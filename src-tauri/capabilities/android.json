@@ -1,0 +1,7 @@
+{
+  "identifier": "android",
+  "description": "Android main window: the floating mic, setup, and text insertion commands of the Kotlin voice-platform plugin",
+  "platforms": ["android"],
+  "windows": ["main"],
+  "permissions": ["voice-platform:default"]
+}

@@ -1,0 +1,24 @@
+---
+description: Use the @/ path alias for imports inside src/ instead of relative paths
+alwaysApply: true
+---
+
+# Alias imports
+
+In TypeScript/TSX under `src/`, import project modules through the `@/` alias (maps to `src/`). Never use relative imports (`./` or `../`).
+
+```ts
+// ❌ BAD
+import { concatPcm } from "../audio/pcm";
+import { useDictation } from "./useDictation";
+
+// ✅ GOOD
+import { concatPcm } from "@/voice/audio/pcm";
+import { useDictation } from "@/app/useDictation";
+```
+
+- Applies to type-only imports too: `import type { VoiceState } from "@/voice/session/state";`
+- Package imports (`react`, `@tauri-apps/api/...`, `@supabase/supabase-js`) are unchanged.
+- When editing a file that still has relative imports, convert them in the same change.
+- Exception: `supabase/functions/**` runs on Deno and is deployed per-function without the Vite alias; keep its imports self-contained.
+- The alias is defined in `tsconfig.json` (`paths`) and `vite.config.ts` (`resolve.alias`); keep both in sync if it changes.

@@ -1,0 +1,127 @@
+import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { androidSetup, canStartFloatingMic } from "@/platform/android/androidSetup";
+import type { AndroidPermission, AndroidSetupStatus } from "@/platform/android/androidSetup";
+
+interface SetupStepProps {
+  title: string;
+  done: boolean;
+  /** Shown instead of "Done" when the step isn't required. */
+  optional?: boolean;
+  children: ReactNode;
+  action?: ReactNode;
+}
+
+function SetupStep({ title, done, optional = false, children, action }: SetupStepProps) {
+  return (
+    <li className={done ? "setup-step setup-done" : "setup-step"}>
+      <div>
+        <strong>{title}</strong>
+        <span className="setup-state">{done ? "Done" : optional ? "Recommended" : "Needed"}</span>
+        <p>{children}</p>
+      </div>
+      {!done && action}
+    </li>
+  );
+}
+
+/** Permissions and the floating mic. Re-checks whenever the app comes back from Android settings. */
+export function AndroidSetupPanel() {
+  const [status, setStatus] = useState<AndroidSetupStatus | null>(null);
+  const [asked, setAsked] = useState<AndroidPermission[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    androidSetup.status().then(setStatus, (reason: unknown) => setError(String(reason)));
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void androidSetup.onFloatingMicChanged(refresh).then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    });
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      unlisten?.();
+    };
+  }, [refresh]);
+
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+      refresh();
+    }
+  }
+
+  function request(permission: AndroidPermission) {
+    setAsked((current) => [...current, permission]);
+    void run(() => androidSetup.requestPermissions([permission]));
+  }
+
+  /** After one refusal Android stops showing the prompt, so App info is the only way back. */
+  function permissionAction(permission: AndroidPermission) {
+    return asked.includes(permission)
+      ? <button type="button" className="secondary" disabled={busy} onClick={() => void run(androidSetup.openAppSettings)}>App info</button>
+      : <button type="button" className="secondary" disabled={busy} onClick={() => request(permission)}>Allow</button>;
+  }
+
+  if (!status) return <p className="placeholder">Checking permissions…</p>;
+
+  return (
+    <>
+      <p className="hint">Hold the floating mic in any app, speak, and release. Drag it to move it; a drag cancels.</p>
+      <ol className="setup-steps">
+        <SetupStep title="Microphone" done={status.microphone} action={permissionAction("microphone")}>
+          Used only while you hold the mic.
+        </SetupStep>
+        <SetupStep
+          title="Display over other apps" done={status.overlay}
+          action={<button type="button" className="secondary" disabled={busy} onClick={() => void run(androidSetup.openOverlaySettings)}>Open settings</button>}
+        >
+          Lets the floating mic sit on top of other apps.
+        </SetupStep>
+        <SetupStep
+          title="Accessibility" done={status.accessibility} optional
+          action={(
+            <div className="actions">
+              <button type="button" className="secondary" disabled={busy} onClick={() => void run(androidSetup.openAccessibilitySettings)}>Open settings</button>
+              <button type="button" className="secondary" disabled={busy} onClick={() => void run(androidSetup.openAppSettings)}>App info</button>
+            </div>
+          )}
+        >
+          Types your text into the field you&apos;re using. It looks only at that field, and only when you finish
+          speaking. Without it, text is copied to the clipboard. If Android says the setting is restricted, open App
+          info, tap ⋮, and choose Allow restricted settings.
+        </SetupStep>
+        <SetupStep title="Notifications" done={status.notifications} optional action={permissionAction("notifications")}>
+          Shows a notification while the floating mic is on, with a button to turn it off.
+        </SetupStep>
+      </ol>
+      <div className="actions">
+        {status.floatingMic ? (
+          <button type="button" className="secondary" disabled={busy} onClick={() => void run(androidSetup.stopFloatingMic)}>
+            Turn off floating mic
+          </button>
+        ) : (
+          <button type="button" className="record" disabled={busy || !canStartFloatingMic(status)} onClick={() => void run(androidSetup.startFloatingMic)}>
+            Turn on floating mic
+          </button>
+        )}
+      </div>
+      {error && <p className="error" role="alert">{error}</p>}
+    </>
+  );
+}

@@ -1,0 +1,29 @@
+fn main() {
+    // Android's Kotlin plugin lives in the app (`gen/android/.../platform`), so its
+    // command permissions are declared here instead of in a separate plugin crate.
+    tauri_build::try_build(
+        tauri_build::Attributes::new().plugin(
+            "voice-platform",
+            tauri_build::InlinedPlugin::new()
+                .commands(&[
+                    "register_listener",
+                    "remove_listener",
+                    "check_permissions",
+                    "request_permissions",
+                    "get_status",
+                    "open_overlay_settings",
+                    "open_accessibility_settings",
+                    "open_app_settings",
+                    "open_download",
+                    "start_floating_mic",
+                    "stop_floating_mic",
+                    "set_indicator",
+                    "insert_text",
+                    "start_capture",
+                    "stop_capture",
+                ])
+                .default_permission(tauri_build::DefaultPermissionRule::AllowAllCommands),
+        ),
+    )
+    .expect("failed to run tauri-build");
+}

@@ -1,0 +1,87 @@
+import type { TranscriptionPreferences } from "@/voice/provider/VoiceProvider";
+
+/** Settings that follow the account across devices. Device-specific settings (hotkey) stay local. */
+export interface SyncedSettings {
+  smartTranscription: boolean;
+  /** BCP-47 code, or `null` for automatic detection. */
+  language: string | null;
+}
+
+export interface DictionaryTerm {
+  id: string;
+  term: string;
+  enabled: boolean;
+}
+
+export interface PersonalData {
+  settings: SyncedSettings;
+  terms: DictionaryTerm[];
+}
+
+export const DEFAULT_SETTINGS: SyncedSettings = { smartTranscription: true, language: null };
+export const EMPTY_PERSONAL_DATA: PersonalData = { settings: DEFAULT_SETTINGS, terms: [] };
+
+/** Mirrors the `enforce_dictionary_limit` trigger and `dictionary.term` check in the migration. */
+export const MAX_TERMS = 200;
+export const MAX_TERM_LENGTH = 100;
+/** Gemini accepts more, but recognition is best with about 100 terms, so the active list stays curated. */
+export const MAX_ENABLED_TERMS = 100;
+
+/** Mirrors the `settings.language` check constraint. */
+const LANGUAGE_CODE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
+
+export const LANGUAGE_OPTIONS = [
+  { value: "en-US", label: "English (US)" },
+  { value: "en-GB", label: "English (UK)" },
+  { value: "es-ES", label: "Spanish (Spain)" },
+  { value: "es-US", label: "Spanish (US)" },
+  { value: "fr-FR", label: "French" },
+  { value: "de-DE", label: "German" },
+  { value: "it-IT", label: "Italian" },
+  { value: "pt-BR", label: "Portuguese (Brazil)" },
+  { value: "ja-JP", label: "Japanese" },
+  { value: "ko-KR", label: "Korean" },
+  { value: "zh-CN", label: "Chinese (Simplified)" },
+  { value: "hi-IN", label: "Hindi" },
+] as const;
+
+export function isLanguageCode(value: string): boolean {
+  return LANGUAGE_CODE.test(value);
+}
+
+/** Trims and collapses inner whitespace so `" Super  base "` and `"Super base"` are the same term. */
+export function normalizeTerm(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ");
+}
+
+/** Case-insensitive, matching the `(user_id, lower(term))` unique index. */
+function sameTerm(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+export function enabledCount(terms: DictionaryTerm[]): number {
+  return terms.filter((entry) => entry.enabled).length;
+}
+
+/** Returns why `term` (already normalized) can't be added, or `null` if it can. */
+export function newTermProblem(term: string, terms: DictionaryTerm[]): string | null {
+  if (!term) return "Type a word or phrase first.";
+  if (term.length > MAX_TERM_LENGTH) return `Terms can be at most ${MAX_TERM_LENGTH} characters.`;
+  if (terms.some((entry) => sameTerm(entry.term, term))) return "That term is already in your dictionary.";
+  if (terms.length >= MAX_TERMS) return `Your dictionary is full (${MAX_TERMS} terms). Delete one first.`;
+  if (enabledCount(terms) >= MAX_ENABLED_TERMS) return `${MAX_ENABLED_TERMS} terms are already active. Turn one off first.`;
+  return null;
+}
+
+export function sortTerms(terms: DictionaryTerm[]): DictionaryTerm[] {
+  return [...terms].sort((a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: "base" }));
+}
+
+/** What the next transcription session is configured with. */
+export function transcriptionPreferences(data: PersonalData): TranscriptionPreferences {
+  return {
+    smart: data.settings.smartTranscription,
+    language: data.settings.language,
+    vocabulary: data.terms.filter((entry) => entry.enabled).map((entry) => entry.term).slice(0, MAX_ENABLED_TERMS),
+  };
+}
