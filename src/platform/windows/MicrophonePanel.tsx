@@ -4,7 +4,7 @@ import { listAudioInputs, microphoneOptions } from "@/platform/microphones";
 import type { AudioInput } from "@/platform/microphones";
 import { loadMicrophone, saveMicrophone } from "@/settings/deviceSettings";
 
-/** Which input dictation records from. Stored on this computer only; applies from the next press. */
+/** Which input dictation records from. Stored on this PC; it is not an account setting. */
 export function MicrophonePanel() {
   const [selected, setSelected] = useState(loadMicrophone);
   const [inputs, setInputs] = useState<AudioInput[]>([]);

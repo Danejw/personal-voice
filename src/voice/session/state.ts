@@ -11,7 +11,7 @@ export type VoiceAction =
   | { type: "connected" }
   | { type: "finish" }
   | { type: "transcribed" }
-  | { type: "inserted" }
+  | { type: "delivered" }
   | { type: "fail" }
   | { type: "cancel" }
   | { type: "reset" };
@@ -26,7 +26,7 @@ export function voiceReducer(state: VoiceState, action: VoiceAction): VoiceState
     // Releasing while still connecting finalizes from the buffered audio.
     case "finish": return state === "CONNECTING" || state === "LISTENING" ? "FINALIZING" : state;
     case "transcribed": return state === "FINALIZING" ? "INSERTING" : state;
-    case "inserted": return state === "INSERTING" ? "IDLE" : state;
+    case "delivered": return state === "INSERTING" ? "IDLE" : state;
     case "fail": return state === "IDLE" ? state : "ERROR";
     // An insertion already in progress cannot be taken back.
     case "cancel": return state === "CONNECTING" || state === "LISTENING" || state === "FINALIZING" ? "IDLE" : state;

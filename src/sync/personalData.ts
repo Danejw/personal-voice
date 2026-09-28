@@ -1,10 +1,12 @@
 import type { TranscriptionPreferences } from "@/voice/provider/VoiceProvider";
 
-/** Settings that follow the account across devices. Device-specific settings (hotkey) stay local. */
+/** Settings that follow the account across devices. Per-device preferences stay on the device. */
 export interface SyncedSettings {
   smartTranscription: boolean;
   /** BCP-47 code, or `null` for automatic detection. */
   language: string | null;
+  /** When false, this device stops recording usage counters. The preference syncs. */
+  usageIntelligence: boolean;
 }
 
 export interface DictionaryTerm {
@@ -18,7 +20,7 @@ export interface PersonalData {
   terms: DictionaryTerm[];
 }
 
-export const DEFAULT_SETTINGS: SyncedSettings = { smartTranscription: true, language: null };
+export const DEFAULT_SETTINGS: SyncedSettings = { smartTranscription: true, language: null, usageIntelligence: true };
 export const EMPTY_PERSONAL_DATA: PersonalData = { settings: DEFAULT_SETTINGS, terms: [] };
 
 /** Mirrors the `enforce_dictionary_limit` trigger and `dictionary.term` check in the migration. */

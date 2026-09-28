@@ -5,9 +5,10 @@ import { pluginErrorMessage } from "@/platform/android/voicePlatformPlugin";
 
 describe("Android floating mic events", () => {
   it("accepts the three push-to-talk events and ignores anything else", () => {
-    expect(parsePushToTalk({ event: "press" })).toBe("press");
-    expect(parsePushToTalk({ event: "release" })).toBe("release");
-    expect(parsePushToTalk({ event: "cancel" })).toBe("cancel");
+    expect(parsePushToTalk({ event: "press" })).toEqual({ event: "press" });
+    expect(parsePushToTalk({ event: "release" })).toEqual({ event: "release" });
+    expect(parsePushToTalk({ event: "cancel" })).toEqual({ event: "cancel" });
+    expect(parsePushToTalk({ event: "capture-selection" })).toEqual({ event: "capture-selection" });
     expect(parsePushToTalk({ event: "tap" })).toBeNull();
     expect(parsePushToTalk(null)).toBeNull();
   });

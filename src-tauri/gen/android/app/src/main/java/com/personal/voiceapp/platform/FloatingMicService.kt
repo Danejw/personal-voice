@@ -19,18 +19,21 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import com.personal.voiceapp.MainActivity
 import com.personal.voiceapp.R
+import org.json.JSONObject
 
 /**
- * Microphone foreground service that owns the floating mic bubble.
+ * Microphone foreground service that owns the floating mic bubble and its quick-actions panel.
  *
  * Android only lets a microphone foreground service start while the app is visible, so it is
  * turned on from the app's setup screen. It then keeps microphone access while the user is in
  * other apps. It never records by itself: the shared WebView code captures audio only while
- * the bubble is held, and the ongoing notification can turn the service off at any time.
+ * the bubble is held or Start dictation is used, and the ongoing notification can turn the
+ * service off at any time.
  */
 class FloatingMicService : Service() {
   interface Listener {
     fun onPushToTalk(event: String)
+    fun onOverlayAction(payload: JSONObject)
     fun onRunningChanged(running: Boolean)
   }
 
@@ -41,6 +44,7 @@ class FloatingMicService : Service() {
     private const val ACTION_STOP = "com.personal.voiceapp.action.STOP_FLOATING_MIC"
     private const val PREFS = "floating_mic"
     private const val BUBBLE_DP = 60
+    private const val PANEL_WIDTH_DP = 280
 
     /** Set by the plugin while the app's WebView is alive. */
     @Volatile var listener: Listener? = null
@@ -54,6 +58,9 @@ class FloatingMicService : Service() {
   private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
   private var bubble: MicBubbleView? = null
   private var bubbleLayout: WindowManager.LayoutParams? = null
+  private var panel: OverlayPanelView? = null
+  private var panelLayout: WindowManager.LayoutParams? = null
+  private var snapshot = JSONObject()
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -66,7 +73,6 @@ class FloatingMicService : Service() {
     try {
       ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), type)
     } catch (error: RuntimeException) {
-      // Microphone permission missing, or started while the app wasn't visible.
       Log.w(TAG, "Could not start the floating mic", error)
       stopSelf()
       return START_NOT_STICKY
@@ -76,18 +82,16 @@ class FloatingMicService : Service() {
       instance = this
       listener?.onRunningChanged(true)
     }
-    // Not sticky: after a kill the WebView that does the dictation is gone too, and a
-    // microphone service can't legally restart from the background anyway.
     return START_NOT_STICKY
   }
 
-  /** A position saved in one orientation can be off screen in the other. */
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
     val view = bubble ?: return
     val layout = bubbleLayout ?: return
     clampToScreen(layout)
     windowManager.updateViewLayout(view, layout)
+    placePanel()
   }
 
   override fun onDestroy() {
@@ -95,6 +99,7 @@ class FloatingMicService : Service() {
       if (it.isHolding) emit("cancel")
       windowManager.removeView(it)
     }
+    hidePanel()
     bubble = null
     bubbleLayout = null
     instance = null
@@ -105,6 +110,29 @@ class FloatingMicService : Service() {
   /** Main thread only. */
   fun showState(state: MicBubbleView.State) {
     bubble?.state = state
+    if (state == MicBubbleView.State.LISTENING || state == MicBubbleView.State.FINALIZING) hidePanel()
+  }
+
+  /** Main thread only. */
+  fun showSnapshot(json: String) {
+    snapshot = try {
+      JSONObject(json)
+    } catch (_: Exception) {
+      JSONObject()
+    }
+    val dictation = snapshot.optString("dictation", "idle")
+    bubble?.state = when (dictation) {
+      "listening" -> MicBubbleView.State.LISTENING
+      "finalizing" -> MicBubbleView.State.FINALIZING
+      "error" -> MicBubbleView.State.ERROR
+      else -> MicBubbleView.State.IDLE
+    }
+    if (dictation == "listening" || dictation == "finalizing") {
+      hidePanel()
+    } else {
+      panel?.bind(snapshot)
+      placePanel()
+    }
   }
 
   private fun emit(event: String) {
@@ -116,19 +144,22 @@ class FloatingMicService : Service() {
     current.onPushToTalk(event)
   }
 
+  private fun emitOverlay(payload: JSONObject) {
+    val current = listener
+    if (current == null) {
+      Toast.makeText(this, R.string.floating_mic_app_closed, Toast.LENGTH_SHORT).show()
+      return
+    }
+    current.onOverlayAction(payload)
+  }
+
   private fun showBubble() {
     val metrics = resources.displayMetrics
     val size = (BUBBLE_DP * metrics.density).toInt()
     val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-    val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-    } else {
-      @Suppress("DEPRECATION")
-      WindowManager.LayoutParams.TYPE_PHONE
-    }
+    val overlayType = overlayType()
     val layout = WindowManager.LayoutParams(
       size, size, overlayType,
-      // Never focusable: touching the bubble must leave keyboard focus in the app being dictated into.
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT,
     ).apply {
@@ -140,6 +171,13 @@ class FloatingMicService : Service() {
     var dragOriginX = 0
     var dragOriginY = 0
     val view = MicBubbleView(this, object : MicBubbleView.Callbacks {
+      override fun onTap() {
+        if (bubble?.state == MicBubbleView.State.LISTENING) {
+          emitOverlay(JSONObject().put("type", "dictate-toggle"))
+        } else {
+          togglePanel()
+        }
+      }
       override fun onPress() = emit("press")
       override fun onRelease() = emit("release")
       override fun onCancel() = emit("cancel")
@@ -152,6 +190,7 @@ class FloatingMicService : Service() {
         layout.y = dragOriginY + dy
         clampToScreen(layout)
         bubble?.let { windowManager.updateViewLayout(it, layout) }
+        placePanel()
       }
       override fun onDragEnd() {
         prefs.edit().putInt("x", layout.x).putInt("y", layout.y).apply()
@@ -160,6 +199,58 @@ class FloatingMicService : Service() {
     windowManager.addView(view, layout)
     bubble = view
     bubbleLayout = layout
+  }
+
+  private fun togglePanel() {
+    if (panel != null) hidePanel() else showPanel()
+  }
+
+  private fun showPanel() {
+    if (panel != null) return
+    val metrics = resources.displayMetrics
+    val width = (PANEL_WIDTH_DP * metrics.density).toInt()
+    val layout = WindowManager.LayoutParams(
+      width, WindowManager.LayoutParams.WRAP_CONTENT, overlayType(),
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+      PixelFormat.TRANSLUCENT,
+    ).apply {
+      gravity = Gravity.TOP or Gravity.START
+    }
+    val view = OverlayPanelView(this) { payload -> emitOverlay(payload) }
+    view.bind(snapshot)
+    windowManager.addView(view, layout)
+    panel = view
+    panelLayout = layout
+    view.post { placePanel() }
+  }
+
+  private fun hidePanel() {
+    panel?.let { windowManager.removeView(it) }
+    panel = null
+    panelLayout = null
+  }
+
+  private fun placePanel() {
+    val view = panel ?: return
+    val panelParams = panelLayout ?: return
+    val bubbleParams = bubbleLayout ?: return
+    val metrics = resources.displayMetrics
+    val gap = (8 * metrics.density).toInt()
+    val width = panelParams.width
+    val height = view.height.coerceAtLeast((80 * metrics.density).toInt())
+    var x = bubbleParams.x - width - gap
+    if (x < 0) x = bubbleParams.x + bubbleParams.width + gap
+    var y = bubbleParams.y + bubbleParams.height - height
+    panelParams.x = x.coerceIn(0, (metrics.widthPixels - width).coerceAtLeast(0))
+    panelParams.y = y.coerceIn(0, (metrics.heightPixels - height).coerceAtLeast(0))
+    windowManager.updateViewLayout(view, panelParams)
+  }
+
+  private fun overlayType(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+  } else {
+    @Suppress("DEPRECATION")
+    WindowManager.LayoutParams.TYPE_PHONE
   }
 
   /** Reads the current display size, so it stays right after rotation. */

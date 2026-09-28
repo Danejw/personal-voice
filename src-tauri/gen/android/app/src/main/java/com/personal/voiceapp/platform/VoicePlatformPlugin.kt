@@ -13,6 +13,7 @@ import android.util.Base64
 import android.view.View
 import android.webkit.WebView
 import android.widget.Toast
+import org.json.JSONObject
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -45,6 +46,16 @@ class OpenDownloadArgs {
 }
 
 @InvokeArg
+class OverlayJsonArgs {
+  lateinit var snapshot: String
+}
+
+@InvokeArg
+class CaptureSelectionArgs {
+  var restoreSettings: Boolean = true
+}
+
+@InvokeArg
 class CaptureArgs {
   /** Chosen by the web side; tags `audioCapture` events so a late event can't reach a newer capture. */
   var id: Int = 0
@@ -74,6 +85,16 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       override fun onPushToTalk(event: String) {
         if (event == "press") wakeWebView()
         trigger("pushToTalk", JSObject().put("event", event))
+      }
+      override fun onOverlayAction(payload: JSONObject) {
+        wakeWebView()
+        val event = JSObject()
+        val keys = payload.keys()
+        while (keys.hasNext()) {
+          val key = keys.next()
+          event.put(key, payload.get(key))
+        }
+        trigger("overlayAction", event)
       }
       override fun onRunningChanged(running: Boolean) =
         trigger("floatingMicChanged", JSObject().put("running", running))
@@ -174,6 +195,30 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     invoke.resolve()
   }
 
+  @Command
+  fun setOverlay(invoke: Invoke) {
+    val json = invoke.parseArgs(OverlayJsonArgs::class.java).snapshot
+    main.post {
+      FloatingMicService.instance?.showSnapshot(json)
+      val parsed = try { JSONObject(json) } catch (_: Exception) { JSONObject() }
+      val dictation = parsed.optString("dictation", "idle")
+      if (dictation == "idle") sleepWebView()
+      val message = parsed.optString("error")
+      if (dictation == "error" && message.isNotEmpty() && !isAppVisible()) {
+        Toast.makeText(activity.applicationContext, message, Toast.LENGTH_LONG).show()
+      }
+    }
+    invoke.resolve()
+  }
+
+  @Command
+  fun showSettings(invoke: Invoke) {
+    main.post {
+      bringAppForward()
+      invoke.resolve()
+    }
+  }
+
   /**
    * Starts streaming `audioCapture` events: `chunk` (base64 PCM), `error`, and finally `end`.
    * Asks for the microphone first when the app is on screen; from the floating mic it must already be granted.
@@ -249,6 +294,61 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
         is InsertResult.Failed -> invoke.reject(result.message)
       }
     }
+  }
+
+  /** Returns to the previous app before asking the accessibility service to insert a handoff. */
+  @Command
+  fun insertHandoffText(invoke: Invoke) {
+    val text = invoke.parseArgs(InsertTextArgs::class.java).text
+    main.post {
+      if (!activity.moveTaskToBack(true)) {
+        invoke.reject("Could not return to the previous app.")
+        return@post
+      }
+      main.postDelayed({
+        when (val result = VoiceAccessibilityService.insert(activity.applicationContext, text)) {
+          is InsertResult.Typed -> invoke.resolve()
+          is InsertResult.Failed -> invoke.reject(result.message)
+        }
+      }, 250)
+    }
+  }
+
+  /** Returns to the previous app, reads its focused selection, then optionally brings Settings back. */
+  @Command
+  fun captureSelection(invoke: Invoke) {
+    val restore = invoke.parseArgs(CaptureSelectionArgs::class.java).restoreSettings
+    main.post {
+      fun finish() {
+        val result = VoiceAccessibilityService.capture()
+        if (restore) bringAppForward()
+        when (result) {
+          is CaptureResult.Captured -> {
+            val payload = JSObject().put("text", result.text)
+            result.sourceApp?.let { payload.put("sourceApp", it) }
+            invoke.resolve(payload)
+          }
+          is CaptureResult.Failed -> invoke.reject(result.message)
+        }
+      }
+      if (!isAppVisible()) {
+        finish()
+        return@post
+      }
+      if (!activity.moveTaskToBack(true)) {
+        invoke.reject("Could not return to the previous app.")
+        return@post
+      }
+      main.postDelayed({ finish() }, 250)
+    }
+  }
+
+  /** Puts Settings in front again so the capture preview is visible. */
+  private fun bringAppForward() {
+    val intent = Intent(activity, activity.javaClass).apply {
+      flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+    }
+    activity.startActivity(intent)
   }
 
   /**

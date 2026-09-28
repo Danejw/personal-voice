@@ -47,7 +47,7 @@ Requirements:
 - clearly tell the user why Accessibility permission is needed
 - gracefully handle fields that reject accessibility text replacement
 - fall back to clipboard when appropriate
-- never inspect unrelated screen content unless required for focused-field insertion
+- never inspect unrelated screen content unless required for focused-field insertion or an explicit selection capture
 
 ## Foreground service
 
@@ -103,11 +103,12 @@ Kotlin lives in `src-tauri/gen/android/app/src/main/java/com/personal/voiceapp/p
 
 | Piece | What it does |
 | --- | --- |
-| `VoicePlatformPlugin` | Commands for setup status, settings shortcuts, starting/stopping the floating mic, the indicator, capture, and insertion. Emits `pushToTalk`, `floatingMicChanged`, and `audioCapture` events. |
-| `FloatingMicService` | One foreground service (type `microphone`) that also owns the overlay bubble. It shows an ongoing notification with "Turn off" and uses `START_NOT_STICKY`, so it never restarts on its own. |
-| `MicBubbleView` | Hold to talk, release to insert. Dragging moves the bubble and cancels the utterance. Colour shows idle, listening, finalizing, or error. |
+| `VoicePlatformPlugin` | Commands for setup status, settings shortcuts, starting/stopping the floating mic, the overlay snapshot, capture, insertion, and selection capture. Emits `pushToTalk`, `overlayAction`, `floatingMicChanged`, and `audioCapture` events. |
+| `FloatingMicService` | One foreground service (type `microphone`) that also owns the overlay bubble and its quick-actions panel. It shows an ongoing notification with "Turn off" and uses `START_NOT_STICKY`, so it never restarts on its own. |
+| `MicBubbleView` | Tap for quick actions. Hold (~400 ms) to talk, release to insert. Dragging moves the bubble; a drag after hold starts cancels the utterance. Colour shows idle, listening, finalizing, or error. |
+| `OverlayPanelView` | Compact native sheet: start dictation, destination, capture, recent notes, pending handoffs, Open Settings. |
 | `NativeMicCapture` | `AudioRecord` producing 16 kHz mono PCM16 in 100 ms chunks, sent to the WebView as base64 events. Runs only between press and release. |
-| `VoiceAccessibilityService` | Subscribes to no events. At insert time it reads only the input-focused field, never password fields. Native fields get an exact splice with `ACTION_SET_TEXT`; web and rich editors get `ACTION_PASTE`. Otherwise the text goes to the clipboard with a message. |
+| `VoiceAccessibilityService` | Subscribes to no events. At insert or selection-capture time it reads only the input-focused field, never password fields. Native fields get an exact splice with `ACTION_SET_TEXT`; web and rich editors get `ACTION_PASTE`. Selection capture returns the node's highlighted substring, not a clipboard copy. Otherwise dictated text goes to the clipboard with a message. |
 
 Shared TypeScript still does everything else: Gemini, vocabulary, settings, auth, and transcript state. `AndroidPlatformAdapter` is a thin bridge; the setup UI is `src/platform/android/AndroidSetupPanel.tsx`.
 
@@ -118,12 +119,13 @@ Shared TypeScript still does everything else: Gemini, vocabulary, settings, auth
 - **The foreground service starts only from the visible app.** Android 14+ forbids starting a microphone foreground service from the background, and `SYSTEM_ALERT_WINDOW` doesn't exempt it, so "Turn on floating mic" lives in the app's setup panel.
 - **Chrome focus lookup.** Chrome reports its content view as the input focus, with the real field as a focused virtual child. When the focused node isn't editable, the service searches beneath it (bounded to 2,000 nodes) for the focused editable node.
 - **Paste leaves the text on the clipboard.** Android 10+ doesn't let a background service read the clipboard, so the previous clip can't be restored.
+- **Selection capture is focused-field only.** Highlighted text on a web page or other non-editable surface is not read. The service still never subscribes to accessibility events.
 
 ### Phase 9 polish
 
 - The bubble is kept on screen: its saved position is clamped when it appears and again on rotation. Before, a position saved near the right edge in landscape could leave it off screen in portrait.
 - Android has no microphone picker. `NativeMicCapture` records from `AudioSource.VOICE_RECOGNITION`, which Android routes to a wired headset when one is plugged in. Bluetooth headset mics aren't used, because that needs SCO routing.
-- The indicator-visibility setting is Windows-only. On Android the bubble's colour is the indicator, and errors also appear as a toast.
+- The floating-control visibility setting is Windows-only. On Android the bubble is the control; tap expands quick actions, hold dictates, and errors also appear as a toast.
 
 ### Building on this machine
 

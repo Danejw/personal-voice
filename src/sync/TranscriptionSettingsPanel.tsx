@@ -25,7 +25,7 @@ export function TranscriptionSettingsPanel({ store, sync }: TranscriptionSetting
       {readOnly && <p className="hint">{readOnly}</p>}
       <Toggle
         label="Smart transcription"
-        description="Punctuation, capitalization, and filler-word cleanup. Off gives a word-for-word transcript."
+        title="Punctuation and cleanup. Off is word-for-word."
         checked={settings.smartTranscription} disabled={!!readOnly}
         onChange={(smartTranscription) => store.updateSettings({ smartTranscription })}
       />

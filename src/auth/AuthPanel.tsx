@@ -53,11 +53,11 @@ export function AuthPanel({ auth, disabled }: AuthPanelProps) {
 
   return (
     <form onSubmit={onSubmit}>
-      <label className="field">
+      <label className="field stack">
         <span>Email</span>
         <input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
       </label>
-      <label className="field">
+      <label className="field stack">
         <span>Password</span>
         <input
           type="password" autoComplete="current-password" required minLength={6} value={password}

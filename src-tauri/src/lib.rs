@@ -4,7 +4,7 @@ mod platform;
 mod tray;
 
 #[cfg(desktop)]
-use tauri::{Manager, PhysicalPosition, WindowEvent};
+use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,6 +28,7 @@ pub fn run() {
             {
                 tray::create(app)?;
                 place_indicator(app)?;
+                watch_overlay(app.handle().clone());
                 if let Err(error) = platform::start_push_to_talk(app.handle().clone()) {
                     eprintln!("{error}");
                 }
@@ -41,12 +42,35 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Closing Settings keeps dictation running in the tray; Quit lives in the tray menu.
             #[cfg(desktop)]
-            if let WindowEvent::CloseRequested { api, .. } = event {
+            {
+                if window.label() == commands::INDICATOR_WINDOW {
+                    match event {
+                        WindowEvent::Moved(_)
+                        | WindowEvent::Resized(_)
+                        | WindowEvent::ScaleFactorChanged { .. } => {
+                            if let Some(overlay) = window
+                                .app_handle()
+                                .get_webview_window(commands::INDICATOR_WINDOW)
+                            {
+                                let _ = platform::pin_overlay(&overlay);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                // Close and minimize keep dictation in the tray. Quit lives only in the tray menu.
                 if window.label() == "main" {
-                    api.prevent_close();
-                    let _ = window.hide();
+                    match event {
+                        WindowEvent::CloseRequested { api, .. } => {
+                            api.prevent_close();
+                            tray::hide_main(window);
+                        }
+                        WindowEvent::Resized(_) if window.is_minimized().unwrap_or(false) => {
+                            tray::hide_main(window);
+                        }
+                        _ => {}
+                    }
                 }
             }
             #[cfg(mobile)]
@@ -54,10 +78,15 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::insert_text,
+            commands::insert_handoff_text,
+            commands::capture_selection,
             commands::set_push_to_talk_shortcut,
+            commands::set_hotkeys,
+            commands::set_hotkey_capture,
             commands::set_dictation_active,
-            commands::show_indicator,
-            commands::hide_indicator,
+            commands::sync_overlay,
+            commands::resize_overlay,
+            commands::show_settings,
             commands::get_launch_at_login,
             commands::set_launch_at_login,
         ])
@@ -70,20 +99,39 @@ pub fn run() {
     });
 }
 
-/// Bottom-centre of the primary work area, click-through.
+/// Bottom-right of the primary work area, clickable without stealing focus.
 #[cfg(desktop)]
 fn place_indicator(app: &tauri::App) -> tauri::Result<()> {
     let Some(window) = app.get_webview_window(commands::INDICATOR_WINDOW) else {
         return Ok(());
     };
-    window.set_ignore_cursor_events(true)?;
-    if let Some(monitor) = window.primary_monitor()? {
-        let area = monitor.work_area();
-        let size = window.outer_size()?;
-        let margin = (48.0 * monitor.scale_factor()) as i32;
-        let x = area.position.x + (area.size.width as i32 - size.width as i32) / 2;
-        let y = area.position.y + area.size.height as i32 - size.height as i32 - margin;
-        window.set_position(PhysicalPosition::new(x, y))?;
+    window.set_ignore_cursor_events(false)?;
+    if let Err(error) = platform::prepare_overlay(&window) {
+        eprintln!("{error}");
+    }
+    if let Err(error) = platform::pin_overlay(&window) {
+        eprintln!("{error}");
     }
     Ok(())
+}
+
+/// Resolution, DPI, and taskbar changes do not always move the window, so re-pin on a short interval.
+#[cfg(desktop)]
+fn watch_overlay(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let handle = app.clone();
+            if app
+                .run_on_main_thread(move || {
+                    if let Some(window) = handle.get_webview_window(commands::INDICATOR_WINDOW) {
+                        let _ = platform::pin_overlay(&window);
+                    }
+                })
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
 }

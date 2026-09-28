@@ -9,6 +9,7 @@ Read these files before changing code:
 1. `docs/SPEC.md`
 2. `docs/ARCHITECTURE.md`
 3. the prompt for the current implementation phase
+4. `docs/PV-Phases/` if the work is a Personal Voice (PV) prompt — completed vs skipped phases are listed there
 
 ## Core rules
 

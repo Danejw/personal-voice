@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlatformAdapter, PushToTalkEvent } from "@/platform/PlatformAdapter";
-import { loadShowIndicator } from "@/settings/deviceSettings";
+import { usageEventsFromDictation } from "@/usage/usageEvents";
+import type { UsageStore } from "@/usage/UsageStore";
 import type { VoiceProvider } from "@/voice/provider/VoiceProvider";
 import { DictationController, initialDictationSnapshot } from "@/voice/session/DictationController";
 import type { DictationSnapshot } from "@/voice/session/DictationController";
-import { indicatorFor, isCancellable } from "@/voice/session/indicator";
+import { isCancellable } from "@/voice/session/indicator";
 import { formatTimings } from "@/voice/session/timings";
-
-const ERROR_INDICATOR_MS = 4000;
+import type { TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
 
 /** Indicator/Escape IPC must never break dictation itself. */
 function quietly(promise: Promise<unknown>) {
@@ -16,16 +16,26 @@ function quietly(promise: Promise<unknown>) {
 
 /**
  * Binds one `DictationController` to React state and to the platform:
- * push-to-talk drives it, and its state drives the floating indicator.
+ * push-to-talk drives it, and Escape is routed while an utterance is cancellable.
  */
-export function useDictation(platform: PlatformAdapter, getProvider: () => VoiceProvider) {
+export function useDictation(
+  platform: PlatformAdapter,
+  getProvider: () => VoiceProvider,
+  destinations: TranscriptDestinationRouter,
+  usage: UsageStore,
+) {
   const [snapshot, setSnapshot] = useState<DictationSnapshot>(initialDictationSnapshot);
   const [paused, setPaused] = useState(false);
   const [controller] = useState(
-    () => new DictationController(() => platform.createCapture(), setSnapshot, (text) => platform.insertText(text), {
-      onTimings: import.meta.env.DEV ? (timings) => console.info(`[latency] ${formatTimings(timings)}`) : undefined,
+    () => new DictationController(() => platform.createCapture(), setSnapshot, destinations, {
+      onTimings: (timings) => {
+        if (import.meta.env.DEV) console.info(`[latency] ${formatTimings(timings)}`);
+        usage.recordLater({ name: "dictation_completed", durationMs: timings.totalMs });
+        if (timings.recovered) usage.recordLater({ name: "recovery_used" });
+      },
     }),
   );
+  const previousRef = useRef(snapshot);
   const providerRef = useRef(getProvider);
   useEffect(() => { providerRef.current = getProvider; }, [getProvider]);
 
@@ -33,12 +43,21 @@ export function useDictation(platform: PlatformAdapter, getProvider: () => Voice
 
   useEffect(() => {
     const onPushToTalk = (event: PushToTalkEvent) => {
-      switch (event) {
-        case "press": void controller.press(providerRef.current()); return;
+      switch (event.event) {
+        case "press":
+          destinations.overrideNext(event.destination ?? null);
+          void controller.press(providerRef.current());
+          return;
         case "release": void controller.stop(); return;
-        case "cancel": void controller.cancel(); return;
+        case "cancel":
+          destinations.overrideNext(null);
+          void controller.cancel();
+          return;
+        case "capture-selection":
+          // Overlay and Settings handle capture; this is not a dictation press.
+          return;
         default: {
-          const unhandled: never = event;
+          const unhandled: never = event.event;
           throw new Error(`Unhandled push-to-talk event: ${String(unhandled)}`);
         }
       }
@@ -57,21 +76,25 @@ export function useDictation(platform: PlatformAdapter, getProvider: () => Voice
       disposed = true;
       unlisteners.forEach((unlisten) => unlisten());
     };
-  }, [controller, platform]);
+  }, [controller, platform, destinations]);
 
-  const { state, error, utterance } = snapshot;
   useEffect(() => {
-    quietly(platform.setDictationActive(isCancellable(state)));
-    const indicator = indicatorFor({ ...initialDictationSnapshot, state, error });
-    if (!indicator || (indicator.kind !== "error" && !loadShowIndicator())) {
-      quietly(platform.hideIndicator());
-      return;
+    const previous = previousRef.current;
+    previousRef.current = snapshot;
+    for (const event of usageEventsFromDictation(previous, snapshot)) {
+      usage.recordLater(event);
     }
-    quietly(platform.showIndicator(indicator));
-    if (indicator.kind !== "error") return;
-    const timer = setTimeout(() => quietly(platform.hideIndicator()), ERROR_INDICATOR_MS);
-    return () => clearTimeout(timer);
-  }, [platform, state, error, utterance]);
+  }, [snapshot, usage]);
+
+  useEffect(() => {
+    if (snapshot.state === "IDLE" || snapshot.state === "ERROR") {
+      destinations.overrideNext(null);
+    }
+  }, [destinations, snapshot.state]);
+
+  useEffect(() => {
+    quietly(platform.setDictationActive(isCancellable(snapshot.state)));
+  }, [platform, snapshot.state]);
 
   return { snapshot, controller, paused };
 }

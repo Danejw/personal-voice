@@ -47,7 +47,7 @@ Hold global hotkey
 → insert text into focused application
 ```
 
-The default hotkey can initially be something like Right Alt, but it must not be hard-coded into the architecture.
+The default hotkey can initially be something like Right Alt, but it must not be hard-coded into the architecture. Each Windows action can record several bindings. A binding is one key or mouse button, optionally with Ctrl, Shift, Alt, or Win, so the same action can use both a mouse button and a keyboard shortcut. Additional bindings may hold-to-talk into a voice note or a handoff.
 
 ### Android
 
@@ -125,6 +125,7 @@ Use Supabase for:
 - device records
 - shared settings
 - personal dictionary
+- explicitly saved voice notes and sent device handoffs
 - secure short-lived Gemini credential/token issuance
 
 Do not send live microphone audio through Supabase.
@@ -150,6 +151,8 @@ platform
 last_seen
 ```
 
+The current install can be renamed. Other installs can be removed. Notes and handoffs keep their device IDs after a row is deleted.
+
 ### dictionary
 
 ```text
@@ -170,6 +173,62 @@ language
 updated_at
 ```
 
+### voice_notes
+
+Explicitly saved when Voice note is the selected dictation destination:
+
+```text
+id
+user_id
+text
+source_device_id
+status
+created_at
+updated_at
+```
+
+### handoffs
+
+Intentionally sent pasted text, typed text, or dictated transcripts:
+
+```text
+id
+user_id
+text
+source_device_id
+target_device_id (optional)
+created_at
+consumed_at (optional)
+```
+
+### Local recent dictation history
+
+Keep at most 75 finalized dictations on the current device:
+
+```text
+text
+timestamp
+destination
+success | failure
+```
+
+This is local recovery data, not a backend table.
+
+### Local device preferences
+
+Keyed by the existing per-account device ID, never written to `settings`:
+
+```text
+destination
+microphone
+showIndicator
+pushToTalk
+voiceNoteHotkey
+handoffHotkey
+```
+
+Launch at login and Android overlay/accessibility/floating-mic state stay on the machine.
+
 Keep schema additions conservative.
 
 ## Privacy defaults
@@ -177,8 +236,14 @@ Keep schema additions conservative.
 - audio goes from the client to the transcription provider
 - backend does not receive live audio
 - audio is not permanently retained by the app
-- transcript history is local-only if added later
-- no cloud transcript-history table in V1
+- voice notes sync only when the user explicitly chooses the Voice note destination
+- handoffs sync only when the user explicitly sends text or chooses Send to device
+- never monitor or continuously synchronize the OS clipboard
+- selection capture is an explicit user action; Windows copies briefly and restores the clipboard
+- usage intelligence stores counters only, never transcript text or microphone audio
+- usage intelligence can be turned off; that preference syncs, the counters stay on the device
+- no automatic cloud transcript-history table
+- recent dictation history contains final text only, stays local, and can be cleared
 - do not log transcript content unnecessarily
 
 ## Reliability expectations
@@ -215,6 +280,9 @@ save clipboard
 
 If clipboard restoration proves unreliable, prioritize correct insertion and data safety over cleverness.
 
+Selection capture uses the same clipboard snapshot/restore path with Ctrl+C instead of Ctrl+V.
+The previous clipboard is restored after the selected text is read.
+
 Native Unicode input may be added later where useful.
 
 ### Android
@@ -224,6 +292,9 @@ Primary:
 ```text
 AccessibilityService
 ```
+
+Focused-field insertion remains the primary path. Selection capture reads only the
+input-focused editable node's highlighted range. It does not scrape the screen.
 
 Fallback where needed:
 
@@ -243,10 +314,13 @@ Main settings view should contain only useful controls such as:
 - Smart transcription toggle
 - dictionary manager
 - launch at startup
-- listening indicator toggle
+- floating control toggle
 - account/sync status
+- devices
+- selection capture preview
+- usage intelligence toggle
 
-During dictation, show a minimal listening indicator.
+The always-visible floating control is the day-to-day interface: start dictation, choose a destination, capture a selection, and peek at recent voice notes and pending handoffs without opening Settings. While listening, the same control shows the listening state.
 
 No dashboard.
 
@@ -311,3 +385,5 @@ Both:
 - same core settings
 - consistent transcription behavior
 - no permanent Google API key in shipped binaries
+
+Personal Voice work after V1 (destinations, notes, handoffs, history, devices, selection, usage) is reported in [`docs/PV-Phases/`](PV-Phases/README.md).

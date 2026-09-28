@@ -18,7 +18,7 @@ function SetupStep({ title, done, optional = false, children, action }: SetupSte
       <div>
         <strong>{title}</strong>
         <span className="setup-state">{done ? "Done" : optional ? "Recommended" : "Needed"}</span>
-        <p>{children}</p>
+        <div className="setup-copy">{children}</div>
       </div>
       {!done && action}
     </li>
@@ -82,7 +82,6 @@ export function AndroidSetupPanel() {
 
   return (
     <>
-      <p className="hint">Hold the floating mic in any app, speak, and release. Drag it to move it; a drag cancels.</p>
       <ol className="setup-steps">
         <SetupStep title="Microphone" done={status.microphone} action={permissionAction("microphone")}>
           Used only while you hold the mic.
@@ -102,12 +101,14 @@ export function AndroidSetupPanel() {
             </div>
           )}
         >
-          Types your text into the field you&apos;re using. It looks only at that field, and only when you finish
-          speaking. Without it, text is copied to the clipboard. If Android says the setting is restricted, open App
-          info, tap ⋮, and choose Allow restricted settings.
+          Types into the focused field. Without it, text is copied.
+          <details className="fold">
+            <summary>If Android blocks it</summary>
+            <p>Open App info, tap ⋮, and choose Allow restricted settings.</p>
+          </details>
         </SetupStep>
         <SetupStep title="Notifications" done={status.notifications} optional action={permissionAction("notifications")}>
-          Shows a notification while the floating mic is on, with a button to turn it off.
+          Shown while the floating mic is on.
         </SetupStep>
       </ol>
       <div className="actions">

@@ -37,6 +37,7 @@ export function readPersonalCache(storage: KeyValueStorage, userId: string): Per
     settings: {
       smartTranscription: typeof settings.smartTranscription === "boolean" ? settings.smartTranscription : DEFAULT_SETTINGS.smartTranscription,
       language,
+      usageIntelligence: typeof settings.usageIntelligence === "boolean" ? settings.usageIntelligence : DEFAULT_SETTINGS.usageIntelligence,
     },
     terms: fields.terms.map(parseTerm).filter((entry): entry is DictionaryTerm => entry !== null),
   };

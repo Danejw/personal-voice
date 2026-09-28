@@ -4,7 +4,7 @@ Phase 0 foundation for one Windows + Android Tauri 2 application. React/strict T
 
 ## Source of truth
 
-Read `AGENTS.md`, every file in `docs/`, and the active prompt in `prompts/` before implementation. The original ZIP README is preserved as `BUILD_PACK_README.md`. Stop after each phase. See `docs/PHASE_0_REPORT.md` for validation results and remaining limitations.
+Read `AGENTS.md`, every file in `docs/`, and the active prompt in `prompts/` before implementation. The original ZIP README is preserved as `BUILD_PACK_README.md`. Stop after each phase. V1 reports are `docs/PHASE_*_REPORT.md`. Personal Voice phases after V1 are `docs/PV-Phases/`. See `docs/PHASE_0_REPORT.md` for foundation validation.
 
 ## Windows setup
 
