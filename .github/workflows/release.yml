@@ -96,6 +96,8 @@ jobs:
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       NDK_VERSION: 28.2.13676358
+      # compileSdk 37 in gen/android/app/build.gradle.kts; sdkmanager names it with the minor version.
+      ANDROID_PLATFORM: platforms;android-37.0
       # Public fingerprint of the permanent release key; a differently signed APK must never ship.
       RELEASE_CERT_SHA256: 5942d721855a770420a1373794b2499df31a73058bc5903db64807fb77106759
     steps:
@@ -119,7 +121,7 @@ jobs:
       - name: Android SDK packages
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" "platforms;android-37" >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" "$ANDROID_PLATFORM" >/dev/null
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
       - name: Release keystore
         env:

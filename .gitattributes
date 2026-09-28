@@ -1,0 +1,4 @@
+* text=auto
+# Run by the Linux release runner; CRLF breaks the shebang.
+src-tauri/gen/android/gradlew text eol=lf
+*.bat text eol=crlf
