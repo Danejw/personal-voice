@@ -5,6 +5,10 @@
 #[cfg(target_os = "android")]
 pub mod android;
 
+/// Passed by the launch-at-startup entry, so a sign-in launch starts in the tray.
+#[cfg_attr(mobile, allow(dead_code))]
+pub const AUTOSTART_ARG: &str = "--autostart";
+
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
@@ -27,6 +31,13 @@ mod unsupported {
     #[cfg_attr(mobile, allow(dead_code))]
     pub fn set_paused(_paused: bool) {}
     pub fn insert_text(_text: &str) -> Result<(), String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn finish_pending_restore() {}
+    pub fn launch_at_login() -> Result<bool, String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn set_launch_at_login(_enabled: bool) -> Result<(), String> {
         Err(UNSUPPORTED.into())
     }
     pub fn show_without_focus(window: &WebviewWindow) -> Result<(), String> {

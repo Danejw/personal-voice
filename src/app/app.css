@@ -12,18 +12,18 @@ html, .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 html::-webkit-scrollbar, .hide-scrollbar::-webkit-scrollbar { display: none; }
 body { margin: 0; min-width: 280px; }
 main { max-width: 620px; margin: auto; padding: clamp(24px, 7vw, 48px); }
-.eyebrow { font-size: 12px; letter-spacing: 0.16em; color: #88d8c1; font-weight: 600; }
-h1 { font-size: clamp(26px, 6vw, 34px); line-height: 1.15; font-weight: 600; margin: 24px 0 12px; }
+.app-header .intro { margin: 4px 0 0; font-size: 14px; }
+h1 { font-size: 20px; line-height: 1.2; font-weight: 600; margin: 0; }
 p { line-height: 1.6; }
 .intro, section > p:last-child { color: #b2becc; }
-section { margin-top: 28px; padding: 20px; border: 1px solid #344252; border-radius: 12px; background: #19232e; }
+section { margin-top: 20px; padding: 20px; border: 1px solid #344252; border-radius: 12px; background: #19232e; }
 h2 { font-size: 14px; font-weight: 500; margin: 0; }
-.status { color: #88d8c1; font-size: 13px; letter-spacing: 0.08em; font-weight: 600; }
+.status { color: #88d8c1; font-size: 15px; font-weight: 600; }
 section > p:last-child { margin-bottom: 0; font-size: 14px; }
 .footnote { font-size: 12px; color: #a2adbc; margin-top: 22px; }
 .field { display: grid; gap: 6px; font-size: 13px; color: #b2becc; margin: 16px 0; }
 .intro strong { color: #e9edf4; font-weight: 600; }
-.field input, .field select { font: inherit; color: inherit; background: #111820; border: 1px solid #344252; border-radius: 8px; padding: 8px 10px; }
+.field input, .field select { min-width: 0; width: 100%; text-overflow: ellipsis; font: inherit; color: inherit; background: #111820; border: 1px solid #344252; border-radius: 8px; padding: 8px 10px; }
 .record { font: inherit; font-weight: 600; color: #111820; background: #88d8c1; border: 0; border-radius: 999px; padding: 10px 24px; cursor: pointer; }
 .record:hover:not(:disabled) { background: #a3e4d2; }
 .record:disabled { opacity: 0.5; cursor: default; }

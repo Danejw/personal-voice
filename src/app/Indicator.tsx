@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import type { IndicatorState } from "../platform/PlatformAdapter";
+import type { IndicatorState } from "@/platform/PlatformAdapter";
 
 function labelFor(state: IndicatorState): string {
   switch (state.kind) {
     case "listening": return "Listening";
-    case "finalizing": return "Finalizing";
+    case "finalizing": return "Transcribing";
     case "error": return state.message;
     default: {
       const unhandled: never = state;

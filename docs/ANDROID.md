@@ -119,6 +119,12 @@ Shared TypeScript still does everything else: Gemini, vocabulary, settings, auth
 - **Chrome focus lookup.** Chrome reports its content view as the input focus, with the real field as a focused virtual child. When the focused node isn't editable, the service searches beneath it (bounded to 2,000 nodes) for the focused editable node.
 - **Paste leaves the text on the clipboard.** Android 10+ doesn't let a background service read the clipboard, so the previous clip can't be restored.
 
+### Phase 9 polish
+
+- The bubble is kept on screen: its saved position is clamped when it appears and again on rotation. Before, a position saved near the right edge in landscape could leave it off screen in portrait.
+- Android has no microphone picker. `NativeMicCapture` records from `AudioSource.VOICE_RECOGNITION`, which Android routes to a wired headset when one is plugged in. Bluetooth headset mics aren't used, because that needs SCO routing.
+- The indicator-visibility setting is Windows-only. On Android the bubble's colour is the indicator, and errors also appear as a toast.
+
 ### Building on this machine
 
 The repo is on an exFAT drive (E:), which can't hold symlinks. `tauri android build` symlinks the Rust library into `jniLibs` and fails there. On NTFS it also needs Windows Developer Mode. Until the project is moved or Developer Mode is on:

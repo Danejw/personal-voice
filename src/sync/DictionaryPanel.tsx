@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import type { PersonalSyncStore, SyncSnapshot } from "@/sync/PersonalSyncStore";
+import { readOnlyReason } from "@/sync/SyncStatus";
 import { MAX_ENABLED_TERMS, MAX_TERM_LENGTH, enabledCount } from "@/sync/personalData";
 
 interface DictionaryPanelProps {
@@ -13,7 +14,8 @@ export function DictionaryPanel({ store, sync }: DictionaryPanelProps) {
   const [draft, setDraft] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const { terms } = sync.data;
-  const editable = sync.status === "synced";
+  const readOnly = readOnlyReason(sync.status);
+  const editable = !readOnly;
 
   function onAdd(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -26,6 +28,7 @@ export function DictionaryPanel({ store, sync }: DictionaryPanelProps) {
     <>
       <p className="hint">
         {enabledCount(terms)} of {MAX_ENABLED_TERMS} active. Keep it to names and jargon you actually say.
+        {readOnly && ` ${readOnly}`}
       </p>
       <form className="term-form" onSubmit={onAdd}>
         <input

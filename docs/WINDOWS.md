@@ -125,3 +125,15 @@ Document failures by application rather than adding hacks immediately.
   - `--autoplay-policy=no-user-gesture-required`, because a hotkey is not a page user gesture and the AudioContext would otherwise stay suspended.
   - Background-throttling switches, because the main window is usually hidden.
 - **Tray:** closing Settings hides it. Quit lives only in the tray menu.
+
+## As implemented (Phase 9 polish)
+
+- **Single instance** (`tauri-plugin-single-instance`, desktop only). A second launch exits and brings the running window forward. Before this, a second copy installed a second keyboard hook, and every transcript was pasted twice.
+- **Launch at startup** (`platform/windows/autostart.rs`): an HKCU `…\CurrentVersion\Run` value named `Personal Voice`, set to `"<exe>" --autostart`. It's toggled from "On this PC" in Settings, and the toggle reads as on only if the value points at this exe.
+  - A `--autostart` launch keeps the main window hidden and dictation runs from the tray. Every other launch shows the window, which now starts hidden (`visible: false`) so it no longer flashes on autostart.
+  - The NSIS uninstaller removes the value (`windows/hooks.nsh`), except during an updater reinstall.
+  - If Task Manager's "Startup apps" disables the entry, Windows keeps the value but skips it, and the toggle still reads as on. Re-enable it there.
+- **Insertion no longer waits for the restore.** `insert_text` returns right after Ctrl+V; a background thread waits 400 ms, then restores the clipboard. The next insertion, and app exit, wait for that restore to finish first. Measured final→inserted went from ~420 ms to 14–26 ms.
+- **Microphone choice:** "Push-to-talk → Microphone", stored in `localStorage` on this PC and read at each press. It's opened with `deviceId: { exact }`, because WebView2 ignored `ideal` and opened the default device. If the chosen mic is unplugged, capture falls back to the system default and the picker lists it as "not connected".
+- **Indicator:** the labels are "Listening" and "Transcribing". "Show listening indicator" can hide the pill; errors still show.
+- **Tray tooltip:** "Personal Voice", or "Personal Voice: dictation paused" while paused.

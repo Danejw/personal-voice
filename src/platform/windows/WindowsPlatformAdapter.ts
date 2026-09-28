@@ -3,13 +3,24 @@ import { listen } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
 import { BrowserAudioCapture } from "@/platform/BrowserAudioCapture";
 import type { AvailableUpdate, IndicatorState, PlatformAdapter, PushToTalkEvent } from "@/platform/PlatformAdapter";
+import { loadMicrophone } from "@/settings/deviceSettings";
 
 /** Thin IPC bridge to `src-tauri/src/commands` and `src-tauri/src/platform/windows`. */
 export class WindowsPlatformAdapter implements PlatformAdapter {
   readonly platform = "windows";
 
+  /** Reads the chosen microphone per utterance, so a new choice applies to the next press. */
   createCapture() {
-    return new BrowserAudioCapture();
+    return new BrowserAudioCapture(loadMicrophone());
+  }
+
+  /** Whether Windows starts the app (hidden in the tray) when the user signs in. */
+  getLaunchAtLogin() {
+    return invoke<boolean>("get_launch_at_login");
+  }
+
+  setLaunchAtLogin(enabled: boolean) {
+    return invoke<void>("set_launch_at_login", { enabled });
   }
 
   insertText(text: string) {

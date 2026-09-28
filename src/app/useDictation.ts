@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlatformAdapter, PushToTalkEvent } from "@/platform/PlatformAdapter";
+import { loadShowIndicator } from "@/settings/deviceSettings";
 import type { VoiceProvider } from "@/voice/provider/VoiceProvider";
 import { DictationController, initialDictationSnapshot } from "@/voice/session/DictationController";
 import type { DictationSnapshot } from "@/voice/session/DictationController";
 import { indicatorFor, isCancellable } from "@/voice/session/indicator";
+import { formatTimings } from "@/voice/session/timings";
 
 const ERROR_INDICATOR_MS = 4000;
 
@@ -20,7 +22,9 @@ export function useDictation(platform: PlatformAdapter, getProvider: () => Voice
   const [snapshot, setSnapshot] = useState<DictationSnapshot>(initialDictationSnapshot);
   const [paused, setPaused] = useState(false);
   const [controller] = useState(
-    () => new DictationController(() => platform.createCapture(), setSnapshot, (text) => platform.insertText(text)),
+    () => new DictationController(() => platform.createCapture(), setSnapshot, (text) => platform.insertText(text), {
+      onTimings: import.meta.env.DEV ? (timings) => console.info(`[latency] ${formatTimings(timings)}`) : undefined,
+    }),
   );
   const providerRef = useRef(getProvider);
   useEffect(() => { providerRef.current = getProvider; }, [getProvider]);
@@ -59,7 +63,7 @@ export function useDictation(platform: PlatformAdapter, getProvider: () => Voice
   useEffect(() => {
     quietly(platform.setDictationActive(isCancellable(state)));
     const indicator = indicatorFor({ ...initialDictationSnapshot, state, error });
-    if (!indicator) {
+    if (!indicator || (indicator.kind !== "error" && !loadShowIndicator())) {
       quietly(platform.hideIndicator());
       return;
     }

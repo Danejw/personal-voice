@@ -18,6 +18,7 @@
         "height": 640,
         "minWidth": 320,
         "minHeight": 360,
+        "visible": false,
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows"
       },
       {
@@ -61,7 +62,8 @@
     "windows": {
       "digestAlgorithm": "sha256",
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerHooks": "./windows/hooks.nsh"
       }
     },
     "icon": [

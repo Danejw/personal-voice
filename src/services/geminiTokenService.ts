@@ -1,6 +1,6 @@
-import { CredentialError } from "../voice/provider/gemini/GeminiTokenSource";
-import type { GeminiToken } from "../voice/provider/gemini/GeminiTokenSource";
-import { getSupabase, supabaseConfig } from "./supabase";
+import { getSupabase, supabaseConfig } from "@/services/supabase";
+import { CredentialError } from "@/voice/provider/gemini/GeminiTokenSource";
+import type { GeminiToken } from "@/voice/provider/gemini/GeminiTokenSource";
 
 const FUNCTION_NAME = "gemini-token";
 
@@ -8,7 +8,7 @@ const FUNCTION_NAME = "gemini-token";
 export function parseTokenResponse(status: number, body: unknown): GeminiToken {
   const fields = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
   if (status < 200 || status >= 300) {
-    const message = typeof fields.error === "string" ? fields.error : `The token service failed (HTTP ${status}).`;
+    const message = typeof fields.error === "string" ? fields.error : `Couldn't start transcription (token service error ${status}). Try again.`;
     // Signed out or not allowlisted cannot be fixed by retrying.
     throw new CredentialError(message, status !== 401 && status !== 403);
   }
@@ -35,7 +35,7 @@ export async function fetchGeminiToken(): Promise<GeminiToken> {
       headers: { Authorization: `Bearer ${accessToken}`, apikey: supabaseConfig.publishableKey },
     });
   } catch {
-    throw new CredentialError("Could not reach the sign-in service. Check your connection.", true);
+    throw new CredentialError("Couldn't connect to start transcription. Check your internet connection and try again.", true);
   }
   return parseTokenResponse(response.status, await response.json().catch(() => null));
 }

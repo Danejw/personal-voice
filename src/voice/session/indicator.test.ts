@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { initialDictationSnapshot } from "./DictationController";
-import { indicatorFor, isCancellable } from "./indicator";
-import type { VoiceState } from "./state";
+import { initialDictationSnapshot } from "@/voice/session/DictationController";
+import { indicatorFor, isCancellable } from "@/voice/session/indicator";
+import type { VoiceState } from "@/voice/session/state";
 
 const at = (state: VoiceState, error: string | null = null) => ({ ...initialDictationSnapshot, state, error });
 

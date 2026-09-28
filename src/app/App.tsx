@@ -3,13 +3,16 @@ import { useDictation } from "@/app/useDictation";
 import { AuthPanel } from "@/auth/AuthPanel";
 import { useAuth } from "@/auth/useAuth";
 import { createPlatformAdapter } from "@/platform";
+import type { AppPlatform } from "@/platform";
 import { AndroidSetupPanel } from "@/platform/android/AndroidSetupPanel";
-import type { PlatformAdapter } from "@/platform/PlatformAdapter";
+import { MicrophonePanel } from "@/platform/windows/MicrophonePanel";
 import { PushToTalkShortcutPanel } from "@/platform/windows/PushToTalkShortcutPanel";
+import { WindowsBehaviorPanel } from "@/platform/windows/WindowsBehaviorPanel";
 import { fetchGeminiToken } from "@/services/geminiTokenService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { DictionaryPanel } from "@/sync/DictionaryPanel";
 import { PersonalSyncStore } from "@/sync/PersonalSyncStore";
+import { SyncStatus } from "@/sync/SyncStatus";
 import { TranscriptionSettingsPanel } from "@/sync/TranscriptionSettingsPanel";
 import { transcriptionPreferences } from "@/sync/personalData";
 import { usePersonalSync } from "@/sync/usePersonalSync";
@@ -31,11 +34,11 @@ function createProvider(): GeminiProvider {
 /** Primary control label and whether pressing it does anything in this state. */
 function controlFor(state: VoiceState): { label: string; enabled: boolean } {
   switch (state) {
-    case "IDLE": return { label: "Record", enabled: true };
+    case "IDLE": return { label: "Test dictation", enabled: true };
     case "CONNECTING": return { label: "Stop", enabled: true };
     case "LISTENING": return { label: "Stop", enabled: true };
-    case "FINALIZING": return { label: "Finishing…", enabled: false };
-    case "INSERTING": return { label: "Inserting…", enabled: false };
+    case "FINALIZING": return { label: "Transcribing…", enabled: false };
+    case "INSERTING": return { label: "Typing…", enabled: false };
     case "ERROR": return { label: "Try again", enabled: true };
     default: {
       const unhandled: never = state;
@@ -44,15 +47,38 @@ function controlFor(state: VoiceState): { label: string; enabled: boolean } {
   }
 }
 
-/** How dictation is triggered outside this window: a hotkey on Windows, the floating mic on Android. */
-function TriggerSection({ platform }: { platform: PlatformAdapter }) {
+/** One word for where dictation is, in the user's terms rather than the state machine's. */
+function statusFor(state: VoiceState): string {
+  switch (state) {
+    case "IDLE": return "Ready";
+    case "CONNECTING":
+    case "LISTENING": return "Listening";
+    case "FINALIZING": return "Transcribing";
+    case "INSERTING": return "Typing";
+    case "ERROR": return "Something went wrong";
+    default: {
+      const unhandled: never = state;
+      throw new Error(`Unhandled voice state: ${String(unhandled)}`);
+    }
+  }
+}
+
+/** How dictation is triggered and set up outside this window, per platform. */
+function PlatformSections({ platform }: { platform: AppPlatform }) {
   switch (platform.platform) {
     case "windows":
       return (
-        <section aria-labelledby="trigger-heading">
-          <h2 id="trigger-heading">Push-to-talk shortcut</h2>
-          <PushToTalkShortcutPanel platform={platform} />
-        </section>
+        <>
+          <section aria-labelledby="trigger-heading">
+            <h2 id="trigger-heading">Push-to-talk</h2>
+            <PushToTalkShortcutPanel platform={platform} />
+            <MicrophonePanel />
+          </section>
+          <section aria-labelledby="behavior-heading">
+            <h2 id="behavior-heading">On this PC</h2>
+            <WindowsBehaviorPanel platform={platform} />
+          </section>
+        </>
       );
     case "android":
       return (
@@ -62,7 +88,7 @@ function TriggerSection({ platform }: { platform: PlatformAdapter }) {
         </section>
       );
     default: {
-      const unhandled: never = platform.platform;
+      const unhandled: never = platform;
       throw new Error(`Unhandled platform: ${String(unhandled)}`);
     }
   }
@@ -77,6 +103,7 @@ export default function App() {
   const control = controlFor(state);
   const signedIn = !!auth.email;
   const idle = state === "IDLE" || state === "ERROR";
+  const status = !auth.ready ? "Starting…" : !signedIn ? "Sign in to start dictating" : paused ? "Paused from the tray" : statusFor(state);
 
   // Warm one token so the first press doesn't wait on it; drop it when the account changes.
   useEffect(() => {
@@ -101,16 +128,13 @@ export default function App() {
 
   return (
     <main>
-      <p className="eyebrow">PERSONAL VOICE</p>
-      <h1>A place for your voice.</h1>
-      <p className="intro">Speak in any app, and your words are typed where you&apos;re writing.</p>
-      <section aria-labelledby="account-heading">
-        <h2 id="account-heading">Account</h2>
-        <AuthPanel auth={auth} disabled={!idle} />
-      </section>
+      <header className="app-header">
+        <h1>Personal Voice</h1>
+        <p className="intro">Speak in any app, and your words are typed where you&apos;re writing.</p>
+      </header>
       <section aria-labelledby="status-heading">
         <h2 id="status-heading">Dictation</h2>
-        <p className="status" role="status">{paused ? "PAUSED" : state}</p>
+        <p className="status" role="status">{status}</p>
         <button type="button" className="record" disabled={!control.enabled || (state === "IDLE" && !signedIn)} onClick={onControl}>
           {control.label}
         </button>
@@ -121,7 +145,12 @@ export default function App() {
           {!partial && !transcript && <p className="placeholder">Your last transcript will appear here.</p>}
         </div>
       </section>
-      <TriggerSection platform={platform} />
+      <section aria-labelledby="account-heading">
+        <h2 id="account-heading">Account</h2>
+        <AuthPanel auth={auth} disabled={!idle} />
+        {signedIn && <SyncStatus store={personalSync} sync={sync} />}
+      </section>
+      <PlatformSections platform={platform} />
       <section aria-labelledby="transcription-heading">
         <h2 id="transcription-heading">Transcription</h2>
         <TranscriptionSettingsPanel store={personalSync} sync={sync} />
@@ -135,7 +164,7 @@ export default function App() {
         <UpdatePanel updates={updates} busy={!idle} />
       </section>
       <p className="footnote">
-        {paused ? "Dictation paused from the tray" : state === "CONNECTING" || state === "LISTENING" ? "Microphone active" : "Microphone inactive"}
+        {state === "CONNECTING" || state === "LISTENING" ? "Microphone on" : "Microphone off"}
       </p>
     </main>
   );

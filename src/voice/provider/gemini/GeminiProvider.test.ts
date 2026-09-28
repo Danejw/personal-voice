@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TranscriptionEvent } from "../VoiceProvider";
-import { GEMINI_MODEL, GeminiProvider, GeminiSession, setupMessage, toBase64 } from "./GeminiProvider";
-import { CredentialError } from "./GeminiTokenSource";
+import type { TranscriptionEvent } from "@/voice/provider/VoiceProvider";
+import { GEMINI_MODEL, GeminiProvider, GeminiSession, setupMessage, toBase64 } from "@/voice/provider/gemini/GeminiProvider";
+import { CredentialError } from "@/voice/provider/gemini/GeminiTokenSource";
 
 class FakeSocket {
   static readonly OPEN = 1;
@@ -131,6 +131,55 @@ describe("GeminiSession", () => {
     expect(events.at(-1)).toMatchObject({ type: "error", retryable: true });
   });
 
+  describe("after Gemini ends the activity", () => {
+    const activityEnd = { serverContent: { speechState: "NON_SPEECH" }, voiceActivity: { type: "ACTIVITY_END", audioOffset: "2.9s" } };
+
+    async function endedSession(before: (socket: FakeSocket) => void = () => undefined) {
+      const listening = await listeningSession();
+      before(listening.socket);
+      await flush();
+      vi.useFakeTimers();
+      await listening.session.endUtterance();
+      listening.socket.serverSends(activityEnd);
+      await vi.advanceTimersByTimeAsync(0);
+      return listening;
+    }
+    afterEach(() => { vi.useRealTimers(); });
+
+    it("settles a silent utterance on an empty final shortly after, not at the full timeout", async () => {
+      const { events } = await endedSession();
+      await vi.advanceTimersByTimeAsync(749);
+      expect(events.at(-1)).toEqual({ type: "connected" });
+      await vi.advanceTimersByTimeAsync(1);
+      expect(events.at(-1)).toEqual({ type: "finalTranscript", text: "" });
+    });
+
+    it("settles on the segments finalized before Stop when the tail was silent", async () => {
+      const { events } = await endedSession((socket) => {
+        socket.serverSends({ serverContent: { inputTranscription: { text: "First part." } } });
+      });
+      await vi.advanceTimersByTimeAsync(750);
+      expect(events.at(-1)).toEqual({ type: "finalTranscript", text: "First part." });
+    });
+
+    it("still takes a final that arrives within the grace, once", async () => {
+      const { socket, events } = await endedSession();
+      socket.serverSends({ serverContent: { inputTranscription: { text: "Late." } } });
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(events.filter((event) => event.type === "finalTranscript")).toEqual([{ type: "finalTranscript", text: "Late." }]);
+    });
+
+    it("keeps waiting the full timeout while speech is still being transcribed", async () => {
+      const { events } = await endedSession((socket) => {
+        socket.serverSends({ serverContent: { interimInputTranscription: { text: "still talk" } } });
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(events.some((event) => event.type === "finalTranscript")).toBe(false);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(events.at(-1)).toMatchObject({ type: "error", retryable: true });
+    });
+  });
+
   it("rejects connect and emits a non-retryable error when the server refuses setup", async () => {
     const events: TranscriptionEvent[] = [];
     const session = new GeminiSession(credential, config, (event) => events.push(event));
@@ -205,8 +254,8 @@ describe("GeminiProvider.transcribeRecording", () => {
   it("rejects with the provider message when the replay session fails", async () => {
     const provider = new GeminiProvider(tokens());
     const { result, socket } = await replayUntilEnd(provider, new Uint8Array(100).buffer);
-    socket.onclose?.({ code: 1011, reason: "" });
-    await expect(result).rejects.toThrow("Transcription disconnected");
+    socket.onclose?.({ code: 1011, reason: "Internal error" });
+    await expect(result).rejects.toThrow("Transcription disconnected (code 1011). Try again.");
   });
 
   it("aborts cleanly and closes the replay socket", async () => {

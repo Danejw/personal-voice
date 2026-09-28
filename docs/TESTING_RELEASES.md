@@ -39,6 +39,10 @@ Before shipping a personal release:
 [ ] network disconnect is handled
 [ ] app restarts cleanly
 [ ] tray quit actually exits
+[ ] a second launch brings the open window forward; still one process, one paste per utterance
+[ ] Start with Windows on: the Run value points at the installed exe; after signing in to Windows the app is in the tray, window hidden
+[ ] a chosen microphone is the one recorded from; unplugged, it falls back to the system default
+[ ] a silent recording shows "No speech detected…" within about a second of release
 ```
 
 ## Android release smoke test
@@ -55,7 +59,10 @@ Before shipping a personal release:
 [ ] foreground-service notification behaves correctly
 [ ] network disconnect is handled
 [ ] app survives normal background/foreground transitions
+[ ] the bubble stays on screen after rotating with it near an edge
 ```
+
+Latency: dev builds log one `[latency] press→audio … | press→live … | release→final … | final→inserted …` line per utterance in the WebView console. Release builds don't log it.
 
 ## Versioning
 

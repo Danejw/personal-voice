@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
@@ -52,6 +53,7 @@ class FloatingMicService : Service() {
 
   private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
   private var bubble: MicBubbleView? = null
+  private var bubbleLayout: WindowManager.LayoutParams? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -79,12 +81,22 @@ class FloatingMicService : Service() {
     return START_NOT_STICKY
   }
 
+  /** A position saved in one orientation can be off screen in the other. */
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    val view = bubble ?: return
+    val layout = bubbleLayout ?: return
+    clampToScreen(layout)
+    windowManager.updateViewLayout(view, layout)
+  }
+
   override fun onDestroy() {
     bubble?.let {
       if (it.isHolding) emit("cancel")
       windowManager.removeView(it)
     }
     bubble = null
+    bubbleLayout = null
     instance = null
     listener?.onRunningChanged(false)
     super.onDestroy()
@@ -124,6 +136,7 @@ class FloatingMicService : Service() {
       x = prefs.getInt("x", metrics.widthPixels - size - size / 4)
       y = prefs.getInt("y", metrics.heightPixels / 2)
     }
+    clampToScreen(layout)
     var dragOriginX = 0
     var dragOriginY = 0
     val view = MicBubbleView(this, object : MicBubbleView.Callbacks {
@@ -135,8 +148,9 @@ class FloatingMicService : Service() {
         dragOriginY = layout.y
       }
       override fun onDragBy(dx: Int, dy: Int) {
-        layout.x = (dragOriginX + dx).coerceIn(0, metrics.widthPixels - size)
-        layout.y = (dragOriginY + dy).coerceIn(0, metrics.heightPixels - size)
+        layout.x = dragOriginX + dx
+        layout.y = dragOriginY + dy
+        clampToScreen(layout)
         bubble?.let { windowManager.updateViewLayout(it, layout) }
       }
       override fun onDragEnd() {
@@ -145,6 +159,14 @@ class FloatingMicService : Service() {
     })
     windowManager.addView(view, layout)
     bubble = view
+    bubbleLayout = layout
+  }
+
+  /** Reads the current display size, so it stays right after rotation. */
+  private fun clampToScreen(layout: WindowManager.LayoutParams) {
+    val metrics = resources.displayMetrics
+    layout.x = layout.x.coerceIn(0, (metrics.widthPixels - layout.width).coerceAtLeast(0))
+    layout.y = layout.y.coerceIn(0, (metrics.heightPixels - layout.height).coerceAtLeast(0))
   }
 
   private fun buildNotification(): Notification {

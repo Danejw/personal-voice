@@ -28,6 +28,16 @@ pub fn set_push_to_talk_shortcut(shortcut: String) -> Result<(), String> {
     platform::set_push_to_talk_shortcut(&shortcut)
 }
 
+#[tauri::command]
+pub fn get_launch_at_login() -> Result<bool, String> {
+    platform::launch_at_login()
+}
+
+#[tauri::command]
+pub fn set_launch_at_login(enabled: bool) -> Result<(), String> {
+    platform::set_launch_at_login(enabled)
+}
+
 /// While active, Escape cancels the utterance instead of reaching the focused app.
 #[tauri::command]
 pub fn set_dictation_active(active: bool) {

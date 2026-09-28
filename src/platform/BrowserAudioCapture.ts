@@ -1,6 +1,24 @@
-import type { AudioCapture } from "../voice/audio/AudioCapture";
-import { PCM_SAMPLE_RATE } from "../voice/audio/pcm";
-import workletUrl from "../voice/audio/pcm-worklet.ts?worker&url";
+import type { AudioCapture } from "@/voice/audio/AudioCapture";
+import { PCM_SAMPLE_RATE } from "@/voice/audio/pcm";
+import workletUrl from "@/voice/audio/pcm-worklet.ts?worker&url";
+
+const VOICE_AUDIO: MediaTrackConstraints = { channelCount: 1, echoCancellation: true, noiseSuppression: true };
+
+/**
+ * Opens the chosen microphone, or the system default when none is chosen or it's unplugged.
+ * `exact` is required: WebView2 treats an `ideal` deviceId as a hint and opens the default anyway.
+ */
+async function openMicrophone(deviceId: string | null): Promise<MediaStream> {
+  const media = navigator.mediaDevices;
+  if (!deviceId) return media.getUserMedia({ audio: VOICE_AUDIO, video: false });
+  try {
+    return await media.getUserMedia({ audio: { ...VOICE_AUDIO, deviceId: { exact: deviceId } }, video: false });
+  } catch (error) {
+    const missing = error instanceof DOMException && (error.name === "OverconstrainedError" || error.name === "NotFoundError");
+    if (!missing) throw error;
+    return media.getUserMedia({ audio: VOICE_AUDIO, video: false });
+  }
+}
 
 /** Shared Web Audio capture for the foreground Tauri webview. No provider knowledge. */
 export class BrowserAudioCapture implements AudioCapture {
@@ -11,6 +29,9 @@ export class BrowserAudioCapture implements AudioCapture {
   private stopped = false;
   private stopping?: Promise<void>;
 
+  /** `deviceId` is `null` for the system default; an unplugged choice falls back to it. */
+  constructor(private deviceId: string | null = null) {}
+
   async start(onChunk: (chunk: ArrayBuffer) => void, onError: (message: string) => void) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone capture is unavailable in this app environment.");
     try {
@@ -19,9 +40,7 @@ export class BrowserAudioCapture implements AudioCapture {
       const context = this.context = new AudioContext({ sampleRate: PCM_SAMPLE_RATE });
       const resumed = context.resume();
       void resumed.catch(() => undefined);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false,
-      });
+      const stream = await openMicrophone(this.deviceId);
       if (this.stopped) {
         stream.getTracks().forEach((track) => track.stop());
         throw new Error("Recording cancelled.");

@@ -1,5 +1,5 @@
-import type { IndicatorState } from "../../platform/PlatformAdapter";
-import type { DictationSnapshot } from "./DictationController";
+import type { IndicatorState } from "@/platform/PlatformAdapter";
+import type { DictationSnapshot } from "@/voice/session/DictationController";
 
 /** What the floating indicator shows for a snapshot; `null` hides it. */
 export function indicatorFor({ state, error }: DictationSnapshot): IndicatorState | null {

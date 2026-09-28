@@ -5,7 +5,8 @@
 //! re-synthesizes CF_BITMAP from CF_DIB, but content that exists *only* as a
 //! metafile, palette, or private format is not restored.
 
-use std::thread::sleep;
+use std::sync::{Mutex, PoisonError};
+use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
 
 use windows::core::{w, PCWSTR};
@@ -31,9 +32,21 @@ const SNAPSHOT_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 
 type Snapshot = Vec<(u32, Vec<u8>)>;
 
+/// The clipboard restore still waiting out `PASTE_SETTLE` after the last paste.
+static PENDING_RESTORE: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
+
+/// Returns once the paste keystroke is sent; the clipboard is restored after
+/// `PASTE_SETTLE` on a background thread, so dictation is ready again at once.
 pub fn insert_text(text: &str) -> Result<(), String> {
     if text.is_empty() {
         return Ok(());
+    }
+    let mut pending = PENDING_RESTORE
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    // A snapshot taken before the previous restore finishes would save our own transcript.
+    if let Some(restore) = pending.take() {
+        let _ = restore.join();
     }
     let previous = {
         let _open = Clipboard::open()?;
@@ -52,21 +65,38 @@ pub fn insert_text(text: &str) -> Result<(), String> {
 
     wait_for_modifiers_released();
     let pasted = send_paste();
-    sleep(PASTE_SETTLE);
+    *pending = Some(std::thread::spawn(move || {
+        sleep(PASTE_SETTLE);
+        restore(&previous, ours);
+    }));
+    pasted
+}
 
-    // Skip restoring if anything else wrote to the clipboard meanwhile.
-    if unsafe { GetClipboardSequenceNumber() } == ours {
-        if let Ok(_open) = Clipboard::open() {
-            let _ = unsafe { EmptyClipboard() };
-            for (format, bytes) in &previous {
-                let _ = set_bytes(*format, bytes);
-            }
-            if !previous.is_empty() {
-                exclude_from_history();
-            }
+/// Lets a restore still in flight finish, so quitting never leaves the transcript on the clipboard.
+pub fn finish_pending_restore() {
+    let restore = PENDING_RESTORE
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take();
+    if let Some(restore) = restore {
+        let _ = restore.join();
+    }
+}
+
+/// Skipped if anything else wrote to the clipboard since our transcript (`ours`).
+fn restore(previous: &Snapshot, ours: u32) {
+    if unsafe { GetClipboardSequenceNumber() } != ours {
+        return;
+    }
+    if let Ok(_open) = Clipboard::open() {
+        let _ = unsafe { EmptyClipboard() };
+        for (format, bytes) in previous {
+            let _ = set_bytes(*format, bytes);
+        }
+        if !previous.is_empty() {
+            exclude_from_history();
         }
     }
-    pasted
 }
 
 struct Clipboard;

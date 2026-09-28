@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CredentialError } from "../voice/provider/gemini/GeminiTokenSource";
-import { parseTokenResponse } from "./geminiTokenService";
+import { parseTokenResponse } from "@/services/geminiTokenService";
+import { CredentialError } from "@/voice/provider/gemini/GeminiTokenSource";
 
 function failure(status: number, body: unknown): CredentialError {
   try {
@@ -23,7 +23,7 @@ describe("parseTokenResponse", () => {
   });
 
   it("treats server failures and malformed responses as retryable", () => {
-    expect(failure(502, null)).toMatchObject({ message: "The token service failed (HTTP 502).", retryable: true });
+    expect(failure(502, null)).toMatchObject({ message: "Couldn't start transcription (token service error 502). Try again.", retryable: true });
     expect(failure(200, { token: "" })).toMatchObject({ retryable: true });
     expect(failure(200, { token: "auth_tokens/x", newSessionExpireTime: "not a date" })).toMatchObject({ retryable: true });
   });

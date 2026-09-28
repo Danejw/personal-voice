@@ -13,7 +13,7 @@ pub fn create(app: &App) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&open, &pause, &quit])?;
 
     let mut tray = TrayIconBuilder::with_id("main")
-        .tooltip("Personal Voice")
+        .tooltip(tooltip(false))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
@@ -21,6 +21,9 @@ pub fn create(app: &App) -> tauri::Result<()> {
             "pause" => {
                 let paused = pause.is_checked().unwrap_or(false);
                 platform::set_paused(paused);
+                if let Some(tray) = app.tray_by_id("main") {
+                    let _ = tray.set_tooltip(Some(tooltip(paused)));
+                }
                 let _ = app.emit_to("main", "dictation-paused", paused);
             }
             "quit" => app.exit(0),
@@ -41,6 +44,14 @@ pub fn create(app: &App) -> tauri::Result<()> {
     }
     tray.build(app)?;
     Ok(())
+}
+
+fn tooltip(paused: bool) -> &'static str {
+    if paused {
+        "Personal Voice: dictation paused"
+    } else {
+        "Personal Voice"
+    }
 }
 
 pub fn show_main(app: &AppHandle) {

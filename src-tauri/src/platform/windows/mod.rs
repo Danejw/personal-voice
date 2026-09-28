@@ -1,3 +1,4 @@
+mod autostart;
 mod hook;
 mod insert;
 mod push_to_talk;
@@ -8,8 +9,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SW_SHOWNOACTIVATE,
 };
 
+pub use autostart::{launch_at_login, set_launch_at_login};
 pub use hook::{set_active as set_dictation_active, set_paused};
-pub use insert::insert_text;
+pub use insert::{finish_pending_restore, insert_text};
 
 use push_to_talk::{PttEvent, Shortcut};
 

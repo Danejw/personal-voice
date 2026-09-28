@@ -10,6 +10,12 @@ export const GEMINI_MODEL = "gemini-3.5-transcribe-live";
 const ENDPOINT = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained";
 const CONNECT_TIMEOUT_MS = 15_000;
 const FINAL_TIMEOUT_MS = 10_000;
+/**
+ * After activityEnd, Gemini sends the final transcript, then `voiceActivity: ACTIVITY_END`
+ * (observed within the same millisecond). When nothing was said it sends only ACTIVITY_END,
+ * so a final that hasn't arrived shortly after it isn't coming.
+ */
+const ACTIVITY_END_GRACE_MS = 750;
 /** WebSocket close codes that mean the request itself was refused (bad argument, bad token/permission). */
 const REFUSED_CLOSE_CODES = new Set([1007, 1008]);
 /** Recovery replays buffered audio in half-second messages, throttled by the socket's send buffer. */
@@ -140,6 +146,8 @@ export class GeminiSession implements TranscriptionSession {
   private messages = Promise.resolve();
   /** Finalized segments emitted on in-utterance pauses, before Stop. */
   private committed: string[] = [];
+  /** An interim hypothesis arrived that no final has settled yet. */
+  private transcribing = false;
   private options: SessionOptions;
 
   constructor(
@@ -162,7 +170,7 @@ export class GeminiSession implements TranscriptionSession {
         (token) => this.open(token),
         (error: unknown) => {
           if (error instanceof CredentialError) this.fail(error.message, error.retryable);
-          else this.fail("Could not get a transcription credential.", true);
+          else this.fail("Couldn't start transcription. Check your connection and try again.", true);
         },
       );
     });
@@ -193,7 +201,7 @@ export class GeminiSession implements TranscriptionSession {
   async endUtterance() {
     if (this.phase !== "listening") throw new Error("Transcription is not listening.");
     this.phase = "finalizing";
-    this.timer = setTimeout(() => this.fail("No final transcript arrived.", true), this.options.finalTimeoutMs);
+    this.timer = setTimeout(() => this.fail("Transcription didn't finish. Try again.", true), this.options.finalTimeoutMs);
     this.send({ realtimeInput: { activityEnd: {} } });
   }
 
@@ -229,8 +237,10 @@ export class GeminiSession implements TranscriptionSession {
       socket.onerror = () => this.fail("Could not reach transcription. Check your connection.", true);
       socket.onclose = (event: CloseEvent) => {
         if (this.phase === "closed" || this.phase === "done") return;
-        const reason = event.reason ? ` (${event.code}: ${redact(event.reason)})` : "";
-        this.fail(`Transcription disconnected before completion${reason}.`, !REFUSED_CLOSE_CODES.has(event.code));
+        // Only a refusal's reason helps the user (for example an invalid setting); others are noise.
+        const refused = REFUSED_CLOSE_CODES.has(event.code);
+        const detail = refused && event.reason ? `${event.code}: ${redact(event.reason)}` : `code ${event.code}`;
+        this.fail(`Transcription disconnected (${detail}).${refused ? "" : " Try again."}`, !refused);
       };
     } catch { this.fail("Could not open the transcription connection.", true); }
   }
@@ -260,18 +270,36 @@ export class GeminiSession implements TranscriptionSession {
     if (this.phase !== "listening" && this.phase !== "finalizing") return;
     const content = record(message.serverContent);
     const interim = record(content.interimInputTranscription).text;
-    if (typeof interim === "string") this.emit({ type: "partialTranscript", text: this.joined(interim) });
+    if (typeof interim === "string") {
+      this.transcribing = true;
+      this.emit({ type: "partialTranscript", text: this.joined(interim) });
+    }
     const final = record(content.inputTranscription).text;
-    if (typeof final !== "string") return;
-    if (this.phase === "listening") {
+    if (typeof final === "string") {
+      this.transcribing = false;
+      if (this.phase === "finalizing") {
+        this.finish(this.joined(final));
+        return;
+      }
       this.committed.push(final);
       this.emit({ type: "partialTranscript", text: this.joined() });
-      return;
     }
-    // The first final after activityEnd closes the utterance; later duplicates are dropped by phase "done".
+    if (this.phase === "finalizing" && record(message.voiceActivity).type === "ACTIVITY_END") this.awaitLastFinal();
+  }
+
+  /** Nothing left to transcribe settles on the segments so far (possibly none); pending speech keeps the full timeout. */
+  private awaitLastFinal() {
+    if (this.transcribing) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.finish(this.joined()), ACTIVITY_END_GRACE_MS);
+  }
+
+  /** The first final after activityEnd closes the utterance; later duplicates are dropped by phase "done". */
+  private finish(text: string) {
+    if (this.phase !== "finalizing") return;
     this.phase = "done";
     clearTimeout(this.timer);
-    this.emit({ type: "finalTranscript", text: this.joined(final) });
+    this.emit({ type: "finalTranscript", text });
   }
 
   private fail(message: string, retryable: boolean) {

@@ -1,8 +1,10 @@
-import type { AudioCapture } from "../audio/AudioCapture";
-import { concatPcm, PCM_BYTES_PER_MS } from "../audio/pcm";
-import type { TranscriptionEvent, TranscriptionSession, VoiceProvider } from "../provider/VoiceProvider";
-import { initialVoiceState, voiceReducer } from "./state";
-import type { VoiceAction, VoiceState } from "./state";
+import type { AudioCapture } from "@/voice/audio/AudioCapture";
+import { concatPcm, PCM_BYTES_PER_MS } from "@/voice/audio/pcm";
+import type { TranscriptionEvent, TranscriptionSession, VoiceProvider } from "@/voice/provider/VoiceProvider";
+import { initialVoiceState, voiceReducer } from "@/voice/session/state";
+import type { VoiceAction, VoiceState } from "@/voice/session/state";
+import { timingsFrom } from "@/voice/session/timings";
+import type { UtteranceMarks, UtteranceTimings } from "@/voice/session/timings";
 
 export interface DictationSnapshot {
   state: VoiceState;
@@ -37,6 +39,12 @@ export const defaultDictationLimits: DictationLimits = {
   recoveryTimeoutMs: 30_000,
 };
 
+export interface DictationOptions extends Partial<DictationLimits> {
+  /** Called once per inserted utterance with its stage durations. */
+  onTimings?: (timings: UtteranceTimings) => void;
+  now?: () => number;
+}
+
 /** The live streaming path for one utterance. Once `lost`, only recovery can produce its transcript. */
 type LivePath =
   | { kind: "connecting"; session: TranscriptionSession }
@@ -59,7 +67,11 @@ interface Utterance {
   recovery?: Promise<void>;
   abort?: AbortController;
   timer?: ReturnType<typeof setTimeout>;
+  marks: UtteranceMarks;
 }
+
+/** Shown when the provider heard no words; a mic that is muted or too quiet looks like this. */
+export const NO_SPEECH = "No speech detected. Check your microphone and try again.";
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : typeof error === "string" ? error : "Something went wrong.";
@@ -75,14 +87,18 @@ export class DictationController {
   private snapshot = initialDictationSnapshot;
   private utt?: Utterance;
   private limits: DictationLimits;
+  private onTimings?: (timings: UtteranceTimings) => void;
+  private now: () => number;
 
   constructor(
     private createCapture: () => AudioCapture,
     private onChange: (snapshot: DictationSnapshot) => void,
     private insertText: (text: string) => Promise<void>,
-    limits: Partial<DictationLimits> = {},
+    { onTimings, now = () => performance.now(), ...limits }: DictationOptions = {},
   ) {
     this.limits = { ...defaultDictationLimits, ...limits };
+    this.onTimings = onTimings;
+    this.now = now;
   }
 
   get current(): DictationSnapshot {
@@ -98,6 +114,7 @@ export class DictationController {
   /** Must be called directly from the user gesture (or push-to-talk) so audio capture may start. */
   async start(provider: VoiceProvider): Promise<void> {
     if (this.snapshot.state !== "IDLE") return;
+    const marks: UtteranceMarks = { pressed: this.now() };
     this.dispatch({ type: "start" }, { partial: "", transcript: "", error: null, utterance: this.snapshot.utterance + 1 });
 
     let utt: Utterance | undefined;
@@ -109,7 +126,7 @@ export class DictationController {
       return;
     }
     const current: Utterance = utt = this.utt = {
-      provider, capture: this.createCapture(), live: { kind: "connecting", session }, audio: [], bytes: 0, sent: 0,
+      provider, capture: this.createCapture(), live: { kind: "connecting", session }, audio: [], bytes: 0, sent: 0, marks,
     };
 
     // Capture starts before any await so it stays inside the user gesture.
@@ -135,6 +152,7 @@ export class DictationController {
     const state = this.snapshot.state;
     if (!utt || (state !== "CONNECTING" && state !== "LISTENING")) return;
     clearTimeout(utt.timer);
+    utt.marks.released = this.now();
     this.dispatch({ type: "finish" });
     try {
       // Trailing audio must reach the buffer (and live session) before the end of speech is signalled.
@@ -182,6 +200,7 @@ export class DictationController {
       }
       if (utt !== this.utt || utt.live.kind !== "connecting") return;
       utt.live = { kind: "streaming", session };
+      utt.marks.live = this.now();
       if (this.state() === "CONNECTING") this.dispatch({ type: "connected" });
       if (utt.flushed) {
         await utt.flushed;
@@ -266,6 +285,7 @@ export class DictationController {
   private handleChunk(utt: Utterance, chunk: ArrayBuffer) {
     const state = this.snapshot.state;
     if (utt !== this.utt || (state !== "CONNECTING" && state !== "LISTENING" && state !== "FINALIZING")) return;
+    utt.marks.audio ??= this.now();
     utt.audio.push(chunk);
     utt.bytes += chunk.byteLength;
     const { live } = utt;
@@ -301,11 +321,20 @@ export class DictationController {
   private async deliver(utt: Utterance, raw: string) {
     if (utt !== this.utt || this.state() !== "FINALIZING") return;
     const text = raw.trim();
+    if (!text) {
+      await this.fail(NO_SPEECH);
+      return;
+    }
+    const { marks } = utt;
+    marks.final = this.now();
+    const recovered = utt.live.kind === "lost";
     this.dispatch({ type: "transcribed" }, { partial: "", transcript: text });
     void this.release();
     try {
-      if (text) await this.insertText(text);
+      await this.insertText(text);
       this.dispatch({ type: "inserted" });
+      const timings = timingsFrom(marks, this.now(), recovered);
+      if (timings) this.onTimings?.(timings);
     } catch (error) {
       await this.fail(error);
     }

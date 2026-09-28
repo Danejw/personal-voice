@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { AudioCapture } from "../audio/AudioCapture";
-import type { TranscriptionEvent, TranscriptionSession, VoiceProvider } from "../provider/VoiceProvider";
-import { DictationController } from "./DictationController";
-import type { DictationLimits, DictationSnapshot } from "./DictationController";
+import type { AudioCapture } from "@/voice/audio/AudioCapture";
+import type { TranscriptionEvent, TranscriptionSession, VoiceProvider } from "@/voice/provider/VoiceProvider";
+import { DictationController, NO_SPEECH } from "@/voice/session/DictationController";
+import type { DictationOptions, DictationSnapshot } from "@/voice/session/DictationController";
+import { formatTimings } from "@/voice/session/timings";
+import type { UtteranceTimings } from "@/voice/session/timings";
 
 class FakeCapture implements AudioCapture {
   onChunk?: (chunk: ArrayBuffer) => void;
@@ -51,7 +53,7 @@ const chunk = (value: number) => new Uint8Array([value]).buffer;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function setup(options: { limits?: Partial<DictationLimits>; recoverable?: boolean } = {}) {
+function setup(options: { limits?: DictationOptions; recoverable?: boolean } = {}) {
   const capture = new FakeCapture();
   const snapshots: DictationSnapshot[] = [];
   const inserted: string[] = [];
@@ -113,13 +115,14 @@ describe("DictationController", () => {
     expect(inserted).toEqual(["Once."]);
   });
 
-  it("does not insert an empty transcript", async () => {
+  it("reports an empty transcript as no speech and inserts nothing", async () => {
     const { controller, current, listen, inserted } = setup();
     await listen();
     await controller.stop();
     current().emit({ type: "finalTranscript", text: "   " });
     await flush();
-    expect(controller.current.state).toBe("IDLE");
+    expect(controller.current).toMatchObject({ state: "ERROR", error: NO_SPEECH });
+    expect(current().calls.at(-1)).toBe("close");
     expect(inserted).toEqual([]);
   });
 
@@ -397,7 +400,7 @@ describe("DictationController recovery", () => {
     expect(inserted).toEqual(["Current."]);
   });
 
-  it("treats a recovery with an empty transcript as a silent utterance", async () => {
+  it("reports a recovery with an empty transcript as no speech", async () => {
     const { controller, current, listen, inserted, recoveries } = setup();
     await listen();
     current().drop();
@@ -405,7 +408,7 @@ describe("DictationController recovery", () => {
     await flush();
     recoveries[0]?.resolve("");
     await flush();
-    expect(controller.current.state).toBe("IDLE");
+    expect(controller.current).toMatchObject({ state: "ERROR", error: NO_SPEECH });
     expect(inserted).toEqual([]);
   });
 });
@@ -433,5 +436,53 @@ describe("DictationController limits", () => {
     current().emit({ type: "finalTranscript", text: "Long." });
     await flush();
     expect(inserted).toEqual(["Long."]);
+  });
+});
+
+describe("DictationController timings", () => {
+  /** A clock that advances 10 ms per reading, so each stage has a known duration. */
+  function ticking() {
+    let t = 0;
+    return () => (t += 10);
+  }
+
+  it("reports stage durations for an inserted live utterance", async () => {
+    const timings: UtteranceTimings[] = [];
+    const { capture, controller, current, listen } = setup({ limits: { now: ticking(), onTimings: (t) => timings.push(t) } });
+    await listen();
+    capture.onChunk?.(chunk(1));
+    await controller.stop();
+    current().emit({ type: "finalTranscript", text: "Timed." });
+    await flush();
+    expect(timings).toHaveLength(1);
+    const [first] = timings;
+    expect(first?.recovered).toBe(false);
+    expect(first?.pressToLive).toBeGreaterThan(0);
+    expect(first?.pressToAudio).toBeGreaterThan(first?.pressToLive ?? Infinity);
+    expect(first?.releaseToFinal).toBe(10);
+    expect(first?.finalToInserted).toBe(10);
+  });
+
+  it("marks recovered utterances and skips empty ones", async () => {
+    const timings: UtteranceTimings[] = [];
+    const { controller, current, listen, recoveries } = setup({ limits: { now: ticking(), onTimings: (t) => timings.push(t) } });
+    await listen();
+    current().drop();
+    await controller.stop();
+    await flush();
+    recoveries[0]?.resolve("Recovered.");
+    await flush();
+    expect(timings[0]?.recovered).toBe(true);
+
+    await listen();
+    await controller.stop();
+    current().emit({ type: "finalTranscript", text: "  " });
+    await flush();
+    expect(timings).toHaveLength(1);
+  });
+
+  it("formats one line without transcript content", () => {
+    expect(formatTimings({ pressToAudio: 120, pressToLive: null, releaseToFinal: 640, finalToInserted: 25, recovered: true }))
+      .toBe("press→audio 120 ms · press→live – · release→final 640 ms (recovered) · final→inserted 25 ms");
   });
 });

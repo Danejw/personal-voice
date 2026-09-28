@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SelectField } from "@/components/SelectField";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import {
   loadPushToTalk, PUSH_TO_TALK_PRESETS, pushToTalkLabel, savePushToTalk,
@@ -26,14 +27,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
         Hold <strong>{pushToTalkLabel(shortcut)}</strong> in any app, speak, and release. Press Esc while speaking to
         cancel. Closing this window keeps dictation running in the tray.
       </p>
-      <label className="field">
-        <span>Hold to dictate</span>
-        <select value={shortcut} onChange={(event) => setShortcut(event.target.value)}>
-          {PUSH_TO_TALK_PRESETS.map((preset) => (
-            <option key={preset.value} value={preset.value}>{preset.label}</option>
-          ))}
-        </select>
-      </label>
+      <SelectField label="Hold to dictate" value={shortcut} options={PUSH_TO_TALK_PRESETS} onChange={setShortcut} />
       {error && <p className="error" role="alert">{error}</p>}
     </>
   );

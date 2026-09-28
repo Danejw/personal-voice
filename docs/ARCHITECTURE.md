@@ -141,6 +141,8 @@ Phase 8 added `checkForUpdate()`, which returns an `AvailableUpdate` (`version`,
 - **Windows** (`action: "restart"`): `tauri-plugin-updater`, registered only on desktop. It reads `latest.json` from the latest GitHub release, verifies the installer against the minisign public key in `tauri.conf.json` (`requireSignedVersion`, so an old signed installer can't be announced as a newer version), and runs the NSIS installer in passive mode. The installer closes the app and reopens it.
 - **Android** (`action: "download"`): Tauri's updater is desktop-only. `releaseService` reads GitHub's latest-release API, `parseAndroidRelease` accepts only `PersonalVoice-<tag version>.apk` from this repo's release downloads, and `install()` calls the Kotlin `open_download` command, which only opens `https://github.com/...` links in the browser. Android's package installer does the rest, and it refuses an APK signed with another key.
 
+Phase 9: `createPlatformAdapter()` returns `AppPlatform`, the union of the two concrete adapters. Platform-only settings panels narrow on `platform.platform` (one switch in `App.tsx`), so launch at startup (`getLaunchAtLogin`/`setLaunchAtLogin`) exists only on `WindowsPlatformAdapter`, with no Android stubs. Per-device settings that aren't synced (microphone, indicator visibility) live in `src/settings/deviceSettings.ts`, next to the push-to-talk shortcut.
+
 The shared `src/updates/` holds the version comparison, the release parsing, and the `updateReducer` state machine (`idle → checking → available/upToDate → installing → handedOff | error`). The startup check fails quietly offline; a check the user asks for reports errors. `UpdatePanel` disables install while dictation isn't idle, because installing on Windows closes the app.
 
 ## Application state
@@ -236,7 +238,8 @@ As implemented (Phase 5, details in `docs/PHASE_5_REPORT.md`):
 - The cache (`localStorage`, one entry per account) holds only server-confirmed data. When Supabase is unreachable, the cached copy is shown read-only with a Retry button. There is no offline write queue.
 - Supabase calls live in `src/services/personalSyncService.ts`, typed by `src/types/database.ts`. RLS limits every row to its owner.
 - `App` builds each session's provider config at press time from `transcriptionPreferences()`. That config is provider-neutral (`TranscriptionPreferences` in `VoiceProvider.ts`), and `geminiConfigFrom()` maps it to Gemini's `mode`, `languageCodes`, and `customVocabulary`.
-- Synced: Smart transcription and language. Local only: the push-to-talk shortcut.
+- Synced: Smart transcription and language. Local only: the push-to-talk shortcut, the microphone, and whether the indicator shows.
+- Phase 9: the sync status (with Retry) moved to the Account section, and the edit panels say why they're read-only. While offline, the store reloads on its own when the browser reports `online` or the window becomes visible again. There is still no polling.
 
 ## Failure recovery
 
@@ -256,6 +259,7 @@ As implemented (Phase 3, `src/voice/session/DictationController.ts`):
 - The live path is a small tagged state per utterance (`connecting`, `streaming`, `ending`, `lost`) instead of lifecycle booleans. The visible lifecycle is still the `voiceReducer` states.
 - Provider errors carry `retryable`. A retryable loss of the live session (network drop, connect or final-transcript timeout, `goAway`) keeps recording if the user is still speaking. On release the buffered audio goes to `VoiceProvider.transcribeRecording`. For Gemini that replays the buffer into a fresh Live session with a new ephemeral token, throttled by the socket's send buffer. Phase 3 first used a unary `generateContent` call, but ephemeral tokens are Live-only, so Phase 4 replaced it. The controller's recovery timeout is 30 s plus the utterance's length. A non-retryable error (signed out, not allowed, refused config) goes straight to ERROR.
 - Release while still connecting finalizes immediately. The controller waits up to 2 s for the live session, then recovers from the buffer. Recordings under 250 ms are discarded as accidental taps. Recording auto-stops at 5 minutes.
+- Phase 9: an empty transcript is an error ("No speech detected…"), not a silent success. Gemini sends `voiceActivity: ACTIVITY_END` after `activityEnd`. When no transcription is still in progress, `GeminiProvider` finishes 750 ms after that instead of waiting for the 10 s final timeout, so a silent recording now fails in about 1 s instead of about 25 s. The controller records per-utterance timings (`src/voice/session/timings.ts`), which dev builds log as `[latency] …`.
 
 ## Future Assistant Mode
 

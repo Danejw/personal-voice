@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import type { AuthState } from "./useAuth";
+import type { AuthState } from "@/auth/useAuth";
 
 interface AuthPanelProps {
   auth: AuthState;

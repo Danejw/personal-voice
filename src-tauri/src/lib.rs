@@ -9,12 +9,20 @@ use tauri::{Manager, PhysicalPosition, WindowEvent};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
+    // Must be the first plugin: a second launch hands over to the running app and exits
+    // before it installs a second push-to-talk hook (which would paste every transcript twice).
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        if !args.iter().any(|arg| arg == platform::AUTOSTART_ARG) {
+            tray::show_main(app);
+        }
+    }));
     #[cfg(target_os = "android")]
     let builder = builder.plugin(platform::android::plugin());
     // Android updates go through the browser and the package installer instead.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
-    builder
+    let app = builder
         .setup(|app| {
             #[cfg(desktop)]
             {
@@ -22,6 +30,10 @@ pub fn run() {
                 place_indicator(app)?;
                 if let Err(error) = platform::start_push_to_talk(app.handle().clone()) {
                     eprintln!("{error}");
+                }
+                // Settings starts hidden; a launch at sign-in stays in the tray.
+                if !std::env::args().any(|arg| arg == platform::AUTOSTART_ARG) {
+                    tray::show_main(app.handle());
                 }
             }
             #[cfg(mobile)]
@@ -46,9 +58,16 @@ pub fn run() {
             commands::set_dictation_active,
             commands::show_indicator,
             commands::hide_indicator,
+            commands::get_launch_at_login,
+            commands::set_launch_at_login,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+    app.run(|_app, event| {
+        if let tauri::RunEvent::Exit = event {
+            platform::finish_pending_restore();
+        }
+    });
 }
 
 /// Bottom-centre of the primary work area, click-through.
