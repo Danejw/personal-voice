@@ -136,6 +136,13 @@ Shared UI should call the adapter, not the operating system directly.
 
 As implemented (Phase 2, `src/platform/PlatformAdapter.ts`): `insertText`, `showIndicator(state)`, `hideIndicator`, `setPushToTalkShortcut`, `setDictationActive` (routes Escape to cancel), `onPushToTalk` (press/release/cancel) and `onPausedChange`. Phase 6 added `createCapture()`: both platforms produce the same 16 kHz PCM16 chunks for the shared `DictationController`, via Web Audio (`BrowserAudioCapture`) on Windows and native `AudioRecord` (`NativeAudioCapture` → Kotlin `NativeMicCapture`) on Android, because the Android WebView cannot open the microphone while the app is hidden behind the floating mic. The adapter is chosen once in `src/platform/index.ts`. The Rust side is `src-tauri/src/commands` (IPC) plus `src-tauri/src/platform/<os>`.
 
+Phase 8 added `checkForUpdate()`, which returns an `AvailableUpdate` (`version`, `notes`, `action`, `install()`) or `null`:
+
+- **Windows** (`action: "restart"`): `tauri-plugin-updater`, registered only on desktop. It reads `latest.json` from the latest GitHub release, verifies the installer against the minisign public key in `tauri.conf.json` (`requireSignedVersion`, so an old signed installer can't be announced as a newer version), and runs the NSIS installer in passive mode. The installer closes the app and reopens it.
+- **Android** (`action: "download"`): Tauri's updater is desktop-only. `releaseService` reads GitHub's latest-release API, `parseAndroidRelease` accepts only `PersonalVoice-<tag version>.apk` from this repo's release downloads, and `install()` calls the Kotlin `open_download` command, which only opens `https://github.com/...` links in the browser. Android's package installer does the rest, and it refuses an APK signed with another key.
+
+The shared `src/updates/` holds the version comparison, the release parsing, and the `updateReducer` state machine (`idle → checking → available/upToDate → installing → handedOff | error`). The startup check fails quietly offline; a check the user asks for reports errors. `UpdatePanel` disables install while dictation isn't idle, because installing on Windows closes the app.
+
 ## Application state
 
 Use an explicit lifecycle.

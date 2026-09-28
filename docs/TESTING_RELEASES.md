@@ -86,6 +86,16 @@ Do not put signing secrets in the repository.
 
 Use Tauri's supported desktop update mechanism once packaging is stable.
 
+As implemented (Phase 8): `tauri-plugin-updater` with `latest.json` from GitHub Releases, signed by the updater key in CI. See `docs/RELEASING.md`.
+
+```text
+[ ] Updates section shows the installed version
+[ ] a newer published release shows "Version X is available" with its notes
+[ ] Install and restart is disabled while dictating
+[ ] Install and restart: the app closes, the installer runs, and the new version reopens
+[ ] sign-in, dictionary, and settings are still there
+```
+
 ## Android updates
 
 For personal sideloading, V1 may simply:
@@ -96,6 +106,15 @@ For personal sideloading, V1 may simply:
 4. let Android perform the package update
 
 Do not build a custom silent updater.
+
+As implemented (Phase 8): the latest-release API on GitHub, then the browser download, then Android's package installer.
+
+```text
+[ ] a newer published release shows "Version X is available"
+[ ] Download update opens the APK download in the browser
+[ ] opening the download shows Android's update screen, and it installs
+[ ] the app reopens on the new version with sign-in, dictionary, and permissions intact
+```
 
 ## Release rule
 
