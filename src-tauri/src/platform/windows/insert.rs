@@ -1,5 +1,4 @@
-//! Clipboard + Ctrl+V insertion, and Ctrl+C selection capture, into whichever
-//! window is focused at call time.
+//! Clipboard + Ctrl+V insertion into whichever window is focused at insertion time.
 //!
 //! The prior clipboard is snapshotted and restored. Only memory-backed (HGLOBAL)
 //! formats can be copied; GDI-handle and private formats are skipped. Windows
@@ -21,16 +20,14 @@ use windows::Win32::System::Memory::{
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-    KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_C, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT, VK_V,
+    KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT, VK_V,
 };
-use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
 
 use super::hook::SYNTHETIC_INPUT_MARK;
 
 const CF_UNICODETEXT: u32 = 13;
-/// Long enough for Chromium/Electron apps to read or write the clipboard asynchronously.
+/// Long enough for Chromium/Electron apps to read the clipboard asynchronously.
 const PASTE_SETTLE: Duration = Duration::from_millis(400);
-const COPY_SETTLE: Duration = PASTE_SETTLE;
 const SNAPSHOT_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 
 type Snapshot = Vec<(u32, Vec<u8>)>;
@@ -73,36 +70,6 @@ pub fn insert_text(text: &str) -> Result<(), String> {
         restore(&previous, ours);
     }));
     pasted
-}
-
-/// Copies the focused app's selection, then restores the previous clipboard.
-pub fn capture_selection() -> Result<(String, Option<String>), String> {
-    finish_pending_restore();
-    let source = foreground_title();
-    let previous = {
-        let _open = Clipboard::open()?;
-        snapshot()
-    };
-    let before = unsafe { GetClipboardSequenceNumber() };
-    wait_for_modifiers_released();
-    send_copy()?;
-    sleep(COPY_SETTLE);
-    let after = unsafe { GetClipboardSequenceNumber() };
-    if after == before {
-        return Err("No text is selected in the other app.".into());
-    }
-    let text = match clipboard_unicode_text() {
-        Ok(text) => text,
-        Err(err) => {
-            restore(&previous, after);
-            return Err(err);
-        }
-    };
-    restore(&previous, after);
-    if text.is_empty() {
-        return Err("No text is selected in the other app.".into());
-    }
-    Ok((text, source))
 }
 
 /// Lets a restore still in flight finish, so quitting never leaves the transcript on the clipboard.
@@ -258,114 +225,24 @@ fn key(vk: VIRTUAL_KEY, flags: KEYBD_EVENT_FLAGS) -> INPUT {
 }
 
 fn send_paste() -> Result<(), String> {
-    send_ctrl(
-        VK_V,
-        "Windows blocked the paste keystroke. The focused app may be running as administrator.",
-    )
-}
-
-fn send_copy() -> Result<(), String> {
-    send_ctrl(
-        VK_C,
-        "Windows blocked the copy keystroke. The focused app may be running as administrator.",
-    )
-}
-
-fn send_ctrl(vk: VIRTUAL_KEY, blocked: &str) -> Result<(), String> {
     let none = KEYBD_EVENT_FLAGS(0);
     let inputs = [
         key(VK_CONTROL, none),
-        key(vk, none),
-        key(vk, KEYEVENTF_KEYUP),
+        key(VK_V, none),
+        key(VK_V, KEYEVENTF_KEYUP),
         key(VK_CONTROL, KEYEVENTF_KEYUP),
     ];
     let sent = unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) };
     if sent as usize == inputs.len() {
         Ok(())
     } else {
-        Err(blocked.into())
+        Err(
+            "Windows blocked the paste keystroke. The focused app may be running as administrator."
+                .into(),
+        )
     }
-}
-
-fn clipboard_unicode_text() -> Result<String, String> {
-    let _open = Clipboard::open()?;
-    let handle = unsafe { GetClipboardData(CF_UNICODETEXT) }
-        .map_err(|_| "No text is selected in the other app.".to_string())?;
-    let memory = HGLOBAL(handle.0);
-    unsafe {
-        let size = GlobalSize(memory);
-        let data = GlobalLock(memory) as *const u8;
-        if data.is_null() {
-            return Err("Could not read the selected text.".into());
-        }
-        let bytes = std::slice::from_raw_parts(data, size);
-        let text = utf16le_nul_terminated(bytes);
-        let _ = GlobalUnlock(memory);
-        text
-    }
-}
-
-fn foreground_title() -> Option<String> {
-    let hwnd = unsafe { GetForegroundWindow() };
-    if hwnd.is_invalid() {
-        return None;
-    }
-    let mut buf = [0u16; 512];
-    let len = unsafe { GetWindowTextW(hwnd, &mut buf) };
-    if len <= 0 {
-        return None;
-    }
-    String::from_utf16(&buf[..len as usize])
-        .ok()
-        .filter(|title| !title.is_empty())
 }
 
 fn utf16_bytes(data: &[u16]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(data.as_ptr().cast::<u8>(), std::mem::size_of_val(data)) }
-}
-
-/// Clipboard `CF_UNICODETEXT` is UTF-16LE, usually NUL-terminated, sometimes with a trailing odd byte.
-fn utf16le_nul_terminated(bytes: &[u8]) -> Result<String, String> {
-    if bytes.len() < 2 {
-        return Ok(String::new());
-    }
-    let even = bytes.len() & !1;
-    let (pairs, _) = bytes[..even].as_chunks::<2>();
-    let units: Vec<u16> = pairs
-        .iter()
-        .map(|chunk| u16::from_le_bytes(*chunk))
-        .take_while(|&unit| unit != 0)
-        .collect();
-    String::from_utf16(&units).map_err(|_| "The selected text is not valid Unicode.".into())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::utf16le_nul_terminated;
-
-    #[test]
-    fn reads_nul_terminated_utf16le() {
-        let mut bytes = Vec::new();
-        for unit in "Hi".encode_utf16() {
-            bytes.extend_from_slice(&unit.to_le_bytes());
-        }
-        bytes.extend_from_slice(&0u16.to_le_bytes());
-        bytes.extend_from_slice(&0xABCDu16.to_le_bytes());
-        assert_eq!(utf16le_nul_terminated(&bytes).unwrap(), "Hi");
-    }
-
-    #[test]
-    fn empty_when_only_nul() {
-        assert_eq!(utf16le_nul_terminated(&[0, 0]).unwrap(), "");
-    }
-
-    #[test]
-    fn odd_trailing_byte_is_ignored() {
-        let mut bytes = Vec::new();
-        for unit in "A".encode_utf16() {
-            bytes.extend_from_slice(&unit.to_le_bytes());
-        }
-        bytes.push(0xFF);
-        assert_eq!(utf16le_nul_terminated(&bytes).unwrap(), "A");
-    }
 }

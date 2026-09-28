@@ -8,8 +8,6 @@ Give Cursor/Codex one Markdown prompt at a time, in numeric order.
 Do not skip ahead unless you intentionally change the dependency sequence.
 The existing Gemini 3.5 Transcribe dictation pipeline remains the baseline throughout.
 
-Implementation reports for completed PV phases: [`docs/PV-Phases/`](../../docs/PV-Phases/README.md).
-
 ## Build order
 
 - `01-PV2-dictation-destinations.md`

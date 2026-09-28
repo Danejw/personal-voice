@@ -2,12 +2,12 @@
     <string name="app_name">"Personal Voice"</string>
     <string name="main_activity_title">"Personal Voice"</string>
     <string name="accessibility_label">Personal Voice dictation</string>
-    <string name="accessibility_description">Types your dictated text into the text field you are using, and can read the text you have selected in that field when you ask. Personal Voice looks only at the focused field, and only when you finish dictating or capture a selection. It does not read, record, or store anything else on screen.</string>
+    <string name="accessibility_description">Types your dictated text into the text field you are using. Personal Voice looks only at the focused field, and only when you finish dictating. It does not read, record, or store anything else on screen.</string>
     <string name="floating_mic_channel">Floating mic</string>
     <string name="floating_mic_channel_description">Shown while the floating mic is on.</string>
     <string name="floating_mic_title">Floating mic is on</string>
-    <string name="floating_mic_text">Tap the mic for quick actions. Hold it in any app to dictate. Audio is recorded only while you hold it.</string>
+    <string name="floating_mic_text">Hold the mic in any app to dictate. Audio is recorded only while you hold it.</string>
     <string name="floating_mic_turn_off">Turn off</string>
-    <string name="floating_mic_hold">Tap for actions, hold to dictate</string>
+    <string name="floating_mic_hold">Hold to dictate</string>
     <string name="floating_mic_app_closed">Open Personal Voice to use the floating mic.</string>
 </resources>

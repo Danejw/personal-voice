@@ -29,39 +29,3 @@ class TextSpliceTest {
     assertEquals(Splice("Persyn", 6), spliceText("", 0, 0, "Persyn"))
   }
 }
-
-class FieldSelectionTest {
-  @Test
-  fun readsTheHighlightedRange() {
-    assertEquals(FieldSelection.Text("world"), selectionFromField("Hello world", 6, 11, false))
-  }
-
-  @Test
-  fun readsASelectionMadeBackwards() {
-    assertEquals(FieldSelection.Text("world"), selectionFromField("Hello world", 11, 6, false))
-  }
-
-  @Test
-  fun refusesACollapsedCursor() {
-    assertEquals(
-      FieldSelection.None("No text is selected in the other app."),
-      selectionFromField("Hello", 2, 2, false),
-    )
-  }
-
-  @Test
-  fun refusesHintText() {
-    assertEquals(
-      FieldSelection.None("No text is selected in the other app."),
-      selectionFromField("Search", 0, 6, true),
-    )
-  }
-
-  @Test
-  fun refusesAnUnknownRange() {
-    assertEquals(
-      FieldSelection.None("No text is selected in the other app."),
-      selectionFromField("Hello", -1, -1, false),
-    )
-  }
-}

@@ -7,10 +7,10 @@ interface SyncStatusProps {
 
 function statusLabel(status: Status): string {
   switch (status) {
-    case "signed-out": return "Sign in";
+    case "signed-out": return "Sign in to sync settings and dictionary.";
     case "loading": return "Syncing…";
-    case "synced": return "Synced";
-    case "offline": return "Offline";
+    case "synced": return "Settings and dictionary are synced.";
+    case "offline": return "Offline. Changes are paused until the connection is back.";
     default: {
       const unhandled: never = status;
       throw new Error(`Unhandled sync status: ${String(unhandled)}`);

@@ -15,18 +15,12 @@ sealed class InsertResult {
   data class Failed(val message: String) : InsertResult()
 }
 
-sealed class CaptureResult {
-  data class Captured(val text: String, val sourceApp: String?) : CaptureResult()
-  data class Failed(val message: String) : CaptureResult()
-}
-
 /**
- * Types dictated text into the input-focused field of another app, and can read
- * a selection in that same field on demand.
+ * Types dictated text into the input-focused field of another app.
  *
  * Scope is deliberately narrow: the service subscribes to no accessibility events, so it
- * never observes the screen. It reads only the focused node, only when `insert` or
- * `capture` is called, and never touches password fields.
+ * never observes the screen. It reads only the focused node, only when `insert` is called
+ * at the end of an utterance, and never touches password fields.
  */
 class VoiceAccessibilityService : AccessibilityService() {
   companion object {
@@ -44,15 +38,6 @@ class VoiceAccessibilityService : AccessibilityService() {
           "Turn on the Personal Voice accessibility service to type into other apps. The text is on your clipboard.",
         )
       return service.insertIntoFocusedField(text)
-    }
-
-    /** Main thread only. Reads the highlighted range of the focused editable field. */
-    fun capture(): CaptureResult {
-      val service = instance
-        ?: return CaptureResult.Failed(
-          "Turn on the Personal Voice accessibility service to read a selected field.",
-        )
-      return service.captureFromFocusedField()
     }
 
     private fun copyToClipboard(context: Context, text: String, message: String): InsertResult {
@@ -97,24 +82,6 @@ class VoiceAccessibilityService : AccessibilityService() {
     setClip(this, text)
     if (node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) return InsertResult.Typed
     return InsertResult.Failed("This field doesn't accept dictated text. The text is on your clipboard.")
-  }
-
-  private fun captureFromFocusedField(): CaptureResult {
-    val node = focusedField()
-      ?: return CaptureResult.Failed("No text field is selected.")
-    if (node.isPassword) return CaptureResult.Failed("Selection capture doesn't read password fields.")
-    val showingHint = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.isShowingHintText
-    return when (
-      val extracted = selectionFromField(
-        node.text?.toString().orEmpty(),
-        node.textSelectionStart,
-        node.textSelectionEnd,
-        showingHint,
-      )
-    ) {
-      is FieldSelection.Text -> CaptureResult.Captured(extracted.text, node.packageName?.toString())
-      is FieldSelection.None -> CaptureResult.Failed(extracted.message)
-    }
   }
 
   /**

@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Narrow scope: no accessibilityEventTypes, so the service receives no events and never
-  observes screen content. It only reads the input-focused node when asked to insert text
-  or capture a selection.
+  observes screen content. It only reads the input-focused node when asked to insert text.
   flagRetrieveInteractiveWindows lets findFocus() search past the floating mic's own window.
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"

@@ -2,11 +2,6 @@
 //! virtual-key codes so it can be unit-tested without a keyboard hook.
 
 pub const VK_ESCAPE: u32 = 0x1B;
-pub const VK_LBUTTON: u32 = 0x01;
-pub const VK_RBUTTON: u32 = 0x02;
-pub const VK_MBUTTON: u32 = 0x04;
-pub const VK_XBUTTON1: u32 = 0x05;
-pub const VK_XBUTTON2: u32 = 0x06;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Modifiers {
@@ -57,26 +52,23 @@ impl Default for Shortcut {
 
 fn key_code(name: &str) -> Option<u32> {
     let lower = name.to_ascii_lowercase();
-    if let Some(vk) = named_key(&lower) {
-        return Some(vk);
+    let named = match lower.as_str() {
+        "rightalt" => Some(0xA5),
+        "rightctrl" => Some(0xA3),
+        "rightshift" => Some(0xA1),
+        "space" => Some(0x20),
+        "capslock" => Some(0x14),
+        "scrolllock" => Some(0x91),
+        "pause" => Some(0x13),
+        "insert" => Some(0x2D),
+        "escape" | "esc" => Some(VK_ESCAPE),
+        _ => None,
+    };
+    if named.is_some() {
+        return named;
     }
-    if let Some(raw) = lower.strip_prefix("vk") {
-        let vk = raw.parse::<u32>().ok()?;
-        if (1..255).contains(&vk) && vk != VK_ESCAPE && vk != VK_LBUTTON {
-            return Some(vk);
-        }
-        return None;
-    }
-    if let Some(rest) = lower.strip_prefix('f') {
-        if !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit()) {
-            let n = rest.parse::<u32>().ok()?;
-            return (1..=24).contains(&n).then(|| 0x70 + n - 1);
-        }
-    }
-    if let Some(rest) = lower.strip_prefix("numpad") {
-        if let Ok(n) = rest.parse::<u32>() {
-            return (0..=9).contains(&n).then(|| 0x60 + n);
-        }
+    if let Some(n) = lower.strip_prefix('f').and_then(|n| n.parse::<u32>().ok()) {
+        return (1..=24).contains(&n).then(|| 0x70 + n - 1);
     }
     match lower.as_bytes() {
         [c @ b'a'..=b'z'] => Some(u32::from(c.to_ascii_uppercase())),
@@ -85,77 +77,11 @@ fn key_code(name: &str) -> Option<u32> {
     }
 }
 
-fn named_key(name: &str) -> Option<u32> {
-    Some(match name {
-        "rightalt" => 0xA5,
-        "leftalt" => 0xA4,
-        "rightctrl" => 0xA3,
-        "leftctrl" => 0xA2,
-        "rightshift" => 0xA1,
-        "leftshift" => 0xA0,
-        "rightwin" => 0x5C,
-        "leftwin" => 0x5B,
-        "space" => 0x20,
-        "capslock" => 0x14,
-        "scrolllock" => 0x91,
-        "pause" => 0x13,
-        "insert" => 0x2D,
-        "mouse4" | "xbutton1" => VK_XBUTTON1,
-        "mouse5" | "xbutton2" => VK_XBUTTON2,
-        "mousemiddle" | "middle" => VK_MBUTTON,
-        "mouseright" => VK_RBUTTON,
-        "escape" | "esc" => VK_ESCAPE,
-        "tab" => 0x09,
-        "enter" | "return" => 0x0D,
-        "backspace" => 0x08,
-        "delete" => 0x2E,
-        "home" => 0x24,
-        "end" => 0x23,
-        "pageup" => 0x21,
-        "pagedown" => 0x22,
-        "up" => 0x26,
-        "down" => 0x28,
-        "left" => 0x25,
-        "right" => 0x27,
-        "backquote" => 0xC0,
-        "minus" => 0xBD,
-        "equal" => 0xBB,
-        "bracketleft" => 0xDB,
-        "bracketright" => 0xDD,
-        "backslash" => 0xDC,
-        "semicolon" => 0xBA,
-        "quote" => 0xDE,
-        "comma" => 0xBC,
-        "period" => 0xBE,
-        "slash" => 0xBF,
-        "numpadmultiply" => 0x6A,
-        "numpadadd" => 0x6B,
-        "numpadsubtract" => 0x6D,
-        "numpaddecimal" => 0x6E,
-        "numpaddivide" => 0x6F,
-        _ => return None,
-    })
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DestOverride {
-    VoiceNote,
-    Handoff,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PttEvent {
-    Press { destination: Option<DestOverride> },
-    /// One-shot: copies the highlighted text. Release is swallowed and does not end dictation.
-    CaptureSelection,
+    Press,
     Release,
     Cancel,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum HeldAction {
-    Talk,
-    Capture,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -174,107 +100,53 @@ const SWALLOW: Outcome = Outcome {
     event: None,
 };
 
-/// Tracks held shortcuts so auto-repeat never starts a second utterance.
+/// Tracks one held shortcut so auto-repeat never starts a second utterance.
+#[derive(Default)]
 pub struct PushToTalk {
-    pub dictate: Vec<Shortcut>,
-    pub voice_note: Vec<Shortcut>,
-    pub handoff: Vec<Shortcut>,
-    pub selection: Vec<Shortcut>,
+    pub shortcut: Shortcut,
     /// While true, Escape cancels the active utterance.
     pub active: bool,
     pub paused: bool,
-    /// Settings is recording a new binding, so the hook must not swallow keys.
-    pub capturing: bool,
-    held: Option<(u32, HeldAction)>,
+    held: bool,
     escape_held: bool,
-}
-
-impl Default for PushToTalk {
-    fn default() -> Self {
-        Self {
-            dictate: vec![Shortcut::default()],
-            voice_note: Vec::new(),
-            handoff: Vec::new(),
-            selection: Vec::new(),
-            active: false,
-            paused: false,
-            capturing: false,
-            held: None,
-            escape_held: false,
-        }
-    }
 }
 
 impl PushToTalk {
     pub fn set_shortcut(&mut self, shortcut: Shortcut) {
-        self.dictate = vec![shortcut];
-        self.held = None;
-    }
-
-    pub fn set_hotkeys(
-        &mut self,
-        dictate: Vec<Shortcut>,
-        voice_note: Vec<Shortcut>,
-        handoff: Vec<Shortcut>,
-        selection: Vec<Shortcut>,
-    ) -> Result<(), String> {
-        if dictate.is_empty() {
-            return Err("Hold to dictate needs a key or mouse button.".into());
-        }
-        ensure_unique(&[&dictate, &voice_note, &handoff, &selection])?;
-        self.dictate = dictate;
-        self.voice_note = voice_note;
-        self.handoff = handoff;
-        self.selection = selection;
-        self.held = None;
-        Ok(())
+        self.shortcut = shortcut;
+        self.held = false;
     }
 
     pub fn set_paused(&mut self, paused: bool) {
         self.paused = paused;
-        self.held = None;
-        self.escape_held = false;
-    }
-
-    pub fn set_capturing(&mut self, capturing: bool) {
-        self.capturing = capturing;
-        self.held = None;
+        self.held = false;
         self.escape_held = false;
     }
 
     /// `modifiers` is the state of the other modifier keys before this event.
     pub fn on_key(&mut self, vk: u32, down: bool, modifiers: Modifiers) -> Outcome {
-        if self.paused || self.capturing {
+        if self.paused {
             return PASS;
         }
-        if let Some((held, action)) = self.held {
-            if vk == held {
-                return match down {
-                    true => SWALLOW,
-                    false => {
-                        self.held = None;
-                        match action {
-                            HeldAction::Talk => Outcome {
-                                swallow: true,
-                                event: Some(PttEvent::Release),
-                            },
-                            HeldAction::Capture => SWALLOW,
-                        }
+        if vk == self.shortcut.vk {
+            return match (down, self.held) {
+                (true, true) => SWALLOW,
+                (true, false) if modifiers == self.shortcut.modifiers => {
+                    self.held = true;
+                    Outcome {
+                        swallow: true,
+                        event: Some(PttEvent::Press),
                     }
-                };
-            }
-        } else if down {
-            if let Some(event) = self.match_press(vk, modifiers) {
-                let action = match event {
-                    PttEvent::CaptureSelection => HeldAction::Capture,
-                    _ => HeldAction::Talk,
-                };
-                self.held = Some((vk, action));
-                return Outcome {
-                    swallow: true,
-                    event: Some(event),
-                };
-            }
+                }
+                (false, true) => {
+                    self.held = false;
+                    Outcome {
+                        swallow: true,
+                        event: Some(PttEvent::Release),
+                    }
+                }
+                _ => PASS,
+            };
         }
         if vk == VK_ESCAPE {
             return match (down, self.escape_held) {
@@ -295,59 +167,6 @@ impl PushToTalk {
         }
         PASS
     }
-
-    fn match_press(&self, vk: u32, modifiers: Modifiers) -> Option<PttEvent> {
-        if self
-            .dictate
-            .iter()
-            .any(|shortcut| matches_shortcut(shortcut, vk, modifiers))
-        {
-            return Some(PttEvent::Press { destination: None });
-        }
-        if self
-            .voice_note
-            .iter()
-            .any(|shortcut| matches_shortcut(shortcut, vk, modifiers))
-        {
-            return Some(PttEvent::Press {
-                destination: Some(DestOverride::VoiceNote),
-            });
-        }
-        if self
-            .handoff
-            .iter()
-            .any(|shortcut| matches_shortcut(shortcut, vk, modifiers))
-        {
-            return Some(PttEvent::Press {
-                destination: Some(DestOverride::Handoff),
-            });
-        }
-        if self
-            .selection
-            .iter()
-            .any(|shortcut| matches_shortcut(shortcut, vk, modifiers))
-        {
-            return Some(PttEvent::CaptureSelection);
-        }
-        None
-    }
-}
-
-fn matches_shortcut(shortcut: &Shortcut, vk: u32, modifiers: Modifiers) -> bool {
-    shortcut.vk == vk && shortcut.modifiers == modifiers
-}
-
-fn ensure_unique(lists: &[&[Shortcut]]) -> Result<(), String> {
-    let mut seen: Vec<&Shortcut> = Vec::new();
-    for list in lists {
-        for shortcut in *list {
-            if seen.iter().any(|other| *other == shortcut) {
-                return Err("Each action needs its own key or mouse button.".into());
-            }
-            seen.push(shortcut);
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -387,13 +206,6 @@ mod tests {
         assert_eq!(Shortcut::parse("F24").unwrap().vk, 0x87);
         assert_eq!(Shortcut::parse("Alt+d").unwrap().vk, 0x44);
         assert_eq!(Shortcut::parse("ScrollLock").unwrap().vk, 0x91);
-        assert_eq!(Shortcut::parse("Mouse4").unwrap().vk, VK_XBUTTON1);
-        assert_eq!(Shortcut::parse("Mouse5").unwrap().vk, VK_XBUTTON2);
-        assert_eq!(Shortcut::parse("MouseMiddle").unwrap().vk, VK_MBUTTON);
-        assert_eq!(Shortcut::parse("LeftAlt").unwrap().vk, 0xA4);
-        assert_eq!(Shortcut::parse("MouseRight").unwrap().vk, VK_RBUTTON);
-        assert_eq!(Shortcut::parse("VK65").unwrap().vk, 0x41);
-        assert_eq!(Shortcut::parse("Ctrl+Mouse5").unwrap().modifiers.ctrl, true);
     }
 
     #[test]
@@ -405,8 +217,7 @@ mod tests {
             "Ctrl+Ctrl+A",
             "F25",
             "Escape",
-            "VK27",
-            "VK1",
+            "Tab",
         ] {
             assert!(Shortcut::parse(bad).is_err(), "{bad} should be rejected");
         }
@@ -421,7 +232,7 @@ mod tests {
             .collect();
         assert_eq!(
             events.iter().filter_map(|o| o.event).collect::<Vec<_>>(),
-            [PttEvent::Press { destination: None }, PttEvent::Release]
+            [PttEvent::Press, PttEvent::Release]
         );
         assert!(events[..4].iter().all(|o| o.swallow));
         assert_eq!(events[4], PASS);
@@ -444,10 +255,7 @@ mod tests {
             ),
             PASS
         );
-        assert_eq!(
-            ptt.on_key(0x20, true, ctrl).event,
-            Some(PttEvent::Press { destination: None })
-        );
+        assert_eq!(ptt.on_key(0x20, true, ctrl).event, Some(PttEvent::Press));
         // Releasing Ctrl first still ends the utterance on the key's release.
         assert_eq!(ptt.on_key(0x20, false, NONE).event, Some(PttEvent::Release));
     }
@@ -474,114 +282,7 @@ mod tests {
         ptt.set_paused(false);
         assert_eq!(
             ptt.on_key(RIGHT_ALT, true, NONE).event,
-            Some(PttEvent::Press { destination: None })
-        );
-    }
-
-    #[test]
-    fn voice_note_and_handoff_hotkeys_override_the_destination() {
-        let mut ptt = PushToTalk::default();
-        ptt.set_hotkeys(
-            vec![Shortcut::parse("RightAlt").unwrap()],
-            vec![Shortcut::parse("Mouse4").unwrap()],
-            vec![Shortcut::parse("Mouse5").unwrap()],
-            vec![],
-        )
-        .unwrap();
-        assert_eq!(
-            ptt.on_key(VK_XBUTTON1, true, NONE).event,
-            Some(PttEvent::Press {
-                destination: Some(DestOverride::VoiceNote)
-            })
-        );
-        assert_eq!(
-            ptt.on_key(VK_XBUTTON1, false, NONE).event,
-            Some(PttEvent::Release)
-        );
-        assert_eq!(
-            ptt.on_key(VK_XBUTTON2, true, NONE).event,
-            Some(PttEvent::Press {
-                destination: Some(DestOverride::Handoff)
-            })
-        );
-    }
-
-    #[test]
-    fn rejects_two_actions_on_the_same_button() {
-        let mut ptt = PushToTalk::default();
-        let f9 = Shortcut::parse("F9").unwrap();
-        assert!(ptt.set_hotkeys(vec![f9], vec![f9], vec![], vec![]).is_err());
-        assert!(ptt.set_hotkeys(vec![], vec![], vec![], vec![]).is_err());
-    }
-
-    #[test]
-    fn one_action_accepts_a_mouse_button_and_a_key() {
-        let mut ptt = PushToTalk::default();
-        ptt.set_hotkeys(
-            vec![
-                Shortcut::parse("RightAlt").unwrap(),
-                Shortcut::parse("Mouse5").unwrap(),
-            ],
-            vec![
-                Shortcut::parse("F9").unwrap(),
-                Shortcut::parse("Ctrl+Shift+Space").unwrap(),
-            ],
-            vec![],
-            vec![],
-        )
-        .unwrap();
-        assert_eq!(
-            ptt.on_key(VK_XBUTTON2, true, NONE).event,
-            Some(PttEvent::Press { destination: None })
-        );
-        assert_eq!(
-            ptt.on_key(VK_XBUTTON2, false, NONE).event,
-            Some(PttEvent::Release)
-        );
-        let ctrl_shift = Modifiers {
-            ctrl: true,
-            shift: true,
-            ..NONE
-        };
-        assert_eq!(
-            ptt.on_key(0x20, true, ctrl_shift).event,
-            Some(PttEvent::Press {
-                destination: Some(DestOverride::VoiceNote)
-            })
-        );
-    }
-
-    #[test]
-    fn capturing_passes_the_bound_key_through() {
-        let mut ptt = PushToTalk::default();
-        ptt.set_capturing(true);
-        assert_eq!(ptt.on_key(RIGHT_ALT, true, NONE), PASS);
-        ptt.set_capturing(false);
-        assert_eq!(
-            ptt.on_key(RIGHT_ALT, true, NONE).event,
-            Some(PttEvent::Press { destination: None })
-        );
-    }
-
-    #[test]
-    fn selection_hotkey_fires_once_without_a_release_event() {
-        let mut ptt = PushToTalk::default();
-        ptt.set_hotkeys(
-            vec![Shortcut::parse("RightAlt").unwrap()],
-            vec![],
-            vec![],
-            vec![Shortcut::parse("Alt+S").unwrap()],
-        )
-        .unwrap();
-        let alt = Modifiers { alt: true, ..NONE };
-        assert_eq!(
-            ptt.on_key(0x53, true, alt).event,
-            Some(PttEvent::CaptureSelection)
-        );
-        assert_eq!(ptt.on_key(0x53, false, NONE), SWALLOW);
-        assert_eq!(
-            ptt.on_key(RIGHT_ALT, true, NONE).event,
-            Some(PttEvent::Press { destination: None })
+            Some(PttEvent::Press)
         );
     }
 }

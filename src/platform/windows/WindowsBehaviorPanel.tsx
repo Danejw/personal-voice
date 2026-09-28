@@ -1,20 +1,16 @@
 import { useEffect, useState } from "react";
 import { Toggle } from "@/components/Toggle";
 import type { WindowsPlatformAdapter } from "@/platform/windows/WindowsPlatformAdapter";
+import { loadShowIndicator, saveShowIndicator } from "@/settings/deviceSettings";
 
 interface WindowsBehaviorPanelProps {
   platform: WindowsPlatformAdapter;
-  showFloatingControl: boolean;
-  onFloatingControlChange(show: boolean): void;
 }
 
-/** How the app sits on this PC. Startup is a Windows setting; the overlay is this device's preference. */
-export function WindowsBehaviorPanel({
-  platform,
-  showFloatingControl,
-  onFloatingControlChange,
-}: WindowsBehaviorPanelProps) {
+/** How the app sits on this PC: starting with Windows and the on-screen indicator. Not synced. */
+export function WindowsBehaviorPanel({ platform }: WindowsBehaviorPanelProps) {
   const [launchAtLogin, setLaunchAtLogin] = useState<boolean | null>(null);
+  const [showIndicator, setShowIndicator] = useState(loadShowIndicator);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,21 +26,22 @@ export function WindowsBehaviorPanel({
   }
 
   function onShowIndicator(show: boolean) {
-    onFloatingControlChange(show);
+    saveShowIndicator(show);
+    setShowIndicator(show);
   }
 
   return (
     <>
       <Toggle
         label="Start with Windows"
-        title="Opens in the tray when you sign in."
+        description="Opens in the tray when you sign in to Windows, ready to dictate."
         checked={launchAtLogin ?? false} disabled={launchAtLogin === null}
         onChange={onLaunchAtLogin}
       />
       <Toggle
-        label="Show floating control"
-        title="A small button over other apps. Close and minimize keep the app in the tray; Quit is on the tray icon."
-        checked={showFloatingControl}
+        label="Show listening indicator"
+        description="A small pill near the bottom of the screen while you dictate. Errors always show."
+        checked={showIndicator}
         onChange={onShowIndicator}
       />
       {error && <p className="error" role="alert">{error}</p>}

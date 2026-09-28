@@ -1,20 +1,18 @@
 import { getVersion } from "@tauri-apps/api/app";
-import { contextItemFromCapture } from "@/context/ContextItem";
-import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
-import { parseOverlayAction } from "@/overlay/overlay";
 import { NativeAudioCapture } from "@/platform/android/NativeAudioCapture";
 import { callPlugin, listenPlugin } from "@/platform/android/voicePlatformPlugin";
-import type { AvailableUpdate, CaptureSelectionOptions, PlatformAdapter } from "@/platform/PlatformAdapter";
-import { parsePushToTalk } from "@/platform/pushToTalkEvent";
-import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
+import type { AvailableUpdate, IndicatorState, PlatformAdapter, PushToTalkEvent } from "@/platform/PlatformAdapter";
 import { fetchLatestAndroidRelease } from "@/services/releaseService";
 import { isNewerVersion } from "@/updates/version";
 
-export { parsePushToTalk } from "@/platform/pushToTalkEvent";
+export function parsePushToTalk(payload: unknown): PushToTalkEvent | null {
+  const event = typeof payload === "object" && payload !== null ? (payload as { event?: unknown }).event : undefined;
+  return event === "press" || event === "release" || event === "cancel" ? event : null;
+}
 
 /**
- * Bridge to the Kotlin plugin. The floating mic is the always-visible control,
- * hold-to-talk trigger, and overlay panel; insertion goes through accessibility.
+ * Bridge to the Kotlin plugin. The floating mic is the push-to-talk trigger and the
+ * indicator; insertion goes through the accessibility service.
  */
 export class AndroidPlatformAdapter implements PlatformAdapter {
   readonly platform = "android";
@@ -27,37 +25,16 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
     return callPlugin("insert_text", { text });
   }
 
-  insertReceivedText(text: string) {
-    return callPlugin("insert_handoff_text", { text });
+  showIndicator(state: IndicatorState) {
+    return callPlugin("set_indicator", state);
   }
 
-  async captureSelection(options?: CaptureSelectionOptions) {
-    return contextItemFromCapture(await callPlugin("capture_selection", {
-      restoreSettings: options?.restoreSettings ?? true,
-    }));
-  }
-
-  syncOverlay(snapshot: OverlaySnapshot) {
-    return callPlugin("set_overlay", { snapshot: JSON.stringify(snapshot) });
-  }
-
-  onOverlayAction(handler: (action: OverlayAction) => void) {
-    return listenPlugin("overlayAction", (payload) => {
-      const action = parseOverlayAction(payload);
-      if (action) handler(action);
-    });
-  }
-
-  openSettings() {
-    return callPlugin("show_settings");
+  hideIndicator() {
+    return callPlugin("set_indicator", { kind: "idle" });
   }
 
   /** There is no hardware shortcut on Android; the floating mic is the trigger. */
-  setHotkeys() {
-    return Promise.resolve();
-  }
-
-  setHotkeyCapture() {
+  setPushToTalkShortcut() {
     return Promise.resolve();
   }
 
@@ -75,10 +52,6 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
 
   /** Android has no tray pause; turning the floating mic off is the equivalent. */
   onPausedChange() {
-    return Promise.resolve(() => undefined);
-  }
-
-  onShowFloatingControl() {
     return Promise.resolve(() => undefined);
   }
 

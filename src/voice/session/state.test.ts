@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { initialVoiceState, voiceReducer } from "@/voice/session/state";
-import type { VoiceAction, VoiceState } from "@/voice/session/state";
+import { initialVoiceState, voiceReducer } from "./state";
+import type { VoiceAction, VoiceState } from "./state";
 
 describe("voice lifecycle foundation", () => {
   it("follows the specified lifecycle back to idle", () => {
     const actions: VoiceAction[] = [
       { type: "start" }, { type: "connected" }, { type: "finish" },
-      { type: "transcribed" }, { type: "delivered" },
+      { type: "transcribed" }, { type: "inserted" },
     ];
     let state: VoiceState = initialVoiceState;
     const states = actions.map((action) => (state = voiceReducer(state, action)));
@@ -17,7 +17,7 @@ describe("voice lifecycle foundation", () => {
     expect(voiceReducer("LISTENING", { type: "start" })).toBe("LISTENING");
     expect(voiceReducer("IDLE", { type: "transcribed" })).toBe("IDLE");
     expect(voiceReducer("INSERTING", { type: "transcribed" })).toBe("INSERTING");
-    expect(voiceReducer("CONNECTING", { type: "delivered" })).toBe("CONNECTING");
+    expect(voiceReducer("CONNECTING", { type: "inserted" })).toBe("CONNECTING");
   });
 
   it("finishes from CONNECTING or LISTENING only", () => {

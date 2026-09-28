@@ -1,5 +1,5 @@
 /**
- * Stage durations for one delivered utterance, in milliseconds. Latency measurement only:
+ * Stage durations for one inserted utterance, in milliseconds. Latency measurement only:
  * it never carries transcript content. A stage that didn't happen is `null`.
  */
 export interface UtteranceTimings {
@@ -9,10 +9,8 @@ export interface UtteranceTimings {
   pressToLive: number | null;
   /** Release → final transcript, live or recovered. */
   releaseToFinal: number;
-  /** Final transcript → selected destination finished. */
-  finalToDelivered: number;
-  /** Press → destination finished. */
-  totalMs: number;
+  /** Final transcript → insertion finished. */
+  finalToInserted: number;
   /** The transcript came from replaying the buffered audio. */
   recovered: boolean;
 }
@@ -30,28 +28,27 @@ function since(start: number | undefined, end: number | undefined): number | nul
   return start === undefined || end === undefined ? null : Math.round(end - start);
 }
 
-/** `null` until the utterance has been released, transcribed, and delivered. */
-export function timingsFrom(marks: UtteranceMarks, delivered: number, recovered: boolean): UtteranceTimings | null {
+/** `null` until the utterance has been released, transcribed, and inserted. */
+export function timingsFrom(marks: UtteranceMarks, inserted: number, recovered: boolean): UtteranceTimings | null {
   const releaseToFinal = since(marks.released, marks.final);
-  const finalToDelivered = since(marks.final, delivered);
-  if (releaseToFinal === null || finalToDelivered === null) return null;
+  const finalToInserted = since(marks.final, inserted);
+  if (releaseToFinal === null || finalToInserted === null) return null;
   return {
     pressToAudio: since(marks.pressed, marks.audio),
     pressToLive: since(marks.pressed, marks.live),
     releaseToFinal,
-    finalToDelivered,
-    totalMs: Math.round(delivered - marks.pressed),
+    finalToInserted,
     recovered,
   };
 }
 
-/** One line for a dev console, e.g. `press→audio 180 ms · … · final→delivered 30 ms`. */
+/** One line for a dev console, e.g. `press→audio 180 ms · … · final→inserted 30 ms`. */
 export function formatTimings(timings: UtteranceTimings): string {
   const ms = (value: number | null) => (value === null ? "–" : `${value} ms`);
   return [
     `press→audio ${ms(timings.pressToAudio)}`,
     `press→live ${ms(timings.pressToLive)}`,
     `release→final ${ms(timings.releaseToFinal)}${timings.recovered ? " (recovered)" : ""}`,
-    `final→delivered ${ms(timings.finalToDelivered)}`,
+    `final→inserted ${ms(timings.finalToInserted)}`,
   ].join(" · ");
 }

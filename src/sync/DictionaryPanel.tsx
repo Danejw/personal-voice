@@ -27,7 +27,8 @@ export function DictionaryPanel({ store, sync }: DictionaryPanelProps) {
   return (
     <>
       <p className="hint">
-        {enabledCount(terms)}/{MAX_ENABLED_TERMS} active{readOnly ? ` · ${readOnly}` : ""}
+        {enabledCount(terms)} of {MAX_ENABLED_TERMS} active. Keep it to names and jargon you actually say.
+        {readOnly && ` ${readOnly}`}
       </p>
       <form className="term-form" onSubmit={onAdd}>
         <input

@@ -1,21 +1,33 @@
-import { useCallback, useEffect, useState } from "react";
-import { emitTo, listen } from "@tauri-apps/api/event";
-import { OverlayPanel } from "@/overlay/OverlayPanel";
-import { emptyOverlaySnapshot } from "@/overlay/overlay";
-import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
+import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import type { IndicatorState } from "@/platform/PlatformAdapter";
 
-/** Always-on-top Personal Voice buttons. Dictation still runs in the main window. */
+function labelFor(state: IndicatorState): string {
+  switch (state.kind) {
+    case "listening": return "Listening";
+    case "finalizing": return "Transcribing";
+    case "error": return state.message;
+    default: {
+      const unhandled: never = state;
+      throw new Error(`Unhandled indicator state: ${JSON.stringify(unhandled)}`);
+    }
+  }
+}
+
+/** Content of the click-through, always-on-top indicator window. */
 export default function Indicator() {
-  const [snapshot, setSnapshot] = useState<OverlaySnapshot>({ ...emptyOverlaySnapshot, visible: true });
+  const [state, setState] = useState<IndicatorState | null>(null);
 
   useEffect(() => {
-    const pending = listen<OverlaySnapshot>("overlay-snapshot", (event) => setSnapshot(event.payload));
+    const pending = listen<IndicatorState>("indicator-state", (event) => setState(event.payload));
     return () => void pending.then((unlisten) => unlisten());
   }, []);
 
-  const onAction = useCallback((action: OverlayAction) => {
-    void emitTo("main", "overlay-action", action);
-  }, []);
-
-  return <OverlayPanel snapshot={snapshot} onAction={onAction} />;
+  if (!state) return null;
+  return (
+    <div className={`indicator indicator-${state.kind}`} role="status" title={labelFor(state)}>
+      <span className="indicator-dot" aria-hidden="true" />
+      <span className="indicator-label">{labelFor(state)}</span>
+    </div>
+  );
 }

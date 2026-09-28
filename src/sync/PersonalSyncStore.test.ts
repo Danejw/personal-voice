@@ -3,7 +3,7 @@ import type { DeviceInfo, PersonalSyncApi } from "@/services/personalSyncService
 import { PersonalSyncStore } from "@/sync/PersonalSyncStore";
 import { readPersonalCache, writePersonalCache } from "@/sync/personalCache";
 import type { KeyValueStorage } from "@/sync/personalCache";
-import { DEFAULT_SETTINGS, MAX_ENABLED_TERMS, transcriptionPreferences } from "@/sync/personalData";
+import { MAX_ENABLED_TERMS, transcriptionPreferences } from "@/sync/personalData";
 import type { DictionaryTerm, PersonalData } from "@/sync/personalData";
 
 function memoryStorage(): KeyValueStorage & { values: Map<string, string> } {
@@ -12,7 +12,7 @@ function memoryStorage(): KeyValueStorage & { values: Map<string, string> } {
 }
 
 /** In-memory Supabase: one account's rows, plus switches to simulate outages and slow responses. */
-function fakeServer(initial: PersonalData = { settings: DEFAULT_SETTINGS, terms: [] }) {
+function fakeServer(initial: PersonalData = { settings: { smartTranscription: true, language: null }, terms: [] }) {
   const state = structuredClone(initial);
   const devices: DeviceInfo[] = [];
   const control = { offline: false, failWrites: 0, gate: null as Promise<void> | null };
@@ -52,7 +52,7 @@ function terms(...names: string[]): DictionaryTerm[] {
 
 describe("PersonalSyncStore", () => {
   it("loads settings and dictionary from Supabase on sign-in and caches them", async () => {
-    const server = fakeServer({ settings: { ...DEFAULT_SETTINGS, smartTranscription: false, language: "en-GB" }, terms: terms("Supabase", "Persyn") });
+    const server = fakeServer({ settings: { smartTranscription: false, language: "en-GB" }, terms: terms("Supabase", "Persyn") });
     const storage = memoryStorage();
     const store = new PersonalSyncStore(server.api, storage, "windows", ids());
 
@@ -60,14 +60,14 @@ describe("PersonalSyncStore", () => {
 
     const { status, data } = store.getSnapshot();
     expect(status).toBe("synced");
-    expect(data.settings).toEqual({ ...DEFAULT_SETTINGS, smartTranscription: false, language: "en-GB" });
+    expect(data.settings).toEqual({ smartTranscription: false, language: "en-GB" });
     expect(data.terms.map((entry) => entry.term)).toEqual(["Persyn", "Supabase"]);
     expect(readPersonalCache(storage, "u1")).toEqual(data);
   });
 
   it("shows the cached copy while loading and keeps it read-only when offline", async () => {
     const storage = memoryStorage();
-    writePersonalCache(storage, "u1", { settings: { ...DEFAULT_SETTINGS, smartTranscription: false, language: null }, terms: terms("UFIQ") });
+    writePersonalCache(storage, "u1", { settings: { smartTranscription: false, language: null }, terms: terms("UFIQ") });
     const server = fakeServer();
     server.control.offline = true;
     const store = new PersonalSyncStore(server.api, storage, "windows", ids());
@@ -95,7 +95,6 @@ describe("PersonalSyncStore", () => {
     expect(store.addTerm("model_pricing_skus")).toBeNull();
     expect(store.updateSettings({ smartTranscription: false })).toBeNull();
     expect(store.updateSettings({ language: "fr-FR" })).toBeNull();
-    expect(store.updateSettings({ usageIntelligence: false })).toBeNull();
     const added = store.getSnapshot().data.terms.find((entry) => entry.term === "Seed Dance");
     expect(added).toBeDefined();
     expect(store.setTermEnabled(added?.id ?? "", false)).toBeNull();
@@ -104,7 +103,7 @@ describe("PersonalSyncStore", () => {
     const restarted = new PersonalSyncStore(server.api, memoryStorage(), "windows", ids());
     await restarted.setUser("u1");
     expect(restarted.getSnapshot().data).toEqual({
-      settings: { ...DEFAULT_SETTINGS, smartTranscription: false, language: "fr-FR", usageIntelligence: false },
+      settings: { smartTranscription: false, language: "fr-FR" },
       terms: [
         { id: "id-3", term: "model_pricing_skus", enabled: true },
         { id: "id-2", term: "Seed Dance", enabled: false },
@@ -129,7 +128,7 @@ describe("PersonalSyncStore", () => {
   });
 
   it("rolls a failed write back but keeps later edits that succeed", async () => {
-    const server = fakeServer({ settings: DEFAULT_SETTINGS, terms: terms("Persyn") });
+    const server = fakeServer({ settings: { smartTranscription: true, language: null }, terms: terms("Persyn") });
     const storage = memoryStorage();
     const store = new PersonalSyncStore(server.api, storage, "windows", ids());
     await store.setUser("u1");
@@ -148,7 +147,7 @@ describe("PersonalSyncStore", () => {
 
   it("refuses duplicates (any case), blanks, and more than the curated number of active terms", async () => {
     const many = Array.from({ length: MAX_ENABLED_TERMS - 1 }, (_, index) => `term${index}`);
-    const server = fakeServer({ settings: DEFAULT_SETTINGS, terms: terms("Persyn", ...many) });
+    const server = fakeServer({ settings: { smartTranscription: true, language: null }, terms: terms("Persyn", ...many) });
     const store = new PersonalSyncStore(server.api, memoryStorage(), "windows", ids());
     await store.setUser("u1");
 
@@ -167,7 +166,7 @@ describe("PersonalSyncStore", () => {
 
   it("feeds only enabled terms and the synced settings into the next session", async () => {
     const server = fakeServer({
-      settings: { ...DEFAULT_SETTINGS, smartTranscription: false, language: "de-DE" },
+      settings: { smartTranscription: false, language: "de-DE" },
       terms: [{ id: "a", term: "Supabase", enabled: true }, { id: "b", term: "Retired", enabled: false }],
     });
     const store = new PersonalSyncStore(server.api, memoryStorage(), "windows", ids());
@@ -192,7 +191,7 @@ describe("PersonalSyncStore", () => {
   });
 
   it("clears on sign-out and ignores a slow load that finishes after an account switch", async () => {
-    const slow = fakeServer({ settings: { ...DEFAULT_SETTINGS, smartTranscription: false, language: null }, terms: terms("Old account") });
+    const slow = fakeServer({ settings: { smartTranscription: false, language: null }, terms: terms("Old account") });
     const store = new PersonalSyncStore(slow.api, memoryStorage(), "windows", ids());
     let open = () => {};
     slow.control.gate = new Promise((resolve) => { open = resolve; });
@@ -204,7 +203,7 @@ describe("PersonalSyncStore", () => {
 
     expect(store.getSnapshot()).toEqual({
       status: "signed-out",
-      data: { settings: DEFAULT_SETTINGS, terms: [] },
+      data: { settings: { smartTranscription: true, language: null }, terms: [] },
       error: null,
     });
   });
