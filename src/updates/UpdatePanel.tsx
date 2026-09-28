@@ -24,7 +24,7 @@ function installHint(update: AvailableUpdate): string {
     case "restart":
       return "Personal Voice closes, installs the signed update, and reopens. Your sign-in and settings are kept.";
     case "download":
-      return "Your browser downloads the APK. Open it and tap Update. The first time, Android asks you to allow installs from your browser. Your sign-in and settings are kept.";
+      return "Your browser downloads the APK. Open it and tap Update. The first time, Android asks you to allow installs from your browser. If Play Protect says it hasn't seen this developer, tap More details, then Install anyway. Your sign-in and settings are kept.";
     default: {
       const unhandled: never = update.action;
       throw new Error(`Unhandled update action: ${String(unhandled)}`);

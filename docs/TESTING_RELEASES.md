@@ -113,6 +113,7 @@ As implemented (Phase 8): the latest-release API on GitHub, then the browser dow
 [ ] a newer published release shows "Version X is available"
 [ ] Download update opens the APK download in the browser
 [ ] opening the download shows Android's update screen, and it installs
+    (Play Protect may block it first: More details, then Install anyway)
 [ ] the app reopens on the new version with sign-in, dictionary, and permissions intact
 ```
 
