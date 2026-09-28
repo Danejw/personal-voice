@@ -56,9 +56,17 @@ pub async fn capture_selection(
     .map_err(|e| e.to_string())
     .and_then(|inner| inner);
     if restore {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
+        // `unminimize` is desktop-only; Android builds reject it at compile time.
+        #[cfg(desktop)]
+        {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+        #[cfg(not(desktop))]
+        {
+            let _ = window.show();
+        }
     }
     result.map(|(text, source_app)| CapturedSelection { text, source_app })
 }
