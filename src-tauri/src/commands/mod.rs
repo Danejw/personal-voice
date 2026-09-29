@@ -139,15 +139,14 @@ pub fn sync_overlay(app: AppHandle, snapshot: serde_json::Value) -> Result<(), S
     }
 }
 
-/// Keeps the overlay at the fixed bottom-right size.
+/// Grows the overlay leftward so a tooltip can sit beside the buttons, then pins it.
 #[tauri::command]
 pub fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
-    let _ = expanded;
+    platform::set_overlay_tip_expanded(expanded);
     let window = app
         .get_webview_window(INDICATOR_WINDOW)
         .ok_or("The overlay window is missing.")?;
-    platform::pin_overlay(&window)?;
-    platform::show_without_focus(&window)
+    platform::pin_overlay(&window)
 }
 
 #[tauri::command]

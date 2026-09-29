@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Tooltip } from "@/components/Tooltip";
 
 /** Actions the shared hover tray knows how to draw. */
 export type TrayActionKind = "copy" | "insert" | "archive" | "unarchive" | "delete" | "dismiss";
@@ -21,19 +22,22 @@ export function HoverActionItem({ busy = false, actions, children }: HoverAction
     <li className={busy ? "action-item is-busy" : "action-item"}>
       {children}
       <div className="item-actions">
-        {actions.map((action) => (
-          <button
-            key={action.kind}
-            type="button"
-            className={isDanger(action.kind) ? "icon-btn icon-btn-danger" : "icon-btn"}
-            title={labelFor(action.kind)}
-            aria-label={labelFor(action.kind)}
-            disabled={busy || action.disabled}
-            onClick={action.onClick}
-          >
-            <ActionIcon kind={action.kind} />
-          </button>
-        ))}
+        {actions.map((action) => {
+          const label = labelFor(action.kind);
+          return (
+            <Tooltip key={action.kind} content={label}>
+              <button
+                type="button"
+                className={isDanger(action.kind) ? "icon-btn icon-btn-danger" : "icon-btn"}
+                aria-label={label}
+                disabled={busy || action.disabled}
+                onClick={action.onClick}
+              >
+                <ActionIcon kind={action.kind} />
+              </button>
+            </Tooltip>
+          );
+        })}
       </div>
     </li>
   );

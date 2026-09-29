@@ -9,11 +9,11 @@ interface VoiceNotesPanelProps {
 }
 
 interface NoteGroupProps {
-  title: string;
   empty: string;
   notes: VoiceNote[];
   busy: string | null;
   editable: boolean;
+  className?: string;
   onCopy(note: VoiceNote): void;
   onArchive(note: VoiceNote, archived: boolean): void;
   onDelete(note: VoiceNote): void;
@@ -32,10 +32,9 @@ function statusLabel(status: VoiceNotesStatus): string {
   }
 }
 
-function NoteGroup({ title, empty, notes, busy, editable, onCopy, onArchive, onDelete }: NoteGroupProps) {
+function NoteGroup({ empty, notes, busy, editable, className, onCopy, onArchive, onDelete }: NoteGroupProps) {
   return (
-    <div className="note-group">
-      {title ? <h3>{title}</h3> : null}
+    <div className={className ? `note-group ${className}` : "note-group"}>
       {notes.length ? (
         <ul className="notes hide-scrollbar">
           {notes.map((note) => {
@@ -65,6 +64,25 @@ function NoteGroup({ title, empty, notes, busy, editable, onCopy, onArchive, onD
         </ul>
       ) : (
         <p className="placeholder">{empty}</p>
+      )}
+    </div>
+  );
+}
+
+/** Sync status + Refresh for the shared page header. */
+export function VoiceNotesToolbar({ store, snapshot }: VoiceNotesPanelProps) {
+  return (
+    <div className="page-header-actions">
+      <p role="status">{statusLabel(snapshot.status)}</p>
+      {snapshot.status !== "signed-out" && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={snapshot.status === "loading"}
+          onClick={() => void store.reload()}
+        >
+          Refresh
+        </button>
       )}
     </div>
   );
@@ -109,31 +127,28 @@ export function VoiceNotesPanel({ store, snapshot }: VoiceNotesPanelProps) {
 
   return (
     <>
-      <div className="card-head">
-        <h2 id="notes-heading" title="Dictate with destination Voice note.">Voice notes</h2>
-        <div className="card-head-actions">
-          <p role="status">{statusLabel(snapshot.status)}</p>
-          {snapshot.status !== "signed-out" && (
-            <button
-              type="button" className="secondary" disabled={snapshot.status === "loading" || busy !== null}
-              onClick={() => void store.reload()}
-            >
-              Refresh
-            </button>
-          )}
-        </div>
-      </div>
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
       {notice && <p role="status">{notice}</p>}
       <NoteGroup
-        title="Inbox" empty="No notes" notes={inbox} busy={busy} editable={editable}
-        onCopy={copy} onArchive={archive} onDelete={remove}
+        className="page-grow"
+        empty="No notes"
+        notes={inbox}
+        busy={busy}
+        editable={editable}
+        onCopy={copy}
+        onArchive={archive}
+        onDelete={remove}
       />
       <details className="fold">
         <summary>Archived ({archived.length})</summary>
         <NoteGroup
-          title="" empty="No archived notes" notes={archived} busy={busy} editable={editable}
-          onCopy={copy} onArchive={archive} onDelete={remove}
+          empty="No archived notes"
+          notes={archived}
+          busy={busy}
+          editable={editable}
+          onCopy={copy}
+          onArchive={archive}
+          onDelete={remove}
         />
       </details>
     </>

@@ -89,10 +89,18 @@ pub fn set_hotkey_capture(active: bool) -> Result<(), String> {
 /// Device-independent size of the button stack. Physical pixels are derived from the monitor.
 const OVERLAY_W: f64 = 44.0;
 const OVERLAY_H: f64 = 156.0;
+/// Extra width to the left of the buttons while a tooltip is open.
+const OVERLAY_TIP_EXTRA: f64 = 220.0;
 /// Inset from the work-area corner, in device-independent pixels.
 const OVERLAY_MARGIN_DIP: f64 = 16.0;
 
 static PINNING: AtomicBool = AtomicBool::new(false);
+static TIP_EXPANDED: AtomicBool = AtomicBool::new(false);
+
+/// Widen the overlay for a left-side tooltip. `pin_overlay` reads this on every place.
+pub fn set_overlay_tip_expanded(expanded: bool) {
+    TIP_EXPANDED.store(expanded, Ordering::SeqCst);
+}
 
 /// Bottom-right of the primary display's work area, above the taskbar, at any DPI.
 /// Size and position are applied together so the window cannot open centered and then jump off-screen.
@@ -111,7 +119,12 @@ fn pin_overlay_inner(window: &WebviewWindow) -> Result<(), String> {
     };
     let area = monitor.work_area();
     let scale = monitor.scale_factor().max(1.0);
-    let width = (OVERLAY_W * scale).round() as i32;
+    let logical_w = if TIP_EXPANDED.load(Ordering::SeqCst) {
+        OVERLAY_W + OVERLAY_TIP_EXTRA
+    } else {
+        OVERLAY_W
+    };
+    let width = (logical_w * scale).round() as i32;
     let height = (OVERLAY_H * scale).round() as i32;
     let margin = (OVERLAY_MARGIN_DIP * scale).round() as i32;
     let max_x = area.position.x + area.size.width as i32 - width;

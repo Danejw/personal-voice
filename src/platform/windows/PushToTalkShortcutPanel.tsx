@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Tooltip } from "@/components/Tooltip";
 import type { HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
 import {
   type CapturedKey,
@@ -306,28 +307,30 @@ function HotkeyField({
                 return (
                   <li key={shortcut}>
                     <span>{hotkeyListLabel([shortcut])}</span>
-                    <button
-                      type="button"
-                      className="hotkey-remove"
-                      aria-label={`Remove ${hotkeyListLabel([shortcut])}`}
-                      disabled={!removable || listening}
-                      title={removable ? "Remove" : "Record another binding before removing this one."}
-                      onClick={() => onRemove(shortcut)}
-                    >
-                      ×
-                    </button>
+                    <Tooltip content={removable ? "Remove" : "Record another binding before removing this one."}>
+                      <button
+                        type="button"
+                        className="hotkey-remove"
+                        aria-label={`Remove ${hotkeyListLabel([shortcut])}`}
+                        disabled={!removable || listening}
+                        onClick={() => onRemove(shortcut)}
+                      >
+                        ×
+                      </button>
+                    </Tooltip>
                   </li>
                 );
               })}
             </ul>
           )}
-          <button
-            type="button" className="secondary hotkey-add" disabled={disabled}
-            title="Key, mouse button, or Ctrl/Shift/Alt/Win combination. Esc cancels."
-            onClick={onRecord}
-          >
-            Record
-          </button>
+          <Tooltip content="Key, mouse button, or Ctrl/Shift/Alt/Win combination. Esc cancels.">
+            <button
+              type="button" className="secondary hotkey-add" disabled={disabled}
+              onClick={onRecord}
+            >
+              Record
+            </button>
+          </Tooltip>
         </>
       )}
     </div>

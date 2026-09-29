@@ -1,21 +1,65 @@
 import { useState } from "react";
 import { BrandMark } from "@/app/BrandMark";
+import { Tooltip } from "@/components/Tooltip";
 
-export type AppSection = "voice" | "devices" | "settings" | "analytics";
+/** Selectable main-pane destinations, including Voice children. */
+export type AppSection =
+  | "dictation"
+  | "dictionary"
+  | "capture"
+  | "notes"
+  | "handoffs"
+  | "devices"
+  | "settings"
+  | "analytics";
 
-const SECTION_META: Record<AppSection, { label: string }> = {
-  voice: { label: "Voice" },
+export type VoiceSection =
+  | "dictation"
+  | "dictionary"
+  | "capture"
+  | "notes"
+  | "handoffs";
+
+type TopSection = "voice" | "devices" | "settings" | "analytics";
+
+const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
+  dictation: { label: "Dictations" },
+  dictionary: { label: "Dictionary" },
+  capture: { label: "Selection" },
+  notes: { label: "Voice Notes" },
+  handoffs: { label: "Handoffs" },
   devices: { label: "Devices & Controls" },
   settings: { label: "Settings" },
   analytics: { label: "Analytics" },
 };
 
-const APP_SECTIONS: readonly AppSection[] = ["voice", "devices", "settings", "analytics"];
+const VOICE_CHILDREN: readonly VoiceSection[] = [
+  "dictation",
+  "dictionary",
+  "capture",
+  "notes",
+  "handoffs",
+];
+
+const TOP_SECTIONS: readonly TopSection[] = ["voice", "devices", "settings", "analytics"];
+const TOP_LABELS: Record<TopSection, string> = {
+  voice: "Voice",
+  devices: "Devices & Controls",
+  settings: "Settings",
+  analytics: "Analytics",
+};
+
 const COLLAPSED_KEY = "ui.sidebar.collapsed";
+const VOICE_OPEN_KEY = "ui.sidebar.voiceOpen";
 
 /** Title for the section shown in the main pane. */
 export function sectionMeta(section: AppSection): { label: string } {
-  return SECTION_META[section];
+  const meta = SECTION_META[section];
+  return { label: meta.title ?? meta.label };
+}
+
+export function isVoiceSection(section: AppSection): section is VoiceSection {
+  return (VOICE_CHILDREN as readonly string[]).includes(section);
 }
 
 function loadCollapsed(): boolean {
@@ -36,6 +80,24 @@ function saveCollapsed(collapsed: boolean): void {
   }
 }
 
+function loadVoiceOpen(): boolean {
+  try {
+    const stored = localStorage.getItem(VOICE_OPEN_KEY);
+    if (stored === null) return true;
+    return stored === "1";
+  } catch {
+    return true;
+  }
+}
+
+function saveVoiceOpen(open: boolean): void {
+  try {
+    localStorage.setItem(VOICE_OPEN_KEY, open ? "1" : "0");
+  } catch {
+    // Preference is local chrome only; a write failure must not block navigation.
+  }
+}
+
 interface AppNavProps {
   section: AppSection;
   microphoneOn: boolean;
@@ -45,7 +107,10 @@ interface AppNavProps {
 /** Persistent section switcher. Selection stays in component state; it does not change the route. */
 export function AppNav({ section, microphoneOn, onSelect }: AppNavProps) {
   const [collapsed, setCollapsed] = useState(loadCollapsed);
+  const [voiceOpen, setVoiceOpen] = useState(loadVoiceOpen);
   const micLabel = microphoneOn ? "Microphone on" : "Microphone off";
+  const voiceActive = isVoiceSection(section);
+  const showVoiceChildren = voiceOpen && !collapsed;
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -55,49 +120,132 @@ export function AppNav({ section, microphoneOn, onSelect }: AppNavProps) {
     });
   }
 
+  function setVoiceExpanded(open: boolean) {
+    setVoiceOpen(open);
+    saveVoiceOpen(open);
+  }
+
+  function toggleVoiceGroup() {
+    if (collapsed) {
+      setCollapsed(false);
+      saveCollapsed(false);
+      setVoiceExpanded(true);
+      if (!voiceActive) onSelect("dictation");
+      return;
+    }
+    const next = !voiceOpen;
+    setVoiceExpanded(next);
+    if (next && !voiceActive) onSelect("dictation");
+  }
+
+  function selectChild(child: VoiceSection) {
+    if (!voiceOpen) setVoiceExpanded(true);
+    onSelect(child);
+  }
+
+  function selectTop(id: Exclude<TopSection, "voice">) {
+    onSelect(id);
+  }
+
   return (
     <aside className={collapsed ? "app-sidebar is-collapsed" : "app-sidebar"}>
       <div className="app-brand">
-        <button
-          type="button"
-          className="app-brand-toggle"
-          aria-expanded={!collapsed}
-          title={collapsed ? "Expand menu" : "Collapse menu"}
-          aria-label={collapsed ? "Expand menu" : "Collapse menu"}
-          onClick={toggleCollapsed}
-        >
-          <BrandMark />
-        </button>
+        <Tooltip content={collapsed ? `Expand menu · ${micLabel}` : `Collapse menu · ${micLabel}`}>
+          <button
+            type="button"
+            className="app-brand-toggle"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+            onClick={toggleCollapsed}
+          >
+            <span className="brand-mark-wrap">
+              <BrandMark />
+              <span
+                className={microphoneOn ? "mic-dot is-on" : "mic-dot is-off"}
+                aria-hidden="true"
+              />
+            </span>
+          </button>
+        </Tooltip>
         <h1>Personal Voice</h1>
+        <span className="visually-hidden" role="status">{micLabel}</span>
       </div>
       <nav className="app-nav" aria-label="Personal Voice">
-        {APP_SECTIONS.map((id) => {
-          const label = SECTION_META[id].label;
+        {TOP_SECTIONS.map((id) => {
+          const label = TOP_LABELS[id];
+          if (id === "voice") {
+            const groupClass = [
+              "app-nav-group",
+              voiceActive ? "is-active" : "",
+              showVoiceChildren ? "is-open" : "",
+            ].filter(Boolean).join(" ");
+            return (
+              <div key={id} className={groupClass}>
+                <Tooltip content={collapsed ? label : voiceOpen ? "Collapse Voice" : "Expand Voice"}>
+                  <button
+                    type="button"
+                    className="app-nav-item app-nav-parent"
+                    aria-expanded={showVoiceChildren}
+                    aria-controls="voice-nav-children"
+                    aria-label={collapsed ? label : undefined}
+                    onClick={toggleVoiceGroup}
+                  >
+                    <NavIcon section={id} />
+                    <span className="app-nav-label">{label}</span>
+                    <span className="app-nav-chevron" aria-hidden="true">
+                      <svg viewBox="0 0 12 12">
+                        <path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                  </button>
+                </Tooltip>
+                <div
+                  id="voice-nav-children"
+                  className="app-nav-children"
+                  role="group"
+                  aria-label="Voice"
+                  hidden={!showVoiceChildren}
+                >
+                  {VOICE_CHILDREN.map((child) => {
+                    const childLabel = SECTION_META[child].label;
+                    return (
+                      <button
+                        key={child}
+                        type="button"
+                        className="app-nav-item app-nav-child"
+                        aria-current={section === child ? "page" : undefined}
+                        onClick={() => selectChild(child)}
+                      >
+                        <span className="app-nav-child-mark" aria-hidden="true" />
+                        <span className="app-nav-label">{childLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }
           return (
-            <button
-              key={id}
-              type="button"
-              className="app-nav-item"
-              aria-current={section === id ? "page" : undefined}
-              aria-label={collapsed ? label : undefined}
-              title={collapsed ? label : undefined}
-              onClick={() => onSelect(id)}
-            >
-              <NavIcon section={id} />
-              <span className="app-nav-label">{label}</span>
-            </button>
+            <Tooltip key={id} content={collapsed ? label : undefined}>
+              <button
+                type="button"
+                className="app-nav-item"
+                aria-current={section === id ? "page" : undefined}
+                aria-label={collapsed ? label : undefined}
+                onClick={() => selectTop(id)}
+              >
+                <NavIcon section={id} />
+                <span className="app-nav-label">{label}</span>
+              </button>
+            </Tooltip>
           );
         })}
       </nav>
-      <p className="sidebar-status" title={micLabel}>
-        <span className={microphoneOn ? "mic-dot is-on" : "mic-dot"} aria-hidden="true" />
-        <span className="sidebar-status-text">{micLabel}</span>
-      </p>
     </aside>
   );
 }
 
-function NavIcon({ section }: { section: AppSection }) {
+function NavIcon({ section }: { section: TopSection }) {
   switch (section) {
     case "voice":
       return (

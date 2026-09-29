@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { Tooltip } from "@/components/Tooltip";
 import type { DeviceSnapshot, DeviceStatus, DeviceStore } from "@/devices/DeviceStore";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import { MAX_DEVICE_NAME } from "@/services/deviceService";
@@ -117,7 +118,9 @@ export function DevicesPanel({ store, snapshot, onChanged }: DevicesPanelProps) 
   return (
     <>
       <div className="card-head">
-        <h2 id="devices-heading" title="Removing a device does not delete notes or sent text.">Connected devices</h2>
+        <Tooltip content="Removing a device does not delete notes or sent text.">
+          <h2 id="devices-heading">Connected devices</h2>
+        </Tooltip>
         <div className="card-head-actions">
           <p role="status">{statusLabel(snapshot.status)}</p>
           {snapshot.status !== "signed-out" && (

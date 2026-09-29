@@ -1,0 +1,38 @@
+---
+description: UI must stay borderless — no CSS borders on new or edited components
+alwaysApply: true
+---
+
+# No UI borders
+
+Personal Voice UI is **borderless**. Separate surfaces with background contrast, spacing, radius, and shadows — never with strokes.
+
+## Do not
+
+```css
+/* ❌ BAD */
+border: 1px solid #344252;
+border-bottom: 1px solid #24303c;
+border-color: #88d8c1;
+box-shadow: inset 0 0 0 1px #2a3644; /* faux border */
+```
+
+```tsx
+/* ❌ BAD */
+style={{ border: "1px solid …" }}
+className="… border border-…"
+```
+
+## Do
+
+```css
+/* ✅ GOOD — fill + radius, optional soft shadow */
+background: #111820;
+border-radius: 8px;
+box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+```
+
+- Prefer `border: 0` (or omit borders) on buttons, inputs, menus, cards, panels, tooltips, and overlays.
+- Focus/active: use `outline` or a background change — not `border` / `border-color`.
+- `border-radius` and `box-sizing: border-box` are fine.
+- When editing existing CSS, remove leftover visible `border*` / faux-border shadows in the same change.

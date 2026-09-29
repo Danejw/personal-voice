@@ -1,16 +1,28 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
+import { Tooltip } from "@/components/Tooltip";
 import type { ContextItem } from "@/context/ContextItem";
 import type { PlatformName } from "@/platform/PlatformAdapter";
 
 interface SelectionPanelProps {
   platform: PlatformName;
   disabled: boolean;
+  /** When true, Capture / Copy / Clear render in the shared page header. */
+  active?: boolean;
   capture(): Promise<ContextItem>;
   onCaptured?(): void;
 }
 
+const HEADER_ACTIONS_ID = "page-header-actions";
+
 /** Preview of text captured from another app. No transformation is applied. */
-export function SelectionPanel({ platform, disabled, capture, onCaptured }: SelectionPanelProps) {
+export function SelectionPanel({
+  platform,
+  disabled,
+  active = false,
+  capture,
+  onCaptured,
+}: SelectionPanelProps) {
   const [item, setItem] = useState<ContextItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -48,21 +60,28 @@ export function SelectionPanel({ platform, disabled, capture, onCaptured }: Sele
     setNotice(null);
   }
 
+  const actions = (
+    <>
+      <Tooltip content={hintFor(platform)}>
+        <button
+          type="button"
+          className="secondary"
+          disabled={disabled || busy}
+          onClick={onCapture}
+        >
+          {busy ? "Capturing…" : "Capture"}
+        </button>
+      </Tooltip>
+      <button type="button" className="secondary" disabled={!item || busy} onClick={onCopy}>Copy</button>
+      <button type="button" className="secondary" disabled={!item || busy} onClick={onClear}>Clear</button>
+    </>
+  );
+
+  const host = typeof document !== "undefined" ? document.getElementById(HEADER_ACTIONS_ID) : null;
+
   return (
     <>
-      <div className="card-head">
-        <h2 id="selection-heading">Capture selection</h2>
-        <div className="actions">
-          <button
-            type="button" className="secondary" title={hintFor(platform)}
-            disabled={disabled || busy} onClick={onCapture}
-          >
-            {busy ? "Capturing…" : "Capture"}
-          </button>
-          <button type="button" className="secondary" disabled={!item || busy} onClick={onCopy}>Copy</button>
-          <button type="button" className="secondary" disabled={!item || busy} onClick={onClear}>Clear</button>
-        </div>
-      </div>
+      {active && host ? createPortal(actions, host) : null}
       {problem && <p className="error" role="alert">{problem}</p>}
       {notice && <p role="status">{notice}</p>}
       {item ? (

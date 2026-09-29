@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  buildAnalytics,
   collectUsagePages,
   deviceLabel,
+  heatMapDays,
   insightsFrom,
+  longestUsageStreak,
   mergeUsageDays,
+  platformUsage,
   sumCounters,
   panelRanges,
   shiftDays,
@@ -94,6 +98,52 @@ describe("dashboard merge", () => {
     phone.counters.targetApps["com.whatsapp"] = { label: "WhatsApp", count: 1, words: 3 };
     expect(sumCounters([desk, phone]).targetApps["slack.exe"]).toEqual({ label: "Slack", count: 7, words: 28 });
     expect(insightsFrom([desk], "2026-09-28")).toContain("Most of your pasted transcripts go into Slack.");
+  });
+
+  it("splits words between Windows and Android devices", () => {
+    const desk = row("2026-09-20", "desk", 4, 80);
+    const phone = row("2026-09-21", "phone", 2, 20);
+    expect(platformUsage([desk, phone], [
+      { id: "desk", name: "PC", platform: "windows" },
+      { id: "phone", name: "Phone", platform: "android" },
+    ])).toEqual([
+      { id: "windows", label: "Windows", count: 80, words: 80, share: 80 },
+      { id: "android", label: "Android", count: 20, words: 20, share: 20 },
+    ]);
+  });
+
+  it("tracks the longest completion streak and builds heatmap days", () => {
+    const rows = [
+      row("2026-09-20", "desk", 1, 10),
+      row("2026-09-21", "desk", 1, 20),
+      row("2026-09-22", "desk", 1, 30),
+      row("2026-09-25", "desk", 1, 5),
+    ];
+    expect(longestUsageStreak(rows)).toBe(3);
+    expect(usageStreak(rows, "2026-09-25")).toBe(1);
+    const heat = heatMapDays(rows, "2026-09-25", 2);
+    expect(heat).toHaveLength(14);
+    expect(heat.find((day) => day.day === "2026-09-22")?.words).toBe(30);
+  });
+
+  it("exposes all-time words separately from this month", () => {
+    const lifetime = [
+      row("2026-08-10", "desk", 2, 100),
+      row("2026-09-05", "desk", 1, 40),
+      row("2026-09-20", "desk", 1, 60),
+    ];
+    const month = lifetime.filter((item) => item.day >= "2026-09-01");
+    const model = buildAnalytics({
+      lifetime,
+      month,
+      recent: month,
+      weeks: month,
+      devices: [{ id: "desk", name: "PC", platform: "windows" }],
+      dictionary: [],
+      today: "2026-09-28",
+    });
+    expect(model.lifetimeWords).toBe(200);
+    expect(model.monthWords).toBe(100);
   });
 });
 

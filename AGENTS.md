@@ -35,6 +35,7 @@ Read these files before changing code:
 - Keep Rust formatted and warning-free where practical.
 - Add tests for shared logic and state transitions.
 - Do not claim a phase is complete until its acceptance criteria have been tested.
+- UI is borderless: do not add CSS/HTML borders (or faux inset-ring shadows). Separate surfaces with background, spacing, radius, and soft shadows. See `.cursor/rules/no-borders.mdc`.
 
 ## Simplicity rule
 

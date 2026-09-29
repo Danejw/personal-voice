@@ -69,6 +69,7 @@ mod unsupported {
     pub fn pin_overlay(_window: &WebviewWindow) -> Result<(), String> {
         Ok(())
     }
+    pub fn set_overlay_tip_expanded(_expanded: bool) {}
     pub fn show_without_focus(window: &WebviewWindow) -> Result<(), String> {
         window.show().map_err(|e| e.to_string())
     }

@@ -6,18 +6,19 @@ import { useAuth } from "@/auth/useAuth";
 import { SelectionPanel } from "@/context/SelectionPanel";
 import { SelectField } from "@/components/SelectField";
 import type { SelectOption } from "@/components/SelectField";
+import { Tooltip } from "@/components/Tooltip";
 import { DevicesPanel } from "@/devices/DevicesPanel";
 import { DeviceStore } from "@/devices/DeviceStore";
 import { useDevices } from "@/devices/useDevices";
 import { DeviceTargetField } from "@/handoffs/DeviceTargetField";
-import { HandoffPanel } from "@/handoffs/HandoffPanel";
+import { HandoffPanel, HandoffToolbar } from "@/handoffs/HandoffPanel";
 import { HandoffStore } from "@/handoffs/HandoffStore";
 import { useHandoffAlerts } from "@/handoffs/useHandoffAlerts";
 import { useHandoffs } from "@/handoffs/useHandoffs";
 import { DictationHistoryPanel } from "@/history/DictationHistoryPanel";
 import { DictationHistoryStore } from "@/history/DictationHistoryStore";
 import { useDictationHistory } from "@/history/useDictationHistory";
-import { VoiceNotesPanel } from "@/notes/VoiceNotesPanel";
+import { VoiceNotesPanel, VoiceNotesToolbar } from "@/notes/VoiceNotesPanel";
 import { VoiceNotesStore } from "@/notes/VoiceNotesStore";
 import { useVoiceNotes } from "@/notes/useVoiceNotes";
 import { useOverlay } from "@/overlay/useOverlay";
@@ -34,7 +35,7 @@ import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
 import { voiceNotesApi } from "@/services/voiceNotesService";
 import { bindDeviceSettings, loadDestination, loadShowIndicator, saveDestination, saveShowIndicator } from "@/settings/deviceSettings";
-import { DictionaryPanel } from "@/sync/DictionaryPanel";
+import { DictionaryPanel, DictionaryToolbar } from "@/sync/DictionaryPanel";
 import { PersonalSyncStore } from "@/sync/PersonalSyncStore";
 import { SyncStatus } from "@/sync/SyncStatus";
 import { TranscriptionSettingsPanel } from "@/sync/TranscriptionSettingsPanel";
@@ -213,7 +214,9 @@ function DeviceControls({
       return (
         <>
           <section aria-labelledby="trigger-heading">
-            <h2 id="trigger-heading" title="Saved on this PC. Not copied to your phone.">Keybindings</h2>
+            <Tooltip content="Saved on this PC. Not copied to your phone.">
+              <h2 id="trigger-heading">Keybindings</h2>
+            </Tooltip>
             {settingsReady
               ? <PushToTalkShortcutPanel platform={platform} />
               : <p className="hint">Loading saved bindings…</p>}
@@ -258,7 +261,7 @@ export default function App() {
   const historySnapshot = useDictationHistory(history);
   const usageSnapshot = useUsage(usage);
   const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
-  const [section, setSection] = useState<AppSection>("voice");
+  const [section, setSection] = useState<AppSection>("dictation");
   const [floatingControl, setFloatingControl] = useState(loadShowIndicator);
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
     const data = personalSync.getSnapshot().data;
@@ -400,72 +403,84 @@ export default function App() {
       <main className="app-main hide-scrollbar" aria-labelledby="page-title">
         <header className="page-header">
           <h2 id="page-title" className="page-title">{page.label}</h2>
+          {section === "dictation" && (
+            <div className="page-header-actions">
+              <p className="status" role="status">{status}</p>
+            </div>
+          )}
+          {section === "dictionary" && <DictionaryToolbar store={personalSync} sync={sync} />}
+          {section === "notes" && <VoiceNotesToolbar store={voiceNotes} snapshot={notes} />}
+          {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
+          <div id="page-header-actions" className="page-header-actions" hidden={section !== "capture"} />
         </header>
 
-        <div className="voice-layout" hidden={section !== "voice"}>
-          <div className="panel-stack">
-            <section aria-labelledby="status-heading">
-              <div className="card-head">
-                <h2 id="status-heading">Dictation</h2>
-                <p className="status" role="status">{status}</p>
-              </div>
-              <div className="dictation-controls">
-                <SelectField
-                  label="Send to" value={destination} options={DESTINATION_OPTIONS}
-                  disabled={!idle} onChange={chooseDestination}
-                />
-                <button type="button" className="record" disabled={!control.enabled || (state === "IDLE" && !signedIn)} onClick={onControl}>
-                  {control.label}
-                </button>
-              </div>
-              {destination === "send-to-device" && (
-                <DeviceTargetField
-                  label="Target" store={handoffs} snapshot={handoffSnapshot} disabled={!idle}
-                />
-              )}
-              {error && <p className="error" role="alert">{error}</p>}
-              <div className="transcript" aria-live="polite">
-                {partial && <p className="partial">{partial}</p>}
-                {!partial && transcript && <p>{transcript}</p>}
-                {!partial && !transcript && <p className="placeholder">No transcript yet.</p>}
-              </div>
-            </section>
-            <section aria-labelledby="history-heading">
-              <DictationHistoryPanel
-                store={history}
-                snapshot={historySnapshot}
-                insertIntoActiveField={(text) => pasteReceived(text)}
-                onInserted={() => usage.recordLater({ name: "history_inserted" })}
+        <div className="panel-stack" hidden={section !== "dictation"}>
+          <section aria-labelledby="page-title" className="page-panel dictations-live">
+            <div className="dictation-controls">
+              <SelectField
+                label="Send to" value={destination} options={DESTINATION_OPTIONS}
+                disabled={!idle} onChange={chooseDestination}
               />
-            </section>
-            <section aria-labelledby="dictionary-heading">
-              <h2 id="dictionary-heading">Personal dictionary</h2>
-              <DictionaryPanel store={personalSync} sync={sync} termUsage={dictionaryTermUsage(usageSnapshot, settingsDeviceId ?? null, sync.data.terms)} />
-            </section>
-          </div>
-          <div className="panel-stack">
-            <section aria-labelledby="selection-heading">
-              <SelectionPanel
-                platform={platform.platform}
-                disabled={!idle}
-                capture={() => platform.captureSelection()}
-                onCaptured={() => usage.recordLater({ name: "selection_captured" })}
+              <button type="button" className="record" disabled={!control.enabled || (state === "IDLE" && !signedIn)} onClick={onControl}>
+                {control.label}
+              </button>
+            </div>
+            {destination === "send-to-device" && (
+              <DeviceTargetField
+                label="Target" store={handoffs} snapshot={handoffSnapshot} disabled={!idle}
               />
-            </section>
-            <section aria-labelledby="notes-heading">
-              <VoiceNotesPanel store={voiceNotes} snapshot={notes} />
-            </section>
-            <section aria-labelledby="handoffs-heading">
-              <HandoffPanel
-                store={handoffs}
-                snapshot={handoffSnapshot}
-                insertIntoActiveField={(text) => pasteReceived(text)}
-              />
-            </section>
-          </div>
+            )}
+            {error && <p className="error" role="alert">{error}</p>}
+            <div className="transcript" aria-live="polite">
+              {partial && <p className="partial">{partial}</p>}
+              {!partial && transcript && <p>{transcript}</p>}
+              {!partial && !transcript && <p className="placeholder">No transcript yet.</p>}
+            </div>
+          </section>
+          <section aria-labelledby="history-heading" className="page-panel dictations-recent">
+            <DictationHistoryPanel
+              snapshot={historySnapshot}
+              insertIntoActiveField={(text) => pasteReceived(text)}
+              onInserted={() => usage.recordLater({ name: "history_inserted" })}
+            />
+          </section>
         </div>
 
-        <div className="panel-stack panel-column" hidden={section !== "devices"}>
+        <div className="panel-stack" hidden={section !== "dictionary"}>
+          <section aria-labelledby="page-title" className="page-panel">
+            <DictionaryPanel store={personalSync} sync={sync} termUsage={dictionaryTermUsage(usageSnapshot, settingsDeviceId ?? null, sync.data.terms)} />
+          </section>
+        </div>
+
+        <div className="panel-stack" hidden={section !== "capture"}>
+          <section aria-labelledby="page-title" className="page-panel">
+            <SelectionPanel
+              platform={platform.platform}
+              disabled={!idle}
+              active={section === "capture"}
+              capture={() => platform.captureSelection()}
+              onCaptured={() => usage.recordLater({ name: "selection_captured" })}
+            />
+          </section>
+        </div>
+
+        <div className="panel-stack" hidden={section !== "notes"}>
+          <section aria-labelledby="page-title" className="page-panel">
+            <VoiceNotesPanel store={voiceNotes} snapshot={notes} />
+          </section>
+        </div>
+
+        <div className="panel-stack" hidden={section !== "handoffs"}>
+          <section aria-labelledby="page-title" className="page-panel">
+            <HandoffPanel
+              store={handoffs}
+              snapshot={handoffSnapshot}
+              insertIntoActiveField={(text) => pasteReceived(text)}
+            />
+          </section>
+        </div>
+
+        <div className="panel-stack is-scroll" hidden={section !== "devices"}>
           {platform.platform === "windows" && (
             <section aria-labelledby="microphone-heading">
               <h2 id="microphone-heading">Microphone</h2>
@@ -491,7 +506,7 @@ export default function App() {
           />
         </div>
 
-        <div className="panel-stack panel-column" hidden={section !== "settings"}>
+        <div className="panel-stack is-scroll" hidden={section !== "settings"}>
           <section aria-labelledby="account-heading">
             <h2 id="account-heading">Account</h2>
             <AuthPanel auth={auth} disabled={!idle} />
@@ -503,7 +518,7 @@ export default function App() {
           </section>
           <section aria-labelledby="usage-heading">
             <h2 id="usage-heading">Usage intelligence</h2>
-            <UsagePanel store={personalSync} sync={sync} usage={usageSnapshot} onClear={() => { void usage.clearAnalytics(); }} />
+            <UsagePanel store={personalSync} sync={sync} />
           </section>
           <section aria-labelledby="updates-heading">
             <h2 id="updates-heading">Updates</h2>

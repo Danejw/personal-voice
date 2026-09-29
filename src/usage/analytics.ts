@@ -21,6 +21,8 @@ export const USAGE_PAGE_SIZE = 1000;
 export interface UsageDevice {
   id: string;
   name: string;
+  /** `windows` or `android` when known from the account device list. */
+  platform?: string;
 }
 
 export interface DateRange {
@@ -188,7 +190,13 @@ export interface DayBar {
   wpm: number | null;
 }
 
+export interface PlatformUsage extends NamedCount {
+  words: number;
+}
+
 export interface AnalyticsModel {
+  /** Output words across every synced day in the current epoch. */
+  lifetimeWords: number;
   monthWords: number;
   monthDictations: number;
   monthCompletionMs: number;
@@ -198,8 +206,11 @@ export interface AnalyticsModel {
   fastestWpm: number | null;
   slowestWpm: number | null;
   bars: DayBar[];
+  /** Daily word totals for the contribution-style calendar (recent months). */
+  heatDays: DayBar[];
   devices: DeviceUsage[];
   mostUsedDevice: DeviceUsage | null;
+  platforms: PlatformUsage[];
   destinations: NamedCount[];
   triggers: NamedCount[];
   features: NamedCount[];
@@ -208,12 +219,13 @@ export interface AnalyticsModel {
   neverUsed: string[];
   activeDays: number;
   streak: number;
+  longestStreak: number;
   insights: string[];
 }
 
 const DESTINATION_LABELS: Record<TranscriptDestinationId, string> = {
   "active-field": "Active field",
-  "voice-note": "Voice notes",
+  "voice-note": "Voice Notes",
   "send-to-device": "Handoffs",
 };
 
@@ -253,6 +265,83 @@ export function usageStreak(rows: readonly RemoteUsageDay[], today: string): num
     cursor = shiftDays(cursor, -1);
   }
   return count;
+}
+
+/** Longest run of consecutive local days with at least one completion. */
+export function longestUsageStreak(rows: readonly RemoteUsageDay[]): number {
+  const active = completedByDay(rows);
+  const days = [...active.keys()].filter((day) => (active.get(day) ?? 0) > 0).sort();
+  let best = 0;
+  let run = 0;
+  let previous: string | null = null;
+  for (const day of days) {
+    if (previous && day === shiftDays(previous, 1)) run += 1;
+    else run = 1;
+    if (run > best) best = run;
+    previous = day;
+  }
+  return best;
+}
+
+/** Sunday that starts the week containing `day`. */
+export function weekStartSunday(day: string): string {
+  const [year, month, date] = day.split("-").map(Number);
+  const value = new Date(year ?? 1970, (month ?? 1) - 1, date ?? 1);
+  return shiftDays(day, -value.getDay());
+}
+
+/**
+ * One cell per day for a GitHub-style calendar. Defaults to 16 weeks ending this week.
+ * Words come from every device row for that local day.
+ */
+export function heatMapDays(
+  rows: readonly RemoteUsageDay[],
+  today: string,
+  weekCount = 16,
+): DayBar[] {
+  const words = new Map<string, number>();
+  for (const row of rows) {
+    words.set(row.day, (words.get(row.day) ?? 0) + row.counters.outputWords);
+  }
+  const end = weekStartSunday(today);
+  const start = shiftDays(end, -(weekCount - 1) * 7);
+  const last = shiftDays(end, 6);
+  const days: DayBar[] = [];
+  for (let cursor = start; cursor <= last; cursor = shiftDays(cursor, 1)) {
+    const dayWords = cursor <= today ? (words.get(cursor) ?? 0) : 0;
+    days.push({ day: cursor, words: cursor <= today ? dayWords : 0, wpm: null });
+    if (cursor === last) break;
+  }
+  return days;
+}
+
+function platformLabel(platform: string): string {
+  switch (platform) {
+    case "windows": return "Windows";
+    case "android": return "Android";
+    default: return platform;
+  }
+}
+
+/** Words attributed to Windows vs Android from known account devices. */
+export function platformUsage(
+  rows: readonly RemoteUsageDay[],
+  devices: readonly UsageDevice[],
+): PlatformUsage[] {
+  const platformByDevice = new Map(devices.map((device) => [device.id, device.platform ?? ""]));
+  const byPlatform = new Map<string, number>();
+  for (const row of rows) {
+    const platform = platformByDevice.get(row.deviceId);
+    if (platform !== "windows" && platform !== "android") continue;
+    byPlatform.set(platform, (byPlatform.get(platform) ?? 0) + row.counters.outputWords);
+  }
+  const total = [...byPlatform.values()].reduce((sum, words) => sum + words, 0);
+  return (["windows", "android"] as const)
+    .map((id) => {
+      const words = byPlatform.get(id) ?? 0;
+      return { id, label: platformLabel(id), count: words, words, share: share(words, total) };
+    })
+    .filter((item) => item.words > 0);
 }
 
 function hourLabel(hour: number): string {
@@ -450,6 +539,7 @@ export function buildAnalytics(input: {
     count: lifetime.destinations[id],
   })));
   return {
+    lifetimeWords: lifetime.outputWords,
     monthWords: month.outputWords,
     monthDictations: month.dictationCompleted,
     monthCompletionMs: month.completionMs,
@@ -459,8 +549,10 @@ export function buildAnalytics(input: {
     fastestWpm: lifetime.fastestWpm,
     slowestWpm: lifetime.slowestWpm,
     bars: recentDays,
+    heatDays: heatMapDays(input.lifetime, input.today),
     devices,
     mostUsedDevice: devices[0] ?? null,
+    platforms: platformUsage(input.lifetime, input.devices),
     destinations,
     triggers: ranked(USAGE_TRIGGERS.map((id) => ({ id, label: TRIGGER_LABELS[id], count: lifetime.triggers[id] }))),
     features: ranked(USAGE_FEATURES.map((id) => ({ id, label: FEATURE_LABELS[id], count: lifetime.features[id] }))),
@@ -469,6 +561,7 @@ export function buildAnalytics(input: {
     neverUsed: terms.neverUsed,
     activeDays: [...completedByDay(input.lifetime).values()].filter((count) => count > 0).length,
     streak: usageStreak(input.lifetime, input.today),
+    longestStreak: longestUsageStreak(input.lifetime),
     insights: insightsFrom(input.lifetime, input.today),
   };
 }

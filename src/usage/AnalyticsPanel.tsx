@@ -5,12 +5,14 @@ import { buildAnalytics, mergeUsageDays, panelRanges } from "@/usage/analytics";
 import type { AnalyticsModel } from "@/usage/analytics";
 import type { UsageSnapshot } from "@/usage/usageEvents";
 import type { RemoteUsageDay } from "@/usage/usageEvents";
+import { HorizontalShareBars, PlatformSplitBar } from "@/usage/HorizontalShareBars";
+import { UsageHeatmap } from "@/usage/UsageHeatmap";
 
 interface AnalyticsPanelProps {
   active: boolean;
   signedIn: boolean;
   deviceId: string | null;
-  devices: readonly { id: string; name: string }[];
+  devices: readonly { id: string; name: string; platform: string }[];
   dictionary: readonly DictionaryTerm[];
   usage: UsageSnapshot;
 }
@@ -19,10 +21,10 @@ function formatWpm(value: number | null): string {
   return value === null ? "–" : String(Math.round(value));
 }
 
-function formatCompletion(ms: number): string {
-  const minutes = Math.round(ms / 60_000);
-  if (minutes < 60) return `${minutes} min`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+/** Bar length relative to the most-used term, so the top term fills the row. */
+function termShare(uses: number, terms: readonly { uses: number }[]): number {
+  const max = Math.max(1, ...terms.map((term) => term.uses));
+  return Math.round((uses / max) * 100);
 }
 
 /** Compact personal dashboard. Numbers come from merged usage days, not a second observer. */
@@ -68,7 +70,6 @@ export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary
       today: panelRanges(new Date()).today,
     })
     : null;
-  const maxBar = Math.max(1, ...(model?.bars.map((bar) => bar.words) ?? [1]));
 
   return (
     <div className="analytics">
@@ -82,136 +83,81 @@ export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary
         <>
           <div className="stat-row">
             <div className="stat-cell">
+              <p className="stat-value">{model.lifetimeWords.toLocaleString()}</p>
+              <p className="stat-label">All-time words</p>
+            </div>
+            <div className="stat-cell">
               <p className="stat-value">{model.monthWords.toLocaleString()}</p>
-              <p className="stat-label">Words dictated · this month</p>
+              <p className="stat-label">Words this month</p>
             </div>
             <div className="stat-cell">
               <p className="stat-value">{model.monthDictations.toLocaleString()}</p>
-              <p className="stat-label">Dictations · this month</p>
+              <p className="stat-label">Dictations</p>
             </div>
             <div className="stat-cell">
-              <p className="stat-value">{model.mostUsedDevice ? `${model.mostUsedDevice.label} ${model.mostUsedDevice.share}%` : "–"}</p>
-              <p className="stat-label">Most used device</p>
+              <p className="stat-value">{formatWpm(model.monthWpm)}</p>
+              <p className="stat-label">Words / minute</p>
+            </div>
+            <div className="stat-cell">
+              <p className="stat-value">{model.mostUsedDevice ? `${model.mostUsedDevice.share}%` : "–"}</p>
+              <p className="stat-label">{model.mostUsedDevice?.label ?? "Top device"}</p>
             </div>
           </div>
 
-          <section aria-labelledby="trend-heading">
-            <h2 id="trend-heading">Usage over time</h2>
-            <ul className="bars">
-              {model.bars.map((bar) => (
-                <li key={bar.day} className="bar-row">
-                  <span>{bar.day.slice(5)}</span>
-                  <span className="bar-track"><span className="bar-fill" style={{ width: `${Math.round((bar.words / maxBar) * 100)}%` }} /></span>
-                  <span>{bar.words}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
+          <UsageHeatmap
+            days={model.heatDays}
+            streak={model.streak}
+            longestStreak={model.longestStreak}
+            today={windows.today}
+          />
 
-          <div className="analytics-grid">
-            <section aria-labelledby="wpm-heading">
-              <h2 id="wpm-heading">Words per minute</h2>
-              <p>Today {formatWpm(model.todayWpm)} · Week {formatWpm(model.weekWpm)} · Month {formatWpm(model.monthWpm)}</p>
-              {model.fastestWpm !== null && model.slowestWpm !== null && (
-                <p className="hint">Fastest {formatWpm(model.fastestWpm)} · Slowest {formatWpm(model.slowestWpm)}</p>
-              )}
-              <ul className="bars">
-                {model.bars.map((bar) => (
-                  <li key={`wpm-${bar.day}`} className="bar-row">
-                    <span>{bar.day.slice(5)}</span>
-                    <span className="bar-track"><span className="bar-fill" style={{ width: `${bar.wpm === null ? 0 : Math.min(100, Math.round(bar.wpm))}%` }} /></span>
-                    <span>{formatWpm(bar.wpm)}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <section aria-labelledby="completion-heading">
-              <h2 id="completion-heading">Completion time</h2>
-              {model.monthCompletionMs > 0 ? (
-                <p>
-                  {formatCompletion(model.monthCompletionMs)} this month
-                  {model.monthDictations > 0 ? ` · average ${formatCompletion(Math.round(model.monthCompletionMs / model.monthDictations))}` : ""}
-                  {" · press to delivery"}
-                </p>
-              ) : (
-                <p className="hint">No completion time yet.</p>
-              )}
-              <p className="hint">{model.streak} day streak · {model.activeDays} active days</p>
-              {usage.legacy && (
-                <p className="hint">Earlier on this device: {usage.legacy.dictationCompleted} completed, not included above.</p>
-              )}
-            </section>
-            <section aria-labelledby="terms-heading">
-              <h2 id="terms-heading">Dictionary</h2>
-              {model.terms.length === 0 && <p className="hint">No dictionary uses yet.</p>}
-              <ul className="metric-list">
-                {model.terms.slice(0, 8).map((term) => (
-                  <li key={term.term}><span>{term.term}</span><span>{term.uses} uses</span></li>
-                ))}
-              </ul>
-              {model.terms.some((term) => term.lastDay !== null && term.lastDay >= windows.recent.from) && (
-                <p className="hint">
-                  Used recently: {model.terms.filter((term) => term.lastDay !== null && term.lastDay >= windows.recent.from).slice(0, 6).map((term) => term.term).join(", ")}
-                </p>
-              )}
-              {model.neverUsed.length > 0 && <p className="hint">Never used: {model.neverUsed.slice(0, 6).join(", ")}</p>}
-            </section>
-            <section aria-labelledby="devices-usage-heading">
-              <h2 id="devices-usage-heading">Devices</h2>
-              {model.devices.length === 0 && <p className="hint">No device usage yet.</p>}
-              <ul className="metric-list">
-                {model.devices.map((device) => (
-                  <li key={device.id}>
-                    <span>{device.label}</span>
-                    <span>{device.share}% · {device.words.toLocaleString()} words</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <section aria-labelledby="apps-heading">
-              <h2 id="apps-heading">Apps</h2>
-              {model.apps.length === 0 && <p className="hint">Paste a transcript into another app and it will show up here.</p>}
-              <ul className="metric-list">
-                {model.apps.slice(0, 8).map((app) => (
-                  <li key={app.id}>
-                    <span>{app.label}</span>
-                    <span>{app.share}% · {app.words.toLocaleString()} words</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <section aria-labelledby="how-heading">
-              <h2 id="how-heading">How you use Personal Voice</h2>
-              <ul className="metric-list">
-                {model.destinations.map((item) => (
-                  <li key={item.id}><span>{item.label}</span><span>{item.share}%</span></li>
-                ))}
-                {model.triggers.map((item) => (
-                  <li key={item.id}><span>{item.label}</span><span>{item.share}%</span></li>
-                ))}
-              </ul>
-            </section>
-            <section aria-labelledby="features-heading">
-              <h2 id="features-heading">Features</h2>
-              {model.features.length === 0 && <p className="hint">No feature usage yet.</p>}
-              <ul className="metric-list">
-                {model.features.map((item) => (
-                  <li key={item.id}><span>{item.label}</span><span>{item.count}</span></li>
-                ))}
-              </ul>
-            </section>
+          <div className="analytics-visual-row">
+            <HorizontalShareBars
+              headingId="apps-heading"
+              title="Apps"
+              items={model.apps.slice(0, 6).map((app) => ({
+                id: app.id,
+                label: app.label,
+                share: app.share,
+                detail: app.words.toLocaleString(),
+              }))}
+            />
+            <PlatformSplitBar platforms={model.platforms} />
           </div>
 
-          <section aria-labelledby="patterns-heading">
-            <h2 id="patterns-heading">Patterns</h2>
-            {model.insights.length === 0 ? (
-              <p className="hint">A few more dictations will make a pattern visible.</p>
-            ) : (
-              <ul className="metric-list">
-                {model.insights.map((line) => <li key={line}>{line}</li>)}
-              </ul>
-            )}
-          </section>
+          <div className="analytics-visual-row">
+            <HorizontalShareBars
+              headingId="where-heading"
+              title="Where it goes"
+              items={model.destinations.filter((item) => item.count > 0).map((item) => ({
+                id: item.id,
+                label: item.label,
+                share: item.share,
+                detail: String(item.count),
+              }))}
+            />
+            <HorizontalShareBars
+              headingId="start-heading"
+              title="How you start"
+              items={model.triggers.filter((item) => item.count > 0).map((item) => ({
+                id: item.id,
+                label: item.label,
+                share: item.share,
+                detail: String(item.count),
+              }))}
+            />
+          </div>
+
+          <HorizontalShareBars
+            headingId="terms-heading"
+            title="Dictionary"
+            items={model.terms.slice(0, 6).map((term) => ({
+              id: term.term,
+              label: term.term,
+              share: termShare(term.uses, model.terms),
+              detail: String(term.uses),
+            }))}
+          />
         </>
       )}
     </div>

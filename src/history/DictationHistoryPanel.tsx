@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { HoverActionItem } from "@/components/HoverActionItem";
+import { Tooltip } from "@/components/Tooltip";
 import type {
   DictationHistoryEntry,
   DictationHistorySnapshot,
-  DictationHistoryStore,
 } from "@/history/DictationHistoryStore";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 interface DictationHistoryPanelProps {
-  store: DictationHistoryStore;
   snapshot: DictationHistorySnapshot;
   insertIntoActiveField(text: string): Promise<void>;
   onInserted?(): void;
@@ -28,7 +27,6 @@ function destinationLabel(destination: TranscriptDestinationId): string {
 
 /** Local recovery list for finalized dictations, whether delivery succeeded or failed. */
 export function DictationHistoryPanel({
-  store,
   snapshot,
   insertIntoActiveField,
   onInserted,
@@ -62,27 +60,15 @@ export function DictationHistoryPanel({
     }, "Transcript inserted.");
   }
 
-  function clear() {
-    setProblem(null);
-    setNotice(null);
-    store.clear();
-  }
-
   return (
     <>
-      <div className="card-head">
-        <h2 id="history-heading" title="Final text, stored on this device">Recent dictation</h2>
-        <button
-          type="button" className="secondary"
-          disabled={!snapshot.entries.length || busy !== null} onClick={clear}
-        >
-          Clear
-        </button>
-      </div>
+      <Tooltip content="Final text, stored on this device">
+        <h2 id="history-heading">Recent</h2>
+      </Tooltip>
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
       {notice && <p role="status">{notice}</p>}
       {snapshot.entries.length ? (
-        <ul className="handoffs history hide-scrollbar">
+        <ul className="history-list hide-scrollbar">
           {snapshot.entries.map((entry, index) => (
             <HoverActionItem
               key={`${entry.timestamp}:${index}`}

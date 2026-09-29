@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import type { PersonalSyncStore, SyncSnapshot } from "@/sync/PersonalSyncStore";
+import type { PersonalSyncStore, SyncSnapshot, SyncStatus as Status } from "@/sync/PersonalSyncStore";
 import { readOnlyReason } from "@/sync/SyncStatus";
 import { MAX_ENABLED_TERMS, MAX_TERM_LENGTH, enabledCount } from "@/sync/personalData";
 
@@ -11,9 +11,41 @@ interface DictionaryPanelProps {
   termUsage?: Readonly<Record<string, { uses: number; lastDay: string | null }>>;
 }
 
+function syncLabel(status: Status): string {
+  switch (status) {
+    case "signed-out": return "Sign in";
+    case "loading": return "Syncing…";
+    case "synced": return "Synced";
+    case "offline": return "Offline";
+    default: {
+      const unhandled: never = status;
+      throw new Error(`Unhandled sync status: ${String(unhandled)}`);
+    }
+  }
+}
+
 function termLabel(stat: { uses: number; lastDay: string | null } | undefined): string {
   if (!stat || stat.uses === 0) return "Never used";
   return `${stat.uses} uses`;
+}
+
+/** Sync status + Refresh for the shared page header. */
+export function DictionaryToolbar({ store, sync }: Pick<DictionaryPanelProps, "store" | "sync">) {
+  return (
+    <div className="page-header-actions">
+      <p role="status">{syncLabel(sync.status)}</p>
+      {sync.status !== "signed-out" && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={sync.status === "loading"}
+          onClick={() => void store.reload()}
+        >
+          Refresh
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** Names and jargon Gemini should recognize. Only enabled terms are sent, from the next utterance. */
@@ -36,6 +68,7 @@ export function DictionaryPanel({ store, sync, termUsage = {} }: DictionaryPanel
       <p className="hint">
         {enabledCount(terms)}/{MAX_ENABLED_TERMS} active{readOnly ? ` · ${readOnly}` : ""}
       </p>
+      {sync.error && <p className="error" role="alert">{sync.error}</p>}
       <form className="term-form" onSubmit={onAdd}>
         <input
           aria-label="New term" placeholder="Add a word or phrase" maxLength={MAX_TERM_LENGTH}

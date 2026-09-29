@@ -1,3 +1,4 @@
+import { Tooltip } from "@/components/Tooltip";
 import type { AvailableUpdate } from "@/platform/PlatformAdapter";
 import type { UpdateState } from "@/updates/updateState";
 import type { Updates } from "@/updates/useUpdates";
@@ -70,9 +71,11 @@ export function UpdatePanel({ updates, busy }: UpdatePanelProps) {
       {update && (
         <>
           <div className="actions">
-            <button type="button" className="record" disabled={busy} title={installHint(update)} onClick={updates.install}>
-              {state.kind === "handedOff" ? "Download again" : installLabel(update)}
-            </button>
+            <Tooltip content={installHint(update)}>
+              <button type="button" className="record" disabled={busy} onClick={updates.install}>
+                {state.kind === "handedOff" ? "Download again" : installLabel(update)}
+              </button>
+            </Tooltip>
             <button type="button" className="secondary" onClick={updates.check}>Check again</button>
           </div>
           <details className="fold">

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { BrandMark } from "@/app/BrandMark";
+import { Tooltip } from "@/components/Tooltip";
 import type { OverlayAction, OverlayDictation, OverlayHoldDestination, OverlaySnapshot } from "@/overlay/overlay";
+import { setOverlayTipSpace } from "@/overlay/overlayTipSpace";
 
 interface OverlayDockProps {
   snapshot: OverlaySnapshot;
@@ -43,6 +45,10 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
     if (snapshot.dictation === "idle" || snapshot.dictation === "error") setHeld(null);
   }, [snapshot.dictation]);
 
+  useEffect(() => () => {
+    void setOverlayTipSpace(false);
+  }, []);
+
   function onHoldDown(destination: OverlayHoldDestination, event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0 || blocked || snapshot.dictation === "listening") return;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -59,50 +65,58 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   }
 
   return (
-    <div className="overlay-dock">
-      <button
-        type="button"
-        className={`overlay-btn ${tone(snapshot.dictation, held === null, true)}`}
-        title={dictateTitle}
-        aria-label={dictateTitle}
-        disabled={blocked && snapshot.dictation !== "listening"}
-        onClick={() => onAction({ type: "dictate-toggle" })}
-      >
-        <MicIcon />
-      </button>
-      <button
-        type="button"
-        className={`overlay-btn ${tone(snapshot.dictation, held === "voice-note", false)}`}
-        title="Hold for a voice note"
-        aria-label="Hold for a voice note"
-        disabled={blocked || (snapshot.dictation === "listening" && held !== "voice-note")}
-        onPointerDown={(event) => onHoldDown("voice-note", event)}
-        onPointerUp={() => onHoldUp("voice-note")}
-        onPointerCancel={() => onHoldUp("voice-note")}
-      >
-        <NoteIcon />
-      </button>
-      <button
-        type="button"
-        className={`overlay-btn ${tone(snapshot.dictation, held === "send-to-device", false)}`}
-        title="Hold to send a handoff"
-        aria-label="Hold to send a handoff"
-        disabled={blocked || (snapshot.dictation === "listening" && held !== "send-to-device")}
-        onPointerDown={(event) => onHoldDown("send-to-device", event)}
-        onPointerUp={() => onHoldUp("send-to-device")}
-        onPointerCancel={() => onHoldUp("send-to-device")}
-      >
-        <SendIcon />
-      </button>
-      <button
-        type="button"
-        className="overlay-btn overlay-logo"
-        title="Open Personal Voice"
-        aria-label="Open Personal Voice"
-        onClick={() => onAction({ type: "open-settings" })}
-      >
-        <BrandMark />
-      </button>
+    <div
+      className="overlay-dock"
+      onMouseEnter={() => { void setOverlayTipSpace(true); }}
+      onMouseLeave={() => { void setOverlayTipSpace(false); }}
+    >
+      <Tooltip content={dictateTitle} side="left" delayMs={280}>
+        <button
+          type="button"
+          className={`overlay-btn ${tone(snapshot.dictation, held === null, true)}`}
+          aria-label={dictateTitle}
+          disabled={blocked && snapshot.dictation !== "listening"}
+          onClick={() => onAction({ type: "dictate-toggle" })}
+        >
+          <MicIcon />
+        </button>
+      </Tooltip>
+      <Tooltip content="Hold for a voice note" side="left" delayMs={280}>
+        <button
+          type="button"
+          className={`overlay-btn ${tone(snapshot.dictation, held === "voice-note", false)}`}
+          aria-label="Hold for a voice note"
+          disabled={blocked || (snapshot.dictation === "listening" && held !== "voice-note")}
+          onPointerDown={(event) => onHoldDown("voice-note", event)}
+          onPointerUp={() => onHoldUp("voice-note")}
+          onPointerCancel={() => onHoldUp("voice-note")}
+        >
+          <NoteIcon />
+        </button>
+      </Tooltip>
+      <Tooltip content="Hold to send a handoff" side="left" delayMs={280}>
+        <button
+          type="button"
+          className={`overlay-btn ${tone(snapshot.dictation, held === "send-to-device", false)}`}
+          aria-label="Hold to send a handoff"
+          disabled={blocked || (snapshot.dictation === "listening" && held !== "send-to-device")}
+          onPointerDown={(event) => onHoldDown("send-to-device", event)}
+          onPointerUp={() => onHoldUp("send-to-device")}
+          onPointerCancel={() => onHoldUp("send-to-device")}
+        >
+          <SendIcon />
+        </button>
+      </Tooltip>
+      <Tooltip content="Open Personal Voice" side="left" delayMs={280}>
+        <button
+          type="button"
+          className="overlay-btn overlay-logo"
+          aria-label="Open Personal Voice"
+          onClick={() => onAction({ type: "open-settings" })}
+        >
+          <BrandMark />
+        </button>
+      </Tooltip>
     </div>
   );
 }
