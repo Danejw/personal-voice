@@ -142,6 +142,14 @@ Keep this function provider-specific so future Google API changes do not affect 
 
 As implemented: `supabase/functions/gemini-token`. It is deployed with gateway `verify_jwt` off, because Supabase's gateway can't verify requests made with the new publishable keys. Instead the function verifies the caller's access token itself, against the project JWKS (issuer `<SUPABASE_URL>/auth/v1`, audience `authenticated`). Any confirmed account may mint tokens; there is no email allowlist. See `docs/PHASE_4_REPORT.md` for the token flow and secrets.
 
+A missing `purpose`, or `"dictation"`, still mints the Gemini 3.5 Transcribe Live token on `v1alpha`. `{ "purpose": "assistant" }` mints a `v1alpha` token locked to `gemini-3.8-live` (`fieldMask: "model"`). The client setup supplies `AUDIO`, transcription, resumption, and tools. Both purposes use the constrained v1alpha Live socket; v1beta constrained sessions closed with 1011 in practice. When a Live setup that includes Google Search is closed for quota, Assistant opens the same session again without Search. The permanent API key stays in the function. Tokens are not logged. The Assistant pipeline is summarized in [Assistant phases](Assistant-Phases/README.md).
+
+Supervised screen clicks use a separate function, `supabase/functions/computer-step`. It calls the Interactions API as `gemini-3.8-flash` with the desktop Computer Use tool and prompt-injection detection. That function is not deployed. The Live token body does not include it.
+
+## As implemented (Assistant device requests)
+
+Migration `supabase/migrations/20260929020000_device_context_requests.sql` adds `device_context_requests` for a read-only look at another owned device. Migration `supabase/migrations/20260929030000_device_action_requests.sql` adds `device_action_requests` for an allowlisted remote action (`open_app`, `press_shortcut`, or `insert_text`). Both tables use owner-only RLS (`user_id = auth.uid()`). Neither grants a shell. Rows are deleted after the requester finishes with them. A continuation package stays in the existing `handoffs.text` column and is not a new table.
+
 ## As implemented (Phase 5)
 
 Migration `supabase/migrations/20260927230000_personal_sync.sql` (applied as `personal_sync`):

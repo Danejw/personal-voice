@@ -1,4 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { formatHandoffList, formatVoiceNoteList } from "@/assistant/accountTools";
+import { buildContinuation, handoffDisplayText } from "@/assistant/continuation";
+import { selectionPreview } from "@/assistant/selectionContext";
+import { snapshotFromNative } from "@/assistant/snapshot";
+import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
+import { AssistantController } from "@/assistant/AssistantController";
+import { AssistantHeader, AssistantPanel } from "@/assistant/AssistantPanel";
+import { PersonalContextPanel } from "@/assistant/PersonalContextPanel";
+import { personalContextBody, profileFacts } from "@/assistant/personalContext";
+import { AssistantSession } from "@/assistant/AssistantSession";
+import { PcmPlayback } from "@/assistant/PcmPlayback";
+import { useAssistant } from "@/assistant/useAssistant";
 import { AppNav, sectionMeta, type AppSection } from "@/app/AppNav";
 import { useDictation } from "@/app/useDictation";
 import { AuthPanel } from "@/auth/AuthPanel";
@@ -6,6 +18,7 @@ import { useAuth } from "@/auth/useAuth";
 import { SelectionPanel } from "@/context/SelectionPanel";
 import { SelectField } from "@/components/SelectField";
 import type { SelectOption } from "@/components/SelectField";
+import { Toggle } from "@/components/Toggle";
 import { Tooltip } from "@/components/Tooltip";
 import { DevicesPanel } from "@/devices/DevicesPanel";
 import { DeviceStore } from "@/devices/DeviceStore";
@@ -22,6 +35,7 @@ import { VoiceNotesPanel, VoiceNotesToolbar } from "@/notes/VoiceNotesPanel";
 import { VoiceNotesStore } from "@/notes/VoiceNotesStore";
 import { useVoiceNotes } from "@/notes/useVoiceNotes";
 import { useOverlay } from "@/overlay/useOverlay";
+import { overlayAssistantFrom, overlayAssistantIntent } from "@/overlay/overlay";
 import { createPlatformAdapter, type AppPlatform } from "@/platform";
 import type { TargetApp } from "@/platform/targetApp";
 import { AndroidSetupPanel } from "@/platform/android/AndroidSetupPanel";
@@ -29,12 +43,19 @@ import { MicrophonePanel } from "@/platform/windows/MicrophonePanel";
 import { PushToTalkShortcutPanel } from "@/platform/windows/PushToTalkShortcutPanel";
 import { WindowsBehaviorPanel } from "@/platform/windows/WindowsBehaviorPanel";
 import { deviceApi } from "@/services/deviceService";
+import { remoteContextApi } from "@/services/remoteContextService";
+import { computerActionApi } from "@/services/computerActionService";
+import { RemoteReadStore } from "@/assistant/RemoteReadStore";
+import { useRemoteReads } from "@/assistant/useRemoteReads";
+import { ComputerActionStore } from "@/assistant/ComputerActionStore";
+import { useComputerActions } from "@/assistant/useComputerActions";
+import { showHandoffAlert } from "@/platform/windows/handoffNotification";
 import { fetchGeminiToken } from "@/services/geminiTokenService";
 import { handoffApi } from "@/services/handoffService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
 import { voiceNotesApi } from "@/services/voiceNotesService";
-import { bindDeviceSettings, loadDestination, loadShowIndicator, saveDestination, saveShowIndicator } from "@/settings/deviceSettings";
+import { bindDeviceSettings, loadAssistantAutoRun, loadAssistantProfile, loadDestination, loadShowIndicator, saveAssistantAutoRun, saveAssistantProfile, saveDestination, saveShowIndicator } from "@/settings/deviceSettings";
 import { DictionaryPanel, DictionaryToolbar } from "@/sync/DictionaryPanel";
 import { PersonalSyncStore } from "@/sync/PersonalSyncStore";
 import { SyncStatus } from "@/sync/SyncStatus";
@@ -44,7 +65,7 @@ import { transcriptionPreferences } from "@/sync/personalData";
 import type { DictionaryTerm } from "@/sync/personalData";
 import { usePersonalSync } from "@/sync/usePersonalSync";
 import { AnalyticsPanel } from "@/usage/AnalyticsPanel";
-import { mergeUsageDays, termUsage } from "@/usage/analytics";
+import { localDayKey, mergeUsageDays, termUsage } from "@/usage/analytics";
 import { UsagePanel } from "@/usage/UsagePanel";
 import { UsageStore } from "@/usage/UsageStore";
 import type { UsageSnapshot } from "@/usage/usageEvents";
@@ -54,6 +75,7 @@ import { UpdatePanel } from "@/updates/UpdatePanel";
 import { useUpdates } from "@/updates/useUpdates";
 import { GeminiProvider, geminiConfigFrom } from "@/voice/provider/gemini/GeminiProvider";
 import { GeminiTokenSource } from "@/voice/provider/gemini/GeminiTokenSource";
+import { MicrophoneLease } from "@/voice/audio/microphoneLease";
 import type { VoiceState } from "@/voice/session/state";
 import { TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
@@ -77,6 +99,15 @@ function dictionaryTermUsage(
 
 const platform = createPlatformAdapter();
 const tokens = new GeminiTokenSource(fetchGeminiToken);
+const assistantTokens = new GeminiTokenSource(() => fetchGeminiToken("assistant"));
+const microphone = new MicrophoneLease();
+const assistant = new AssistantController(
+  (onEvent, handle) => new AssistantSession(() => assistantTokens.take(), onEvent, handle),
+  new PcmPlayback(),
+  () => crypto.randomUUID(),
+  () => platform.createCapture(),
+  microphone,
+);
 const usage = new UsageStore(localStorage, platform.platform, () => new Date(), usageApi);
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
 const voiceNotes = new VoiceNotesStore(
@@ -94,6 +125,27 @@ const handoffs = new HandoffStore(
   () => usage.recordLater({ name: "handoff_created" }),
   () => usage.recordLater({ name: "shared_clipboard" }),
 );
+const remoteReads = new RemoteReadStore(
+  remoteContextApi,
+  (userId) => deviceApi.list(userId),
+  (userId) => localDeviceId(localStorage, userId, () => crypto.randomUUID()),
+  platform,
+  (id) => {
+    if (platform.platform !== "windows") return;
+    void showHandoffAlert({
+      id: `remote-read:${id}`,
+      title: "Screenshot requested",
+      body: "Allow the one-time screenshot in Personal Voice.",
+    }).catch(() => undefined);
+  },
+);
+const computerActions = new ComputerActionStore(
+  computerActionApi,
+  (userId) => deviceApi.list(userId),
+  (userId) => localDeviceId(localStorage, userId, () => crypto.randomUUID()),
+  platform,
+);
+let accountUserId: string | null = null;
 const history = new DictationHistoryStore(localStorage);
 
 /** Counts a successful paste. A failure here must not fail the paste itself. */
@@ -122,6 +174,81 @@ function pasteReceived(text: string): Promise<void> {
     recordTargetApp(text, app);
   });
 }
+
+assistant.setActions({
+  copyText: (text) => navigator.clipboard.writeText(text),
+  insertText: (text) => pasteIntoField(text),
+  createVoiceNote: (text) => voiceNotes.create(text),
+  planHandoff: (deviceName) => {
+    const snap = handoffs.getSnapshot();
+    const only = snap.devices[0];
+    if (!deviceName && !snap.targetDeviceId && snap.devices.length === 1 && only) {
+      return { deviceId: only.id, label: only.name };
+    }
+    try {
+      const target = handoffs.resolveTarget(deviceName);
+      return { deviceId: target.id, label: target.name };
+    } catch (error) {
+      const names = snap.devices.map((device) => device.name);
+      const listed = names.length ? ` Devices: ${names.join(", ")}.` : " No other device is on this account.";
+      const message = error instanceof Error ? error.message : "The handoff could not be prepared.";
+      throw new Error(`${message}${listed}`, { cause: error });
+    }
+  },
+  sendHandoff: (text, deviceId) => handoffs.send(text, "dictation", deviceId),
+  captureSelection: () => platform.captureSelection(),
+  listVoiceNotes: async (includeArchived) => {
+    const snap = voiceNotes.getSnapshot();
+    if (snap.status === "signed-out") throw new Error("Sign in to read voice notes.");
+    if (snap.status !== "synced" && snap.notes.length === 0) throw new Error("Voice notes are unavailable until sync reconnects.");
+    const body = formatVoiceNoteList(snap.notes, includeArchived);
+    return snap.status === "synced" ? body : `Voice notes may be out of date.\n${body}`;
+  },
+  listHandoffs: async () => {
+    const snap = handoffs.getSnapshot();
+    if (snap.status === "signed-out") throw new Error("Sign in to read handoffs.");
+    if (snap.status !== "synced" && snap.received.length === 0 && snap.devices.length === 0) {
+      throw new Error("Device handoff is unavailable until sync reconnects.");
+    }
+    const body = formatHandoffList(
+      snap.devices.map((device) => device.name),
+      snap.received.map((handoff) => ({
+        id: handoff.id,
+        text: handoff.text,
+        createdAt: handoff.createdAt,
+        sourceLabel: snap.devices.find((device) => device.id === handoff.sourceDeviceId)?.name ?? "Another device",
+      })),
+    );
+    return snap.status === "synced" ? body : `Handoffs may be out of date.\n${body}`;
+  },
+  describeItem: (kind, id) => {
+    if (kind === "note") {
+      const note = voiceNotes.getSnapshot().notes.find((item) => item.id === id);
+      if (!note) throw new Error("No voice note has that id. Call list_voice_notes.");
+      return selectionPreview(note.text);
+    }
+    const handoff = handoffs.getSnapshot().received.find((item) => item.id === id);
+    if (!handoff) throw new Error("No received handoff has that id. Call list_handoffs.");
+    return selectionPreview(handoffDisplayText(handoff.text));
+  },
+  archiveVoiceNote: (id, archived) => voiceNotes.setArchived(id, archived),
+  deleteVoiceNote: (id) => voiceNotes.remove(id),
+  dismissHandoff: (id) => handoffs.consume(id),
+  readRemote: async (kind, deviceName) => {
+    if (!accountUserId) throw new Error("Sign in to check another device.");
+    return remoteReads.ask(accountUserId, kind, deviceName);
+  },
+  captureScreen: async () => snapshotFromNative(await platform.captureSnapshot(), encodeSnapshotJpeg),
+  computer: {
+    openApp: (id) => computerActions.openApp(id),
+    pressShortcut: (id) => computerActions.pressShortcut(id),
+    remoteAction: (action, argument, deviceName) => computerActions.remoteAction(action, argument, deviceName),
+    capture: () => computerActions.capture(),
+    propose: (body) => computerActions.propose(body),
+    execute: (call) => computerActions.execute(call),
+    restore: () => computerActions.restore(),
+  },
+});
 
 const destinations = new TranscriptDestinationRouter({
   "active-field": { deliver: (transcript) => pasteIntoField(transcript) },
@@ -226,6 +353,7 @@ function DeviceControls({
             <WindowsBehaviorPanel
               platform={platform}
               showFloatingControl={showFloatingControl}
+              settingsReady={settingsReady}
               onFloatingControlChange={onFloatingControlChange}
             />
           </section>
@@ -252,30 +380,39 @@ export default function App() {
   const notes = useVoiceNotes(voiceNotes, auth.userId);
   const deviceSnapshot = useDevices(devices, auth.userId);
   const handoffSnapshot = useHandoffs(handoffs, auth.userId);
+  const historySnapshot = useDictationHistory(history);
+  const usageSnapshot = useUsage(usage);
+  const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
+  const [section, setSection] = useState<AppSection>("dictation");
   useHandoffAlerts(
     handoffs,
     auth.userId,
     platform.platform === "windows",
     (text) => pasteReceived(text),
+    () => setSection("handoffs"),
+    () => { void platform.openSettings(); },
   );
-  const historySnapshot = useDictationHistory(history);
-  const usageSnapshot = useUsage(usage);
-  const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
-  const [section, setSection] = useState<AppSection>("dictation");
+  const remoteSnapshot = useRemoteReads(remoteReads, auth.userId);
+  const computerSnapshot = useComputerActions(computerActions, auth.userId);
+  const assistantSnapshot = useAssistant(assistant);
   const [floatingControl, setFloatingControl] = useState(loadShowIndicator);
+  const [profileEnabled, setProfileEnabled] = useState(true);
+  const [autoRun, setAutoRun] = useState(true);
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
     const data = personalSync.getSnapshot().data;
     return {
       locale: data.settings.language,
       terms: data.terms.filter((entry) => entry.enabled).map((entry) => entry.term),
     };
-  });
+  }, microphone);
   const updates = useUpdates(platform);
   const { state, partial, transcript, error } = snapshot;
   const control = controlFor(state, destination);
   const page = sectionMeta(section);
   const signedIn = !!auth.email;
   const idle = state === "IDLE" || state === "ERROR";
+  const assistantLive = assistantSnapshot.status === "CONNECTING" || assistantSnapshot.status === "READY" || assistantSnapshot.status === "RESPONDING";
+  const dictationLive = state === "CONNECTING" || state === "LISTENING";
   const status = !auth.ready ? "Starting…" : !signedIn ? "Sign in to start dictating" : paused ? "Paused from the tray" : statusFor(state, destination);
 
   function chooseDestination(value: string) {
@@ -303,6 +440,9 @@ export default function App() {
     dismissHandoff: (id) => handoffs.consume(id),
     onSelectionCaptured: () => usage.recordLater({ name: "selection_captured" }),
     onArmDictation: () => usage.armTrigger("overlay"),
+    canDictate: () => microphone.heldBy() !== "assistant",
+    assistant: assistantSnapshot,
+    assistantController: assistant,
   });
 
   // Bind before the keybinding panel's first read. Child state initializers run during this
@@ -315,6 +455,31 @@ export default function App() {
       : null;
   if (settingsDeviceId !== undefined) bindDeviceSettings(settingsDeviceId);
 
+  const personalToday = localDayKey(new Date());
+  const personalDevice = deviceSnapshot.devices.find((device) => device.id === deviceSnapshot.currentDeviceId);
+  const personalFacts = profileFacts(
+    mergeUsageDays(
+      usageSnapshot.remote.filter((row) => row.epoch === usageSnapshot.epoch),
+      usageSnapshot.days,
+      settingsDeviceId ?? "",
+    ).filter((row) => row.epoch === usageSnapshot.epoch),
+    deviceSnapshot.devices.map((device) => ({ id: device.id, name: device.name, platform: device.platform })),
+    personalToday,
+  );
+  const personalDeviceName = personalDevice?.name ?? "This device";
+  const personalPlatform = personalDevice?.platform ?? platform.platform;
+  const personalBody = personalContextBody({
+    deviceName: personalDeviceName,
+    platform: personalPlatform,
+    profileEnabled,
+    facts: profileEnabled ? personalFacts : [],
+  });
+  const personalDeviceLine = personalBody.split("\n")[0] ?? "";
+
+  useEffect(() => {
+    assistant.setPersonalContext(personalBody);
+  }, [personalBody]);
+
   useEffect(() => {
     if (settingsDeviceId === undefined) return;
     bindDeviceSettings(settingsDeviceId);
@@ -322,13 +487,22 @@ export default function App() {
     destinations.select(next);
     setDestination(next);
     setFloatingControl(loadShowIndicator());
+    setProfileEnabled(loadAssistantProfile());
+    const auto = loadAssistantAutoRun();
+    setAutoRun(auto);
+    assistant.setAutoRun(auto);
   }, [settingsDeviceId]);
 
   // Warm one token so the first press doesn't wait on it; drop it when the account changes.
   useEffect(() => {
     tokens.clear();
+    assistantTokens.clear();
+    assistant.end();
+    assistant.clearAccountContext();
+    accountUserId = auth.userId;
+    computerActions.userId = auth.userId;
     if (auth.email) tokens.prefetch();
-  }, [auth.email]);
+  }, [auth.email, auth.userId]);
 
   useEffect(() => {
     usage.setEnabled(sync.data.settings.usageIntelligence);
@@ -366,6 +540,9 @@ export default function App() {
     };
   }, [auth.userId, settingsDeviceId, sync.data.settings.usageEpoch]);
 
+  const signedInRef = useRef(signedIn);
+  signedInRef.current = signedIn;
+
   useEffect(() => {
     let stop = () => {};
     void platform.onShowFloatingControl(() => {
@@ -375,9 +552,21 @@ export default function App() {
     return () => stop();
   }, []);
 
+  useEffect(() => {
+    let stop = () => {};
+    void platform.onPushToTalk((event) => {
+      if (event.event !== "toggle-assistant") return;
+      const intent = overlayAssistantIntent(overlayAssistantFrom(assistant.getSnapshot().status));
+      if (intent === "end") assistant.end();
+      else if (signedInRef.current) assistant.start();
+    }).then((unlisten) => { stop = unlisten; });
+    return () => stop();
+  }, []);
+
   function onControl() {
     switch (state) {
       case "IDLE":
+        if (microphone.heldBy() === "assistant") return;
         usage.armTrigger("ui-button");
         void controller.start(createProvider());
         return;
@@ -397,7 +586,7 @@ export default function App() {
     <div className="app-shell">
       <AppNav
         section={section}
-        microphoneOn={state === "CONNECTING" || state === "LISTENING"}
+        microphoneOn={dictationLive || assistantLive}
         onSelect={setSection}
       />
       <main className="app-main hide-scrollbar" aria-labelledby="page-title">
@@ -411,8 +600,29 @@ export default function App() {
           {section === "dictionary" && <DictionaryToolbar store={personalSync} sync={sync} />}
           {section === "notes" && <VoiceNotesToolbar store={voiceNotes} snapshot={notes} />}
           {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
+          {section === "assistant" && (
+            <AssistantHeader controller={assistant} snapshot={assistantSnapshot} signedIn={signedIn} micBusy={dictationLive} />
+          )}
           <div id="page-header-actions" className="page-header-actions" hidden={section !== "capture"} />
         </header>
+        {computerSnapshot.approval && (
+          <div className="assistant-action" role="region" aria-label="Remote action">
+            <p>{computerSnapshot.approval.label}</p>
+            <div className="assistant-action-buttons">
+              <button type="button" className="secondary" onClick={() => { if (auth.userId) void computerActions.approve(auth.userId); }}>Allow once</button>
+              <button type="button" className="secondary" onClick={() => { if (auth.userId) void computerActions.deny(auth.userId); }}>Don't allow</button>
+            </div>
+          </div>
+        )}
+        {remoteSnapshot.approval && (
+          <div className="assistant-action" role="region" aria-label="Remote screenshot">
+            <p>{remoteSnapshot.approval.label}</p>
+            <div className="assistant-action-buttons">
+              <button type="button" className="secondary" onClick={() => { if (auth.userId) void remoteReads.approve(auth.userId); }}>Allow once</button>
+              <button type="button" className="secondary" onClick={() => { if (auth.userId) void remoteReads.deny(auth.userId); }}>Don't allow</button>
+            </div>
+          </div>
+        )}
 
         <div className="panel-stack" hidden={section !== "dictation"}>
           <section aria-labelledby="page-title" className="page-panel dictations-live">
@@ -421,7 +631,7 @@ export default function App() {
                 label="Send to" value={destination} options={DESTINATION_OPTIONS}
                 disabled={!idle} onChange={chooseDestination}
               />
-              <button type="button" className="record" disabled={!control.enabled || (state === "IDLE" && !signedIn)} onClick={onControl}>
+              <button type="button" className="record" disabled={!control.enabled || (state === "IDLE" && (!signedIn || assistantLive))} onClick={onControl}>
                 {control.label}
               </button>
             </div>
@@ -460,13 +670,80 @@ export default function App() {
               active={section === "capture"}
               capture={() => platform.captureSelection()}
               onCaptured={() => usage.recordLater({ name: "selection_captured" })}
+              attached={assistantSnapshot.selection}
+              onItem={(item) => {
+                if (!item) {
+                  assistant.detachSelection();
+                  return;
+                }
+                const message = assistant.attachSelection(item);
+                if (message) throw new Error(message);
+              }}
             />
           </section>
         </div>
 
         <div className="panel-stack" hidden={section !== "notes"}>
           <section aria-labelledby="page-title" className="page-panel">
-            <VoiceNotesPanel store={voiceNotes} snapshot={notes} />
+            <VoiceNotesPanel
+              store={voiceNotes}
+              snapshot={notes}
+              attachedNoteIds={assistantSnapshot.notes.map((note) => note.id)}
+              onAttachNote={(note) => assistant.attachNote({ id: note.id, text: note.text, createdAt: note.createdAt })}
+              onDetachNote={(id) => assistant.detachNote(id)}
+            />
+          </section>
+        </div>
+
+        <div className="panel-stack" hidden={section !== "assistant"}>
+          <section aria-labelledby="page-title" className="page-panel">
+            <PersonalContextPanel
+              enabled={profileEnabled}
+              deviceLine={personalDeviceLine}
+              facts={personalFacts}
+            />
+            <AssistantPanel
+              controller={assistant}
+              snapshot={assistantSnapshot}
+              signedIn={signedIn}
+              onContinueTask={async () => {
+                const current = deviceSnapshot.devices.find((device) => device.id === deviceSnapshot.currentDeviceId);
+                if (!current) throw new Error("Sign in to continue Assistant on another device.");
+                const built = buildContinuation({
+                  turns: assistantSnapshot.turns.map((turn) => ({ role: turn.role, text: turn.text })),
+                  selection: assistantSnapshot.selection
+                    ? {
+                        text: assistantSnapshot.selection.text,
+                        ...(assistantSnapshot.selection.sourceApp ? { sourceApp: assistantSnapshot.selection.sourceApp } : {}),
+                        capturedAt: assistantSnapshot.selection.capturedAt,
+                      }
+                    : null,
+                  notes: assistantSnapshot.notes,
+                  handoff: assistantSnapshot.handoff,
+                  screen: assistantSnapshot.screen
+                    ? {
+                        source: assistantSnapshot.screen.source,
+                        ...(assistantSnapshot.screen.sourceApp ? { sourceApp: assistantSnapshot.screen.sourceApp } : {}),
+                        capturedAt: assistantSnapshot.screen.capturedAt,
+                      }
+                    : null,
+                  sourceDeviceId: current.id,
+                  sourceDeviceName: current.name,
+                  createdAt: new Date().toISOString(),
+                });
+                if (!built.ok) throw new Error(built.message);
+                const target = handoffs.resolveTarget();
+                await handoffs.send(built.text, "dictation", target.id);
+              }}
+              onCaptureScreen={async () => {
+                try {
+                  const native = await platform.captureSnapshot();
+                  assistant.attachSnapshot(snapshotFromNative(native, encodeSnapshotJpeg));
+                } catch (reason) {
+                  assistant.reportSnapshotError(reason instanceof Error ? reason.message : "Couldn't capture the screen.");
+                }
+              }}
+            />
           </section>
         </div>
 
@@ -476,6 +753,19 @@ export default function App() {
               store={handoffs}
               snapshot={handoffSnapshot}
               insertIntoActiveField={(text) => pasteReceived(text)}
+              attachedHandoffId={assistantSnapshot.handoff?.id ?? null}
+              onAttachHandoff={(handoff, sourceLabel) => assistant.attachHandoff({
+                id: handoff.id,
+                text: handoff.text,
+                createdAt: handoff.createdAt,
+                sourceLabel,
+              })}
+              onDetachHandoff={() => assistant.detachHandoff()}
+              onOpenContinuation={(payload) => {
+                const message = assistant.openContinuation(payload);
+                if (!message) setSection("assistant");
+                return message;
+              }}
             />
           </section>
         </div>
@@ -519,6 +809,28 @@ export default function App() {
           <section aria-labelledby="usage-heading">
             <h2 id="usage-heading">Usage intelligence</h2>
             <UsagePanel store={personalSync} sync={sync} />
+          </section>
+          <section aria-labelledby="assistant-settings-heading">
+            <h2 id="assistant-settings-heading">Assistant</h2>
+            <Toggle
+              label="Auto-run actions"
+              description="Runs notes, handoffs, and other actions when you ask. Turn this off to confirm each one."
+              checked={autoRun}
+              onChange={(enabled) => {
+                saveAssistantAutoRun(enabled);
+                setAutoRun(enabled);
+                assistant.setAutoRun(enabled);
+              }}
+            />
+            <Toggle
+              label="Use analytics profile"
+              description="Sends dictation habits with Assistant. Turning this off keeps the facts on the Assistant page only."
+              checked={profileEnabled}
+              onChange={(enabled) => {
+                saveAssistantProfile(enabled);
+                setProfileEnabled(enabled);
+              }}
+            />
           </section>
           <section aria-labelledby="updates-heading">
             <h2 id="updates-heading">Updates</h2>

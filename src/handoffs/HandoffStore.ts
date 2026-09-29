@@ -1,4 +1,4 @@
-import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
+import { resolveHandoffDevice, type Handoff, type OwnedDevice } from "@/handoffs/handoff";
 import type { HandoffApi } from "@/services/handoffService";
 
 export type HandoffStatus = "signed-out" | "loading" | "synced" | "offline";
@@ -77,14 +77,37 @@ export class HandoffStore {
     this.publish({ ...this.snapshot, targetDeviceId: deviceId });
   }
 
+  /**
+   * The device a one-off send would use. Does not change the saved target.
+   * Throws when handoff is offline or no single device matches.
+   */
+  resolveTarget(requestedName?: string | null): { id: string; name: string } {
+    this.requireConnected();
+    const resolved = resolveHandoffDevice(
+      this.snapshot.devices,
+      this.snapshot.targetDeviceId,
+      requestedName ?? null,
+    );
+    if ("error" in resolved) throw new Error(resolved.error);
+    return resolved;
+  }
+
   /** Destination delivery and manual send share the same confirmed online write. */
-  async send(text: string, source: "dictation" | "clipboard" = "dictation"): Promise<void> {
+  async send(
+    text: string,
+    source: "dictation" | "clipboard" = "dictation",
+    targetDeviceId?: string,
+  ): Promise<void> {
     const { userId, currentDeviceId } = this.requireConnected();
     const handoff = text.trim();
     if (!handoff) throw new Error("Enter text to send.");
+    if (targetDeviceId && !this.snapshot.devices.some((device) => device.id === targetDeviceId)) {
+      throw new Error("That device is not on this account.");
+    }
+    const target = targetDeviceId ?? this.snapshot.targetDeviceId;
     const generation = this.generation;
     try {
-      await this.api.send(userId, handoff, currentDeviceId, this.snapshot.targetDeviceId);
+      await this.api.send(userId, handoff, currentDeviceId, target);
       try { this.onSent?.(); } catch { /* usage must not fail dest delivery */ }
       if (source === "clipboard") {
         try { this.onClipboard?.(); } catch { /* usage must not fail dest delivery */ }

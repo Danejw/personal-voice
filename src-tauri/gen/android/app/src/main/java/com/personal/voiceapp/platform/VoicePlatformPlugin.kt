@@ -202,10 +202,17 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       FloatingMicService.instance?.showSnapshot(json)
       val parsed = try { JSONObject(json) } catch (_: Exception) { JSONObject() }
       val dictation = parsed.optString("dictation", "idle")
-      if (dictation == "idle") sleepWebView()
+      val assistant = parsed.optString("assistant", "idle")
+      val assistantLive = assistant == "listening" || assistant == "responding"
+      if (assistantLive) wakeWebView()
+      if (dictation == "idle" && !assistantLive) sleepWebView()
       val message = parsed.optString("error")
       if (dictation == "error" && message.isNotEmpty() && !isAppVisible()) {
         Toast.makeText(activity.applicationContext, message, Toast.LENGTH_LONG).show()
+      }
+      val assistantError = parsed.optString("assistantError")
+      if (assistant == "error" && assistantError.isNotEmpty() && !isAppVisible()) {
+        Toast.makeText(activity.applicationContext, assistantError, Toast.LENGTH_LONG).show()
       }
     }
     invoke.resolve()
@@ -340,6 +347,25 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
         return@post
       }
       main.postDelayed({ finish() }, 250)
+    }
+  }
+
+  /** One MediaProjection frame. Accessibility is not used. */
+  @Command
+  fun captureSnapshot(invoke: Invoke) {
+    val host = activity
+    if (host == null) {
+      invoke.reject("Couldn't capture the screen.")
+      return
+    }
+    host.runOnUiThread {
+      ScreenSnapshotCapture.begin(host) { jpeg, error ->
+        if (jpeg == null) {
+          invoke.reject(error ?: "Couldn't capture the screen.")
+        } else {
+          invoke.resolve(JSObject().put("source", "screen").put("jpeg", jpeg))
+        }
+      }
     }
   }
 

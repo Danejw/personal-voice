@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { BrandMark } from "@/app/BrandMark";
 import { Tooltip } from "@/components/Tooltip";
-import type { OverlayAction, OverlayDictation, OverlayHoldDestination, OverlaySnapshot } from "@/overlay/overlay";
+import type { OverlayAction, OverlayAssistant, OverlayDictation, OverlayHoldDestination, OverlaySnapshot } from "@/overlay/overlay";
+import { setOverlayConfirmSpace } from "@/overlay/overlayConfirmSpace";
 import { setOverlayTipSpace } from "@/overlay/overlayTipSpace";
 
 interface OverlayDockProps {
@@ -11,6 +12,31 @@ interface OverlayDockProps {
 
 type ButtonTone = "" | "overlay-live" | "overlay-busy" | "overlay-bad";
 
+function assistantTone(assistant: OverlayAssistant): ButtonTone {
+  switch (assistant) {
+    case "listening": return "overlay-live";
+    case "responding": return "overlay-busy";
+    case "error": return "overlay-bad";
+    case "idle": return "";
+    default: {
+      const unhandled: never = assistant;
+      throw new Error(`Unhandled overlay assistant: ${String(unhandled)}`);
+    }
+  }
+}
+
+function assistantLabel(assistant: OverlayAssistant, error: string | null): string {
+  switch (assistant) {
+    case "listening": return "End Assistant";
+    case "responding": return "Assistant speaking";
+    case "error": return error || "Retry Assistant";
+    case "idle": return "Start Assistant";
+    default: {
+      const unhandled: never = assistant;
+      throw new Error(`Unhandled overlay assistant: ${String(unhandled)}`);
+    }
+  }
+}
 function tone(dictation: OverlayDictation, owns: boolean, showError: boolean): ButtonTone {
   if (!owns) return "";
   switch (dictation) {
@@ -25,12 +51,24 @@ function tone(dictation: OverlayDictation, owns: boolean, showError: boolean): B
   }
 }
 
-/** Four small buttons at the corner of the screen. Hold note or handoff for that destination only. */
+/** Five small buttons. The Assistant button is its own action; the mic stays dictation. */
 export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   const [held, setHeld] = useState<OverlayHoldDestination | null>(null);
   const heldRef = useRef<OverlayHoldDestination | null>(null);
   const holdId = useRef(0);
   const blocked = !snapshot.signedIn || snapshot.paused || snapshot.dictation === "finalizing";
+  const selectionHint = snapshot.selectionPreview
+    ? ` Selection attached${snapshot.selectionSource ? ` from ${snapshot.selectionSource}` : ""}: ${snapshot.selectionPreview}`
+    : "";
+  const pendingHint = snapshot.pendingTitle
+    ? ` Assistant wants to: ${snapshot.pendingTitle}${snapshot.pendingPreview ? `. ${snapshot.pendingPreview}` : ""}`
+    : "";
+  const assistantTitle = `${assistantLabel(snapshot.assistant, snapshot.assistantError)}${selectionHint}${pendingHint}`;
+  useEffect(() => {
+    void setOverlayConfirmSpace(Boolean(snapshot.pendingTitle));
+  }, [snapshot.pendingTitle]);
+  useEffect(() => () => { void setOverlayConfirmSpace(false); }, []);
+  const assistantBlocked = (!snapshot.signedIn || snapshot.paused) && snapshot.assistant !== "listening" && snapshot.assistant !== "responding";
   const dictateTitle = snapshot.paused
     ? "Paused"
     : snapshot.dictation === "listening"
@@ -107,6 +145,43 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           <SendIcon />
         </button>
       </Tooltip>
+      <Tooltip content={assistantTitle} side="left" delayMs={280}>
+        <button
+          type="button"
+          className={`overlay-btn ${assistantTone(snapshot.assistant)}`}
+          aria-label={assistantTitle}
+          disabled={assistantBlocked}
+          onClick={() => onAction({ type: "assistant-toggle" })}
+        >
+          <AssistantIcon />
+        </button>
+      </Tooltip>
+      {snapshot.pendingTitle && (
+        <>
+          <Tooltip content={snapshot.pendingWorking ? "Working…" : snapshot.pendingTitle} side="left" delayMs={280}>
+            <button
+              type="button"
+              className="overlay-btn"
+              aria-label="Confirm"
+              disabled={snapshot.pendingWorking}
+              onClick={() => onAction({ type: "confirm-action" })}
+            >
+              <CheckIcon />
+            </button>
+          </Tooltip>
+          <Tooltip content="Cancel" side="left" delayMs={280}>
+            <button
+              type="button"
+              className="overlay-btn"
+              aria-label="Cancel"
+              disabled={snapshot.pendingWorking}
+              onClick={() => onAction({ type: "cancel-action" })}
+            >
+              <CrossIcon />
+            </button>
+          </Tooltip>
+        </>
+      )}
       <Tooltip content="Open Personal Voice" side="left" delayMs={280}>
         <button
           type="button"
@@ -143,6 +218,30 @@ function SendIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 12h12M13 7l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CrossIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 8l8 8M16 8l-8 8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AssistantIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 4.5v3M12 16.5v3M4.5 12h3M16.5 12h3M7 7l2 2M15 15l2 2M17 7l-2 2M9 15l-2 2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
     </svg>
   );
 }

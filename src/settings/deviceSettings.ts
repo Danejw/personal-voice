@@ -8,6 +8,7 @@ const LEGACY_PUSH_TO_TALK_KEY = "settings.pushToTalk";
 const LEGACY_VOICE_NOTE_HOTKEY_KEY = "settings.voiceNoteHotkey";
 const LEGACY_HANDOFF_HOTKEY_KEY = "settings.handoffHotkey";
 const LEGACY_SELECTION_HOTKEY_KEY = "settings.selectionHotkey";
+const LEGACY_ASSISTANT_HOTKEY_KEY = "settings.assistantHotkey";
 const LEGACY_DESTINATION_KEY = "settings.destination";
 
 let boundDeviceId: string | null = null;
@@ -21,6 +22,16 @@ export interface DevicePreferences {
   voiceNoteHotkey: string[];
   handoffHotkey: string[];
   selectionHotkey: string[];
+  /** Windows press-to-toggle Assistant. Empty until the user records one. */
+  assistantHotkey: string[];
+  /** This PC may answer another device's read-only window and screenshot requests. */
+  remoteReads: boolean;
+  /** Assistant may receive analytics-derived profile facts. On until turned off. */
+  assistantProfile: boolean;
+  /** Assistant runs confirming actions without a card. Off means review each one. */
+  assistantAutoRun: boolean;
+  /** This PC may run an allowlisted action asked by another owned device. */
+  remoteComputerActions: boolean;
 }
 
 function prefsKey(deviceId: string): string {
@@ -68,6 +79,11 @@ function fromLegacy(storage: KeyValueStorage): DevicePreferences {
     voiceNoteHotkey: shortcutList(storage.getItem(LEGACY_VOICE_NOTE_HOTKEY_KEY), []),
     handoffHotkey: shortcutList(storage.getItem(LEGACY_HANDOFF_HOTKEY_KEY), []),
     selectionHotkey: shortcutList(storage.getItem(LEGACY_SELECTION_HOTKEY_KEY), []),
+    assistantHotkey: shortcutList(storage.getItem(LEGACY_ASSISTANT_HOTKEY_KEY), []),
+    remoteReads: false,
+    assistantProfile: true,
+    assistantAutoRun: true,
+    remoteComputerActions: false,
   };
 }
 
@@ -87,6 +103,11 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
       voiceNoteHotkey: shortcutList(fields.voiceNoteHotkey, fallback.voiceNoteHotkey),
       handoffHotkey: shortcutList(fields.handoffHotkey, fallback.handoffHotkey),
       selectionHotkey: shortcutList(fields.selectionHotkey, fallback.selectionHotkey),
+      assistantHotkey: shortcutList(fields.assistantHotkey, fallback.assistantHotkey),
+      remoteReads: fields.remoteReads === true,
+      assistantProfile: fields.assistantProfile !== false,
+      assistantAutoRun: fields.assistantAutoRun !== false,
+      remoteComputerActions: fields.remoteComputerActions === true,
     };
   } catch {
     return fallback;
@@ -115,6 +136,7 @@ function write(storage: KeyValueStorage, deviceId: string | null, patch: Partial
   storage.setItem(LEGACY_VOICE_NOTE_HOTKEY_KEY, JSON.stringify(next.voiceNoteHotkey));
   storage.setItem(LEGACY_HANDOFF_HOTKEY_KEY, JSON.stringify(next.handoffHotkey));
   storage.setItem(LEGACY_SELECTION_HOTKEY_KEY, JSON.stringify(next.selectionHotkey));
+  storage.setItem(LEGACY_ASSISTANT_HOTKEY_KEY, JSON.stringify(next.assistantHotkey));
   return next;
 }
 
@@ -187,4 +209,44 @@ export function loadStoredSelectionHotkey(storage: KeyValueStorage = localStorag
 
 export function saveStoredSelectionHotkey(shortcuts: readonly string[], storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
   write(storage, scope(deviceId), { selectionHotkey: [...shortcuts] });
+}
+
+export function loadStoredAssistantHotkey(storage: KeyValueStorage = localStorage, deviceId?: string | null): string[] {
+  return read(storage, scope(deviceId)).assistantHotkey;
+}
+
+export function saveStoredAssistantHotkey(shortcuts: readonly string[], storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { assistantHotkey: [...shortcuts] });
+}
+
+export function loadRemoteReads(storage: KeyValueStorage = localStorage, deviceId?: string | null): boolean {
+  return read(storage, scope(deviceId)).remoteReads;
+}
+
+export function saveRemoteReads(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { remoteReads: enabled });
+}
+
+export function loadAssistantProfile(storage: KeyValueStorage = localStorage, deviceId?: string | null): boolean {
+  return read(storage, scope(deviceId)).assistantProfile;
+}
+
+export function loadAssistantAutoRun(storage: KeyValueStorage = localStorage, deviceId?: string | null): boolean {
+  return read(storage, scope(deviceId)).assistantAutoRun;
+}
+
+export function saveAssistantAutoRun(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { assistantAutoRun: enabled });
+}
+
+export function saveAssistantProfile(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { assistantProfile: enabled });
+}
+
+export function loadRemoteComputerActions(storage: KeyValueStorage = localStorage, deviceId?: string | null): boolean {
+  return read(storage, scope(deviceId)).remoteComputerActions;
+}
+
+export function saveRemoteComputerActions(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { remoteComputerActions: enabled });
 }

@@ -9,6 +9,9 @@ describe("parsePushToTalk", () => {
     expect(parsePushToTalk({ event: "release" })).toEqual({ event: "release" });
     expect(parsePushToTalk({ event: "cancel" })).toEqual({ event: "cancel" });
     expect(parsePushToTalk({ event: "capture-selection" })).toEqual({ event: "capture-selection" });
+    expect(parsePushToTalk({ event: "toggle-assistant" })).toEqual({ event: "toggle-assistant" });
+    expect(parsePushToTalk("toggle-assistant")).toEqual({ event: "toggle-assistant" });
+    expect(parsePushToTalk({ event: "toggle-assistant" })?.event).not.toBe("press");
     expect(parsePushToTalk("press")).toEqual({ event: "press" });
     expect(parsePushToTalk({ event: "tap" })).toBeNull();
     expect(parsePushToTalk(null)).toBeNull();

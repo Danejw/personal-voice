@@ -43,6 +43,34 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
     }));
   }
 
+  captureSnapshot() {
+    return invoke("capture_snapshot");
+  }
+
+  describeWindows() {
+    return invoke<{ active: string | null; windows: string[] }>("describe_windows");
+  }
+
+  openAllowlistedApp(id: string) {
+    return invoke<string>("open_allowlisted_app", { id });
+  }
+
+  pressAllowlistedShortcut(id: string, restore = true) {
+    return invoke<string>("press_allowlisted_shortcut", { id, restore });
+  }
+
+  computerCapture() {
+    return invoke("computer_capture");
+  }
+
+  computerClick(x: number, y: number, times: number) {
+    return invoke<string>("computer_click", { x, y, times });
+  }
+
+  computerRestore() {
+    return invoke<void>("computer_restore");
+  }
+
   syncOverlay(snapshot: OverlaySnapshot) {
     return invoke<void>("sync_overlay", { snapshot });
   }
@@ -64,6 +92,7 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
       voiceNote: [...bindings.voiceNote],
       handoff: [...bindings.handoff],
       selection: [...bindings.selection],
+      assistant: [...bindings.assistant],
     });
   }
 

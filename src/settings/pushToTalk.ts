@@ -1,9 +1,11 @@
 import { canonicalShortcut, hotkeyLabel } from "@/settings/hotkeyChord";
 import {
+  loadStoredAssistantHotkey,
   loadStoredHandoffHotkey,
   loadStoredPushToTalk,
   loadStoredSelectionHotkey,
   loadStoredVoiceNoteHotkey,
+  saveStoredAssistantHotkey,
   saveStoredHandoffHotkey,
   saveStoredPushToTalk,
   saveStoredSelectionHotkey,
@@ -57,18 +59,21 @@ export function saveSelectionHotkey(shortcuts: readonly string[]): void {
   saveStoredSelectionHotkey([...shortcuts]);
 }
 
+export function loadAssistantHotkey(): string[] {
+  return keepValid(loadStoredAssistantHotkey(), []);
+}
+
+export function saveAssistantHotkey(shortcuts: readonly string[]): void {
+  saveStoredAssistantHotkey([...shortcuts]);
+}
+
 export function pushToTalkLabel(shortcut: string): string {
   return hotkeyLabel(shortcut);
 }
 
 /** True when the same key or mouse button is bound to more than one action, or twice on one action. */
-export function hotkeysConflict(
-  dictate: readonly string[],
-  voiceNote: readonly string[],
-  handoff: readonly string[],
-  selection: readonly string[] = [],
-): boolean {
-  const bound = [dictate, voiceNote, handoff, selection]
+export function hotkeysConflict(...lists: readonly (readonly string[])[]): boolean {
+  const bound = lists
     .flat()
     .map((shortcut) => canonicalShortcut(shortcut))
     .filter((shortcut): shortcut is string => shortcut !== null);

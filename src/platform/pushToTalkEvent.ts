@@ -2,7 +2,7 @@ import type { UsageTrigger } from "@/usage/usageEvents";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 export interface PushToTalkEvent {
-  event: "press" | "release" | "cancel" | "capture-selection";
+  event: "press" | "release" | "cancel" | "capture-selection" | "toggle-assistant";
   /** When set, this utterance is delivered here without changing the saved destination. */
   destination?: TranscriptDestinationId;
   /** Set by the platform that emitted the press. The dictation state machine only copies it. */
@@ -24,7 +24,13 @@ export function windowsShortcutTrigger(destination?: TranscriptDestinationId): U
 }
 
 export function parsePushToTalk(payload: unknown): PushToTalkEvent | null {
-  if (payload === "press" || payload === "release" || payload === "cancel" || payload === "capture-selection") {
+  if (
+    payload === "press"
+    || payload === "release"
+    || payload === "cancel"
+    || payload === "capture-selection"
+    || payload === "toggle-assistant"
+  ) {
     return { event: payload };
   }
   if (typeof payload !== "object" || payload === null) return null;
@@ -34,6 +40,7 @@ export function parsePushToTalk(payload: unknown): PushToTalkEvent | null {
     && record.event !== "release"
     && record.event !== "cancel"
     && record.event !== "capture-selection"
+    && record.event !== "toggle-assistant"
   ) {
     return null;
   }

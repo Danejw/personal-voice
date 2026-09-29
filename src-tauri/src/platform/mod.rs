@@ -11,6 +11,25 @@ pub struct TargetApp {
     pub label: String,
 }
 
+/// One in-memory screenshot. `rgba` is tightly packed base64. Nothing is stored on disk.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotFrame {
+    pub source: &'static str,
+    pub source_app: Option<String>,
+    pub width: u32,
+    pub height: u32,
+    pub rgba: String,
+}
+
+/// Window titles only. No pixels and no input.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowReport {
+    pub active: Option<String>,
+    pub windows: Vec<String>,
+}
+
 #[cfg(target_os = "android")]
 pub mod android;
 
@@ -41,6 +60,7 @@ mod unsupported {
         _voice_note: &[String],
         _handoff: &[String],
         _selection: &[String],
+        _assistant: &[String],
     ) -> Result<(), String> {
         Err(UNSUPPORTED.into())
     }
@@ -54,6 +74,21 @@ mod unsupported {
         Err(UNSUPPORTED.into())
     }
     pub fn capture_selection() -> Result<(String, Option<String>), String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn capture_snapshot() -> Result<super::SnapshotFrame, String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn describe_windows() -> Result<super::WindowReport, String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn open_allowlisted_app(_id: &str) -> Result<String, String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn press_allowlisted_shortcut(_id: &str) -> Result<String, String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn click_normalized(_x: i32, _y: i32, _times: u32) -> Result<String, String> {
         Err(UNSUPPORTED.into())
     }
     pub fn finish_pending_restore() {}
@@ -70,6 +105,7 @@ mod unsupported {
         Ok(())
     }
     pub fn set_overlay_tip_expanded(_expanded: bool) {}
+    pub fn set_overlay_confirm_expanded(_expanded: bool) {}
     pub fn show_without_focus(window: &WebviewWindow) -> Result<(), String> {
         window.show().map_err(|e| e.to_string())
     }

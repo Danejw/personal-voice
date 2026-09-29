@@ -1,3 +1,5 @@
+import type { AssistantStatus } from "@/assistant/state";
+import { handoffDisplayText } from "@/assistant/continuation";
 import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
 import type { VoiceNote } from "@/notes/voiceNote";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
@@ -7,6 +9,9 @@ export const OVERLAY_ITEM_LIMIT = 3;
 export const OVERLAY_TEXT_LIMIT = 160;
 
 export type OverlayDictation = "idle" | "listening" | "finalizing" | "error";
+
+/** Assistant on the floating control. Separate from the dictation mic. */
+export type OverlayAssistant = "idle" | "listening" | "responding" | "error";
 
 export interface OverlayItem {
   id: string;
@@ -25,6 +30,13 @@ export interface OverlaySnapshot {
   handoffs: OverlayItem[];
   capture: string | null;
   notice: string | null;
+  assistant: OverlayAssistant;
+  assistantError: string | null;
+  selectionPreview: string | null;
+  selectionSource: string | null;
+  pendingTitle: string | null;
+  pendingPreview: string | null;
+  pendingWorking: boolean;
 }
 
 export type OverlayHoldDestination = "voice-note" | "send-to-device";
@@ -38,7 +50,11 @@ export type OverlayAction =
   | { type: "dismiss-handoff"; id: string }
   | { type: "copy-note"; id: string }
   | { type: "copy-handoff"; id: string }
-  | { type: "open-settings" };
+  | { type: "open-settings" }
+  | { type: "assistant-toggle" }
+  | { type: "detach-selection" }
+  | { type: "confirm-action" }
+  | { type: "cancel-action" };
 
 export const emptyOverlaySnapshot: OverlaySnapshot = {
   visible: false,
@@ -51,6 +67,13 @@ export const emptyOverlaySnapshot: OverlaySnapshot = {
   handoffs: [],
   capture: null,
   notice: null,
+  assistant: "idle",
+  assistantError: null,
+  selectionPreview: null,
+  selectionSource: null,
+  pendingTitle: null,
+  pendingPreview: null,
+  pendingWorking: false,
 };
 
 export function overlayDictationFrom(state: VoiceState): OverlayDictation {
@@ -85,6 +108,55 @@ export function overlayDictateIntent(dictation: OverlayDictation): "start" | "st
   }
 }
 
+/** Maps the Assistant machine onto the floating control. Connecting counts as listening. */
+export function overlayAssistantFrom(status: AssistantStatus): OverlayAssistant {
+  switch (status) {
+    case "IDLE": return "idle";
+    case "CONNECTING":
+    case "READY": return "listening";
+    case "RESPONDING": return "responding";
+    case "ERROR": return "error";
+    default: {
+      const unhandled: never = status;
+      throw new Error(`Unhandled assistant status: ${String(unhandled)}`);
+    }
+  }
+}
+
+/** Press starts a stopped Assistant and ends a running one. */
+export function overlayAssistantIntent(assistant: OverlayAssistant): "start" | "end" {
+  switch (assistant) {
+    case "idle":
+    case "error":
+      return "start";
+    case "listening":
+    case "responding":
+      return "end";
+    default: {
+      const unhandled: never = assistant;
+      throw new Error(`Unhandled overlay assistant: ${String(unhandled)}`);
+    }
+  }
+}
+
+/**
+ * The hidden Android WebView stays resumed while dictation or Assistant still needs
+ * the microphone or the speakers. Idle and a failed Assistant let it sleep again.
+ */
+export function overlayKeepsWebViewAwake(dictation: OverlayDictation, assistant: OverlayAssistant): boolean {
+  if (dictation !== "idle") return true;
+  return assistant === "listening" || assistant === "responding";
+}
+
+/** Which session a floating-control toggle drives. Dictation and Assistant never share a button. */
+export function overlayToggleTarget(action: OverlayAction): "dictation" | "assistant" | null {
+  switch (action.type) {
+    case "dictate-toggle": return "dictation";
+    case "assistant-toggle": return "assistant";
+    default: return null;
+  }
+}
+
 export function buildOverlaySnapshot(input: {
   visible: boolean;
   state: VoiceState;
@@ -97,6 +169,13 @@ export function buildOverlaySnapshot(input: {
   devices: OwnedDevice[];
   capture: string | null;
   notice: string | null;
+  assistant: OverlayAssistant;
+  assistantError: string | null;
+  selectionPreview: string | null;
+  selectionSource: string | null;
+  pendingTitle: string | null;
+  pendingPreview: string | null;
+  pendingWorking: boolean;
 }): OverlaySnapshot {
   return {
     visible: input.visible,
@@ -109,6 +188,13 @@ export function buildOverlaySnapshot(input: {
     handoffs: overlayHandoffsFrom(input.handoffs, input.devices),
     capture: input.capture,
     notice: input.notice,
+    assistant: input.assistant,
+    assistantError: input.assistantError,
+    selectionPreview: input.selectionPreview,
+    selectionSource: input.selectionSource,
+    pendingTitle: input.pendingTitle,
+    pendingPreview: input.pendingPreview,
+    pendingWorking: input.pendingWorking,
   };
 }
 
@@ -132,7 +218,7 @@ export function overlayNotesFrom(notes: VoiceNote[]): OverlayItem[] {
 export function overlayHandoffsFrom(handoffs: Handoff[], devices: OwnedDevice[]): OverlayItem[] {
   return handoffs.slice(0, OVERLAY_ITEM_LIMIT).map((handoff) => ({
     id: handoff.id,
-    text: handoff.text,
+      text: handoffDisplayText(handoff.text),
     meta: devices.find((device) => device.id === handoff.sourceDeviceId)?.name ?? "Another device",
   }));
 }
@@ -144,6 +230,10 @@ export function parseOverlayAction(payload: unknown): OverlayAction | null {
     case "dictate-toggle":
     case "capture-selection":
     case "open-settings":
+    case "assistant-toggle":
+    case "detach-selection":
+    case "confirm-action":
+    case "cancel-action":
       return { type: record.type };
     case "dictate-hold":
       return (record.phase === "start" || record.phase === "stop")

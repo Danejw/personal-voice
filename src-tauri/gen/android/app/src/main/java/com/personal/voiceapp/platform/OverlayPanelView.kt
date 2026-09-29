@@ -42,6 +42,40 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
     stack.removeAllViews()
     addLabel("Quick actions")
     addButton("Start dictation", primary = true) { emit("dictate-toggle") }
+    val assistant = snapshot.optString("assistant", "idle")
+    val assistantLabel = when (assistant) {
+      "listening", "responding" -> "End Assistant"
+      "error" -> "Retry Assistant"
+      else -> "Start Assistant"
+    }
+    addButton(assistantLabel) { emit("assistant-toggle") }
+    when (assistant) {
+      "listening" -> addPreview("Assistant is listening")
+      "responding" -> addPreview("Assistant is speaking")
+      "error" -> snapshot.optString("assistantError").takeIf { it.isNotEmpty() }?.let { addPreview(it, error = true) }
+      else -> Unit
+    }
+    val pending = snapshot.optString("pendingTitle")
+    if (pending.isNotEmpty() && snapshot.has("pendingTitle") && !snapshot.isNull("pendingTitle")) {
+      addLabel("Assistant wants to:")
+      addPreview(pending)
+      val preview = snapshot.optString("pendingPreview")
+      if (preview.isNotEmpty() && snapshot.has("pendingPreview") && !snapshot.isNull("pendingPreview")) {
+        addPreview(preview)
+      }
+      if (snapshot.optBoolean("pendingWorking", false)) {
+        addPreview("Working…")
+      } else {
+        addButton("Confirm", primary = true) { emit("confirm-action") }
+        addButton("Cancel") { emit("cancel-action") }
+      }
+    }
+    val selection = snapshot.optString("selectionPreview")
+    if (selection.isNotEmpty() && snapshot.has("selectionPreview") && !snapshot.isNull("selectionPreview")) {
+      val source = snapshot.optString("selectionSource")
+      addPreview(if (source.isNotEmpty()) "From $source: $selection" else selection)
+      addButton("Remove selection") { emit("detach-selection") }
+    }
 
     addLabel("Send transcript to")
     val destinations = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }

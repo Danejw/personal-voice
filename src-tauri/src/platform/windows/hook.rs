@@ -74,10 +74,11 @@ pub fn set_hotkeys(
     voice_note: Vec<Shortcut>,
     handoff: Vec<Shortcut>,
     selection: Vec<Shortcut>,
+    assistant: Vec<Shortcut>,
 ) -> Result<(), String> {
     match HOOK.get() {
         Some(hook) => match hook.state.lock() {
-            Ok(mut state) => state.set_hotkeys(dictate, voice_note, handoff, selection),
+            Ok(mut state) => state.set_hotkeys(dictate, voice_note, handoff, selection, assistant),
             Err(_) => Err("Push-to-talk is busy.".into()),
         },
         None => Err("Push-to-talk is not running.".into()),

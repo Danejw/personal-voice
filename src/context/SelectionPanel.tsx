@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Tooltip } from "@/components/Tooltip";
 import type { ContextItem } from "@/context/ContextItem";
@@ -11,6 +11,10 @@ interface SelectionPanelProps {
   active?: boolean;
   capture(): Promise<ContextItem>;
   onCaptured?(): void;
+  /** Called with the capture, or null when the user clears it. Throw to reject an oversized selection. */
+  onItem?(item: ContextItem | null): void;
+  /** Assistant attachment. Clear on the Assistant page clears this preview too. */
+  attached?: ContextItem | null;
 }
 
 const HEADER_ACTIONS_ID = "page-header-actions";
@@ -22,11 +26,18 @@ export function SelectionPanel({
   active = false,
   capture,
   onCaptured,
+  onItem,
+  attached,
 }: SelectionPanelProps) {
   const [item, setItem] = useState<ContextItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (attached === undefined) return;
+    setItem(attached);
+  }, [attached]);
 
   async function run(action: () => Promise<void>, success?: string) {
     setBusy(true);
@@ -44,7 +55,9 @@ export function SelectionPanel({
 
   function onCapture() {
     void run(async () => {
-      setItem(await capture());
+      const next = await capture();
+      onItem?.(next);
+      setItem(next);
       try { onCaptured?.(); } catch { /* usage must not fail capture */ }
     }, "Selection captured.");
   }
@@ -58,6 +71,7 @@ export function SelectionPanel({
     setItem(null);
     setProblem(null);
     setNotice(null);
+    onItem?.(null);
   }
 
   const actions = (

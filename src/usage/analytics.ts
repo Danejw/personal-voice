@@ -229,7 +229,7 @@ const DESTINATION_LABELS: Record<TranscriptDestinationId, string> = {
   "send-to-device": "Handoffs",
 };
 
-const TRIGGER_LABELS: Record<UsageTrigger, string> = {
+export const TRIGGER_LABELS: Record<UsageTrigger, string> = {
   "ui-button": "UI button",
   "shortcut-dictate": "Hold to Dictate",
   "shortcut-note": "Voice Note Shortcut",

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { classifyHandoffText } from "@/assistant/continuation";
 import { initialArrivalState, nextArrivals } from "@/handoffs/handoffAlert";
 import type { HandoffStore } from "@/handoffs/HandoffStore";
 import { onHandoffAlertClick, showHandoffAlert } from "@/platform/windows/handoffNotification";
@@ -9,9 +10,15 @@ export function useHandoffAlerts(
   userId: string | null,
   enabled: boolean,
   insert: (text: string) => Promise<void>,
+  onContinuation?: () => void,
+  onRemoteRead?: () => void,
 ): void {
   const insertRef = useRef(insert);
+  const continuationRef = useRef(onContinuation);
+  const remoteReadRef = useRef(onRemoteRead);
   insertRef.current = insert;
+  continuationRef.current = onContinuation;
+  remoteReadRef.current = onRemoteRead;
 
   useEffect(() => {
     if (!enabled) return;
@@ -30,8 +37,16 @@ export function useHandoffAlerts(
     let stop = () => {};
     let closed = false;
     void onHandoffAlertClick((id) => {
+      if (id.startsWith("remote-read:")) {
+        remoteReadRef.current?.();
+        return;
+      }
       const handoff = store.getSnapshot().received.find((item) => item.id === id);
       if (!handoff) return;
+      if (classifyHandoffText(handoff.text).kind !== "text") {
+        continuationRef.current?.();
+        return;
+      }
       void insertRef.current(handoff.text);
     }).then((unlisten) => {
       if (closed) unlisten();

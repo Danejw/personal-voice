@@ -83,6 +83,61 @@ pub async fn capture_selection(
     result.map(|(text, source_app)| CapturedSelection { text, source_app })
 }
 
+/// Hides Settings, captures the window that becomes active, then shows Settings again.
+/// Falls back to the primary screen. The pixels are returned in memory only.
+#[tauri::command]
+pub async fn capture_snapshot(app: AppHandle) -> Result<platform::SnapshotFrame, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("The Settings window is missing.")?;
+    window.hide().map_err(|e| e.to_string())?;
+    let result = tauri::async_runtime::spawn_blocking(|| {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        platform::capture_snapshot()
+    })
+    .await
+    .map_err(|e| e.to_string())
+    .and_then(|inner| inner);
+    #[cfg(desktop)]
+    {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = window.show();
+    }
+    result
+}
+
+/// Hides Settings, then reads window titles only. Does not click or type.
+#[tauri::command]
+pub async fn describe_windows(app: AppHandle) -> Result<platform::WindowReport, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("The Settings window is missing.")?;
+    window.hide().map_err(|error| error.to_string())?;
+    let result = tauri::async_runtime::spawn_blocking(|| {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        platform::describe_windows()
+    })
+    .await
+    .map_err(|error| error.to_string())
+    .and_then(|inner| inner);
+    #[cfg(desktop)]
+    {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    #[cfg(not(desktop))]
+    {
+        let _ = window.show();
+    }
+    result
+}
+
 #[tauri::command]
 pub fn set_push_to_talk_shortcut(shortcut: String) -> Result<(), String> {
     platform::set_push_to_talk_shortcut(&shortcut)
@@ -94,8 +149,9 @@ pub fn set_hotkeys(
     voice_note: Vec<String>,
     handoff: Vec<String>,
     selection: Vec<String>,
+    assistant: Vec<String>,
 ) -> Result<(), String> {
-    platform::set_hotkeys(&dictate, &voice_note, &handoff, &selection)
+    platform::set_hotkeys(&dictate, &voice_note, &handoff, &selection, &assistant)
 }
 
 /// Lets the Settings window see the next chord instead of starting dictation with it.
@@ -147,6 +203,82 @@ pub fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
         .get_webview_window(INDICATOR_WINDOW)
         .ok_or("The overlay window is missing.")?;
     platform::pin_overlay(&window)
+}
+
+/// Grows the overlay so Confirm and Cancel fit under the Assistant button, then pins it.
+#[tauri::command]
+pub fn resize_overlay_confirm(app: AppHandle, expanded: bool) -> Result<(), String> {
+    platform::set_overlay_confirm_expanded(expanded);
+    let window = app
+        .get_webview_window(INDICATOR_WINDOW)
+        .ok_or("The overlay window is missing.")?;
+    platform::pin_overlay(&window)
+}
+
+#[tauri::command]
+pub async fn open_allowlisted_app(id: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || platform::open_allowlisted_app(&id))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn press_allowlisted_shortcut(app: AppHandle, id: String, restore: Option<bool>) -> Result<String, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("The Settings window is missing.")?;
+    window.hide().map_err(|error| error.to_string())?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        platform::press_allowlisted_shortcut(&id)
+    })
+    .await
+    .map_err(|error| error.to_string())
+    .and_then(|inner| inner);
+    if restore.unwrap_or(true) {
+        #[cfg(desktop)]
+        {
+            let _ = window.show();
+        }
+    }
+    result
+}
+
+/// Hides Settings and captures the screen underneath. The window stays hidden until `computer_restore`.
+#[tauri::command]
+pub async fn computer_capture(app: AppHandle) -> Result<platform::SnapshotFrame, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("The Settings window is missing.")?;
+    window.hide().map_err(|error| error.to_string())?;
+    tauri::async_runtime::spawn_blocking(|| {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        platform::capture_snapshot()
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn computer_click(x: i32, y: i32, times: u32) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || platform::click_normalized(x, y, times))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn computer_restore(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("The Settings window is missing.")?;
+    #[cfg(desktop)]
+    {
+        let _ = window.unminimize();
+        window.show().map_err(|error| error.to_string())?;
+    }
+    #[cfg(not(desktop))]
+    let _ = window;
+    Ok(())
 }
 
 #[tauri::command]

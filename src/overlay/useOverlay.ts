@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { classifyHandoffText } from "@/assistant/continuation";
 import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
-import { buildOverlaySnapshot, clipOverlayText, overlayDictateIntent } from "@/overlay/overlay";
+import { buildOverlaySnapshot, clipOverlayText, overlayAssistantFrom, overlayAssistantIntent, overlayDictateIntent } from "@/overlay/overlay";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
+import type { AssistantController } from "@/assistant/AssistantController";
+import type { AssistantSnapshot } from "@/assistant/state";
 import type { VoiceNote } from "@/notes/voiceNote";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import type { VoiceProvider } from "@/voice/provider/VoiceProvider";
@@ -34,6 +37,10 @@ export interface OverlayBindings {
   onSelectionCaptured?(): void;
   /** Called at the overlay before an utterance starts. */
   onArmDictation?(): void;
+  /** False while Assistant holds the microphone. */
+  canDictate?(): boolean;
+  assistant: AssistantSnapshot;
+  assistantController: AssistantController;
 }
 
 async function copyText(text: string): Promise<void> {
@@ -66,13 +73,18 @@ export function useOverlay({
   dismissHandoff,
   onSelectionCaptured,
   onArmDictation,
+  canDictate,
+  assistant,
+  assistantController,
 }: OverlayBindings): OverlaySnapshot {
   const [capture, setCapture] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const providerRef = useRef(getProvider);
   const armRef = useRef(onArmDictation);
+  const canDictateRef = useRef(canDictate);
   useEffect(() => { providerRef.current = getProvider; }, [getProvider]);
   armRef.current = onArmDictation;
+  canDictateRef.current = canDictate;
 
   const snapshot = useMemo(() => buildOverlaySnapshot({
     visible,
@@ -86,7 +98,14 @@ export function useOverlay({
     devices,
     capture,
     notice,
-  }), [visible, dictation.state, dictation.error, destination, signedIn, paused, notes, handoffs, devices, capture, notice]);
+    assistant: overlayAssistantFrom(assistant.status),
+    assistantError: assistant.status === "ERROR" ? assistant.error : null,
+    selectionPreview: assistant.selection ? clipOverlayText(assistant.selection.text) : null,
+    selectionSource: assistant.selection?.sourceApp ?? null,
+    pendingTitle: assistant.pendingAction?.title ?? null,
+    pendingPreview: assistant.pendingAction?.preview ?? null,
+    pendingWorking: assistant.pendingAction?.working ?? false,
+  }), [visible, dictation.state, dictation.error, destination, signedIn, paused, notes, handoffs, devices, capture, notice, assistant]);
 
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
@@ -111,11 +130,12 @@ export function useOverlay({
       const item = await platform.captureSelection({ restoreSettings: false });
       setCapture(clipOverlayText(item.text));
       try { onSelectionCaptured?.(); } catch { /* usage must not fail capture */ }
-      flash("Selection captured.");
+      const message = assistantController.attachSelection(item);
+      flash(message ?? "Selection attached to Assistant.");
     } catch (reason) {
       flash(reason instanceof Error ? reason.message : String(reason));
     }
-  }, [flash, onSelectionCaptured, platform]);
+  }, [assistantController, flash, onSelectionCaptured, platform]);
 
   useEffect(() => {
     let disposed = false;
@@ -153,6 +173,7 @@ export function useOverlay({
           switch (intent) {
             case "start":
               if (snapshotRef.current.paused || !snapshotRef.current.signedIn) return;
+              if (canDictateRef.current && !canDictateRef.current()) return;
               armRef.current?.();
               controller.reset();
               await controller.start(providerRef.current());
@@ -176,6 +197,7 @@ export function useOverlay({
           }
           if (releasedHolds.current.has(action.id)) return;
           if (snapshotRef.current.paused || !snapshotRef.current.signedIn) return;
+          if (canDictateRef.current && !canDictateRef.current()) return;
           if (overlayDictateIntent(snapshotRef.current.dictation) !== "start") return;
           overrideDestination(action.destination);
           armRef.current?.();
@@ -206,6 +228,10 @@ export function useOverlay({
             flash("That handoff is no longer pending.");
             return;
           }
+          if (classifyHandoffText(text).kind !== "text") {
+            flash("Open Handoffs and choose Continue.");
+            return;
+          }
           await copyText(text);
           flash("Copied.");
           return;
@@ -214,6 +240,10 @@ export function useOverlay({
           const text = handoffsRef.current.find((handoff) => handoff.id === action.id)?.text;
           if (!text) {
             flash("That handoff is no longer pending.");
+            return;
+          }
+          if (classifyHandoffText(text).kind !== "text") {
+            flash("Open Handoffs and choose Continue.");
             return;
           }
           try {
@@ -234,13 +264,32 @@ export function useOverlay({
         case "open-settings":
           quietly(platform.openSettings());
           return;
+        case "assistant-toggle": {
+          const intent = overlayAssistantIntent(snapshotRef.current.assistant);
+          if (intent === "start") {
+            if (snapshotRef.current.paused || !snapshotRef.current.signedIn) return;
+            assistantController.start();
+            return;
+          }
+          assistantController.end();
+          return;
+        }
+        case "detach-selection":
+          assistantController.detachSelection();
+          return;
+        case "confirm-action":
+          assistantController.confirmPending();
+          return;
+        case "cancel-action":
+          assistantController.cancelPending();
+          return;
         default: {
           const unhandled: never = action;
           throw new Error(`Unhandled overlay action: ${String(unhandled)}`);
         }
       }
     }
-  }, [platform, controller, onDestination, overrideDestination, insertHandoff, dismissHandoff, captureSelection, flash]);
+  }, [platform, controller, assistantController, onDestination, overrideDestination, insertHandoff, dismissHandoff, captureSelection, flash]);
 
   return snapshot;
 }

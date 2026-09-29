@@ -11,6 +11,8 @@ describe("hotkeysConflict", () => {
     expect(hotkeysConflict(["Ctrl+Shift+A"], ["Shift+Ctrl+A"], [], [])).toBe(true);
     expect(hotkeysConflict(["A"], ["VK65"], [], [])).toBe(true);
     expect(hotkeysConflict(["Alt+S"], [], [], ["Alt+S"])).toBe(true);
+    expect(hotkeysConflict(["RightAlt"], [], [], [], ["RightAlt"])).toBe(true);
+    expect(hotkeysConflict(["RightAlt"], [], [], [], ["Ctrl+Alt+A"])).toBe(false);
   });
 });
 

@@ -9,6 +9,7 @@ export type AppSection =
   | "capture"
   | "notes"
   | "handoffs"
+  | "assistant"
   | "devices"
   | "settings"
   | "analytics";
@@ -20,7 +21,7 @@ export type VoiceSection =
   | "notes"
   | "handoffs";
 
-type TopSection = "voice" | "devices" | "settings" | "analytics";
+type TopSection = "voice" | "assistant" | "devices" | "settings" | "analytics";
 
 const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   dictation: { label: "Dictations" },
@@ -28,6 +29,7 @@ const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   capture: { label: "Selection" },
   notes: { label: "Voice Notes" },
   handoffs: { label: "Handoffs" },
+  assistant: { label: "Assistant" },
   devices: { label: "Devices & Controls" },
   settings: { label: "Settings" },
   analytics: { label: "Analytics" },
@@ -41,9 +43,10 @@ const VOICE_CHILDREN: readonly VoiceSection[] = [
   "handoffs",
 ];
 
-const TOP_SECTIONS: readonly TopSection[] = ["voice", "devices", "settings", "analytics"];
+const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "devices", "settings", "analytics"];
 const TOP_LABELS: Record<TopSection, string> = {
   voice: "Voice",
+  assistant: "Assistant",
   devices: "Devices & Controls",
   settings: "Settings",
   analytics: "Analytics",
@@ -252,6 +255,12 @@ function NavIcon({ section }: { section: TopSection }) {
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" fill="none" stroke="currentColor" strokeWidth="1.6" />
           <path d="M6 11a6 6 0 0 0 12 0M12 17v3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      );
+    case "assistant":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6.5h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H11l-4 3.2V16.5H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
         </svg>
       );
     case "devices":

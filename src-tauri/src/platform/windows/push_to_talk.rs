@@ -150,6 +150,8 @@ pub enum PttEvent {
     },
     /// One-shot: copies the highlighted text. Release is swallowed and does not end dictation.
     CaptureSelection,
+    /// One-shot: starts or ends Assistant. Release is swallowed and does not end dictation.
+    ToggleAssistant,
     Release,
     Cancel,
 }
@@ -157,7 +159,7 @@ pub enum PttEvent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum HeldAction {
     Talk,
-    Capture,
+    OneShot,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -182,6 +184,7 @@ pub struct PushToTalk {
     pub voice_note: Vec<Shortcut>,
     pub handoff: Vec<Shortcut>,
     pub selection: Vec<Shortcut>,
+    pub assistant: Vec<Shortcut>,
     /// While true, Escape cancels the active utterance.
     pub active: bool,
     pub paused: bool,
@@ -198,6 +201,7 @@ impl Default for PushToTalk {
             voice_note: Vec::new(),
             handoff: Vec::new(),
             selection: Vec::new(),
+            assistant: Vec::new(),
             active: false,
             paused: false,
             capturing: false,
@@ -219,15 +223,17 @@ impl PushToTalk {
         voice_note: Vec<Shortcut>,
         handoff: Vec<Shortcut>,
         selection: Vec<Shortcut>,
+        assistant: Vec<Shortcut>,
     ) -> Result<(), String> {
         if dictate.is_empty() {
             return Err("Hold to dictate needs a key or mouse button.".into());
         }
-        ensure_unique(&[&dictate, &voice_note, &handoff, &selection])?;
+        ensure_unique(&[&dictate, &voice_note, &handoff, &selection, &assistant])?;
         self.dictate = dictate;
         self.voice_note = voice_note;
         self.handoff = handoff;
         self.selection = selection;
+        self.assistant = assistant;
         self.held = None;
         Ok(())
     }
@@ -260,7 +266,7 @@ impl PushToTalk {
                                 swallow: true,
                                 event: Some(PttEvent::Release),
                             },
-                            HeldAction::Capture => SWALLOW,
+                            HeldAction::OneShot => SWALLOW,
                         }
                     }
                 };
@@ -268,7 +274,7 @@ impl PushToTalk {
         } else if down {
             if let Some(event) = self.match_press(vk, modifiers) {
                 let action = match event {
-                    PttEvent::CaptureSelection => HeldAction::Capture,
+                    PttEvent::CaptureSelection | PttEvent::ToggleAssistant => HeldAction::OneShot,
                     _ => HeldAction::Talk,
                 };
                 self.held = Some((vk, action));
@@ -330,6 +336,13 @@ impl PushToTalk {
             .any(|shortcut| matches_shortcut(shortcut, vk, modifiers))
         {
             return Some(PttEvent::CaptureSelection);
+        }
+        if self
+            .assistant
+            .iter()
+            .any(|shortcut| matches_shortcut(shortcut, vk, modifiers))
+        {
+            return Some(PttEvent::ToggleAssistant);
         }
         None
     }
@@ -488,6 +501,7 @@ mod tests {
             vec![Shortcut::parse("Mouse4").unwrap()],
             vec![Shortcut::parse("Mouse5").unwrap()],
             vec![],
+            vec![],
         )
         .unwrap();
         assert_eq!(
@@ -512,8 +526,8 @@ mod tests {
     fn rejects_two_actions_on_the_same_button() {
         let mut ptt = PushToTalk::default();
         let f9 = Shortcut::parse("F9").unwrap();
-        assert!(ptt.set_hotkeys(vec![f9], vec![f9], vec![], vec![]).is_err());
-        assert!(ptt.set_hotkeys(vec![], vec![], vec![], vec![]).is_err());
+        assert!(ptt.set_hotkeys(vec![f9], vec![f9], vec![], vec![], vec![]).is_err());
+        assert!(ptt.set_hotkeys(vec![], vec![], vec![], vec![], vec![]).is_err());
     }
 
     #[test]
@@ -528,6 +542,7 @@ mod tests {
                 Shortcut::parse("F9").unwrap(),
                 Shortcut::parse("Ctrl+Shift+Space").unwrap(),
             ],
+            vec![],
             vec![],
             vec![],
         )
@@ -573,6 +588,7 @@ mod tests {
             vec![],
             vec![],
             vec![Shortcut::parse("Alt+S").unwrap()],
+            vec![],
         )
         .unwrap();
         let alt = Modifiers { alt: true, ..NONE };
@@ -585,5 +601,37 @@ mod tests {
             ptt.on_key(RIGHT_ALT, true, NONE).event,
             Some(PttEvent::Press { destination: None })
         );
+    }
+
+    #[test]
+    fn assistant_hotkey_does_not_start_or_release_dictation() {
+        let mut ptt = PushToTalk::default();
+        ptt.set_hotkeys(
+            vec![Shortcut::parse("RightAlt").unwrap()],
+            vec![],
+            vec![],
+            vec![],
+            vec![Shortcut::parse("Ctrl+Alt+A").unwrap()],
+        )
+        .unwrap();
+        let ctrl_alt = Modifiers {
+            ctrl: true,
+            alt: true,
+            ..NONE
+        };
+        assert_eq!(
+            ptt.on_key(0x41, true, ctrl_alt).event,
+            Some(PttEvent::ToggleAssistant)
+        );
+        assert_eq!(ptt.on_key(0x41, false, NONE), SWALLOW);
+        assert!(ptt
+            .set_hotkeys(
+                vec![Shortcut::parse("RightAlt").unwrap()],
+                vec![],
+                vec![],
+                vec![],
+                vec![Shortcut::parse("RightAlt").unwrap()],
+            )
+            .is_err());
     }
 }

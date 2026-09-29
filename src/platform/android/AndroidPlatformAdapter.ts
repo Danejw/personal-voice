@@ -38,6 +38,34 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
     }));
   }
 
+  captureSnapshot() {
+    return callPlugin("capture_snapshot");
+  }
+
+  describeWindows() {
+    return Promise.reject(new Error("This device can't share windows."));
+  }
+
+  openAllowlistedApp() {
+    return Promise.reject(new Error("This device can't run desktop actions."));
+  }
+
+  pressAllowlistedShortcut() {
+    return Promise.reject(new Error("This device can't run desktop actions."));
+  }
+
+  computerCapture() {
+    return Promise.reject(new Error("This device can't run desktop actions."));
+  }
+
+  computerClick() {
+    return Promise.reject(new Error("This device can't run desktop actions."));
+  }
+
+  computerRestore() {
+    return Promise.resolve();
+  }
+
   syncOverlay(snapshot: OverlaySnapshot) {
     return callPlugin("set_overlay", { snapshot: JSON.stringify(snapshot) });
   }

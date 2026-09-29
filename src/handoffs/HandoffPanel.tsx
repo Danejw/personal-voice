@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { acceptContinuation, classifyHandoffText, handoffDisplayText, type AssistantContinuation } from "@/assistant/continuation";
 import { HoverActionItem } from "@/components/HoverActionItem";
 import { Tooltip } from "@/components/Tooltip";
 import { DeviceTargetField } from "@/handoffs/DeviceTargetField";
@@ -10,6 +11,10 @@ interface HandoffPanelProps {
   store: HandoffStore;
   snapshot: HandoffSnapshot;
   insertIntoActiveField(text: string): Promise<void>;
+  attachedHandoffId?: string | null;
+  onAttachHandoff?: (handoff: Handoff, sourceLabel: string) => string | null;
+  onDetachHandoff?: () => void;
+  onOpenContinuation?: (payload: AssistantContinuation) => string | null;
 }
 
 function statusLabel(status: HandoffStatus): string {
@@ -53,7 +58,15 @@ export function HandoffToolbar({
 }
 
 /** Shared clipboard composition plus the receiving inbox; Supabase remains the only transport. */
-export function HandoffPanel({ store, snapshot, insertIntoActiveField }: HandoffPanelProps) {
+export function HandoffPanel({
+  store,
+  snapshot,
+  insertIntoActiveField,
+  attachedHandoffId = null,
+  onAttachHandoff,
+  onDetachHandoff,
+  onOpenContinuation,
+}: HandoffPanelProps) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -100,6 +113,29 @@ export function HandoffPanel({ store, snapshot, insertIntoActiveField }: Handoff
     void run(`dismiss:${handoff.id}`, () => store.consume(handoff.id));
   }
 
+  function attach(handoff: Handoff) {
+    setProblem(onAttachHandoff?.(handoff, sourceLabel(handoff)) ?? null);
+  }
+
+  function openContinuation(handoff: Handoff) {
+    const classified = classifyHandoffText(handoff.text);
+    if (classified.kind !== "continuation") {
+      setProblem(classified.kind === "malformed" ? classified.message : "That handoff is plain text.");
+      return;
+    }
+    const owned = acceptContinuation(classified.payload, handoff);
+    if (!owned.ok) {
+      setProblem(owned.message);
+      return;
+    }
+    const message = onOpenContinuation?.(classified.payload);
+    if (message) {
+      setProblem(message);
+      return;
+    }
+    void run(`continue:${handoff.id}`, () => store.consume(handoff.id));
+  }
+
   function sourceLabel(handoff: Handoff): string {
     return snapshot.devices.find((device) => device.id === handoff.sourceDeviceId)?.name ?? "Another device";
   }
@@ -130,20 +166,41 @@ export function HandoffPanel({ store, snapshot, insertIntoActiveField }: Handoff
           <ul className="handoffs hide-scrollbar">
             {snapshot.received.map((handoff) => {
               const pending = busy?.endsWith(handoff.id) ?? false;
+              const attached = attachedHandoffId === handoff.id;
+              const classified = classifyHandoffText(handoff.text);
+              const plain = classified.kind === "text";
               return (
                 <HoverActionItem
                   key={handoff.id}
                   busy={pending}
                   actions={[
-                    { kind: "copy", onClick: () => copy(handoff) },
-                    { kind: "insert", onClick: () => insert(handoff) },
-                    { kind: "dismiss", disabled: !connected, onClick: () => dismiss(handoff) },
+                    ...(plain && onAttachHandoff && onDetachHandoff ? [{
+                      kind: "attach" as const,
+                      label: attached ? "Remove from Assistant" : "Attach to Assistant",
+                      onClick: () => { if (attached) onDetachHandoff(); else attach(handoff); },
+                    }] : []),
+                    ...(plain ? [
+                      { kind: "copy" as const, onClick: () => copy(handoff) },
+                      { kind: "insert" as const, onClick: () => insert(handoff) },
+                    ] : []),
+                    { kind: "dismiss" as const, disabled: !connected, onClick: () => dismiss(handoff) },
                   ]}
                 >
-                  <p className="handoff-text">{handoff.text}</p>
+                  <p className="handoff-text">{handoffDisplayText(handoff.text)}</p>
                   <p className="note-meta">
+                    {classified.kind === "continuation" ? "Assistant continuation · " : ""}
                     {sourceLabel(handoff)} · <time dateTime={handoff.createdAt}>{new Date(handoff.createdAt).toLocaleString()}</time>
                   </p>
+                  {classified.kind === "continuation" && onOpenContinuation && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!connected || pending}
+                      onClick={() => openContinuation(handoff)}
+                    >
+                      Continue
+                    </button>
+                  )}
                 </HoverActionItem>
               );
             })}

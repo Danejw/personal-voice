@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlatformAdapter, PushToTalkEvent } from "@/platform/PlatformAdapter";
+import { gateDictationCapture } from "@/voice/audio/gateDictationCapture";
+import type { MicrophoneLease } from "@/voice/audio/microphoneLease";
 import { countOutputWords, countTermUses } from "@/usage/words";
 import { usageEventsFromDictation } from "@/usage/usageEvents";
 import type { UsageStore } from "@/usage/UsageStore";
@@ -30,13 +32,18 @@ export function useDictation(
   destinations: TranscriptDestinationRouter,
   usage: UsageStore,
   getUsageContext: () => UsageContext = () => ({ locale: null, terms: [] }),
+  lease?: MicrophoneLease,
 ) {
   const [snapshot, setSnapshot] = useState<DictationSnapshot>(initialDictationSnapshot);
   const [paused, setPaused] = useState(false);
   const contextRef = useRef(getUsageContext);
   contextRef.current = getUsageContext;
   const [controller] = useState(
-    () => new DictationController(() => platform.createCapture(), setSnapshot, destinations, {
+    () => new DictationController(
+      () => lease ? gateDictationCapture(platform.createCapture(), lease) : platform.createCapture(),
+      setSnapshot,
+      destinations,
+      {
       onTimings: (timings, transcript) => {
         if (import.meta.env.DEV) console.info(`[latency] ${formatTimings(timings)}`);
         const context = contextRef.current();
@@ -61,6 +68,7 @@ export function useDictation(
     const onPushToTalk = (event: PushToTalkEvent) => {
       switch (event.event) {
         case "press":
+          if (lease?.heldBy() === "assistant") return;
           if (event.trigger) usage.armTrigger(event.trigger);
           destinations.overrideNext(event.destination ?? null);
           void controller.press(providerRef.current());
@@ -72,6 +80,9 @@ export function useDictation(
           return;
         case "capture-selection":
           // Overlay and Settings handle capture; this is not a dictation press.
+          return;
+        case "toggle-assistant":
+          // The Assistant shortcut is a separate listener. It must not start dictation.
           return;
         default: {
           const unhandled: never = event.event;

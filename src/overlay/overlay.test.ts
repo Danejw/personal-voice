@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { buildContinuation } from "@/assistant/continuation";
 import {
   buildOverlaySnapshot,
   clipOverlayText,
+  overlayAssistantFrom,
+  overlayAssistantIntent,
   overlayDictateIntent,
   overlayDictationFrom,
   overlayHandoffsFrom,
+  overlayKeepsWebViewAwake,
   overlayNotesFrom,
+  overlayToggleTarget,
   parseOverlayAction,
 } from "@/overlay/overlay";
 import type { Handoff } from "@/handoffs/handoff";
@@ -60,6 +65,13 @@ describe("overlay lists", () => {
       devices: [],
       capture: null,
       notice: null,
+      assistant: "idle",
+      assistantError: null,
+      selectionPreview: null,
+      selectionSource: null,
+      pendingTitle: null,
+      pendingPreview: null,
+      pendingWorking: false,
     });
     expect(snapshot.dictation).toBe("listening");
     expect(snapshot.destination).toBe("voice-note");
@@ -78,6 +90,21 @@ describe("overlay lists", () => {
     expect(overlayHandoffsFrom([handoff], [{ id: "phone", name: "Phone", platform: "android", lastSeen: null }])).toEqual([
       { id: "h1", text: "Continue elsewhere.", meta: "Phone" },
     ]);
+    const built = buildContinuation({
+      turns: [{ role: "user", text: "The cross-device code word is pineapple seven." }],
+      selection: null,
+      notes: [],
+      handoff: null,
+      screen: null,
+      sourceDeviceId: "phone",
+      sourceDeviceName: "Phone",
+      createdAt: "2026-09-28T12:00:00.000Z",
+    });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const continuation: Handoff = { ...handoff, text: built.text };
+    expect(overlayHandoffsFrom([continuation], [{ id: "phone", name: "Phone", platform: "android", lastSeen: null }])[0]?.text)
+      .toBe("The cross-device code word is pineapple seven.");
   });
 });
 
@@ -94,8 +121,42 @@ describe("parseOverlayAction", () => {
     expect(parseOverlayAction({ type: "insert-handoff", id: "h1" })).toEqual({ type: "insert-handoff", id: "h1" });
     expect(parseOverlayAction({ type: "copy-note", id: "n1" })).toEqual({ type: "copy-note", id: "n1" });
     expect(parseOverlayAction({ type: "open-settings" })).toEqual({ type: "open-settings" });
+    expect(parseOverlayAction({ type: "assistant-toggle" })).toEqual({ type: "assistant-toggle" });
+    expect(parseOverlayAction({ type: "detach-selection" })).toEqual({ type: "detach-selection" });
+    expect(parseOverlayAction({ type: "confirm-action" })).toEqual({ type: "confirm-action" });
+    expect(parseOverlayAction({ type: "cancel-action" })).toEqual({ type: "cancel-action" });
     expect(parseOverlayAction({ type: "set-destination", destination: "nowhere" })).toBeNull();
     expect(parseOverlayAction({ type: "insert-handoff" })).toBeNull();
     expect(parseOverlayAction(null)).toBeNull();
+  });
+});
+
+describe("assistant quick access", () => {
+  it("routes the Assistant button separately from dictation", () => {
+    expect(overlayToggleTarget({ type: "assistant-toggle" })).toBe("assistant");
+    expect(overlayToggleTarget({ type: "dictate-toggle" })).toBe("dictation");
+    expect(overlayToggleTarget({ type: "open-settings" })).toBeNull();
+    expect(overlayAssistantIntent("idle")).toBe("start");
+    expect(overlayAssistantIntent("error")).toBe("start");
+    expect(overlayAssistantIntent("listening")).toBe("end");
+    expect(overlayAssistantIntent("responding")).toBe("end");
+    expect(overlayDictateIntent("listening")).toBe("stop");
+  });
+
+  it("shows listening, responding, and error without using the dictation states", () => {
+    expect(overlayAssistantFrom("IDLE")).toBe("idle");
+    expect(overlayAssistantFrom("CONNECTING")).toBe("listening");
+    expect(overlayAssistantFrom("READY")).toBe("listening");
+    expect(overlayAssistantFrom("RESPONDING")).toBe("responding");
+    expect(overlayAssistantFrom("ERROR")).toBe("error");
+    expect(overlayAssistantFrom("RESPONDING")).not.toBe(overlayDictationFrom("LISTENING"));
+  });
+
+  it("keeps the hidden WebView awake while Assistant is listening or speaking", () => {
+    expect(overlayKeepsWebViewAwake("idle", "idle")).toBe(false);
+    expect(overlayKeepsWebViewAwake("idle", "error")).toBe(false);
+    expect(overlayKeepsWebViewAwake("idle", "listening")).toBe(true);
+    expect(overlayKeepsWebViewAwake("idle", "responding")).toBe(true);
+    expect(overlayKeepsWebViewAwake("listening", "idle")).toBe(true);
   });
 });

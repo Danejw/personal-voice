@@ -1,15 +1,10 @@
 // Mints a short-lived Gemini Live credential for any signed-in user.
-// Verified against https://ai.google.dev/gemini-api/docs/ephemeral-tokens and
-// https://ai.google.dev/api/live#ephemeral-auth-tokens (Sep 2026).
+// Default (no purpose) stays gemini-3.5-transcribe-live on v1alpha.
+// `{ "purpose": "assistant" }` locks gemini-3.8-live on v1alpha.
+// Verified against https://ai.google.dev/gemini-api/docs/live-api/ephemeral-tokens (2026-09-15).
 // Secrets: GEMINI_API_KEY. SUPABASE_URL is provided by the runtime.
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@6.2.12";
-
-const MODEL = "models/gemini-3.5-transcribe-live";
-const CREATE_TOKEN_URL = "https://generativelanguage.googleapis.com/v1alpha/auth_tokens";
-/** A cached, unused token must start its session within this window. */
-const NEW_SESSION_WINDOW_MS = 2 * 60_000;
-/** Covers a 5-minute utterance plus replay recovery, started at the end of the new-session window. */
-const TOKEN_LIFETIME_MS = 15 * 60_000;
+import { geminiMintRequest, readTokenPurpose } from "./tokenRequest.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const jwks = createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`));
@@ -45,25 +40,30 @@ Deno.serve(async (req) => {
 
   if (!await isSignedIn(req)) return reply(401, { error: "Sign in again to dictate." });
 
+  const raw = await req.text();
+  let purpose: "dictation" | "assistant" = "dictation";
+  if (raw.trim()) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return reply(400, { error: "The token request was not valid." });
+    }
+    const read = readTokenPurpose(parsed);
+    if (read === "invalid") return reply(400, { error: "The token request was not valid." });
+    purpose = read;
+  }
+
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return reply(500, { error: "The token service is not configured." });
 
-  const now = Date.now();
-  const newSessionExpireTime = new Date(now + NEW_SESSION_WINDOW_MS).toISOString();
-  const expireTime = new Date(now + TOKEN_LIFETIME_MS).toISOString();
+  const minted = geminiMintRequest(purpose, Date.now());
   let response: Response;
   try {
-    response = await fetch(CREATE_TOKEN_URL, {
+    response = await fetch(minted.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        uses: 1,
-        expireTime,
-        newSessionExpireTime,
-        // Lock only the model; the client still sends its own transcription config.
-        bidiGenerateContentSetup: { model: MODEL },
-        fieldMask: "model",
-      }),
+      body: JSON.stringify(minted.body),
       signal: AbortSignal.timeout(10_000),
     });
   } catch {
@@ -71,11 +71,21 @@ Deno.serve(async (req) => {
     return reply(502, { error: "Could not reach Gemini." });
   }
   if (!response.ok) {
-    // Status only: Google error bodies are not needed here and must never be echoed to the client.
-    console.error(`gemini-token: Gemini returned ${response.status}`);
+    // Status + Google's short message for ops; never echo the body to the client.
+    const googleBody = await response.text().catch(() => "");
+    const googleMessage = (() => {
+      try {
+        const parsed = JSON.parse(googleBody) as { error?: { message?: unknown } };
+        const message = parsed.error?.message;
+        return typeof message === "string" ? message.slice(0, 200) : "";
+      } catch {
+        return "";
+      }
+    })();
+    console.error(`gemini-token: Gemini returned ${response.status}${googleMessage ? ` (${googleMessage})` : ""}`);
     return reply(502, { error: "Gemini refused the token request." });
   }
   const created = await response.json().catch(() => null) as { name?: unknown } | null;
   if (typeof created?.name !== "string") return reply(502, { error: "Gemini sent an unexpected token response." });
-  return reply(200, { token: created.name, newSessionExpireTime, expireTime });
+  return reply(200, { token: created.name, newSessionExpireTime: minted.newSessionExpireTime, expireTime: minted.expireTime });
 });

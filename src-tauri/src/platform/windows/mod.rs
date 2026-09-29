@@ -1,8 +1,11 @@
 mod autostart;
+mod computer;
 mod handoff_alert;
 mod hook;
 mod insert;
 mod push_to_talk;
+mod snapshot;
+mod windows_info;
 
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,9 +18,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 pub use autostart::{launch_at_login, set_launch_at_login};
+pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_shortcut};
 pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
 pub use hook::{set_active as set_dictation_active, set_paused};
 pub use insert::{capture_selection, finish_pending_restore, insert_text};
+pub use snapshot::capture_snapshot;
+pub use windows_info::describe_windows;
 
 use push_to_talk::{DestOverride, PttEvent, Shortcut};
 
@@ -50,6 +56,10 @@ fn push_to_talk_payload(event: PttEvent) -> PushToTalkPayload {
             event: "capture-selection",
             destination: None,
         },
+        PttEvent::ToggleAssistant => PushToTalkPayload {
+            event: "toggle-assistant",
+            destination: None,
+        },
     }
 }
 
@@ -70,6 +80,7 @@ pub fn set_hotkeys(
     voice_note: &[String],
     handoff: &[String],
     selection: &[String],
+    assistant: &[String],
 ) -> Result<(), String> {
     fn parse_list(values: &[String]) -> Result<Vec<Shortcut>, String> {
         values.iter().map(|value| Shortcut::parse(value)).collect()
@@ -79,6 +90,7 @@ pub fn set_hotkeys(
         parse_list(voice_note)?,
         parse_list(handoff)?,
         parse_list(selection)?,
+        parse_list(assistant)?,
     )
 }
 
@@ -88,18 +100,26 @@ pub fn set_hotkey_capture(active: bool) -> Result<(), String> {
 
 /// Device-independent size of the button stack. Physical pixels are derived from the monitor.
 const OVERLAY_W: f64 = 44.0;
-const OVERLAY_H: f64 = 156.0;
+const OVERLAY_H: f64 = 194.0;
 /// Extra width to the left of the buttons while a tooltip is open.
 const OVERLAY_TIP_EXTRA: f64 = 220.0;
+/// Extra height for Confirm and Cancel while an Assistant action is waiting.
+const OVERLAY_CONFIRM_EXTRA: f64 = 76.0;
 /// Inset from the work-area corner, in device-independent pixels.
 const OVERLAY_MARGIN_DIP: f64 = 16.0;
 
 static PINNING: AtomicBool = AtomicBool::new(false);
 static TIP_EXPANDED: AtomicBool = AtomicBool::new(false);
+static CONFIRM_EXPANDED: AtomicBool = AtomicBool::new(false);
 
 /// Widen the overlay for a left-side tooltip. `pin_overlay` reads this on every place.
 pub fn set_overlay_tip_expanded(expanded: bool) {
     TIP_EXPANDED.store(expanded, Ordering::SeqCst);
+}
+
+/// Taller overlay while Confirm and Cancel are on the button stack.
+pub fn set_overlay_confirm_expanded(expanded: bool) {
+    CONFIRM_EXPANDED.store(expanded, Ordering::SeqCst);
 }
 
 /// Bottom-right of the primary display's work area, above the taskbar, at any DPI.
@@ -125,7 +145,12 @@ fn pin_overlay_inner(window: &WebviewWindow) -> Result<(), String> {
         OVERLAY_W
     };
     let width = (logical_w * scale).round() as i32;
-    let height = (OVERLAY_H * scale).round() as i32;
+    let logical_h = if CONFIRM_EXPANDED.load(Ordering::SeqCst) {
+        OVERLAY_H + OVERLAY_CONFIRM_EXTRA
+    } else {
+        OVERLAY_H
+    };
+    let height = (logical_h * scale).round() as i32;
     let margin = (OVERLAY_MARGIN_DIP * scale).round() as i32;
     let max_x = area.position.x + area.size.width as i32 - width;
     let max_y = area.position.y + area.size.height as i32 - height;

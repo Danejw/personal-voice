@@ -1,3 +1,4 @@
+import { handoffDisplayText } from "@/assistant/continuation";
 import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
 import type { HandoffStatus } from "@/handoffs/HandoffStore";
 import { clipOverlayText } from "@/overlay/overlay";
@@ -44,7 +45,7 @@ export function nextArrivals(state: ArrivalState, snapshot: ArrivalSnapshot): { 
     alerts.push({
       id: handoff.id,
       title: sourceName(snapshot.devices, handoff.sourceDeviceId),
-      body: clipOverlayText(handoff.text),
+      body: clipOverlayText(handoffDisplayText(handoff.text)),
     });
   }
   return { state: { primed: true, seen }, alerts };

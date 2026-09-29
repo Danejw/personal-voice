@@ -1,0 +1,349 @@
+import type { ContextItem } from "@/context/ContextItem";
+import type { AttachedHandoff, AttachedNote } from "@/assistant/accountContext";
+import type { AssistantSource } from "@/assistant/grounding";
+import type { ScreenSnapshot } from "@/assistant/snapshot";
+
+export type AssistantStatus = "IDLE" | "CONNECTING" | "READY" | "RESPONDING" | "ERROR";
+
+export interface AssistantTurn {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  /** Present only when this reply was actually grounded. */
+  sources?: AssistantSource[];
+}
+
+export interface AssistantSnapshot {
+  status: AssistantStatus;
+  turns: AssistantTurn[];
+  /** In-progress user speech. Replaced by each interim transcript. */
+  liveUser: string;
+  /** Output transcription for the reply that is still being spoken. */
+  liveText: string;
+  /** Citations for the reply that is still being spoken. */
+  liveSources: AssistantSource[];
+  error: string | null;
+  /** True while a dropped Live socket is being resumed. */
+  resuming: boolean;
+  /** Explicit highlight attached to Assistant. Null after remove or End. */
+  selection: ContextItem | null;
+  selectionError: string | null;
+  /** An action waiting for Confirm or Cancel. The full text stays on the controller. */
+  pendingAction: PendingAssistantAction | null;
+  /** Shown after a clipboard copy, which does not ask for confirmation. */
+  actionNotice: string | null;
+  /** One explicit screenshot. Null after Remove or End. Not written to disk. */
+  screen: ScreenSnapshot | null;
+  screenError: string | null;
+  /** Voice notes the user attached for this session. Not a copy of the account. */
+  notes: AttachedNote[];
+  /** The one handoff the user attached for this session. */
+  handoff: AttachedHandoff | null;
+  accountError: string | null;
+  /** Device name when this session was opened from a continuation. Not a resumed socket. */
+  continuedFrom: string | null;
+  /** A supervised screen task is in progress. Stop ends it before the next step. */
+  computerRunning: boolean;
+  /** Set when Computer Use asks the user to confirm one step. */
+  computerPrompt: string | null;
+}
+
+export interface PendingAssistantAction {
+  id: string;
+  title: string;
+  preview: string;
+  working: boolean;
+}
+
+export type AssistantAction =
+  | { type: "start" }
+  | { type: "ready" }
+  | { type: "blocked"; message: string }
+  | { type: "send"; id: string; text: string }
+  | { type: "userPartial"; text: string }
+  | { type: "userFinal"; id: string; text: string }
+  | { type: "assistantSpeaking" }
+  | { type: "output"; text: string }
+  | { type: "grounding"; sources: AssistantSource[] }
+  | { type: "interrupt"; id: string }
+  | { type: "turnComplete"; id: string }
+  | { type: "reconnect"; id: string }
+  | { type: "fail"; message: string }
+  | { type: "end" }
+  | { type: "attachSelection"; item: ContextItem }
+  | { type: "detachSelection" }
+  | { type: "selectionError"; message: string }
+  | { type: "setPending"; pending: PendingAssistantAction }
+  | { type: "computer"; running: boolean; prompt: string | null }
+  | { type: "clearPending" }
+  | { type: "actionNotice"; message: string | null }
+  | { type: "attachScreen"; screen: ScreenSnapshot }
+  | { type: "detachScreen" }
+  | { type: "screenError"; message: string }
+  | { type: "attachNote"; note: AttachedNote }
+  | { type: "detachNote"; id: string }
+  | { type: "attachHandoff"; handoff: AttachedHandoff }
+  | { type: "detachHandoff" }
+  | { type: "clearAccount" }
+  | { type: "accountError"; message: string }
+  | { type: "seed"; turns: AssistantTurn[]; from: string };
+
+export const initialAssistantState: AssistantSnapshot = {
+  status: "IDLE",
+  turns: [],
+  liveUser: "",
+  liveText: "",
+  liveSources: [],
+  error: null,
+  resuming: false,
+  selection: null,
+  selectionError: null,
+  pendingAction: null,
+  actionNotice: null,
+  screen: null,
+  screenError: null,
+  notes: [],
+  handoff: null,
+  accountError: null,
+  continuedFrom: null,
+  computerRunning: false,
+  computerPrompt: null,
+};
+
+/**
+ * Joins output-transcription pieces.
+ * A chunk that already contains the text so far replaces it. Anything else is appended.
+ */
+export function mergeTranscript(current: string, next: string): string {
+  if (!next) return current;
+  if (!current || next.startsWith(current)) return next;
+  return current + next;
+}
+
+/** Explicit Assistant lifecycle. Late actions that do not match the current status are ignored. */
+export function assistantReducer(state: AssistantSnapshot, action: AssistantAction): AssistantSnapshot {
+  switch (action.type) {
+    case "start":
+      if (state.status === "CONNECTING" || state.status === "READY" || state.status === "RESPONDING") return state;
+      return {
+        ...state,
+        status: "CONNECTING",
+        liveUser: "",
+        liveText: "",
+        liveSources: [],
+        error: null,
+        resuming: false,
+        pendingAction: null,
+        actionNotice: null,
+      };
+    case "ready":
+      if (state.status !== "CONNECTING") return state;
+      return { ...state, status: "READY", error: null, resuming: false };
+    case "blocked":
+      if (state.status !== "IDLE" && state.status !== "ERROR") return state;
+      return { ...state, status: "ERROR", error: action.message, liveUser: "", liveText: "", liveSources: [], resuming: false };
+    case "send":
+      if (state.status !== "READY") return state;
+      return {
+        ...state,
+        status: "RESPONDING",
+        liveUser: "",
+        liveText: "",
+        liveSources: [],
+        turns: [...state.turns, { id: action.id, role: "user", text: action.text }],
+      };
+    case "userPartial":
+      if (state.status !== "READY" && state.status !== "RESPONDING") return state;
+      return { ...state, liveUser: action.text };
+    case "userFinal": {
+      if ((state.status !== "READY" && state.status !== "RESPONDING") || !action.text.trim()) return state;
+      const spoken = state.status === "RESPONDING" ? replyTurn(state, `${action.id}-spoken`) : null;
+      return {
+        ...state,
+        status: "RESPONDING",
+        liveUser: "",
+        liveText: "",
+        liveSources: [],
+        turns: [
+          ...state.turns,
+          ...(spoken ? [spoken] : []),
+          { id: action.id, role: "user" as const, text: action.text },
+        ],
+      };
+    }
+    case "assistantSpeaking":
+      if (state.status !== "READY") return state;
+      return { ...state, status: "RESPONDING" };
+    case "output":
+      if (state.status === "READY") return { ...state, status: "RESPONDING", liveText: action.text };
+      if (state.status !== "RESPONDING") return state;
+      return { ...state, liveText: mergeTranscript(state.liveText, action.text) };
+    case "grounding":
+      if (state.status !== "READY" && state.status !== "RESPONDING") return state;
+      if (state.status === "READY") return attachSources(state, action.sources);
+      return { ...state, liveSources: mergeSources(state.liveSources, action.sources) };
+    case "interrupt": {
+      if (state.status !== "RESPONDING") return state;
+      const interrupted = replyTurn(state, action.id);
+      return {
+        ...state,
+        status: "READY",
+        liveText: "",
+        liveSources: [],
+        turns: interrupted ? [...state.turns, interrupted] : state.turns,
+      };
+    }
+    case "turnComplete": {
+      if (state.status !== "RESPONDING") return state;
+      const finished = replyTurn(state, action.id);
+      return {
+        ...state,
+        status: "READY",
+        liveText: "",
+        liveSources: [],
+        turns: finished ? [...state.turns, finished] : state.turns,
+      };
+    }
+    case "reconnect": {
+      if (state.status === "IDLE" || state.status === "ERROR") return state;
+      const resumed = replyTurn(state, action.id);
+      return {
+        ...state,
+        status: "CONNECTING",
+        resuming: true,
+        liveText: "",
+        liveSources: [],
+        error: null,
+        pendingAction: null,
+        turns: resumed ? [...state.turns, resumed] : state.turns,
+      };
+    }
+    case "fail":
+      if (state.status === "IDLE") return state;
+      return {
+        ...state,
+        status: "ERROR",
+        error: action.message,
+        liveUser: "",
+        liveText: "",
+        liveSources: [],
+        resuming: false,
+        pendingAction: null,
+        actionNotice: null,
+      };
+    case "end":
+      if (state.status === "IDLE") return state;
+      return {
+        ...state,
+        status: "IDLE",
+        liveUser: "",
+        liveText: "",
+        liveSources: [],
+        error: null,
+        resuming: false,
+        selection: null,
+        selectionError: null,
+        pendingAction: null,
+        actionNotice: null,
+        screen: null,
+        screenError: null,
+        notes: [],
+        handoff: null,
+        accountError: null,
+        continuedFrom: null,
+        computerRunning: false,
+        computerPrompt: null,
+      };
+    case "attachSelection":
+      return { ...state, selection: action.item, selectionError: null };
+    case "detachSelection":
+      return { ...state, selection: null, selectionError: null };
+    case "selectionError":
+      return { ...state, selectionError: action.message };
+    case "setPending":
+      return { ...state, pendingAction: action.pending, actionNotice: null };
+    case "clearPending":
+      return { ...state, pendingAction: null };
+    case "computer":
+      return { ...state, computerRunning: action.running, computerPrompt: action.prompt };
+    case "actionNotice":
+      return { ...state, actionNotice: action.message };
+    case "attachScreen":
+      return { ...state, screen: action.screen, screenError: null };
+    case "detachScreen":
+      return { ...state, screen: null, screenError: null };
+    case "screenError":
+      return { ...state, screenError: action.message };
+    case "attachNote":
+      return { ...state, notes: [...state.notes, action.note], accountError: null };
+    case "detachNote":
+      return { ...state, notes: state.notes.filter((note) => note.id !== action.id), accountError: null };
+    case "attachHandoff":
+      return { ...state, handoff: action.handoff, accountError: null };
+    case "detachHandoff":
+      return { ...state, handoff: null, accountError: null };
+    case "clearAccount":
+      return { ...state, notes: [], handoff: null, accountError: null };
+    case "accountError":
+      return { ...state, accountError: action.message };
+    case "seed":
+      if (state.status === "CONNECTING" || state.status === "READY" || state.status === "RESPONDING") return state;
+      return { ...state, turns: action.turns, continuedFrom: action.from, liveUser: "", liveText: "", liveSources: [], error: null };
+    default: {
+      const unhandled: never = action;
+      throw new Error(`Unhandled assistant action: ${JSON.stringify(unhandled)}`);
+    }
+  }
+}
+
+const SOURCE_LIMIT = 8;
+
+function mergeSources(current: AssistantSource[], incoming: AssistantSource[]): AssistantSource[] {
+  const seen = new Set(current.map((source) => source.url));
+  const next = [...current];
+  for (const source of incoming) {
+    if (seen.has(source.url)) continue;
+    seen.add(source.url);
+    next.push(source);
+    if (next.length >= SOURCE_LIMIT) break;
+  }
+  return next;
+}
+
+/** Keeps citations on the reply that was spoken. No text means no sourced turn. */
+function replyTurn(state: AssistantSnapshot, id: string): AssistantTurn | null {
+  if (!state.liveText) return null;
+  return {
+    id,
+    role: "assistant",
+    text: state.liveText,
+    ...(state.liveSources.length ? { sources: state.liveSources } : {}),
+  };
+}
+
+/** A citation that arrives after the reply is already on screen stays with that reply. */
+function attachSources(state: AssistantSnapshot, sources: AssistantSource[]): AssistantSnapshot {
+  const last = state.turns.at(-1);
+  if (!last || last.role !== "assistant") {
+    return { ...state, liveSources: mergeSources(state.liveSources, sources) };
+  }
+  const turns = state.turns.slice(0, -1);
+  turns.push({ ...last, sources: mergeSources(last.sources ?? [], sources) });
+  return { ...state, turns, liveSources: [] };
+}
+
+/** Short status line for the Assistant header. */
+export function assistantStatusLabel(snapshot: AssistantSnapshot, signedIn: boolean): string {
+  if (!signedIn && snapshot.status === "IDLE") return "Sign in to use Assistant";
+  switch (snapshot.status) {
+    case "IDLE": return "Not started";
+    case "CONNECTING": return snapshot.resuming ? "Reconnecting…" : "Connecting…";
+    case "READY": return "Listening";
+    case "RESPONDING": return "Responding…";
+    case "ERROR": return snapshot.error ?? "Assistant failed";
+    default: {
+      const unhandled: never = snapshot.status;
+      throw new Error(`Unhandled assistant status: ${String(unhandled)}`);
+    }
+  }
+}

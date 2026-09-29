@@ -11,6 +11,8 @@ export interface HotkeyBindings {
   voiceNote: readonly string[];
   handoff: readonly string[];
   selection: readonly string[];
+  /** Press toggles Assistant. Windows only. Never starts dictation. */
+  assistant: readonly string[];
 }
 
 /** When false, Settings stays hidden so the previous app keeps focus. */
@@ -49,6 +51,20 @@ export interface PlatformAdapter {
   insertReceivedText(text: string): Promise<TargetApp | null>;
   /** Hides Settings, reads the highlighted text in the previous app, then returns here. */
   captureSelection(options?: CaptureSelectionOptions): Promise<ContextItem>;
+  /** One explicit screenshot. Windows prefers the active window. Android uses the screen consent dialog. */
+  captureSnapshot(): Promise<unknown>;
+  /** Active window and top-level window titles. Windows only. */
+  describeWindows(): Promise<{ active: string | null; windows: string[] }>;
+  /** Opens Notepad or Calculator. The id is an allowlist key, not a path. */
+  openAllowlistedApp(id: string): Promise<string>;
+  /** Presses one allowlisted shortcut into the previous app. */
+  pressAllowlistedShortcut(id: string, restore?: boolean): Promise<string>;
+  /** Hides Settings and returns one screenshot. The window stays hidden. */
+  computerCapture(): Promise<unknown>;
+  /** Clicks a 0–999 point in the foreground window. */
+  computerClick(x: number, y: number, times: number): Promise<string>;
+  /** Shows Settings after a supervised screen task. */
+  computerRestore(): Promise<void>;
   /** Always-visible floating control: snapshot in, clicks out. */
   syncOverlay(snapshot: OverlaySnapshot): Promise<void>;
   onOverlayAction(handler: (action: OverlayAction) => void): Promise<() => void>;

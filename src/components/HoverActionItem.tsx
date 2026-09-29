@@ -2,10 +2,12 @@ import type { ReactNode } from "react";
 import { Tooltip } from "@/components/Tooltip";
 
 /** Actions the shared hover tray knows how to draw. */
-export type TrayActionKind = "copy" | "insert" | "archive" | "unarchive" | "delete" | "dismiss";
+export type TrayActionKind = "copy" | "insert" | "archive" | "unarchive" | "delete" | "dismiss" | "attach";
 
 export interface TrayAction {
   kind: TrayActionKind;
+  /** Replaces the default label when the same icon attaches or removes. */
+  label?: string;
   disabled?: boolean;
   onClick(): void;
 }
@@ -23,7 +25,7 @@ export function HoverActionItem({ busy = false, actions, children }: HoverAction
       {children}
       <div className="item-actions">
         {actions.map((action) => {
-          const label = labelFor(action.kind);
+          const label = action.label ?? labelFor(action.kind);
           return (
             <Tooltip key={action.kind} content={label}>
               <button
@@ -52,6 +54,7 @@ function isDanger(kind: TrayActionKind): boolean {
     case "insert":
     case "archive":
     case "unarchive":
+    case "attach":
       return false;
     default: {
       const unhandled: never = kind;
@@ -68,6 +71,7 @@ function labelFor(kind: TrayActionKind): string {
     case "unarchive": return "Unarchive";
     case "delete": return "Delete";
     case "dismiss": return "Dismiss";
+    case "attach": return "Attach to Assistant";
     default: {
       const unhandled: never = kind;
       throw new Error(`Unhandled tray action: ${String(unhandled)}`);
@@ -115,6 +119,13 @@ function ActionIcon({ kind }: { kind: TrayActionKind }) {
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case "attach":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5v10M8 11l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M6 19h12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
         </svg>
       );
     default: {

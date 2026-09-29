@@ -11,10 +11,12 @@ import {
 import {
   MAX_BINDINGS_PER_ACTION,
   hotkeysConflict,
+  loadAssistantHotkey,
   loadHandoffHotkey,
   loadPushToTalk,
   loadSelectionHotkey,
   loadVoiceNoteHotkey,
+  saveAssistantHotkey,
   saveHandoffHotkey,
   savePushToTalk,
   saveSelectionHotkey,
@@ -25,7 +27,7 @@ interface PushToTalkShortcutPanelProps {
   platform: PlatformAdapter;
 }
 
-type HotkeyAction = "dictate" | "voiceNote" | "handoff" | "selection";
+type HotkeyAction = "dictate" | "voiceNote" | "handoff" | "selection" | "assistant";
 
 const INVALID_CHORD = "Use one key or mouse button. Hold Ctrl, Shift, Alt, or Win for a combination.";
 
@@ -35,16 +37,17 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
   const [voiceNote, setVoiceNote] = useState(loadVoiceNoteHotkey);
   const [handoff, setHandoff] = useState(loadHandoffHotkey);
   const [selection, setSelection] = useState(loadSelectionHotkey);
+  const [assistant, setAssistant] = useState(loadAssistantHotkey);
   const [recording, setRecording] = useState<HotkeyAction | null>(null);
   const [arming, setArming] = useState<HotkeyAction | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const lists = { dictate, voiceNote, handoff, selection };
-  const conflict = hotkeysConflict(dictate, voiceNote, handoff, selection);
+  const lists = { dictate, voiceNote, handoff, selection, assistant };
+  const conflict = hotkeysConflict(dictate, voiceNote, handoff, selection, assistant);
   const captureRequest = useRef(0);
 
   useEffect(() => {
     if (conflict || dictate.length === 0) return;
-    const bindings: HotkeyBindings = { dictate, voiceNote, handoff, selection };
+    const bindings: HotkeyBindings = { dictate, voiceNote, handoff, selection, assistant };
     let cancelled = false;
     platform.setHotkeys(bindings).then(
       () => {
@@ -53,6 +56,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
         saveVoiceNoteHotkey(voiceNote);
         saveHandoffHotkey(handoff);
         saveSelectionHotkey(selection);
+        saveAssistantHotkey(assistant);
         setError(null);
       },
       (reason: unknown) => {
@@ -62,7 +66,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
     return () => {
       cancelled = true;
     };
-  }, [platform, dictate, voiceNote, handoff, selection, conflict]);
+  }, [platform, dictate, voiceNote, handoff, selection, assistant, conflict]);
 
   useEffect(() => () => {
     captureRequest.current += 1;
@@ -147,6 +151,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
       case "voiceNote": return voiceNote;
       case "handoff": return handoff;
       case "selection": return selection;
+      case "assistant": return assistant;
       default: {
         const unhandled: never = action;
         throw new Error(`Unhandled hotkey action: ${String(unhandled)}`);
@@ -160,6 +165,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
       case "voiceNote": setVoiceNote(shortcuts); return;
       case "handoff": setHandoff(shortcuts); return;
       case "selection": setSelection(shortcuts); return;
+      case "assistant": setAssistant(shortcuts); return;
       default: {
         const unhandled: never = action;
         throw new Error(`Unhandled hotkey action: ${String(unhandled)}`);
@@ -177,7 +183,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
       return;
     }
     const candidate = { ...lists, [action]: next };
-    if (hotkeysConflict(candidate.dictate, candidate.voiceNote, candidate.handoff, candidate.selection)) {
+    if (hotkeysConflict(candidate.dictate, candidate.voiceNote, candidate.handoff, candidate.selection, candidate.assistant)) {
       setError("That key is already used by another action.");
       return;
     }
@@ -263,6 +269,16 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
         onRecord={() => startRecording("selection")}
         onCancel={cancelRecording}
         onRemove={(shortcut) => removeShortcut("selection", shortcut)}
+      />
+      <HotkeyField
+        label="Assistant"
+        shortcuts={assistant}
+        listening={recording === "assistant"}
+        canRemoveLast
+        disabled={arming !== null || assistant.length >= MAX_BINDINGS_PER_ACTION || (recording !== null && recording !== "assistant")}
+        onRecord={() => startRecording("assistant")}
+        onCancel={cancelRecording}
+        onRemove={(shortcut) => removeShortcut("assistant", shortcut)}
       />
       {recordError && <p className="error" role="alert">{recordError}</p>}
     </>

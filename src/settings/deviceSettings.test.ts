@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   bindDeviceSettings,
+  loadAssistantAutoRun,
   loadDestination,
   loadMicrophone,
   loadShowIndicator,
+  loadStoredAssistantHotkey,
   loadStoredHandoffHotkey,
   loadStoredPushToTalk,
   loadStoredVoiceNoteHotkey,
+  saveAssistantAutoRun,
   saveDestination,
   saveMicrophone,
   saveShowIndicator,
+  saveStoredAssistantHotkey,
   saveStoredHandoffHotkey,
   saveStoredPushToTalk,
   saveStoredVoiceNoteHotkey,
@@ -66,6 +70,21 @@ describe("device settings", () => {
     expect(loadStoredVoiceNoteHotkey(storage, "windows")).toEqual(["Mouse4", "F9"]);
     expect(loadStoredHandoffHotkey(storage, "windows")).toEqual(["Mouse5"]);
     expect(loadStoredVoiceNoteHotkey(storage, "android")).toEqual([]);
+  });
+
+  it("runs Assistant actions automatically until review is turned on", () => {
+    const storage = memoryStorage();
+    expect(loadAssistantAutoRun(storage, "windows")).toBe(true);
+    saveAssistantAutoRun(false, storage, "windows");
+    expect(loadAssistantAutoRun(storage, "windows")).toBe(false);
+    expect(loadAssistantAutoRun(storage, "android")).toBe(true);
+  });
+
+  it("keeps the Assistant shortcut on this Windows device", () => {
+    const storage = memoryStorage();
+    saveStoredAssistantHotkey(["Ctrl+Alt+A"], storage, "windows");
+    expect(loadStoredAssistantHotkey(storage, "windows")).toEqual(["Ctrl+Alt+A"]);
+    expect(loadStoredAssistantHotkey(storage, "android")).toEqual([]);
   });
 
   it("persists this device's dictation destination without touching another device", () => {

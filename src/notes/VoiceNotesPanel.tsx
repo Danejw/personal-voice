@@ -6,6 +6,9 @@ import type { VoiceNote } from "@/notes/voiceNote";
 interface VoiceNotesPanelProps {
   store: VoiceNotesStore;
   snapshot: VoiceNotesSnapshot;
+  attachedNoteIds?: readonly string[];
+  onAttachNote?: (note: VoiceNote) => string | null;
+  onDetachNote?: (id: string) => void;
 }
 
 interface NoteGroupProps {
@@ -17,6 +20,9 @@ interface NoteGroupProps {
   onCopy(note: VoiceNote): void;
   onArchive(note: VoiceNote, archived: boolean): void;
   onDelete(note: VoiceNote): void;
+  attachedIds?: readonly string[];
+  onAttach?(note: VoiceNote): void;
+  onDetach?(id: string): void;
 }
 
 function statusLabel(status: VoiceNotesStatus): string {
@@ -32,7 +38,7 @@ function statusLabel(status: VoiceNotesStatus): string {
   }
 }
 
-function NoteGroup({ empty, notes, busy, editable, className, onCopy, onArchive, onDelete }: NoteGroupProps) {
+function NoteGroup({ empty, notes, busy, editable, className, onCopy, onArchive, onDelete, attachedIds = [], onAttach, onDetach }: NoteGroupProps) {
   return (
     <div className={className ? `note-group ${className}` : "note-group"}>
       {notes.length ? (
@@ -40,12 +46,18 @@ function NoteGroup({ empty, notes, busy, editable, className, onCopy, onArchive,
           {notes.map((note) => {
             const pending = busy?.endsWith(note.id) ?? false;
             const archived = note.status !== "inbox";
+            const attached = attachedIds.includes(note.id);
             return (
               <HoverActionItem
                 key={note.id}
                 busy={pending}
                 actions={[
-                  { kind: "copy", onClick: () => onCopy(note) },
+                  ...(onAttach && onDetach ? [{
+                    kind: "attach" as const,
+                    label: attached ? "Remove from Assistant" : "Attach to Assistant",
+                    onClick: () => { if (attached) onDetach(note.id); else onAttach(note); },
+                  }] : []),
+                  { kind: "copy" as const, onClick: () => onCopy(note) },
                   {
                     kind: archived ? "unarchive" : "archive",
                     disabled: !editable,
@@ -89,7 +101,7 @@ export function VoiceNotesToolbar({ store, snapshot }: VoiceNotesPanelProps) {
 }
 
 /** Synced notes explicitly created by choosing Voice note as the dictation destination. */
-export function VoiceNotesPanel({ store, snapshot }: VoiceNotesPanelProps) {
+export function VoiceNotesPanel({ store, snapshot, attachedNoteIds = [], onAttachNote, onDetachNote }: VoiceNotesPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -125,6 +137,10 @@ export function VoiceNotesPanel({ store, snapshot }: VoiceNotesPanelProps) {
     void run(`delete:${note.id}`, () => store.remove(note.id));
   }
 
+  function attach(note: VoiceNote) {
+    setProblem(onAttachNote?.(note) ?? null);
+  }
+
   return (
     <>
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
@@ -138,6 +154,9 @@ export function VoiceNotesPanel({ store, snapshot }: VoiceNotesPanelProps) {
         onCopy={copy}
         onArchive={archive}
         onDelete={remove}
+        attachedIds={attachedNoteIds}
+        onAttach={onAttachNote ? attach : undefined}
+        onDetach={onDetachNote}
       />
       <details className="fold">
         <summary>Archived ({archived.length})</summary>
@@ -149,6 +168,9 @@ export function VoiceNotesPanel({ store, snapshot }: VoiceNotesPanelProps) {
           onCopy={copy}
           onArchive={archive}
           onDelete={remove}
+          attachedIds={attachedNoteIds}
+          onAttach={onAttachNote ? attach : undefined}
+          onDetach={onDetachNote}
         />
       </details>
     </>

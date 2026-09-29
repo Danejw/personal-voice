@@ -327,15 +327,12 @@ No dashboard.
 
 ## Explicitly out of scope for V1
 
-Do not build:
+The original dictation scope did not include an assistant. Assistant now exists as a second mode. It does not replace dictation. Its limits are in `docs/Assistant-Phases/`.
+
+Still out of scope:
 
 - meeting recording
 - meeting summaries
-- AI assistant mode
-- tool calling
-- computer control
-- screen understanding
-- AI chat
 - transcript analytics
 - billing
 - subscriptions
@@ -347,7 +344,7 @@ Do not build:
 
 ## Future direction
 
-The product should eventually support distinct voice modes:
+The product has two voice modes:
 
 ```text
 Voice Engine
@@ -357,7 +354,7 @@ Voice Engine
     └── real-time multimodal voice model
 ```
 
-The V1 capture, UI shell, auth, platform integration, device handling, and streaming infrastructure should be reusable by Assistant Mode later.
+Assistant Mode is implemented beside Dictation. Dictation stays Gemini 3.5 Transcribe Live. Assistant is Gemini 3.8 Live and reuses the capture, account, and platform boundaries. It does not share Dictation's session.
 
 ## V1 definition of done
 

@@ -42,6 +42,93 @@ export type Database = {
         }
         Relationships: []
       }
+      device_context_requests: {
+        Row: {
+          answered_at: string | null
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          requester_device_id: string
+          response: string | null
+          status: string
+          target_device_id: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          answered_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind: string
+          requester_device_id: string
+          response?: string | null
+          status?: string
+          target_device_id: string
+          user_id?: string
+          version?: number
+        }
+        Update: {
+          answered_at?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          requester_device_id?: string
+          response?: string | null
+          status?: string
+          target_device_id?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      device_action_requests: {
+        Row: {
+          action: string
+          answered_at: string | null
+          argument: string
+          created_at: string
+          error: string | null
+          id: string
+          requester_device_id: string
+          result: string | null
+          status: string
+          target_device_id: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          action: string
+          answered_at?: string | null
+          argument: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          requester_device_id: string
+          result?: string | null
+          status?: string
+          target_device_id: string
+          user_id?: string
+          version?: number
+        }
+        Update: {
+          action?: string
+          answered_at?: string | null
+          argument?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          requester_device_id?: string
+          result?: string | null
+          status?: string
+          target_device_id?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       dictionary: {
         Row: {
           created_at: string
