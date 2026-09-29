@@ -26,11 +26,10 @@ export function defaultWordSegmenter(locale?: string | null): WordSegmenter | nu
 /** Joins pieces the segmenter split on `_`, so `user_id` stays one token. */
 export function tokensFromSegments(parts: readonly WordSegment[]): string[] {
   const tokens: string[] = [];
-  let buffer = "";
   for (let index = 0; index < parts.length; index += 1) {
     const part = parts[index];
     if (!part?.isWordLike) continue;
-    buffer = part.segment;
+    let buffer = part.segment;
     while (index + 2 < parts.length) {
       const bridge = parts[index + 1];
       const next = parts[index + 2];
@@ -39,7 +38,6 @@ export function tokensFromSegments(parts: readonly WordSegment[]): string[] {
       index += 2;
     }
     tokens.push(buffer);
-    buffer = "";
   }
   return tokens;
 }
