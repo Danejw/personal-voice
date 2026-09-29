@@ -16,9 +16,7 @@
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* Legacy Edge / IE */
 }
-*::-webkit-scrollbar,
-*::before::-webkit-scrollbar,
-*::after::-webkit-scrollbar {
+*::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Edge, Opera */
   width: 0;
   height: 0;
