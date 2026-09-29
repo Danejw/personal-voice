@@ -49,7 +49,7 @@ export const personalSyncApi: PersonalSyncApi = {
   async load(userId) {
     const client = requireClient();
     const [settings, dictionary] = await Promise.all([
-      client.from("settings").select("smart_transcription, language").eq("user_id", userId).maybeSingle(),
+      client.from("settings").select("smart_transcription, language, usage_intelligence").eq("user_id", userId).maybeSingle(),
       client.from("dictionary").select("id, term, enabled").eq("user_id", userId).order("term"),
     ]);
     check(settings.error);
@@ -57,7 +57,11 @@ export const personalSyncApi: PersonalSyncApi = {
     return {
       // No row yet means the user has never changed a setting.
       settings: settings.data
-        ? { smartTranscription: settings.data.smart_transcription, language: settings.data.language }
+        ? {
+          smartTranscription: settings.data.smart_transcription,
+          language: settings.data.language,
+          usageIntelligence: settings.data.usage_intelligence ?? true,
+        }
         : DEFAULT_SETTINGS,
       terms: dictionary.data ?? [],
     };
@@ -68,6 +72,7 @@ export const personalSyncApi: PersonalSyncApi = {
       user_id: userId,
       smart_transcription: settings.smartTranscription,
       language: settings.language,
+      usage_intelligence: settings.usageIntelligence,
     });
     check(error);
   },
@@ -88,11 +93,21 @@ export const personalSyncApi: PersonalSyncApi = {
   },
 
   async touchDevice(userId, device) {
-    const { error } = await requireClient().from("devices").upsert({
+    const client = requireClient();
+    const lastSeen = new Date().toISOString();
+    const { error: insertError } = await client.from("devices").upsert({
       ...device,
       user_id: userId,
-      last_seen: new Date().toISOString(),
+      last_seen: lastSeen,
+    }, {
+      onConflict: "id",
+      ignoreDuplicates: true,
     });
-    check(error);
+    check(insertError);
+    // Preserve a friendly user rename while still refreshing mutable device metadata.
+    const { error: updateError } = await client.from("devices")
+      .update({ platform: device.platform, last_seen: lastSeen })
+      .eq("id", device.id);
+    check(updateError);
   },
 };

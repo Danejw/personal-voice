@@ -1,8 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
+import { contextItemFromCapture } from "@/context/ContextItem";
+import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
+import { parseOverlayAction } from "@/overlay/overlay";
 import { BrowserAudioCapture } from "@/platform/BrowserAudioCapture";
-import type { AvailableUpdate, IndicatorState, PlatformAdapter, PushToTalkEvent } from "@/platform/PlatformAdapter";
+import type { AvailableUpdate, CaptureSelectionOptions, HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
+import { parsePushToTalk } from "@/platform/pushToTalkEvent";
+import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
 import { loadMicrophone } from "@/settings/deviceSettings";
 
 /** Thin IPC bridge to `src-tauri/src/commands` and `src-tauri/src/platform/windows`. */
@@ -27,16 +32,42 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
     return invoke<void>("insert_text", { text });
   }
 
-  showIndicator(state: IndicatorState) {
-    return invoke<void>("show_indicator", { state });
+  insertReceivedText(text: string) {
+    return invoke<void>("insert_handoff_text", { text });
   }
 
-  hideIndicator() {
-    return invoke<void>("hide_indicator");
+  async captureSelection(options?: CaptureSelectionOptions) {
+    return contextItemFromCapture(await invoke("capture_selection", {
+      restoreSettings: options?.restoreSettings ?? true,
+    }));
   }
 
-  setPushToTalkShortcut(shortcut: string) {
-    return invoke<void>("set_push_to_talk_shortcut", { shortcut });
+  syncOverlay(snapshot: OverlaySnapshot) {
+    return invoke<void>("sync_overlay", { snapshot });
+  }
+
+  onOverlayAction(handler: (action: OverlayAction) => void) {
+    return listen<unknown>("overlay-action", (event) => {
+      const action = parseOverlayAction(event.payload);
+      if (action) handler(action);
+    });
+  }
+
+  openSettings() {
+    return invoke<void>("show_settings");
+  }
+
+  setHotkeys(bindings: HotkeyBindings) {
+    return invoke<void>("set_hotkeys", {
+      dictate: [...bindings.dictate],
+      voiceNote: [...bindings.voiceNote],
+      handoff: [...bindings.handoff],
+      selection: [...bindings.selection],
+    });
+  }
+
+  setHotkeyCapture(active: boolean) {
+    return invoke<void>("set_hotkey_capture", { active });
   }
 
   setDictationActive(active: boolean) {
@@ -44,11 +75,18 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
   }
 
   onPushToTalk(handler: (event: PushToTalkEvent) => void) {
-    return listen<PushToTalkEvent>("push-to-talk", (event) => handler(event.payload));
+    return listen<unknown>("push-to-talk", (event) => {
+      const parsed = parsePushToTalk(event.payload);
+      if (parsed) handler(parsed);
+    });
   }
 
   onPausedChange(handler: (paused: boolean) => void) {
     return listen<boolean>("dictation-paused", (event) => handler(event.payload));
+  }
+
+  onShowFloatingControl(handler: () => void) {
+    return listen("show-floating-control", () => handler());
   }
 
   /** Tauri's updater: `latest.json` from GitHub Releases, verified against `plugins.updater.pubkey`. */

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readPersonalCache, writePersonalCache } from "@/sync/personalCache";
 import type { KeyValueStorage } from "@/sync/personalCache";
 import {
-  MAX_ENABLED_TERMS, isLanguageCode, newTermProblem, normalizeTerm, transcriptionPreferences,
+  DEFAULT_SETTINGS, MAX_ENABLED_TERMS, isLanguageCode, newTermProblem, normalizeTerm, transcriptionPreferences,
 } from "@/sync/personalData";
 import { syncErrorMessage } from "@/services/personalSyncService";
 import { geminiConfigFrom, setupMessage } from "@/voice/provider/gemini/GeminiProvider";
@@ -24,7 +24,7 @@ describe("dictionary rules", () => {
 
   it("caps the vocabulary sent to the provider at the curated limit", () => {
     const terms = Array.from({ length: MAX_ENABLED_TERMS + 5 }, (_, index) => ({ id: `${index}`, term: `t${index}`, enabled: true }));
-    const preferences = transcriptionPreferences({ settings: { smartTranscription: true, language: null }, terms });
+    const preferences = transcriptionPreferences({ settings: DEFAULT_SETTINGS, terms });
     expect(preferences.vocabulary).toHaveLength(MAX_ENABLED_TERMS);
   });
 
@@ -54,7 +54,7 @@ describe("Gemini configuration from synced preferences", () => {
 describe("personal cache", () => {
   it("round-trips per account", () => {
     const storage = memoryStorage();
-    const data = { settings: { smartTranscription: false, language: "ja-JP" }, terms: [{ id: "1", term: "Runware", enabled: true }] };
+    const data = { settings: { ...DEFAULT_SETTINGS, smartTranscription: false, language: "ja-JP" }, terms: [{ id: "1", term: "Runware", enabled: true }] };
     writePersonalCache(storage, "u1", data);
     expect(readPersonalCache(storage, "u1")).toEqual(data);
     expect(readPersonalCache(storage, "u2")).toBeNull();
@@ -76,7 +76,7 @@ describe("personal cache", () => {
       terms: [{ id: "1", term: "Good", enabled: true }, { id: 2, term: "Bad" }],
     }));
     expect(readPersonalCache(storage, "u1")).toEqual({
-      settings: { smartTranscription: true, language: null },
+      settings: DEFAULT_SETTINGS,
       terms: [{ id: "1", term: "Good", enabled: true }],
     });
   });

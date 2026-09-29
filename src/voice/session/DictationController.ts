@@ -5,6 +5,7 @@ import { initialVoiceState, voiceReducer } from "@/voice/session/state";
 import type { VoiceAction, VoiceState } from "@/voice/session/state";
 import { timingsFrom } from "@/voice/session/timings";
 import type { UtteranceMarks, UtteranceTimings } from "@/voice/session/timings";
+import type { TranscriptDestination } from "@/voice/transcript/TranscriptDestination";
 
 export interface DictationSnapshot {
   state: VoiceState;
@@ -40,7 +41,7 @@ export const defaultDictationLimits: DictationLimits = {
 };
 
 export interface DictationOptions extends Partial<DictationLimits> {
-  /** Called once per inserted utterance with its stage durations. */
+  /** Called once per delivered utterance with its stage durations. */
   onTimings?: (timings: UtteranceTimings) => void;
   now?: () => number;
 }
@@ -52,7 +53,7 @@ type LivePath =
   | { kind: "ending"; session: TranscriptionSession }
   | { kind: "lost" };
 
-/** Everything owned by one press-to-release. Discarded as a whole on insert, cancel, or failure. */
+/** Everything owned by one press-to-release. Discarded as a whole on delivery, cancel, or failure. */
 interface Utterance {
   provider: VoiceProvider;
   capture: AudioCapture;
@@ -78,10 +79,10 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * Runs one utterance at a time: capture → provider session → final transcript → insert.
+ * Runs one utterance at a time: capture → provider session → final transcript → destination.
  * Audio is buffered locally until the utterance resolves, so a failed live session can be
  * recovered with the same provider. Every async continuation checks that its utterance is
- * still current, so stale output can never be inserted.
+ * still current, so stale output can never be delivered.
  */
 export class DictationController {
   private snapshot = initialDictationSnapshot;
@@ -93,7 +94,7 @@ export class DictationController {
   constructor(
     private createCapture: () => AudioCapture,
     private onChange: (snapshot: DictationSnapshot) => void,
-    private insertText: (text: string) => Promise<void>,
+    private destination: TranscriptDestination,
     { onTimings, now = () => performance.now(), ...limits }: DictationOptions = {},
   ) {
     this.limits = { ...defaultDictationLimits, ...limits };
@@ -170,7 +171,7 @@ export class DictationController {
     this.finalize(utt);
   }
 
-  /** Abandons the utterance before insertion; nothing is inserted, including a pending recovery. */
+  /** Abandons the utterance before delivery; nothing is delivered, including a pending recovery. */
   async cancel(): Promise<void> {
     const state = this.snapshot.state;
     if (state !== "CONNECTING" && state !== "LISTENING" && state !== "FINALIZING") return;
@@ -317,7 +318,7 @@ export class DictationController {
     }
   }
 
-  /** On failure the transcript stays in the snapshot so the user can still copy it. */
+  /** On destination failure the transcript stays in the snapshot so the user can still copy it. */
   private async deliver(utt: Utterance, raw: string) {
     if (utt !== this.utt || this.state() !== "FINALIZING") return;
     const text = raw.trim();
@@ -331,8 +332,8 @@ export class DictationController {
     this.dispatch({ type: "transcribed" }, { partial: "", transcript: text });
     void this.release();
     try {
-      await this.insertText(text);
-      this.dispatch({ type: "inserted" });
+      await this.destination.deliver(text);
+      this.dispatch({ type: "delivered" });
       const timings = timingsFrom(marks, this.now(), recovered);
       if (timings) this.onTimings?.(timings);
     } catch (error) {

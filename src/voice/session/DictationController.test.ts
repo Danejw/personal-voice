@@ -58,10 +58,17 @@ function setup(options: { limits?: DictationOptions; recoverable?: boolean } = {
   const snapshots: DictationSnapshot[] = [];
   const inserted: string[] = [];
   const insert = { error: undefined as Error | undefined };
-  const controller = new DictationController(() => capture, (snapshot) => snapshots.push(snapshot), async (text) => {
-    if (insert.error) throw insert.error;
-    inserted.push(text);
-  }, { minAudioBytes: 0, ...options.limits });
+  const controller = new DictationController(
+    () => capture,
+    (snapshot) => snapshots.push(snapshot),
+    {
+      async deliver(text) {
+        if (insert.error) throw insert.error;
+        inserted.push(text);
+      },
+    },
+    { minAudioBytes: 0, ...options.limits },
+  );
   let session: FakeSession | undefined;
   const recoveries: Recovery[] = [];
   const provider: VoiceProvider = { createSession: (emit) => (session = new FakeSession(emit)) };
@@ -460,7 +467,8 @@ describe("DictationController timings", () => {
     expect(first?.pressToLive).toBeGreaterThan(0);
     expect(first?.pressToAudio).toBeGreaterThan(first?.pressToLive ?? Infinity);
     expect(first?.releaseToFinal).toBe(10);
-    expect(first?.finalToInserted).toBe(10);
+    expect(first?.finalToDelivered).toBe(10);
+    expect(first?.totalMs).toBeGreaterThan(0);
   });
 
   it("marks recovered utterances and skips empty ones", async () => {
@@ -482,7 +490,7 @@ describe("DictationController timings", () => {
   });
 
   it("formats one line without transcript content", () => {
-    expect(formatTimings({ pressToAudio: 120, pressToLive: null, releaseToFinal: 640, finalToInserted: 25, recovered: true }))
-      .toBe("press→audio 120 ms · press→live – · release→final 640 ms (recovered) · final→inserted 25 ms");
+    expect(formatTimings({ pressToAudio: 120, pressToLive: null, releaseToFinal: 640, finalToDelivered: 25, totalMs: 900, recovered: true }))
+      .toBe("press→audio 120 ms · press→live – · release→final 640 ms (recovered) · final→delivered 25 ms");
   });
 });

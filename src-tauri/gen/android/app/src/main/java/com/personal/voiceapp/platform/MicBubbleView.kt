@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.os.Handler
+import android.os.Looper
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
@@ -14,12 +16,14 @@ import kotlin.math.hypot
 import kotlin.math.min
 
 /**
- * The floating mic. Holding it is one utterance; moving it past a small threshold turns the
- * touch into a drag, which cancels that utterance so nothing is inserted.
+ * The floating mic. A short tap opens quick actions. Holding past [HOLD_MS] is one
+ * utterance; moving it past a small threshold turns the touch into a drag, which
+ * cancels that utterance so nothing is inserted.
  */
 @SuppressLint("ViewConstructor")
 class MicBubbleView(context: Context, private val callbacks: Callbacks) : View(context) {
   interface Callbacks {
+    fun onTap()
     fun onPress()
     fun onRelease()
     fun onCancel()
@@ -45,6 +49,7 @@ class MicBubbleView(context: Context, private val callbacks: Callbacks) : View(c
   var isHolding = false
     private set
 
+  private val holdHandler = Handler(Looper.getMainLooper())
   private val dragThreshold = ViewConfiguration.get(context).scaledTouchSlop * 3f
   private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
   private val icon = ContextCompat.getDrawable(context, R.drawable.ic_mic)!!.mutate().apply {
@@ -53,6 +58,14 @@ class MicBubbleView(context: Context, private val callbacks: Callbacks) : View(c
   private var downX = 0f
   private var downY = 0f
   private var dragging = false
+  private var holdStarted = false
+  private val beginHold = Runnable {
+    holdStarted = true
+    isHolding = true
+    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+    callbacks.onPress()
+    invalidate()
+  }
 
   init {
     contentDescription = context.getString(R.string.floating_mic_hold)
@@ -74,29 +87,38 @@ class MicBubbleView(context: Context, private val callbacks: Callbacks) : View(c
         downX = event.rawX
         downY = event.rawY
         dragging = false
-        isHolding = true
-        performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-        callbacks.onPress()
+        holdStarted = false
+        isHolding = false
+        holdHandler.postDelayed(beginHold, HOLD_MS)
         invalidate()
       }
       MotionEvent.ACTION_MOVE -> {
         val dx = event.rawX - downX
         val dy = event.rawY - downY
         if (!dragging && hypot(dx, dy) > dragThreshold) {
+          holdHandler.removeCallbacks(beginHold)
           dragging = true
-          isHolding = false
-          callbacks.onCancel()
+          if (holdStarted) {
+            isHolding = false
+            callbacks.onCancel()
+          }
           callbacks.onDragStart()
           invalidate()
         }
         if (dragging) callbacks.onDragBy(dx.toInt(), dy.toInt())
       }
       MotionEvent.ACTION_UP -> {
-        if (dragging) callbacks.onDragEnd() else if (isHolding) callbacks.onRelease()
+        holdHandler.removeCallbacks(beginHold)
+        when {
+          dragging -> callbacks.onDragEnd()
+          holdStarted -> callbacks.onRelease()
+          else -> callbacks.onTap()
+        }
         reset()
       }
       MotionEvent.ACTION_CANCEL -> {
-        if (isHolding) callbacks.onCancel()
+        holdHandler.removeCallbacks(beginHold)
+        if (holdStarted) callbacks.onCancel()
         if (dragging) callbacks.onDragEnd()
         reset()
       }
@@ -107,6 +129,11 @@ class MicBubbleView(context: Context, private val callbacks: Callbacks) : View(c
   private fun reset() {
     isHolding = false
     dragging = false
+    holdStarted = false
     invalidate()
+  }
+
+  companion object {
+    const val HOLD_MS = 400L
   }
 }

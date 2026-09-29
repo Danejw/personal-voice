@@ -27,10 +27,24 @@ mod unsupported {
     pub fn set_push_to_talk_shortcut(_shortcut: &str) -> Result<(), String> {
         Err(UNSUPPORTED.into())
     }
+    pub fn set_hotkeys(
+        _dictate: &[String],
+        _voice_note: &[String],
+        _handoff: &[String],
+        _selection: &[String],
+    ) -> Result<(), String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn set_hotkey_capture(_active: bool) -> Result<(), String> {
+        Err(UNSUPPORTED.into())
+    }
     pub fn set_dictation_active(_active: bool) {}
     #[cfg_attr(mobile, allow(dead_code))]
     pub fn set_paused(_paused: bool) {}
     pub fn insert_text(_text: &str) -> Result<(), String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn capture_selection() -> Result<(String, Option<String>), String> {
         Err(UNSUPPORTED.into())
     }
     pub fn finish_pending_restore() {}
@@ -39,6 +53,12 @@ mod unsupported {
     }
     pub fn set_launch_at_login(_enabled: bool) -> Result<(), String> {
         Err(UNSUPPORTED.into())
+    }
+    pub fn prepare_overlay(_window: &WebviewWindow) -> Result<(), String> {
+        Ok(())
+    }
+    pub fn pin_overlay(_window: &WebviewWindow) -> Result<(), String> {
+        Ok(())
     }
     pub fn show_without_focus(window: &WebviewWindow) -> Result<(), String> {
         window.show().map_err(|e| e.to_string())

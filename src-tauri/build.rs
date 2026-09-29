@@ -18,7 +18,11 @@ fn main() {
                     "start_floating_mic",
                     "stop_floating_mic",
                     "set_indicator",
+                    "set_overlay",
+                    "show_settings",
                     "insert_text",
+                    "insert_handoff_text",
+                    "capture_selection",
                     "start_capture",
                     "stop_capture",
                 ])

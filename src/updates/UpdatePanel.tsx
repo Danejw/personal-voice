@@ -69,13 +69,16 @@ export function UpdatePanel({ updates, busy }: UpdatePanelProps) {
       {state.kind === "available" && state.update.notes && <p className="release-notes hide-scrollbar">{state.update.notes}</p>}
       {update && (
         <>
-          <p className="hint">{installHint(update)}</p>
           <div className="actions">
-            <button type="button" className="record" disabled={busy} onClick={updates.install}>
+            <button type="button" className="record" disabled={busy} title={installHint(update)} onClick={updates.install}>
               {state.kind === "handedOff" ? "Download again" : installLabel(update)}
             </button>
             <button type="button" className="secondary" onClick={updates.check}>Check again</button>
           </div>
+          <details className="fold">
+            <summary>Install details</summary>
+            <p className="hint">{installHint(update)}</p>
+          </details>
           {busy && <p className="hint">Finish dictating first.</p>}
         </>
       )}
