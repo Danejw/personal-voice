@@ -142,7 +142,7 @@ export function HandoffPanel({
 
   return (
     <>
-      <DeviceTargetField label="Target" store={store} snapshot={snapshot} disabled={busy !== null} />
+      <DeviceTargetField label="Target" store={store} snapshot={snapshot} disabled={busy !== null} layout="stack" />
       <form className="handoff-form" onSubmit={onSend}>
         <Tooltip content="Sends without dictating.">
           <textarea

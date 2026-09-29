@@ -85,7 +85,7 @@ Account-wide: Smart transcription, language, and usage intelligence.
 
 Device (local, existing device ID): dictation destination, microphone, floating-control visibility, push-to-talk.
 
-Local machine only: Windows launch at login; Android overlay, accessibility, and floating mic runtime.
+Local machine only: Windows launch at login; Android overlay, accessibility, floating-mic want/start-on-boot prefs, and live FGS.
 
 ### voice_notes
 

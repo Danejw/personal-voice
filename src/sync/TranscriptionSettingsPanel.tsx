@@ -31,6 +31,7 @@ export function TranscriptionSettingsPanel({ store, sync }: TranscriptionSetting
       />
       <SelectField
         label="Language" value={settings.language ?? ""} options={languages} disabled={!!readOnly}
+        layout="stack"
         onChange={(language) => store.updateSettings({ language: language || null })}
       />
     </>

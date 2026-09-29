@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrandMark } from "@/app/BrandMark";
 import { Tooltip } from "@/components/Tooltip";
 
@@ -54,6 +54,7 @@ const TOP_LABELS: Record<TopSection, string> = {
 
 const COLLAPSED_KEY = "ui.sidebar.collapsed";
 const VOICE_OPEN_KEY = "ui.sidebar.voiceOpen";
+const MOBILE_MQ = "(max-width: 720px)";
 
 /** Title for the section shown in the main pane. */
 export function sectionMeta(section: AppSection): { label: string } {
@@ -63,6 +64,34 @@ export function sectionMeta(section: AppSection): { label: string } {
 
 export function isVoiceSection(section: AppSection): section is VoiceSection {
   return (VOICE_CHILDREN as readonly string[]).includes(section);
+}
+
+/** Android always uses the hamburger shell; desktop width only matters on Windows. */
+export function preferMobileNav(userAgent: string, widthMatches: boolean): boolean {
+  return /\bAndroid\b/.test(userAgent) || widthMatches;
+}
+
+/** True when the shell should use the hamburger drawer instead of a persistent sidebar. */
+export function useMobileNav(): boolean {
+  const [mobile, setMobile] = useState(() =>
+    typeof window !== "undefined"
+      ? preferMobileNav(navigator.userAgent, window.matchMedia(MOBILE_MQ).matches)
+      : false,
+  );
+
+  useEffect(() => {
+    if (/\bAndroid\b/.test(navigator.userAgent)) {
+      setMobile(true);
+      return;
+    }
+    const media = window.matchMedia(MOBILE_MQ);
+    const sync = () => setMobile(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  return mobile;
 }
 
 function loadCollapsed(): boolean {
@@ -105,17 +134,39 @@ interface AppNavProps {
   section: AppSection;
   microphoneOn: boolean;
   onSelect(section: AppSection): void;
+  /** When set, render as a slide-out drawer (always expanded labels). */
+  drawer?: boolean;
+  drawerOpen?: boolean;
+  onDrawerClose?(): void;
 }
 
 /** Persistent section switcher. Selection stays in component state; it does not change the route. */
-export function AppNav({ section, microphoneOn, onSelect }: AppNavProps) {
+export function AppNav({
+  section,
+  microphoneOn,
+  onSelect,
+  drawer = false,
+  drawerOpen = false,
+  onDrawerClose,
+}: AppNavProps) {
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [voiceOpen, setVoiceOpen] = useState(loadVoiceOpen);
   const micLabel = microphoneOn ? "Microphone on" : "Microphone off";
   const voiceActive = isVoiceSection(section);
-  const showVoiceChildren = voiceOpen && !collapsed;
+  const railCollapsed = drawer ? false : collapsed;
+  const showVoiceChildren = voiceOpen && !railCollapsed;
+
+  useEffect(() => {
+    if (!drawer || !drawerOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onDrawerClose?.();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawer, drawerOpen, onDrawerClose]);
 
   function toggleCollapsed() {
+    if (drawer) return;
     setCollapsed((current) => {
       const next = !current;
       saveCollapsed(next);
@@ -129,7 +180,7 @@ export function AppNav({ section, microphoneOn, onSelect }: AppNavProps) {
   }
 
   function toggleVoiceGroup() {
-    if (collapsed) {
+    if (railCollapsed) {
       setCollapsed(false);
       saveCollapsed(false);
       setVoiceExpanded(true);
@@ -150,28 +201,61 @@ export function AppNav({ section, microphoneOn, onSelect }: AppNavProps) {
     onSelect(id);
   }
 
+  const sidebarClass = [
+    "app-sidebar",
+    railCollapsed ? "is-collapsed" : "",
+    drawer ? "is-drawer" : "",
+    drawer && drawerOpen ? "is-open" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <aside className={collapsed ? "app-sidebar is-collapsed" : "app-sidebar"}>
+    <aside
+      id={drawer ? "app-nav-drawer" : undefined}
+      className={sidebarClass}
+      aria-hidden={drawer && !drawerOpen ? true : undefined}
+    >
       <div className="app-brand">
-        <Tooltip content={collapsed ? `Expand menu · ${micLabel}` : `Collapse menu · ${micLabel}`}>
-          <button
-            type="button"
-            className="app-brand-toggle"
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
-            onClick={toggleCollapsed}
-          >
-            <span className="brand-mark-wrap">
-              <BrandMark />
-              <span
-                className={microphoneOn ? "mic-dot is-on" : "mic-dot is-off"}
-                aria-hidden="true"
-              />
-            </span>
-          </button>
-        </Tooltip>
+        {drawer ? (
+          <span className="brand-mark-wrap" aria-hidden="true">
+            <BrandMark />
+            <span
+              className={microphoneOn ? "mic-dot is-on" : "mic-dot is-off"}
+              aria-hidden="true"
+            />
+          </span>
+        ) : (
+          <Tooltip content={collapsed ? `Expand menu · ${micLabel}` : `Collapse menu · ${micLabel}`}>
+            <button
+              type="button"
+              className="app-brand-toggle"
+              aria-expanded={!collapsed}
+              aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+              onClick={toggleCollapsed}
+            >
+              <span className="brand-mark-wrap">
+                <BrandMark />
+                <span
+                  className={microphoneOn ? "mic-dot is-on" : "mic-dot is-off"}
+                  aria-hidden="true"
+                />
+              </span>
+            </button>
+          </Tooltip>
+        )}
         <h1>Personal Voice</h1>
         <span className="visually-hidden" role="status">{micLabel}</span>
+        {drawer && (
+          <button
+            type="button"
+            className="app-drawer-close"
+            aria-label="Close menu"
+            onClick={() => onDrawerClose?.()}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
       </div>
       <nav className="app-nav" aria-label="Personal Voice">
         {TOP_SECTIONS.map((id) => {
@@ -184,13 +268,13 @@ export function AppNav({ section, microphoneOn, onSelect }: AppNavProps) {
             ].filter(Boolean).join(" ");
             return (
               <div key={id} className={groupClass}>
-                <Tooltip content={collapsed ? label : voiceOpen ? "Collapse Voice" : "Expand Voice"}>
+                <Tooltip content={railCollapsed ? label : voiceOpen ? "Collapse Voice" : "Expand Voice"}>
                   <button
                     type="button"
                     className="app-nav-item app-nav-parent"
                     aria-expanded={showVoiceChildren}
                     aria-controls="voice-nav-children"
-                    aria-label={collapsed ? label : undefined}
+                    aria-label={railCollapsed ? label : undefined}
                     onClick={toggleVoiceGroup}
                   >
                     <NavIcon section={id} />
@@ -229,12 +313,12 @@ export function AppNav({ section, microphoneOn, onSelect }: AppNavProps) {
             );
           }
           return (
-            <Tooltip key={id} content={collapsed ? label : undefined}>
+            <Tooltip key={id} content={railCollapsed ? label : undefined}>
               <button
                 type="button"
                 className="app-nav-item"
                 aria-current={section === id ? "page" : undefined}
-                aria-label={collapsed ? label : undefined}
+                aria-label={railCollapsed ? label : undefined}
                 onClick={() => selectTop(id)}
               >
                 <NavIcon section={id} />

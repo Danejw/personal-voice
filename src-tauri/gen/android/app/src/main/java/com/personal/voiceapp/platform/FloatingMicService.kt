@@ -11,7 +11,9 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -22,13 +24,14 @@ import com.personal.voiceapp.R
 import org.json.JSONObject
 
 /**
- * Microphone foreground service that owns the floating mic bubble and its quick-actions panel.
+ * Microphone foreground service that owns the floating control stack (assistant above
+ * dictation) and its quick-actions panel.
  *
- * Android only lets a microphone foreground service start while the app is visible, so it is
- * turned on from the app's setup screen. It then keeps microphone access while the user is in
- * other apps. It never records by itself: the shared WebView code captures audio only while
- * the bubble is held or Start dictation is used, and the ongoing notification can turn the
- * service off at any time.
+ * Android only lets a microphone foreground service start while the app is visible, so first
+ * start (and boot restore) goes through MainActivity. Once running it keeps the bubble over
+ * other apps. It never records by itself: shared WebView code captures only while the mic is
+ * held or Start dictation is used. Turn off via the notification or setup clears the "want"
+ * preference so the session does not come back on its own.
  */
 class FloatingMicService : Service() {
   interface Listener {
@@ -41,9 +44,10 @@ class FloatingMicService : Service() {
     private const val TAG = "FloatingMicService"
     private const val CHANNEL_ID = "floating_mic"
     private const val NOTIFICATION_ID = 1
+    private const val RESTORE_NOTIFICATION_ID = 2
     private const val ACTION_STOP = "com.personal.voiceapp.action.STOP_FLOATING_MIC"
-    private const val PREFS = "floating_mic"
     private const val BUBBLE_DP = 60
+    private const val GAP_DP = 8
     private const val PANEL_WIDTH_DP = 280
 
     /** Set by the plugin while the app's WebView is alive. */
@@ -56,8 +60,10 @@ class FloatingMicService : Service() {
   }
 
   private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
-  private var bubble: MicBubbleView? = null
-  private var bubbleLayout: WindowManager.LayoutParams? = null
+  private var stack: LinearLayout? = null
+  private var stackLayout: WindowManager.LayoutParams? = null
+  private var assistantBubble: AssistantBubbleView? = null
+  private var micBubble: MicBubbleView? = null
   private var panel: OverlayPanelView? = null
   private var panelLayout: WindowManager.LayoutParams? = null
   private var snapshot = JSONObject()
@@ -66,6 +72,7 @@ class FloatingMicService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent?.action == ACTION_STOP) {
+      FloatingMicPrefs.setWantFloatingMic(this, false)
       stopSelf()
       return START_NOT_STICKY
     }
@@ -74,34 +81,39 @@ class FloatingMicService : Service() {
       ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), type)
     } catch (error: RuntimeException) {
       Log.w(TAG, "Could not start the floating mic", error)
+      if (FloatingMicPrefs.wantFloatingMic(this)) postRestoreNotification()
       stopSelf()
       return START_NOT_STICKY
     }
-    if (bubble == null) showBubble()
+    NotificationManagerCompat.from(this).cancel(RESTORE_NOTIFICATION_ID)
+    FloatingMicPrefs.setWantFloatingMic(this, true)
+    if (stack == null) showStack()
     if (instance == null) {
       instance = this
       listener?.onRunningChanged(true)
     }
-    return START_NOT_STICKY
+    return START_STICKY
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
-    val view = bubble ?: return
-    val layout = bubbleLayout ?: return
+    val view = stack ?: return
+    val layout = stackLayout ?: return
     clampToScreen(layout)
     windowManager.updateViewLayout(view, layout)
     placePanel()
   }
 
   override fun onDestroy() {
-    bubble?.let {
+    micBubble?.let {
       if (it.isHolding) emit("cancel")
-      windowManager.removeView(it)
     }
+    stack?.let { windowManager.removeView(it) }
     hidePanel()
-    bubble = null
-    bubbleLayout = null
+    stack = null
+    stackLayout = null
+    assistantBubble = null
+    micBubble = null
     instance = null
     listener?.onRunningChanged(false)
     super.onDestroy()
@@ -109,7 +121,7 @@ class FloatingMicService : Service() {
 
   /** Main thread only. */
   fun showState(state: MicBubbleView.State) {
-    bubble?.state = state
+    micBubble?.state = state
     if (state == MicBubbleView.State.LISTENING || state == MicBubbleView.State.FINALIZING) hidePanel()
   }
 
@@ -121,11 +133,17 @@ class FloatingMicService : Service() {
       JSONObject()
     }
     val dictation = snapshot.optString("dictation", "idle")
-    bubble?.state = when (dictation) {
+    micBubble?.state = when (dictation) {
       "listening" -> MicBubbleView.State.LISTENING
       "finalizing" -> MicBubbleView.State.FINALIZING
       "error" -> MicBubbleView.State.ERROR
       else -> MicBubbleView.State.IDLE
+    }
+    assistantBubble?.state = when (snapshot.optString("assistant", "idle")) {
+      "listening" -> AssistantBubbleView.State.LISTENING
+      "responding" -> AssistantBubbleView.State.RESPONDING
+      "error" -> AssistantBubbleView.State.ERROR
+      else -> AssistantBubbleView.State.IDLE
     }
     if (dictation == "listening" || dictation == "finalizing") {
       hidePanel()
@@ -138,7 +156,7 @@ class FloatingMicService : Service() {
   private fun emit(event: String) {
     val current = listener
     if (current == null) {
-      Toast.makeText(this, R.string.floating_mic_app_closed, Toast.LENGTH_SHORT).show()
+      wakeAppForWebView()
       return
     }
     current.onPushToTalk(event)
@@ -147,19 +165,27 @@ class FloatingMicService : Service() {
   private fun emitOverlay(payload: JSONObject) {
     val current = listener
     if (current == null) {
-      Toast.makeText(this, R.string.floating_mic_app_closed, Toast.LENGTH_SHORT).show()
+      wakeAppForWebView()
       return
     }
     current.onOverlayAction(payload)
   }
 
-  private fun showBubble() {
+  /** Activity/WebView died while the FGS kept running — bring Settings back so the plugin reattaches. */
+  private fun wakeAppForWebView() {
+    startActivity(FloatingMicIntents.wakeIntent(this))
+    Toast.makeText(this, R.string.floating_mic_opening_app, Toast.LENGTH_SHORT).show()
+  }
+
+  private fun showStack() {
     val metrics = resources.displayMetrics
     val size = (BUBBLE_DP * metrics.density).toInt()
-    val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+    val gap = (GAP_DP * metrics.density).toInt()
+    val prefs = getSharedPreferences(FloatingMicPrefs.PREFS, MODE_PRIVATE)
     val overlayType = overlayType()
+    val stackHeight = size * 2 + gap
     val layout = WindowManager.LayoutParams(
-      size, size, overlayType,
+      size, stackHeight, overlayType,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
       PixelFormat.TRANSLUCENT,
     ).apply {
@@ -168,11 +194,48 @@ class FloatingMicService : Service() {
       y = prefs.getInt("y", metrics.heightPixels / 2)
     }
     clampToScreen(layout)
+
+    val host = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      clipChildren = false
+      clipToPadding = false
+    }
+
     var dragOriginX = 0
     var dragOriginY = 0
-    val view = MicBubbleView(this, object : MicBubbleView.Callbacks {
+    val dragCallbacks = object {
+      fun onDragStart() {
+        dragOriginX = layout.x
+        dragOriginY = layout.y
+      }
+      fun onDragBy(dx: Int, dy: Int) {
+        layout.x = dragOriginX + dx
+        layout.y = dragOriginY + dy
+        clampToScreen(layout)
+        host.let { windowManager.updateViewLayout(it, layout) }
+        placePanel()
+      }
+      fun onDragEnd() {
+        prefs.edit().putInt("x", layout.x).putInt("y", layout.y).apply()
+      }
+    }
+
+    val assistant = AssistantBubbleView(this, object : AssistantBubbleView.Callbacks {
       override fun onTap() {
-        if (bubble?.state == MicBubbleView.State.LISTENING) {
+        emitOverlay(JSONObject().put("type", "assistant-toggle"))
+      }
+      override fun onDragStart() = dragCallbacks.onDragStart()
+      override fun onDragBy(dx: Int, dy: Int) = dragCallbacks.onDragBy(dx, dy)
+      override fun onDragEnd() = dragCallbacks.onDragEnd()
+    })
+
+    val gapView = View(this).apply {
+      layoutParams = LinearLayout.LayoutParams(size, gap)
+    }
+
+    val mic = MicBubbleView(this, object : MicBubbleView.Callbacks {
+      override fun onTap() {
+        if (micBubble?.state == MicBubbleView.State.LISTENING) {
           emitOverlay(JSONObject().put("type", "dictate-toggle"))
         } else {
           togglePanel()
@@ -181,24 +244,20 @@ class FloatingMicService : Service() {
       override fun onPress() = emit("press")
       override fun onRelease() = emit("release")
       override fun onCancel() = emit("cancel")
-      override fun onDragStart() {
-        dragOriginX = layout.x
-        dragOriginY = layout.y
-      }
-      override fun onDragBy(dx: Int, dy: Int) {
-        layout.x = dragOriginX + dx
-        layout.y = dragOriginY + dy
-        clampToScreen(layout)
-        bubble?.let { windowManager.updateViewLayout(it, layout) }
-        placePanel()
-      }
-      override fun onDragEnd() {
-        prefs.edit().putInt("x", layout.x).putInt("y", layout.y).apply()
-      }
+      override fun onDragStart() = dragCallbacks.onDragStart()
+      override fun onDragBy(dx: Int, dy: Int) = dragCallbacks.onDragBy(dx, dy)
+      override fun onDragEnd() = dragCallbacks.onDragEnd()
     })
-    windowManager.addView(view, layout)
-    bubble = view
-    bubbleLayout = layout
+
+    host.addView(assistant, LinearLayout.LayoutParams(size, size))
+    host.addView(gapView)
+    host.addView(mic, LinearLayout.LayoutParams(size, size))
+
+    windowManager.addView(host, layout)
+    stack = host
+    stackLayout = layout
+    assistantBubble = assistant
+    micBubble = mic
   }
 
   private fun togglePanel() {
@@ -233,14 +292,15 @@ class FloatingMicService : Service() {
   private fun placePanel() {
     val view = panel ?: return
     val panelParams = panelLayout ?: return
-    val bubbleParams = bubbleLayout ?: return
+    val stackParams = stackLayout ?: return
     val metrics = resources.displayMetrics
     val gap = (8 * metrics.density).toInt()
     val width = panelParams.width
     val height = view.height.coerceAtLeast((80 * metrics.density).toInt())
-    var x = bubbleParams.x - width - gap
-    if (x < 0) x = bubbleParams.x + bubbleParams.width + gap
-    var y = bubbleParams.y + bubbleParams.height - height
+    var x = stackParams.x - width - gap
+    if (x < 0) x = stackParams.x + stackParams.width + gap
+    // Anchor beside the mic (bottom bubble) so the sheet feels tied to dictation actions.
+    var y = stackParams.y + stackParams.height - height
     panelParams.x = x.coerceIn(0, (metrics.widthPixels - width).coerceAtLeast(0))
     panelParams.y = y.coerceIn(0, (metrics.heightPixels - height).coerceAtLeast(0))
     windowManager.updateViewLayout(view, panelParams)
@@ -260,13 +320,17 @@ class FloatingMicService : Service() {
     layout.y = layout.y.coerceIn(0, (metrics.heightPixels - layout.height).coerceAtLeast(0))
   }
 
-  private fun buildNotification(): Notification {
+  private fun ensureChannel() {
     NotificationManagerCompat.from(this).createNotificationChannel(
       NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
         .setName(getString(R.string.floating_mic_channel))
         .setDescription(getString(R.string.floating_mic_channel_description))
         .build(),
     )
+  }
+
+  private fun buildNotification(): Notification {
+    ensureChannel()
     val open = PendingIntent.getActivity(
       this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
     )
@@ -282,5 +346,28 @@ class FloatingMicService : Service() {
       .addAction(0, getString(R.string.floating_mic_turn_off), stop)
       .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
       .build()
+  }
+
+  /**
+   * Sticky restart from the background cannot start a microphone FGS on Android 14+.
+   * Ask the user to open the app so a visible activity can restore the session.
+   */
+  private fun postRestoreNotification() {
+    ensureChannel()
+    val open = PendingIntent.getActivity(
+      this,
+      2,
+      FloatingMicIntents.autostartIntent(this),
+      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+    val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+      .setSmallIcon(R.drawable.ic_mic)
+      .setContentTitle(getString(R.string.floating_mic_restore_title))
+      .setContentText(getString(R.string.floating_mic_restore_text))
+      .setContentIntent(open)
+      .setAutoCancel(true)
+      .setPriority(NotificationCompat.PRIORITY_HIGH)
+      .build()
+    NotificationManagerCompat.from(this).notify(RESTORE_NOTIFICATION_ID, notification)
   }
 }

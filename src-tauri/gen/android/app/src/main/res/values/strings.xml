@@ -6,8 +6,12 @@
     <string name="floating_mic_channel">Floating mic</string>
     <string name="floating_mic_channel_description">Shown while the floating mic is on.</string>
     <string name="floating_mic_title">Floating mic is on</string>
-    <string name="floating_mic_text">Tap the mic for quick actions. Hold it in any app to dictate. Audio is recorded only while you hold it.</string>
+    <string name="floating_mic_text">Tap the mic for quick actions. Hold it to dictate. Tap the assistant button above it to talk with the assistant.</string>
     <string name="floating_mic_turn_off">Turn off</string>
     <string name="floating_mic_hold">Tap for actions, hold to dictate</string>
+    <string name="floating_assistant_tap">Tap to start or end the assistant</string>
     <string name="floating_mic_app_closed">Open Personal Voice to use the floating mic.</string>
+    <string name="floating_mic_opening_app">Opening Personal Voice… Hold again to dictate.</string>
+    <string name="floating_mic_restore_title">Floating mic needs to reopen</string>
+    <string name="floating_mic_restore_text">Tap to turn the floating mic back on.</string>
 </resources>

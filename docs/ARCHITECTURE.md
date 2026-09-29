@@ -292,7 +292,7 @@ As implemented (Phase 5, details in `docs/PHASE_5_REPORT.md`):
 - The cache (`localStorage`, one entry per account) holds only server-confirmed data. When Supabase is unreachable, the cached copy is shown read-only with a Retry button. There is no offline write queue.
 - Supabase calls live in `src/services/personalSyncService.ts`, typed by `src/types/database.ts`. RLS limits every row to its owner.
 - `App` builds each session's provider config at press time from `transcriptionPreferences()`. That config is provider-neutral (`TranscriptionPreferences` in `VoiceProvider.ts`), and `geminiConfigFrom()` maps it to Gemini's `mode`, `languageCodes`, and `customVocabulary`.
-- Synced: Smart transcription, language, and usage intelligence. Device-scoped (local, keyed by the existing device ID): default dictation destination, Windows microphone, floating-control visibility, and Windows push-to-talk. Local machine only: launch at login and Android overlay/accessibility/floating-mic runtime.
+- Synced: Smart transcription, language, and usage intelligence. Device-scoped (local, keyed by the existing device ID): default dictation destination, Windows microphone, floating-control visibility, and Windows push-to-talk. Local machine only: Windows launch at login; Android overlay/accessibility plus floating-mic want and start-on-boot prefs.
 - Phase 9: the sync status (with Retry) moved to the Account section, and the edit panels say why they're read-only. While offline, the store reloads on its own when the browser reports `online` or the window becomes visible again. Settings and the dictionary are still not polled.
 - PV1 adds `voice_notes` and a separate `VoiceNotesStore`. Notes load on sign-in and refresh when the app becomes visible, so changes made on another device appear without realtime infrastructure. Notes are created only when the user selects the Voice note destination; this is not automatic transcript history.
 - PV3 adds `handoffs` and `HandoffStore`. Pending rows are filtered by owner, target, source device, and `consumed_at`; dismissing marks a row consumed. The source device never receives its own broadcast. Handoffs refresh on focus and visibility, and a signed-in device also reloads about every 8 seconds so a hidden Settings window can see a new row. There is still no direct device networking and no realtime subscription. Windows shows a toast for each new arrival; clicking it inserts the text without opening Settings. Copy and insert still do not consume the row.
@@ -338,12 +338,12 @@ Writes go through `upsert_usage_day()`. Clients may only select `usage_days`. On
 | Preferred microphone | Device | Hardware IDs are meaningless on another machine |
 | Floating control | Device | Windows overlay; unused on Android (the floating mic is the control) |
 | Push-to-talk shortcut | Device | Windows-only; Dictate, Voice Note, Handoff, Selection, and Assistant each record their own keys or mouse buttons; Android uses the floating mic |
-| Launch at login | Local machine | Windows OS startup item, not an app setting row |
-| Android overlay, accessibility, floating mic on/off | Local machine | OS permissions and a live service, not a stored preference |
+| Launch at login / start with phone | Local machine | Windows OS startup item; Android boot receiver + local prefs |
+| Android overlay, accessibility, floating mic on/off | Local machine | OS permissions; floating-mic want + start-on-boot are device SharedPreferences |
 | Usage intelligence | Account | Same opt-out on every device |
 | Usage analytics | Account days | Daily counters per device, replaced by the local snapshot for this device |
 
-Overlay layout and auto-start of the floating mic are not stored in this phase.
+Overlay layout is not synced. Android start-on-boot and `want_floating_mic` stay on the device.
 
 ## Local dictation history
 

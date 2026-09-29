@@ -7,6 +7,7 @@ interface DeviceTargetFieldProps {
   store: HandoffStore;
   snapshot: HandoffSnapshot;
   disabled?: boolean;
+  layout?: "row" | "stack";
 }
 
 /** Shared target selection for voice handoffs and manually sent clipboard text. */
@@ -15,6 +16,7 @@ export function DeviceTargetField({
   store,
   snapshot,
   disabled = false,
+  layout = "row",
 }: DeviceTargetFieldProps) {
   const options: readonly SelectOption[] = [
     { value: "", label: "All my other devices" },
@@ -30,6 +32,7 @@ export function DeviceTargetField({
       value={snapshot.targetDeviceId ?? ""}
       options={options}
       disabled={disabled || snapshot.status !== "synced"}
+      layout={layout}
       onChange={(value) => store.selectTarget(value || null)}
     />
   );

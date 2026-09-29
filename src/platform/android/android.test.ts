@@ -17,12 +17,49 @@ describe("Android floating mic events", () => {
 describe("Android setup status", () => {
   it("treats missing or malformed fields as not granted", () => {
     expect(parseSetupStatus({ microphone: true, overlay: "yes" })).toEqual({
-      microphone: true, notifications: false, overlay: false, accessibility: false, floatingMic: false,
+      microphone: true,
+      notifications: false,
+      overlay: false,
+      accessibility: false,
+      floatingMic: false,
+      startOnBoot: true,
+      wantFloatingMic: false,
+      batteryUnrestricted: false,
+    });
+  });
+
+  it("defaults startOnBoot to on when the plugin omits it", () => {
+    expect(parseSetupStatus({ microphone: true, overlay: true }).startOnBoot).toBe(true);
+    expect(parseSetupStatus({ startOnBoot: false }).startOnBoot).toBe(false);
+  });
+
+  it("parses always-on and battery fields", () => {
+    expect(parseSetupStatus({
+      microphone: true,
+      overlay: true,
+      startOnBoot: true,
+      wantFloatingMic: true,
+      batteryUnrestricted: true,
+      floatingMic: true,
+    })).toMatchObject({
+      startOnBoot: true,
+      wantFloatingMic: true,
+      batteryUnrestricted: true,
+      floatingMic: true,
     });
   });
 
   it("needs microphone and overlay; accessibility and notifications are optional", () => {
-    const ready = { microphone: true, overlay: true, notifications: false, accessibility: false, floatingMic: false };
+    const ready = {
+      microphone: true,
+      overlay: true,
+      notifications: false,
+      accessibility: false,
+      floatingMic: false,
+      startOnBoot: true,
+      wantFloatingMic: false,
+      batteryUnrestricted: false,
+    };
     expect(canStartFloatingMic(ready)).toBe(true);
     expect(canStartFloatingMic({ ...ready, overlay: false })).toBe(false);
     expect(canStartFloatingMic({ ...ready, microphone: false })).toBe(false);

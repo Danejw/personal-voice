@@ -103,8 +103,10 @@ Kotlin lives in `src-tauri/gen/android/app/src/main/java/com/personal/voiceapp/p
 
 | Piece | What it does |
 | --- | --- |
-| `VoicePlatformPlugin` | Commands for setup status, settings shortcuts, starting/stopping the floating mic, the overlay snapshot, capture, insertion, and selection capture. Emits `pushToTalk`, `overlayAction`, `floatingMicChanged`, and `audioCapture` events. |
-| `FloatingMicService` | One foreground service (type `microphone`) that also owns the overlay bubble and its quick-actions panel. It shows an ongoing notification with "Turn off" and uses `START_NOT_STICKY`, so it never restarts on its own. |
+| `VoicePlatformPlugin` | Commands for setup status, start-on-boot, battery settings, starting/stopping the floating mic, the overlay snapshot, capture, insertion, and selection capture. Emits `pushToTalk`, `overlayAction`, `floatingMicChanged`, and `audioCapture` events. |
+| `FloatingMicService` | One foreground service (type `microphone`) that also owns the overlay bubble and its quick-actions panel. Ongoing notification with "Turn off". Uses `START_STICKY`; if a background sticky restart cannot start the mic FGS, it posts a tap-to-restore notification instead. |
+| `FloatingMicPrefs` | Local prefs: `want_floating_mic` (left on until the user turns it off) and `start_on_boot` (default on). |
+| `BootReceiver` | On `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`, if the floating mic was left on and start-on-boot is enabled, briefly opens `MainActivity` so a visible activity can start the FGS, then the plugin sends the task to the back. |
 | `MicBubbleView` | Tap for quick actions. Hold (~400 ms) to talk, release to insert. Dragging moves the bubble; a drag after hold starts cancels the utterance. Colour shows idle, listening, finalizing, or error. |
 | `OverlayPanelView` | Compact native sheet: start dictation, destination, capture, recent notes, pending handoffs, Open Settings. |
 | `NativeMicCapture` | `AudioRecord` producing 16 kHz mono PCM16 in 100 ms chunks, sent to the WebView as base64 events. Runs only between press and release. |
@@ -112,11 +114,18 @@ Kotlin lives in `src-tauri/gen/android/app/src/main/java/com/personal/voiceapp/p
 
 Shared TypeScript still does everything else: Gemini, vocabulary, settings, auth, and transcript state. `AndroidPlatformAdapter` is a thin bridge; the setup UI is `src/platform/android/AndroidSetupPanel.tsx`.
 
+### Always-on and start-on-boot
+
+- Turning the floating mic **on** sets `want_floating_mic` and starts the FGS. Turning it **off** (setup or notification) clears that flag and stops the service.
+- When the WebView/activity is destroyed but the user still wants the floating mic, the plugin **leaves the FGS running**. A bubble press with no listener opens `MainActivity` so the plugin can reattach (the first press after process death may only wake the app).
+- **Start with phone** (setup toggle, default on) plus `want_floating_mic` causes `BootReceiver` to open the app after reboot. Android 14+ still requires a visible activity to start a microphone FGS, so a brief flash is expected; the activity then moves to the back with the bubble up.
+- Unrestricted battery is recommended in setup. OEM "sleeping apps" lists (especially Samsung) can still kill the session without an extra exemption.
+
 ### Deviations found on a device/emulator
 
 - **Capture is native, not `getUserMedia`.** Tauri's generated `RustWebChromeClient` asks the activity for permission on every `getUserMedia`, and Android delivers that result only once the activity is visible again. From the floating mic the promise never settles, so capture moved behind `PlatformAdapter.createCapture()`.
 - **The WebView is woken for each dictation.** While the app is hidden, Chromium throttles page timers, and after about 5 minutes it freezes timers and message tasks, which stops React and the controller. On press, the plugin calls `WebView.onResume()` and `dispatchWindowVisibilityChanged(VISIBLE)`. When the indicator returns to idle, it restores the real visibility. Verified after 6 minutes hidden: timers ran at full speed during the hold.
-- **The foreground service starts only from the visible app.** Android 14+ forbids starting a microphone foreground service from the background, and `SYSTEM_ALERT_WINDOW` doesn't exempt it, so "Turn on floating mic" lives in the app's setup panel.
+- **The foreground service starts only from a visible activity.** Android 14+ forbids starting a microphone foreground service from the background, and `SYSTEM_ALERT_WINDOW` doesn't exempt it. Setup, boot autostart, and the restore notification all open or use `MainActivity` first.
 - **Chrome focus lookup.** Chrome reports its content view as the input focus, with the real field as a focused virtual child. When the focused node isn't editable, the service searches beneath it (bounded to 2,000 nodes) for the focused editable node.
 - **Paste leaves the text on the clipboard.** Android 10+ doesn't let a background service read the clipboard, so the previous clip can't be restored.
 - **Selection capture is focused-field only.** Highlighted text on a web page or other non-editable surface is not read. The service still never subscribes to accessibility events.

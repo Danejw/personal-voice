@@ -10,6 +10,12 @@ export interface AndroidSetupStatus {
   /** The accessibility service is enabled and connected. Without it, text goes to the clipboard. */
   accessibility: boolean;
   floatingMic: boolean;
+  /** Restore the floating mic after reboot when it was left on. Default on. */
+  startOnBoot: boolean;
+  /** User turned the floating mic on and has not turned it off. */
+  wantFloatingMic: boolean;
+  /** Android is not battery-optimizing this app. Recommended for always-on. */
+  batteryUnrestricted: boolean;
 }
 
 export type AndroidPermission = "microphone" | "notifications";
@@ -22,6 +28,10 @@ export function parseSetupStatus(value: unknown): AndroidSetupStatus {
     overlay: fields.overlay === true,
     accessibility: fields.accessibility === true,
     floatingMic: fields.floatingMic === true,
+    // Default on in Kotlin; treat missing as on so the toggle matches first paint.
+    startOnBoot: fields.startOnBoot !== false,
+    wantFloatingMic: fields.wantFloatingMic === true,
+    batteryUnrestricted: fields.batteryUnrestricted === true,
   };
 }
 
@@ -40,6 +50,8 @@ export const androidSetup = {
   openOverlaySettings: () => callPlugin("open_overlay_settings"),
   openAccessibilitySettings: () => callPlugin("open_accessibility_settings"),
   openAppSettings: () => callPlugin("open_app_settings"),
+  openBatterySettings: () => callPlugin("open_battery_settings"),
+  setStartOnBoot: (enabled: boolean) => callPlugin("set_start_on_boot", { enabled }),
   startFloatingMic: () => callPlugin("start_floating_mic"),
   stopFloatingMic: () => callPlugin("stop_floating_mic"),
   /** Fires when the service starts or stops, including from the notification's Turn off action. */

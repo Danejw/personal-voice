@@ -59,7 +59,7 @@ export function UsageHeatmap({ days, streak, longestStreak, today }: UsageHeatma
       </div>
       <div
         className="heatmap-plot"
-        style={{ gridTemplateColumns: `32px repeat(${weeks.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `32px repeat(${weeks.length}, minmax(10px, 1fr))` }}
         role="img"
         aria-label="Dictation activity by day. Darker squares mean more words."
       >

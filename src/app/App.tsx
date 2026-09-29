@@ -11,7 +11,8 @@ import { personalContextBody, profileFacts } from "@/assistant/personalContext";
 import { AssistantSession } from "@/assistant/AssistantSession";
 import { PcmPlayback } from "@/assistant/PcmPlayback";
 import { useAssistant } from "@/assistant/useAssistant";
-import { AppNav, sectionMeta, type AppSection } from "@/app/AppNav";
+import { AppNav, sectionMeta, useMobileNav, type AppSection } from "@/app/AppNav";
+import { BrandMark } from "@/app/BrandMark";
 import { useDictation } from "@/app/useDictation";
 import { AuthPanel } from "@/auth/AuthPanel";
 import { useAuth } from "@/auth/useAuth";
@@ -363,7 +364,9 @@ function DeviceControls({
       return (
         <section aria-labelledby="trigger-heading">
           <h2 id="trigger-heading">Floating mic</h2>
-          <p className="hint">Overlay, accessibility, and whether the mic is on stay on this phone.</p>
+          <p className="hint">
+            Stays on over other apps until you turn it off. Start with phone restores it after reboot.
+          </p>
           <AndroidSetupPanel />
         </section>
       );
@@ -395,6 +398,8 @@ export default function App() {
   const remoteSnapshot = useRemoteReads(remoteReads, auth.userId);
   const computerSnapshot = useComputerActions(computerActions, auth.userId);
   const assistantSnapshot = useAssistant(assistant);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const mobileNav = useMobileNav();
   const [floatingControl, setFloatingControl] = useState(loadShowIndicator);
   const [profileEnabled, setProfileEnabled] = useState(true);
   const [autoRun, setAutoRun] = useState(true);
@@ -582,16 +587,55 @@ export default function App() {
     }
   }
 
+  function selectSection(next: AppSection) {
+    setSection(next);
+    if (mobileNav) setDrawerOpen(false);
+  }
+
+  const microphoneOn = dictationLive || assistantLive;
+
   return (
-    <div className="app-shell">
+    <div className={mobileNav ? `app-shell is-mobile${drawerOpen ? " is-drawer-open" : ""}` : "app-shell"}>
+      {mobileNav && (
+        <header className="mobile-topbar">
+          <button
+            type="button"
+            className="mobile-menu-btn"
+            aria-label="Open menu"
+            aria-expanded={drawerOpen}
+            aria-controls="app-nav-drawer"
+            onClick={() => setDrawerOpen(true)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+          <h2 id="page-title" className="mobile-topbar-title">{page.label}</h2>
+          <span className="brand-mark-wrap" aria-hidden="true">
+            <BrandMark />
+            <span className={microphoneOn ? "mic-dot is-on" : "mic-dot is-off"} />
+          </span>
+        </header>
+      )}
+      {mobileNav && drawerOpen && (
+        <button
+          type="button"
+          className="app-drawer-scrim"
+          aria-label="Close menu"
+          onClick={() => setDrawerOpen(false)}
+        />
+      )}
       <AppNav
         section={section}
-        microphoneOn={dictationLive || assistantLive}
-        onSelect={setSection}
+        microphoneOn={microphoneOn}
+        onSelect={selectSection}
+        drawer={mobileNav}
+        drawerOpen={drawerOpen}
+        onDrawerClose={() => setDrawerOpen(false)}
       />
       <main className="app-main hide-scrollbar" aria-labelledby="page-title">
         <header className="page-header">
-          <h2 id="page-title" className="page-title">{page.label}</h2>
+          <h2 id={mobileNav ? "page-title-desktop" : "page-title"} className="page-title">{page.label}</h2>
           {section === "dictation" && (
             <div className="page-header-actions">
               <p className="status" role="status">{status}</p>
@@ -629,7 +673,7 @@ export default function App() {
             <div className="dictation-controls">
               <SelectField
                 label="Send to" value={destination} options={DESTINATION_OPTIONS}
-                disabled={!idle} onChange={chooseDestination}
+                disabled={!idle} layout={mobileNav ? "stack" : "row"} onChange={chooseDestination}
               />
               <button type="button" className="record" disabled={!control.enabled || (state === "IDLE" && (!signedIn || assistantLive))} onClick={onControl}>
                 {control.label}
@@ -638,6 +682,7 @@ export default function App() {
             {destination === "send-to-device" && (
               <DeviceTargetField
                 label="Target" store={handoffs} snapshot={handoffSnapshot} disabled={!idle}
+                layout={mobileNav ? "stack" : "row"}
               />
             )}
             {error && <p className="error" role="alert">{error}</p>}

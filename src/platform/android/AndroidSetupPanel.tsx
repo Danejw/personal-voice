@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { Toggle } from "@/components/Toggle";
 import { androidSetup, canStartFloatingMic } from "@/platform/android/androidSetup";
 import type { AndroidPermission, AndroidSetupStatus } from "@/platform/android/androidSetup";
 
@@ -78,6 +79,13 @@ export function AndroidSetupPanel() {
       : <button type="button" className="secondary" disabled={busy} onClick={() => request(permission)}>Allow</button>;
   }
 
+  function onStartOnBoot(enabled: boolean) {
+    void run(async () => {
+      await androidSetup.setStartOnBoot(enabled);
+      setStatus((current) => current ? { ...current, startOnBoot: enabled } : current);
+    });
+  }
+
   if (!status) return <p className="placeholder">Checking permissions…</p>;
 
   return (
@@ -110,7 +118,20 @@ export function AndroidSetupPanel() {
         <SetupStep title="Notifications" done={status.notifications} optional action={permissionAction("notifications")}>
           Shown while the floating mic is on.
         </SetupStep>
+        <SetupStep
+          title="Unrestricted battery" done={status.batteryUnrestricted} optional
+          action={<button type="button" className="secondary" disabled={busy} onClick={() => void run(androidSetup.openBatterySettings)}>Allow</button>}
+        >
+          Helps the floating mic stay on. On Samsung, also set this app to Never sleeping if prompted.
+        </SetupStep>
       </ol>
+      <Toggle
+        label="Start with phone"
+        description="After reboot, briefly opens Personal Voice, turns the floating mic back on, then returns to your home screen."
+        checked={status.startOnBoot}
+        disabled={busy}
+        onChange={onStartOnBoot}
+      />
       <div className="actions">
         {status.floatingMic ? (
           <button type="button" className="secondary" disabled={busy} onClick={() => void run(androidSetup.stopFloatingMic)}>
