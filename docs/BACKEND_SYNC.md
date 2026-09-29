@@ -25,9 +25,8 @@ It is not a transcription server.
 - live transcription
 - transcript processing
 - job queues
-- transcript analytics
+- transcript analytics or per-utterance logs
 - recent dictation history
-- usage intelligence counters
 - permanent recording storage
 
 ## Suggested tables
@@ -74,8 +73,11 @@ user_id uuid primary key references auth.users(id)
 smart_transcription boolean not null default true
 language text
 usage_intelligence boolean not null default true
+usage_epoch bigint not null default 0
 updated_at timestamptz not null default now()
 ```
+
+`usage_epoch` is server-owned. A missing settings row means epoch 0. Ordinary settings saves omit it. A trigger ignores client changes. Only `clear_usage_analytics()` increments it.
 
 Keep device-specific settings local unless there is a concrete reason to sync them.
 
@@ -148,7 +150,8 @@ Migration `supabase/migrations/20260927230000_personal_sync.sql` (applied as `pe
 - No `profiles` table. Nothing needs per-user data beyond `auth.users`.
 - Dictionary terms are unique per user **case-insensitively** (`Persyn` and `persyn` are the same term), must be trimmed, and are 1–100 characters. A trigger caps each user at 200 terms. The client also keeps at most 100 terms *active*, matching Gemini's recommended vocabulary size.
 - `settings.language` is a BCP-47 code or `null` (automatic detection).
-- PV17 adds `settings.usage_intelligence` (default true). Usage counters stay in local WebView storage and are never written to Supabase.
+- PV17 adds `settings.usage_intelligence` (default true).
+- Personal analytics adds `settings.usage_epoch` and `usage_days`. Clients may select their own days. Insert, update, and delete are revoked. `upsert_usage_day()` and `clear_usage_analytics()` are security definer and hold the same per-user advisory lock. A missing settings row is epoch 0; clear creates that row, then increments the epoch and deletes the days in one transaction. `saveSettings` does not send `usage_epoch`.
 - RLS on all three tables, with one policy each: `to authenticated using/with check (user_id = (select auth.uid()))`. `anon` has no table privileges.
 - Last write wins: the client sends the whole settings row on each change.
 
@@ -171,8 +174,11 @@ keys, because device registration is best-effort. The receiver query excludes th
 and returns only pending rows targeted to the current device or to all devices.
 
 `HandoffStore` supports typed sends and the Send to Device dictation destination. It refreshes on
-sign-in, focus, visibility, or explicit request. Copy and insert do not consume a row; Dismiss
-sets `consumed_at`, allowing the user to confirm the transfer before removing it.
+sign-in, focus, visibility, explicit request, and about every 8 seconds while signed in, including
+when Settings is hidden in the tray. The first successful load does not alert. Later pending rows
+for this device show a Windows toast (sending device name and a short preview). Clicking the toast
+inserts the text and does not open Settings or consume the row. Copy and insert do not consume a
+row; Dismiss sets `consumed_at`, allowing the user to confirm the transfer before removing it.
 
 PV4 exposes the typed-send path as Shared clipboard in the UI and reuses the same target
 selection as Voice handoff. It does not add a table, read the OS clipboard, or monitor clipboard
@@ -197,9 +203,25 @@ reach Android because each OS has its own WebView storage.
 ## As implemented (PV17 Usage intelligence)
 
 Migration `supabase/migrations/20260928160000_usage_intelligence.sql` adds
-`settings.usage_intelligence`. The client stores only counters (event name, platform,
-destination id, duration) in `usage.totals.v1`. Transcript text and audio are excluded from
-the type and from persistence.
+`settings.usage_intelligence`. The original counters lived in `usage.totals.v1`. Personal
+analytics supersedes that store. If the old blob is still present it is shown separately
+and is not copied into a daily row.
+
+## As implemented (Personal analytics)
+
+Migration `supabase/migrations/20260928230000_usage_days.sql` adds `settings.usage_epoch`
+(default 0) and `usage_days` (`user_id`, `device_id`, `day`, `epoch`, `counters`, `revision`).
+The primary key is one row per user, device, and local day. Authenticated clients have
+`SELECT` only. `upsert_usage_day()` locks the user, treats a missing settings row as epoch 0,
+and updates only when the incoming revision is greater and the epoch matches.
+`clear_usage_analytics()` locks the same user, inserts a settings row when one is missing,
+increments the epoch, and deletes `usage_days` before returning the new epoch. Counters are
+aggregates (`counters.version` 1). They do not include transcript text or audio.
+
+The client pages `usage_days` (1000 rows, day descending, then device id). Lifetime totals
+and streaks read every page. Month, last-14-day, and week panels request only those ranges.
+This device's local day replaces the matching remote row. After a successful upsert, clean
+local days beyond the newest 90 are dropped. Dirty days stay until they ack.
 
 ## Sync behavior
 

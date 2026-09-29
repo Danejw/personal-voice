@@ -1,6 +1,7 @@
 import type { ContextItem } from "@/context/ContextItem";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 import type { AudioCapture } from "@/voice/audio/AudioCapture";
+import type { TargetApp } from "@/platform/targetApp";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
 
 export type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
@@ -42,10 +43,10 @@ export interface PlatformAdapter {
   readonly platform: PlatformName;
   /** A fresh capture per utterance. */
   createCapture(): AudioCapture;
-  /** Inserts into whatever field is focused when this is called. */
-  insertText(text: string): Promise<void>;
+  /** Inserts into whatever field is focused when this is called. Returns that app when it can be named. */
+  insertText(text: string): Promise<TargetApp | null>;
   /** Hides Settings, restores the previous app, then inserts a received handoff. */
-  insertReceivedText(text: string): Promise<void>;
+  insertReceivedText(text: string): Promise<TargetApp | null>;
   /** Hides Settings, reads the highlighted text in the previous app, then returns here. */
   captureSelection(options?: CaptureSelectionOptions): Promise<ContextItem>;
   /** Always-visible floating control: snapshot in, clicks out. */

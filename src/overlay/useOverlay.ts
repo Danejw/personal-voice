@@ -32,6 +32,8 @@ export interface OverlayBindings {
   insertHandoff(text: string): Promise<void>;
   dismissHandoff(id: string): Promise<void>;
   onSelectionCaptured?(): void;
+  /** Called at the overlay before an utterance starts. */
+  onArmDictation?(): void;
 }
 
 async function copyText(text: string): Promise<void> {
@@ -63,11 +65,14 @@ export function useOverlay({
   insertHandoff,
   dismissHandoff,
   onSelectionCaptured,
+  onArmDictation,
 }: OverlayBindings): OverlaySnapshot {
   const [capture, setCapture] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const providerRef = useRef(getProvider);
+  const armRef = useRef(onArmDictation);
   useEffect(() => { providerRef.current = getProvider; }, [getProvider]);
+  armRef.current = onArmDictation;
 
   const snapshot = useMemo(() => buildOverlaySnapshot({
     visible,
@@ -148,6 +153,7 @@ export function useOverlay({
           switch (intent) {
             case "start":
               if (snapshotRef.current.paused || !snapshotRef.current.signedIn) return;
+              armRef.current?.();
               controller.reset();
               await controller.start(providerRef.current());
               return;
@@ -172,6 +178,7 @@ export function useOverlay({
           if (snapshotRef.current.paused || !snapshotRef.current.signedIn) return;
           if (overlayDictateIntent(snapshotRef.current.dictation) !== "start") return;
           overrideDestination(action.destination);
+          armRef.current?.();
           controller.reset();
           await controller.start(providerRef.current());
           if (releasedHolds.current.has(action.id)) await controller.stop();

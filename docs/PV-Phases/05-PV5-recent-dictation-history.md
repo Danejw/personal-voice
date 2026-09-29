@@ -1,6 +1,6 @@
 # PV5 implementation report — recent dictation history
 
-Prompt: `prompts/PV-Prompts/05-PV5-recent-dictation-history.md`
+Prompt: `prompts/PV-Prompts/Done/05-PV5-recent-dictation-history.md`
 
 ## Scope
 

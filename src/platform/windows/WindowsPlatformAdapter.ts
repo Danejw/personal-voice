@@ -6,8 +6,9 @@ import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 import { parseOverlayAction } from "@/overlay/overlay";
 import { BrowserAudioCapture } from "@/platform/BrowserAudioCapture";
 import type { AvailableUpdate, CaptureSelectionOptions, HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
-import { parsePushToTalk } from "@/platform/pushToTalkEvent";
+import { parsePushToTalk, windowsShortcutTrigger } from "@/platform/pushToTalkEvent";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
+import { parseTargetApp } from "@/platform/targetApp";
 import { loadMicrophone } from "@/settings/deviceSettings";
 
 /** Thin IPC bridge to `src-tauri/src/commands` and `src-tauri/src/platform/windows`. */
@@ -28,12 +29,12 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
     return invoke<void>("set_launch_at_login", { enabled });
   }
 
-  insertText(text: string) {
-    return invoke<void>("insert_text", { text });
+  async insertText(text: string) {
+    return parseTargetApp(await invoke("insert_text", { text }));
   }
 
-  insertReceivedText(text: string) {
-    return invoke<void>("insert_handoff_text", { text });
+  async insertReceivedText(text: string) {
+    return parseTargetApp(await invoke("insert_handoff_text", { text }));
   }
 
   async captureSelection(options?: CaptureSelectionOptions) {
@@ -77,7 +78,8 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
   onPushToTalk(handler: (event: PushToTalkEvent) => void) {
     return listen<unknown>("push-to-talk", (event) => {
       const parsed = parsePushToTalk(event.payload);
-      if (parsed) handler(parsed);
+      if (!parsed) return;
+      handler(parsed.event === "press" ? { ...parsed, trigger: windowsShortcutTrigger(parsed.destination) } : parsed);
     });
   }
 

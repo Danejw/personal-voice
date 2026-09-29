@@ -23,5 +23,7 @@
     "noUncheckedIndexedAccess": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts"],
+  // This copy is locked and still has a newer overlay API. The running control is OverlayDock.tsx.
+  "exclude": ["src/overlay/OverlayPanel.tsx"]
 }

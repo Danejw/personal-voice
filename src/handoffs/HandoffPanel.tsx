@@ -48,7 +48,7 @@ export function HandoffPanel({ store, snapshot, insertIntoActiveField }: Handoff
   function onSend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void run("send", async () => {
-      await store.send(draft);
+      await store.send(draft, "clipboard");
       setDraft("");
       setNotice("Sent.");
     });

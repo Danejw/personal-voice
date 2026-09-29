@@ -42,7 +42,7 @@ export const defaultDictationLimits: DictationLimits = {
 
 export interface DictationOptions extends Partial<DictationLimits> {
   /** Called once per delivered utterance with its stage durations. */
-  onTimings?: (timings: UtteranceTimings) => void;
+  onTimings?: (timings: UtteranceTimings, transcript: string) => void;
   now?: () => number;
 }
 
@@ -88,7 +88,7 @@ export class DictationController {
   private snapshot = initialDictationSnapshot;
   private utt?: Utterance;
   private limits: DictationLimits;
-  private onTimings?: (timings: UtteranceTimings) => void;
+  private onTimings?: (timings: UtteranceTimings, transcript: string) => void;
   private now: () => number;
 
   constructor(
@@ -335,7 +335,7 @@ export class DictationController {
       await this.destination.deliver(text);
       this.dispatch({ type: "delivered" });
       const timings = timingsFrom(marks, this.now(), recovered);
-      if (timings) this.onTimings?.(timings);
+      if (timings) this.onTimings?.(timings, text);
     } catch (error) {
       await this.fail(error);
     }

@@ -133,7 +133,11 @@ PV2 introduced the boundary with `active-field` as its only destination. PV1 add
 which saves the finalized transcript as an inbox note only after Supabase confirms the insert.
 PV3 adds `send-to-device`; the selected owned device, or all other devices when no target is
 selected, receives the text through the `handoffs` table. `HandoffStore` refreshes when Settings
-regains focus or visibility rather than adding sockets or polling.
+regains focus or visibility, and while signed in it also reloads about every 8 seconds so a
+computer sitting in the tray can notice a new handoff. There are still no sockets and no realtime
+subscriptions. On Windows, each new arrival shows a toast with the sending device's name and a
+short preview. Clicking it inserts the text with `insertReceivedText` and leaves Settings hidden.
+The row stays pending until it is dismissed.
 PV4 reuses that same store and table for explicitly pasted or typed text. The shared
 `DeviceTargetField` keeps the Voice handoff and Shared clipboard entry points on one target
 selection without reading or monitoring either operating system's clipboard.
@@ -289,31 +293,38 @@ As implemented (Phase 5, details in `docs/PHASE_5_REPORT.md`):
 - Supabase calls live in `src/services/personalSyncService.ts`, typed by `src/types/database.ts`. RLS limits every row to its owner.
 - `App` builds each session's provider config at press time from `transcriptionPreferences()`. That config is provider-neutral (`TranscriptionPreferences` in `VoiceProvider.ts`), and `geminiConfigFrom()` maps it to Gemini's `mode`, `languageCodes`, and `customVocabulary`.
 - Synced: Smart transcription, language, and usage intelligence. Device-scoped (local, keyed by the existing device ID): default dictation destination, Windows microphone, floating-control visibility, and Windows push-to-talk. Local machine only: launch at login and Android overlay/accessibility/floating-mic runtime.
-- Phase 9: the sync status (with Retry) moved to the Account section, and the edit panels say why they're read-only. While offline, the store reloads on its own when the browser reports `online` or the window becomes visible again. There is still no polling.
+- Phase 9: the sync status (with Retry) moved to the Account section, and the edit panels say why they're read-only. While offline, the store reloads on its own when the browser reports `online` or the window becomes visible again. Settings and the dictionary are still not polled.
 - PV1 adds `voice_notes` and a separate `VoiceNotesStore`. Notes load on sign-in and refresh when the app becomes visible, so changes made on another device appear without realtime infrastructure. Notes are created only when the user selects the Voice note destination; this is not automatic transcript history.
-- PV3 adds `handoffs` and `HandoffStore`. Pending rows are filtered by owner, target, source device, and `consumed_at`; dismissing marks a row consumed. The source device never receives its own broadcast. Handoffs refresh on focus/visibility and use neither direct device networking nor realtime subscriptions.
+- PV3 adds `handoffs` and `HandoffStore`. Pending rows are filtered by owner, target, source device, and `consumed_at`; dismissing marks a row consumed. The source device never receives its own broadcast. Handoffs refresh on focus and visibility, and a signed-in device also reloads about every 8 seconds so a hidden Settings window can see a new row. There is still no direct device networking and no realtime subscription. Windows shows a toast for each new arrival; clicking it inserts the text without opening Settings. Copy and insert still do not consume the row.
 - PV4 labels manual text entry as Shared clipboard while keeping Voice handoff as a dictation destination. Reloads replace the received snapshot, so they cannot duplicate rows; two explicit sends remain two distinct handoffs even when their text matches.
 - PV12 adds a Devices panel on the existing `devices` table: friendly name, platform, last seen, and a This device marker. Rename writes only `name`; `touchDevice` still refreshes `last_seen` without overwriting a custom name. Remove is refused for the current device. Notes and handoffs have no foreign keys to `devices`, so deleting an old install does not delete their rows.
 - PV11 stores device preferences in local WebView storage under `device.prefs.<device id>`, not in the account `settings` row. The first bind copies any previous unscoped `settings.*` keys into that record so existing installs keep their microphone, indicator, and hotkey. Windows and Android never share that file, so a Windows hotkey cannot land on a phone. Reports: [PV12](PV-Phases/06-PV12-better-device-management.md), [PV11](PV-Phases/07-PV11-device-specific-preferences.md).
 
-## Usage intelligence
+## Personal analytics
 
-PV17 records structured operational counters on this device so I can see how the app is used. It is not a third-party analytics product and it never stores transcript text or microphone audio.
+PV17 started as on-device counters. The Analytics page replaces that with daily rollups the user can read across devices. It is still not a third-party analytics product. It never stores transcript text, microphone audio, or raw key logs. Term keys are dictionary strings the user already saved.
 
-Events (each also carries `platform` from the local adapter):
+Each event folds into the current device's local day (`usage.days.v1`), stamped with `counters.version` 1 and the account `usage_epoch`. The start source stamps the trigger when the utterance begins: `ui-button`, `shortcut-dictate`, `shortcut-note`, `shortcut-handoff`, `overlay`, or `android-floating-mic`. Word counts use `Intl.Segmenter` (`outputWords` after SMART cleanup). `recordingMs` is first mic chunk until recording stop. `completionMs` is press-to-delivery. WPM uses only words that had a measured recording interval.
 
-| Event | When | Extra fields |
-| --- | --- | --- |
-| `dictation_started` | A new utterance begins | |
-| `dictation_completed` | Destination delivery succeeded | `durationMs` (press → delivered) |
-| `dictation_failed` | The utterance ended in ERROR | |
-| `recovery_used` | Replay-from-buffer produced the delivered transcript | |
-| `destination_used` | The selected destination accepted the transcript | `destination` |
-| `voice_note_created` | A voice note row was saved | |
-| `handoff_created` | A handoff row was saved | |
-| `selection_captured` | Highlighted text was captured | |
+A successful paste into another application's field also records that application. Windows stores the foreground process file name (`chrome.exe`). Android stores the focused field's package name. The label is a short display name. The window title is not stored, so a document name or email subject never enters `usage_days`. Voice notes and Send to device do not paste, so they have no target app. A day keeps at most 40 named apps; further apps fold into `other`. Browser tabs stay one application.
 
-Counters fold into local aggregates (`usage.totals.v1`). They are not synced: last-write-wins on `settings` would drop counts from the other device. The only synced field is `usageIntelligence` (default on). Turning it off stops collection; existing totals remain. A telemetry failure never changes dictation, notes, handoffs, or capture. Report: [PV17](PV-Phases/12-PV17-lightweight-usage-intelligence.md).
+| Event | When |
+| --- | --- |
+| `dictation_started` | A new utterance begins |
+| `dictation_completed` | Destination delivery succeeded |
+| `dictation_failed` | The utterance ended in ERROR |
+| `recovery_used` | Replay-from-buffer produced the delivered transcript |
+| `destination_used` | The selected destination accepted the transcript |
+| `voice_note_created` | A voice note row was saved |
+| `handoff_created` | A handoff row was saved |
+| `selection_captured` | Highlighted text was captured |
+| `history_inserted` | Recent Dictation inserted into the active field |
+| `shared_clipboard` | A typed Shared clipboard send |
+| `target_app` | A paste landed in another application's field |
+
+The account opt-out is `usageIntelligence` (default on). Turning it off stops new events. Clear analytics is one server call, `clear_usage_analytics()`, which creates a settings row if needed, increments `usage_epoch`, and deletes `usage_days` in the same transaction. Devices drop local days from any other epoch and do not upload them. Ordinary settings saves omit `usage_epoch`.
+
+Writes go through `upsert_usage_day()`. Clients may only select `usage_days`. On sign-in, a missing local day is seeded from the remote row and keeps that revision. A higher remote revision replaces a clean local day. A dirty local day is kept. After a successful ack, clean local days beyond the newest 90 are dropped; every dirty day stays. Dashboard math replaces this device's remote day with its local snapshot. An older undated `usage.totals.v1` blob is shown as "Earlier on this device" and is not copied into today. A telemetry failure never changes dictation, notes, handoffs, or capture. Reports: [PV17](PV-Phases/12-PV17-lightweight-usage-intelligence.md), [PV31](PV-Phases/31-PV31-user-facing-analytics.md).
 
 ## Preference scope
 
@@ -329,7 +340,8 @@ Counters fold into local aggregates (`usage.totals.v1`). They are not synced: la
 | Push-to-talk shortcut | Device | Windows-only; each action can record several keys or mouse buttons; Android uses the floating mic |
 | Launch at login | Local machine | Windows OS startup item, not an app setting row |
 | Android overlay, accessibility, floating mic on/off | Local machine | OS permissions and a live service, not a stored preference |
-| Usage intelligence | Account | Same opt-out on every device; counters stay local |
+| Usage intelligence | Account | Same opt-out on every device |
+| Usage analytics | Account days | Daily counters per device, replaced by the local snapshot for this device |
 
 Overlay layout and auto-start of the floating mic are not stored in this phase.
 

@@ -1,6 +1,6 @@
 # PV12 implementation report — better device management
 
-Prompt: `prompts/PV-Prompts/06-PV12-better-device-management.md`
+Prompt: `prompts/PV-Prompts/Done/06-PV12-better-device-management.md`
 
 ## Scope
 

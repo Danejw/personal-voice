@@ -7,6 +7,11 @@ export interface SyncedSettings {
   language: string | null;
   /** When false, this device stops recording usage counters. The preference syncs. */
   usageIntelligence: boolean;
+  /**
+   * Server-owned analytics generation. Loads may read it. `saveSettings` must not write it.
+   * A missing settings row means `0`.
+   */
+  usageEpoch: number;
 }
 
 export interface DictionaryTerm {
@@ -20,7 +25,7 @@ export interface PersonalData {
   terms: DictionaryTerm[];
 }
 
-export const DEFAULT_SETTINGS: SyncedSettings = { smartTranscription: true, language: null, usageIntelligence: true };
+export const DEFAULT_SETTINGS: SyncedSettings = { smartTranscription: true, language: null, usageIntelligence: true, usageEpoch: 0 };
 export const EMPTY_PERSONAL_DATA: PersonalData = { settings: DEFAULT_SETTINGS, terms: [] };
 
 /** Mirrors the `enforce_dictionary_limit` trigger and `dictionary.term` check in the migration. */

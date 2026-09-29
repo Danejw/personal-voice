@@ -4,5 +4,5 @@
   "description": "Windows main window: check for, download, verify, and install signed updates",
   "platforms": ["windows"],
   "windows": ["main"],
-  "permissions": ["updater:default"]
+  "permissions": ["updater:default", "notification:default"]
 }

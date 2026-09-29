@@ -290,7 +290,7 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
         return@post
       }
       when (val result = VoiceAccessibilityService.insert(activity.applicationContext, text)) {
-        is InsertResult.Typed -> invoke.resolve()
+        is InsertResult.Typed -> resolveTarget(invoke, result)
         is InsertResult.Failed -> invoke.reject(result.message)
       }
     }
@@ -307,7 +307,7 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       }
       main.postDelayed({
         when (val result = VoiceAccessibilityService.insert(activity.applicationContext, text)) {
-          is InsertResult.Typed -> invoke.resolve()
+          is InsertResult.Typed -> resolveTarget(invoke, result)
           is InsertResult.Failed -> invoke.reject(result.message)
         }
       }, 250)
@@ -341,6 +341,16 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       }
       main.postDelayed({ finish() }, 250)
     }
+  }
+
+  /** Resolves the receiving app, or nothing when the paste could not be named. */
+  private fun resolveTarget(invoke: Invoke, result: InsertResult.Typed) {
+    val id = result.appId
+    if (id.isNullOrBlank()) {
+      invoke.resolve()
+      return
+    }
+    invoke.resolve(JSObject().put("id", id).put("label", result.appLabel ?: id))
   }
 
   /** Puts Settings in front again so the capture preview is visible. */

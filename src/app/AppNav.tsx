@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { BrandMark } from "@/app/BrandMark";
 
-export type AppSection = "voice" | "devices" | "settings";
+export type AppSection = "voice" | "devices" | "settings" | "analytics";
 
 const SECTION_META: Record<AppSection, { label: string }> = {
   voice: { label: "Voice" },
   devices: { label: "Devices & Controls" },
   settings: { label: "Settings" },
+  analytics: { label: "Analytics" },
 };
 
-const APP_SECTIONS: readonly AppSection[] = ["voice", "devices", "settings"];
+const APP_SECTIONS: readonly AppSection[] = ["voice", "devices", "settings", "analytics"];
 const COLLAPSED_KEY = "ui.sidebar.collapsed";
 
 /** Title for the section shown in the main pane. */
@@ -120,6 +121,12 @@ function NavIcon({ section }: { section: AppSection }) {
             d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M18 6l-1.6 1.6M7.6 16.4 6 18"
             fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"
           />
+        </svg>
+      );
+    case "analytics":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 19V10M10 19V5M15 19v-7M20 19V8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       );
     default: {

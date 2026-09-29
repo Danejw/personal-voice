@@ -39,6 +39,37 @@ function check(error: PostgrestError | null): void {
   if (error) throw new Error(syncErrorMessage(error));
 }
 
+/** A missing settings row is epoch 0. The first usage sync does not create the row. */
+export function settingsFromRow(row: {
+  smart_transcription: boolean;
+  language: string | null;
+  usage_intelligence: boolean | null;
+  usage_epoch?: number | null;
+} | null): SyncedSettings {
+  if (!row) return DEFAULT_SETTINGS;
+  return {
+    smartTranscription: row.smart_transcription,
+    language: row.language,
+    usageIntelligence: row.usage_intelligence ?? true,
+    usageEpoch: typeof row.usage_epoch === "number" && row.usage_epoch >= 0 ? row.usage_epoch : 0,
+  };
+}
+
+/** Whole-row settings write. `usage_epoch` is omitted so a stale device cannot roll it back. */
+export function settingsUpsertRow(userId: string, settings: SyncedSettings): {
+  user_id: string;
+  smart_transcription: boolean;
+  language: string | null;
+  usage_intelligence: boolean;
+} {
+  return {
+    user_id: userId,
+    smart_transcription: settings.smartTranscription,
+    language: settings.language,
+    usage_intelligence: settings.usageIntelligence,
+  };
+}
+
 function requireClient(): SupabaseClient<Database> {
   const client = getSupabase();
   if (!client) throw new Error("Sync is not configured for this build.");
@@ -49,31 +80,20 @@ export const personalSyncApi: PersonalSyncApi = {
   async load(userId) {
     const client = requireClient();
     const [settings, dictionary] = await Promise.all([
-      client.from("settings").select("smart_transcription, language, usage_intelligence").eq("user_id", userId).maybeSingle(),
+      client.from("settings").select("smart_transcription, language, usage_intelligence, usage_epoch").eq("user_id", userId).maybeSingle(),
       client.from("dictionary").select("id, term, enabled").eq("user_id", userId).order("term"),
     ]);
     check(settings.error);
     check(dictionary.error);
     return {
       // No row yet means the user has never changed a setting.
-      settings: settings.data
-        ? {
-          smartTranscription: settings.data.smart_transcription,
-          language: settings.data.language,
-          usageIntelligence: settings.data.usage_intelligence ?? true,
-        }
-        : DEFAULT_SETTINGS,
+      settings: settingsFromRow(settings.data),
       terms: dictionary.data ?? [],
     };
   },
 
   async saveSettings(userId, settings) {
-    const { error } = await requireClient().from("settings").upsert({
-      user_id: userId,
-      smart_transcription: settings.smartTranscription,
-      language: settings.language,
-      usage_intelligence: settings.usageIntelligence,
-    });
+    const { error } = await requireClient().from("settings").upsert(settingsUpsertRow(userId, settings));
     check(error);
   },
 

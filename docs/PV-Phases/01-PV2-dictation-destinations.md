@@ -1,6 +1,6 @@
 # PV2 implementation report — dictation destinations
 
-Prompt: `prompts/PV-Prompts/01-PV2-dictation-destinations.md`
+Prompt: `prompts/PV-Prompts/Done/01-PV2-dictation-destinations.md`
 
 ## Scope
 

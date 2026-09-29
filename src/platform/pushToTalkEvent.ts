@@ -1,9 +1,26 @@
+import type { UsageTrigger } from "@/usage/usageEvents";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 export interface PushToTalkEvent {
   event: "press" | "release" | "cancel" | "capture-selection";
   /** When set, this utterance is delivered here without changing the saved destination. */
   destination?: TranscriptDestinationId;
+  /** Set by the platform that emitted the press. The dictation state machine only copies it. */
+  trigger?: UsageTrigger;
+}
+
+/** The Windows hook already names the binding through its destination override. */
+export function windowsShortcutTrigger(destination?: TranscriptDestinationId): UsageTrigger {
+  switch (destination) {
+    case "voice-note": return "shortcut-note";
+    case "send-to-device": return "shortcut-handoff";
+    case "active-field":
+    case undefined: return "shortcut-dictate";
+    default: {
+      const unhandled: never = destination;
+      throw new Error(`Unhandled shortcut destination: ${String(unhandled)}`);
+    }
+  }
 }
 
 export function parsePushToTalk(payload: unknown): PushToTalkEvent | null {

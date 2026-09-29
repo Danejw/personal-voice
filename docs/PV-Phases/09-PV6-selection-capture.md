@@ -1,6 +1,6 @@
 # PV6 implementation report — selection capture
 
-Prompt: `prompts/PV-Prompts/09-PV6-selection-capture.md`
+Prompt: `prompts/PV-Prompts/Done/09-PV6-selection-capture.md`
 
 ## Scope
 

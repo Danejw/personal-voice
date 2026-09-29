@@ -1,6 +1,6 @@
 # PV11 implementation report — device-specific preferences
 
-Prompt: `prompts/PV-Prompts/07-PV11-device-specific-preferences.md`
+Prompt: `prompts/PV-Prompts/Done/07-PV11-device-specific-preferences.md`
 
 ## Scope
 

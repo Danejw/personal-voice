@@ -490,7 +490,7 @@ describe("DictationController timings", () => {
   });
 
   it("formats one line without transcript content", () => {
-    expect(formatTimings({ pressToAudio: 120, pressToLive: null, releaseToFinal: 640, finalToDelivered: 25, totalMs: 900, recovered: true }))
+    expect(formatTimings({ pressToAudio: 120, pressToLive: null, releaseToFinal: 640, finalToDelivered: 25, totalMs: 900, recordingMs: 400, recovered: true }))
       .toBe("press→audio 120 ms · press→live – · release→final 640 ms (recovered) · final→delivered 25 ms");
   });
 });

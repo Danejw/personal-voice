@@ -1,6 +1,6 @@
 # PV3 implementation report — cross-device handoff
 
-Prompt: `prompts/PV-Prompts/03-PV3-cross-device-handoff.md`
+Prompt: `prompts/PV-Prompts/Done/03-PV3-cross-device-handoff.md`
 
 ## Scope
 

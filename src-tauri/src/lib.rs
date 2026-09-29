@@ -13,6 +13,15 @@ pub fn run() {
     // before it installs a second push-to-talk hook (which would paste every transcript twice).
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        if let Some(id) = args
+            .iter()
+            .find_map(|arg| arg.strip_prefix("handoff-alert:"))
+        {
+            if !id.is_empty() {
+                platform::notify_handoff_click(app, id);
+                return;
+            }
+        }
         if !args.iter().any(|arg| arg == platform::AUTOSTART_ARG) {
             tray::show_main(app);
         }
@@ -22,6 +31,8 @@ pub fn run() {
     // Android updates go through the browser and the package installer instead.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    #[cfg(windows)]
+    let builder = builder.plugin(tauri_plugin_notification::init());
     let app = builder
         .setup(|app| {
             #[cfg(desktop)]
@@ -79,6 +90,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::insert_text,
             commands::insert_handoff_text,
+            commands::show_handoff_alert,
             commands::capture_selection,
             commands::set_push_to_talk_shortcut,
             commands::set_hotkeys,
@@ -118,20 +130,18 @@ fn place_indicator(app: &tauri::App) -> tauri::Result<()> {
 /// Resolution, DPI, and taskbar changes do not always move the window, so re-pin on a short interval.
 #[cfg(desktop)]
 fn watch_overlay(app: tauri::AppHandle) {
-    std::thread::spawn(move || {
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            let handle = app.clone();
-            if app
-                .run_on_main_thread(move || {
-                    if let Some(window) = handle.get_webview_window(commands::INDICATOR_WINDOW) {
-                        let _ = platform::pin_overlay(&window);
-                    }
-                })
-                .is_err()
-            {
-                break;
-            }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let handle = app.clone();
+        if app
+            .run_on_main_thread(move || {
+                if let Some(window) = handle.get_webview_window(commands::INDICATOR_WINDOW) {
+                    let _ = platform::pin_overlay(&window);
+                }
+            })
+            .is_err()
+        {
+            break;
         }
     });
 }

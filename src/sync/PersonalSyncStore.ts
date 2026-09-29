@@ -88,7 +88,7 @@ export class PersonalSyncStore {
     return this.writes;
   }
 
-  updateSettings(patch: Partial<SyncedSettings>): string | null {
+  updateSettings(patch: Partial<Omit<SyncedSettings, "usageEpoch">>): string | null {
     if (patch.language && !isLanguageCode(patch.language)) return "That language code isn't valid.";
     // The whole row is sent so the last write from any device wins as a unit.
     const settings = { ...this.snapshot.data.settings, ...patch };

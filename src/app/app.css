@@ -87,6 +87,20 @@ section > p:last-child { margin-bottom: 0; font-size: 12px; }
 .fold summary { cursor: pointer; }
 .fold p { margin: 4px 0 0; }
 .footnote { font-size: 12px; color: #a2adbc; margin-top: 22px; }
+.stat-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat-cell { padding: 8px 10px; border: 1px solid #344252; border-radius: 10px; background: #19232e; }
+.stat-value { margin: 0; font-size: 16px; font-weight: 600; }
+.stat-label { margin: 2px 0 0; font-size: 11px; color: #a2adbc; }
+.analytics { display: grid; gap: 10px; }
+.analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bars, .metric-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.bar-row, .metric-list li { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 6px; align-items: center; font-size: 12px; }
+.metric-list li { grid-template-columns: minmax(0, 1fr) auto; }
+.bar-track { height: 6px; background: #111820; border-radius: 999px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: #88d8c1; border-radius: 999px; }
+@media (max-width: 800px) {
+  .stat-row, .analytics-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 1040px) {
   .voice-layout { grid-template-columns: 1fr; }
 }

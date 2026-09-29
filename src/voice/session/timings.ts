@@ -11,8 +11,14 @@ export interface UtteranceTimings {
   releaseToFinal: number;
   /** Final transcript → selected destination finished. */
   finalToDelivered: number;
-  /** Press → destination finished. */
+  /** Press → destination finished. Includes speaking, transcription, and delivery. */
   totalMs: number;
+  /**
+   * First captured microphone chunk → recording stop.
+   * `null` when either mark is missing or the interval is not positive.
+   * This is the speaking-speed interval. It is not `totalMs`.
+   */
+  recordingMs: number | null;
   /** The transcript came from replaying the buffered audio. */
   recovered: boolean;
 }
@@ -35,12 +41,14 @@ export function timingsFrom(marks: UtteranceMarks, delivered: number, recovered:
   const releaseToFinal = since(marks.released, marks.final);
   const finalToDelivered = since(marks.final, delivered);
   if (releaseToFinal === null || finalToDelivered === null) return null;
+  const recorded = since(marks.audio, marks.released);
   return {
     pressToAudio: since(marks.pressed, marks.audio),
     pressToLive: since(marks.pressed, marks.live),
     releaseToFinal,
     finalToDelivered,
     totalMs: Math.round(delivered - marks.pressed),
+    recordingMs: recorded !== null && recorded > 0 ? recorded : null,
     recovered,
   };
 }

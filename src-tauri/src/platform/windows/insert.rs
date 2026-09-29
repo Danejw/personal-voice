@@ -11,7 +11,7 @@ use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
 
 use windows::core::{w, PCWSTR};
-use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL};
+use windows::Win32::Foundation::{CloseHandle, GlobalFree, HANDLE, HGLOBAL};
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData,
     GetClipboardSequenceNumber, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
@@ -19,11 +19,18 @@ use windows::Win32::System::DataExchange::{
 use windows::Win32::System::Memory::{
     GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
 };
+use windows::Win32::System::Threading::{
+    OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
     KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_C, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT, VK_V,
 };
-use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+};
+
+use crate::platform::TargetApp;
 
 use super::hook::SYNTHETIC_INPUT_MARK;
 
@@ -40,9 +47,9 @@ static PENDING_RESTORE: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 
 /// Returns once the paste keystroke is sent; the clipboard is restored after
 /// `PASTE_SETTLE` on a background thread, so dictation is ready again at once.
-pub fn insert_text(text: &str) -> Result<(), String> {
+pub fn insert_text(text: &str) -> Result<Option<TargetApp>, String> {
     if text.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
     let mut pending = PENDING_RESTORE
         .lock()
@@ -67,12 +74,14 @@ pub fn insert_text(text: &str) -> Result<(), String> {
     let ours = unsafe { GetClipboardSequenceNumber() };
 
     wait_for_modifiers_released();
+    // Named at the keystroke, so the identity is the window that receives the paste.
+    let target = foreground_app();
     let pasted = send_paste();
     *pending = Some(std::thread::spawn(move || {
         sleep(PASTE_SETTLE);
         restore(&previous, ours);
     }));
-    pasted
+    pasted.map(|()| target)
 }
 
 /// Copies the focused app's selection, then restores the previous clipboard.
@@ -305,6 +314,85 @@ fn clipboard_unicode_text() -> Result<String, String> {
     }
 }
 
+/// File name of the foreground process. A full path is reduced to that name so a user folder is never kept.
+pub fn app_from_image_path(path: &str) -> Option<TargetApp> {
+    let file = path.rsplit(['\\', '/']).next()?.trim();
+    if file.is_empty() || file == "." || file == ".." {
+        return None;
+    }
+    let id = file.to_lowercase();
+    if id.len() > 120 || !id.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '.' || ch == '_' || ch == '-') {
+        return None;
+    }
+    let label = known_app_label(&id).unwrap_or_else(|| display_stem(file));
+    Some(TargetApp { id, label })
+}
+
+fn known_app_label(id: &str) -> Option<String> {
+    let label = match id {
+        "chrome.exe" => "Chrome",
+        "msedge.exe" => "Microsoft Edge",
+        "firefox.exe" => "Firefox",
+        "slack.exe" => "Slack",
+        "notepad.exe" => "Notepad",
+        "winword.exe" => "Word",
+        "excel.exe" => "Excel",
+        "powerpnt.exe" => "PowerPoint",
+        "outlook.exe" => "Outlook",
+        "code.exe" => "Visual Studio Code",
+        "cursor.exe" => "Cursor",
+        "notion.exe" => "Notion",
+        "discord.exe" => "Discord",
+        "telegram.exe" => "Telegram",
+        "whatsapp.exe" => "WhatsApp",
+        "teams.exe" => "Microsoft Teams",
+        "spotify.exe" => "Spotify",
+        "explorer.exe" => "File Explorer",
+        _ => return None,
+    };
+    Some(label.to_string())
+}
+
+fn display_stem(file: &str) -> String {
+    let stem = file
+        .strip_suffix(".exe")
+        .or_else(|| file.strip_suffix(".EXE"))
+        .unwrap_or(file);
+    let mut chars = stem.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => file.to_string(),
+    }
+}
+
+fn foreground_app() -> Option<TargetApp> {
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.is_invalid() {
+        return None;
+    }
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    if pid == 0 {
+        return None;
+    }
+    if pid == std::process::id() {
+        return Some(TargetApp {
+            id: "personal-voice".into(),
+            label: "Personal Voice".into(),
+        });
+    }
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
+    let mut buf = [0u16; 1024];
+    let mut len = buf.len() as u32;
+    let named = unsafe {
+        QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, windows::core::PWSTR(buf.as_mut_ptr()), &mut len)
+    };
+    unsafe { let _ = CloseHandle(handle); }
+    named.ok()?;
+    let path = String::from_utf16(&buf[..len as usize]).ok()?;
+    app_from_image_path(&path)
+}
+
 fn foreground_title() -> Option<String> {
     let hwnd = unsafe { GetForegroundWindow() };
     if hwnd.is_invalid() {
@@ -341,7 +429,29 @@ fn utf16le_nul_terminated(bytes: &[u8]) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::utf16le_nul_terminated;
+    use super::{app_from_image_path, utf16le_nul_terminated};
+
+    #[test]
+    fn image_path_keeps_only_the_file_name() {
+        let app = app_from_image_path(r"C:\Users\keali\AppData\Local\Google\Chrome\Application\chrome.exe")
+            .expect("chrome");
+        assert_eq!(app.id, "chrome.exe");
+        assert_eq!(app.label, "Chrome");
+        assert!(!app.id.contains("keali"));
+    }
+
+    #[test]
+    fn unknown_exe_uses_the_stem() {
+        let app = app_from_image_path(r"D:\Tools\custom.exe").expect("custom");
+        assert_eq!(app.id, "custom.exe");
+        assert_eq!(app.label, "Custom");
+    }
+
+    #[test]
+    fn a_title_is_not_an_app_id() {
+        assert!(app_from_image_path("Inbox - Gmail").is_none());
+        assert!(app_from_image_path("").is_none());
+    }
 
     #[test]
     fn reads_nul_terminated_utf16le() {

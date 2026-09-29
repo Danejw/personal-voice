@@ -33,6 +33,7 @@ export class HandoffStore {
     private api: HandoffApi,
     private getDeviceId: (userId: string) => string,
     private onSent?: () => void,
+    private onClipboard?: () => void,
   ) {}
 
   subscribe = (listener: () => void): (() => void) => {
@@ -77,7 +78,7 @@ export class HandoffStore {
   }
 
   /** Destination delivery and manual send share the same confirmed online write. */
-  async send(text: string): Promise<void> {
+  async send(text: string, source: "dictation" | "clipboard" = "dictation"): Promise<void> {
     const { userId, currentDeviceId } = this.requireConnected();
     const handoff = text.trim();
     if (!handoff) throw new Error("Enter text to send.");
@@ -85,6 +86,9 @@ export class HandoffStore {
     try {
       await this.api.send(userId, handoff, currentDeviceId, this.snapshot.targetDeviceId);
       try { this.onSent?.(); } catch { /* usage must not fail dest delivery */ }
+      if (source === "clipboard") {
+        try { this.onClipboard?.(); } catch { /* usage must not fail dest delivery */ }
+      }
       if (generation === this.generation) this.publish({ ...this.snapshot, error: null });
     } catch (reason) {
       this.reportFailure(generation, reason);

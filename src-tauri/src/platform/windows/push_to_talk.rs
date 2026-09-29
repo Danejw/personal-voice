@@ -145,7 +145,9 @@ pub enum DestOverride {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PttEvent {
-    Press { destination: Option<DestOverride> },
+    Press {
+        destination: Option<DestOverride>,
+    },
     /// One-shot: copies the highlighted text. Release is swallowed and does not end dictation.
     CaptureSelection,
     Release,

@@ -11,7 +11,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 sealed class InsertResult {
-  object Typed : InsertResult()
+  data class Typed(val appId: String?, val appLabel: String?) : InsertResult()
   data class Failed(val message: String) : InsertResult()
 }
 
@@ -93,10 +93,29 @@ class VoiceAccessibilityService : AccessibilityService() {
     if (node.isPassword) return InsertResult.Failed("Dictation doesn't type into password fields.")
     // Native fields take an exact splice. Web and rich editors get a paste, because replacing
     // their whole text would drop formatting.
-    if (isNativeTextField(node) && setText(node, text)) return InsertResult.Typed
+    if (isNativeTextField(node) && setText(node, text)) return typedInto(node)
     setClip(this, text)
-    if (node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) return InsertResult.Typed
+    if (node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) return typedInto(node)
     return InsertResult.Failed("This field doesn't accept dictated text. The text is on your clipboard.")
+  }
+
+  /** Package name plus launcher label. A window title is never used. */
+  private fun typedInto(node: AccessibilityNodeInfo): InsertResult {
+    val pkg = node.packageName?.toString()?.trim().orEmpty()
+    if (pkg.isEmpty()) return InsertResult.Typed(null, null)
+    if (pkg == packageName) return InsertResult.Typed("personal-voice", "Personal Voice")
+    if (pkg.length > 120 || !pkg.matches(Regex("^[A-Za-z0-9._-]+$"))) return InsertResult.Typed(null, null)
+    val label = applicationLabel(pkg) ?: pkg.substringAfterLast('.').ifBlank { pkg }
+    return InsertResult.Typed(pkg, label.take(60))
+  }
+
+  private fun applicationLabel(packageName: String): String? {
+    return try {
+      val info = packageManager.getApplicationInfo(packageName, 0)
+      packageManager.getApplicationLabel(info)?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+    } catch (_: Exception) {
+      null
+    }
   }
 
   private fun captureFromFocusedField(): CaptureResult {

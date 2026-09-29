@@ -8,8 +8,9 @@ use crate::platform;
 pub const INDICATOR_WINDOW: &str = "indicator";
 
 /// Pastes into the window focused at call time. Blocks a worker thread for the paste settle delay.
+/// Returns the receiving application when the paste is sent, or null when it cannot be named.
 #[tauri::command]
-pub async fn insert_text(text: String) -> Result<(), String> {
+pub async fn insert_text(text: String) -> Result<Option<platform::TargetApp>, String> {
     tauri::async_runtime::spawn_blocking(move || platform::insert_text(&text))
         .await
         .map_err(|e| e.to_string())?
@@ -17,7 +18,7 @@ pub async fn insert_text(text: String) -> Result<(), String> {
 
 /// Hides Settings so Windows restores the previously focused app before pasting the handoff.
 #[tauri::command]
-pub async fn insert_handoff_text(app: AppHandle, text: String) -> Result<(), String> {
+pub async fn insert_handoff_text(app: AppHandle, text: String) -> Result<Option<platform::TargetApp>, String> {
     let window = app
         .get_webview_window("main")
         .ok_or("The Settings window is missing.")?;
@@ -28,6 +29,17 @@ pub async fn insert_handoff_text(app: AppHandle, text: String) -> Result<(), Str
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Windows toast for a handoff that just arrived. Clicking it emits `handoff-alert-click`.
+#[tauri::command]
+pub async fn show_handoff_alert(
+    app: AppHandle,
+    id: String,
+    title: String,
+    body: String,
+) -> Result<(), String> {
+    platform::show_handoff_alert(&app, &id, &title, &body)
 }
 
 #[derive(Serialize)]

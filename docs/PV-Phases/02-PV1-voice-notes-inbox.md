@@ -1,6 +1,6 @@
 # PV1 implementation report — voice notes inbox
 
-Prompt: `prompts/PV-Prompts/02-PV1-voice-notes-inbox.md`
+Prompt: `prompts/PV-Prompts/Done/02-PV1-voice-notes-inbox.md`
 
 ## Scope
 

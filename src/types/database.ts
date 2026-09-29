@@ -1,6 +1,14 @@
 // Generated from the Supabase schema (Supabase MCP `generate_typescript_types`, 2026-09-28).
 // Regenerate after any migration instead of editing by hand.
 
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
 export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
@@ -96,6 +104,7 @@ export type Database = {
           language: string | null
           smart_transcription: boolean
           updated_at: string
+          usage_epoch: number
           usage_intelligence: boolean
           user_id: string
         }
@@ -103,6 +112,7 @@ export type Database = {
           language?: string | null
           smart_transcription?: boolean
           updated_at?: string
+          usage_epoch?: number
           usage_intelligence?: boolean
           user_id?: string
         }
@@ -110,7 +120,38 @@ export type Database = {
           language?: string | null
           smart_transcription?: boolean
           updated_at?: string
+          usage_epoch?: number
           usage_intelligence?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
+      usage_days: {
+        Row: {
+          counters: Json
+          day: string
+          device_id: string
+          epoch: number
+          revision: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          counters: Json
+          day: string
+          device_id: string
+          epoch: number
+          revision: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          counters?: Json
+          day?: string
+          device_id?: string
+          epoch?: number
+          revision?: number
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -150,7 +191,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      clear_usage_analytics: {
+        Args: Record<string, never>
+        Returns: number
+      }
+      upsert_usage_day: {
+        Args: {
+          p_counters: Json
+          p_day: string
+          p_device_id: string
+          p_epoch: number
+          p_revision: number
+          p_updated_at: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

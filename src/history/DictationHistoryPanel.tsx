@@ -11,6 +11,7 @@ interface DictationHistoryPanelProps {
   store: DictationHistoryStore;
   snapshot: DictationHistorySnapshot;
   insertIntoActiveField(text: string): Promise<void>;
+  onInserted?(): void;
 }
 
 function destinationLabel(destination: TranscriptDestinationId): string {
@@ -30,6 +31,7 @@ export function DictationHistoryPanel({
   store,
   snapshot,
   insertIntoActiveField,
+  onInserted,
 }: DictationHistoryPanelProps) {
   const [busy, setBusy] = useState<number | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -54,7 +56,10 @@ export function DictationHistoryPanel({
   }
 
   function insert(entry: DictationHistoryEntry, index: number) {
-    void run(index, () => insertIntoActiveField(entry.text), "Transcript inserted.");
+    void run(index, async () => {
+      await insertIntoActiveField(entry.text);
+      onInserted?.();
+    }, "Transcript inserted.");
   }
 
   function clear() {

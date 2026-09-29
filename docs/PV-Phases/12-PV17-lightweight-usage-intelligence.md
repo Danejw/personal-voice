@@ -1,6 +1,6 @@
 # PV17 implementation report — lightweight usage intelligence
 
-Prompt: `prompts/PV-Prompts/12-PV17-lightweight-usage-intelligence.md`
+Prompt: `prompts/PV-Prompts/Done/12-PV17-lightweight-usage-intelligence.md`
 
 ## Scope
 

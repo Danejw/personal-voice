@@ -240,8 +240,9 @@ Keep schema additions conservative.
 - handoffs sync only when the user explicitly sends text or chooses Send to device
 - never monitor or continuously synchronize the OS clipboard
 - selection capture is an explicit user action; Windows copies briefly and restores the clipboard
-- usage intelligence stores counters only, never transcript text or microphone audio
-- usage intelligence can be turned off; that preference syncs, the counters stay on the device
+- usage analytics stores daily counters only, never transcript text, microphone audio, or raw key logs
+- usage intelligence can be turned off; that preference syncs and stops new counts
+- clearing analytics increments a server-owned epoch and deletes synced daily counters
 - no automatic cloud transcript-history table
 - recent dictation history contains final text only, stays local, and can be cleared
 - do not log transcript content unnecessarily

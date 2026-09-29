@@ -12,6 +12,7 @@ import { useDevices } from "@/devices/useDevices";
 import { DeviceTargetField } from "@/handoffs/DeviceTargetField";
 import { HandoffPanel } from "@/handoffs/HandoffPanel";
 import { HandoffStore } from "@/handoffs/HandoffStore";
+import { useHandoffAlerts } from "@/handoffs/useHandoffAlerts";
 import { useHandoffs } from "@/handoffs/useHandoffs";
 import { DictationHistoryPanel } from "@/history/DictationHistoryPanel";
 import { DictationHistoryStore } from "@/history/DictationHistoryStore";
@@ -21,6 +22,7 @@ import { VoiceNotesStore } from "@/notes/VoiceNotesStore";
 import { useVoiceNotes } from "@/notes/useVoiceNotes";
 import { useOverlay } from "@/overlay/useOverlay";
 import { createPlatformAdapter, type AppPlatform } from "@/platform";
+import type { TargetApp } from "@/platform/targetApp";
 import { AndroidSetupPanel } from "@/platform/android/AndroidSetupPanel";
 import { MicrophonePanel } from "@/platform/windows/MicrophonePanel";
 import { PushToTalkShortcutPanel } from "@/platform/windows/PushToTalkShortcutPanel";
@@ -29,6 +31,7 @@ import { deviceApi } from "@/services/deviceService";
 import { fetchGeminiToken } from "@/services/geminiTokenService";
 import { handoffApi } from "@/services/handoffService";
 import { personalSyncApi } from "@/services/personalSyncService";
+import { usageApi } from "@/services/usageService";
 import { voiceNotesApi } from "@/services/voiceNotesService";
 import { bindDeviceSettings, loadDestination, loadShowIndicator, saveDestination, saveShowIndicator } from "@/settings/deviceSettings";
 import { DictionaryPanel } from "@/sync/DictionaryPanel";
@@ -37,10 +40,15 @@ import { SyncStatus } from "@/sync/SyncStatus";
 import { TranscriptionSettingsPanel } from "@/sync/TranscriptionSettingsPanel";
 import { localDeviceId } from "@/sync/personalCache";
 import { transcriptionPreferences } from "@/sync/personalData";
+import type { DictionaryTerm } from "@/sync/personalData";
 import { usePersonalSync } from "@/sync/usePersonalSync";
+import { AnalyticsPanel } from "@/usage/AnalyticsPanel";
+import { mergeUsageDays, termUsage } from "@/usage/analytics";
 import { UsagePanel } from "@/usage/UsagePanel";
 import { UsageStore } from "@/usage/UsageStore";
+import type { UsageSnapshot } from "@/usage/usageEvents";
 import { useUsage } from "@/usage/useUsage";
+import { countOutputWords } from "@/usage/words";
 import { UpdatePanel } from "@/updates/UpdatePanel";
 import { useUpdates } from "@/updates/useUpdates";
 import { GeminiProvider, geminiConfigFrom } from "@/voice/provider/gemini/GeminiProvider";
@@ -49,9 +57,26 @@ import type { VoiceState } from "@/voice/session/state";
 import { TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
+function dictionaryTermUsage(
+  usageSnapshot: UsageSnapshot,
+  deviceId: string | null,
+  terms: readonly DictionaryTerm[],
+): Record<string, { uses: number; lastDay: string | null }> {
+  const rows = mergeUsageDays(
+    usageSnapshot.remote.filter((row) => row.epoch === usageSnapshot.epoch),
+    usageSnapshot.days,
+    deviceId ?? "",
+  );
+  const stats = termUsage(rows, [...terms]);
+  const labels: Record<string, { uses: number; lastDay: string | null }> = {};
+  for (const entry of stats.used) labels[entry.term.toLocaleLowerCase()] = { uses: entry.uses, lastDay: entry.lastDay };
+  for (const term of stats.neverUsed) labels[term.toLocaleLowerCase()] = { uses: 0, lastDay: null };
+  return labels;
+}
+
 const platform = createPlatformAdapter();
 const tokens = new GeminiTokenSource(fetchGeminiToken);
-const usage = new UsageStore(localStorage, platform.platform);
+const usage = new UsageStore(localStorage, platform.platform, () => new Date(), usageApi);
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
 const voiceNotes = new VoiceNotesStore(
   voiceNotesApi,
@@ -66,10 +91,39 @@ const handoffs = new HandoffStore(
   handoffApi,
   (userId) => localDeviceId(localStorage, userId, () => crypto.randomUUID()),
   () => usage.recordLater({ name: "handoff_created" }),
+  () => usage.recordLater({ name: "shared_clipboard" }),
 );
 const history = new DictationHistoryStore(localStorage);
+
+/** Counts a successful paste. A failure here must not fail the paste itself. */
+function recordTargetApp(text: string, app: TargetApp | null): void {
+  if (!app) return;
+  try {
+    usage.recordLater({
+      name: "target_app",
+      appId: app.id,
+      appLabel: app.label,
+      words: countOutputWords(text, personalSync.getSnapshot().data.settings.language),
+    });
+  } catch {
+    // The transcript is already in the other app.
+  }
+}
+
+function pasteIntoField(text: string): Promise<void> {
+  return platform.insertText(text).then((app) => {
+    recordTargetApp(text, app);
+  });
+}
+
+function pasteReceived(text: string): Promise<void> {
+  return platform.insertReceivedText(text).then((app) => {
+    recordTargetApp(text, app);
+  });
+}
+
 const destinations = new TranscriptDestinationRouter({
-  "active-field": { deliver: (transcript) => platform.insertText(transcript) },
+  "active-field": { deliver: (transcript) => pasteIntoField(transcript) },
   "voice-note": { deliver: (transcript) => voiceNotes.create(transcript) },
   "send-to-device": { deliver: (transcript) => handoffs.send(transcript) },
 }, "active-field", (result) => {
@@ -195,12 +249,24 @@ export default function App() {
   const notes = useVoiceNotes(voiceNotes, auth.userId);
   const deviceSnapshot = useDevices(devices, auth.userId);
   const handoffSnapshot = useHandoffs(handoffs, auth.userId);
+  useHandoffAlerts(
+    handoffs,
+    auth.userId,
+    platform.platform === "windows",
+    (text) => pasteReceived(text),
+  );
   const historySnapshot = useDictationHistory(history);
   const usageSnapshot = useUsage(usage);
   const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
   const [section, setSection] = useState<AppSection>("voice");
   const [floatingControl, setFloatingControl] = useState(loadShowIndicator);
-  const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage);
+  const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
+    const data = personalSync.getSnapshot().data;
+    return {
+      locale: data.settings.language,
+      terms: data.terms.filter((entry) => entry.enabled).map((entry) => entry.term),
+    };
+  });
   const updates = useUpdates(platform);
   const { state, partial, transcript, error } = snapshot;
   const control = controlFor(state, destination);
@@ -230,9 +296,10 @@ export default function App() {
     getProvider: createProvider,
     onDestination: chooseDestination,
     overrideDestination: (next) => destinations.overrideNext(next),
-    insertHandoff: (text) => platform.insertReceivedText(text),
+    insertHandoff: (text) => pasteReceived(text),
     dismissHandoff: (id) => handoffs.consume(id),
     onSelectionCaptured: () => usage.recordLater({ name: "selection_captured" }),
+    onArmDictation: () => usage.armTrigger("overlay"),
   });
 
   // Bind before the keybinding panel's first read. Child state initializers run during this
@@ -265,6 +332,38 @@ export default function App() {
   }, [sync.data.settings.usageIntelligence]);
 
   useEffect(() => {
+    if (!auth.userId || !settingsDeviceId) {
+      usage.adoptRemote([]);
+      return;
+    }
+    usage.beginBootstrap(sync.data.settings.usageEpoch, settingsDeviceId);
+    let cancelled = false;
+    let request = 0;
+    const pull = () => {
+      const current = ++request;
+      void usageApi.fetchDays().then(
+        (rows) => {
+          if (cancelled || current !== request) return;
+          usage.adoptRemote(rows);
+          usage.setRemote(rows);
+        },
+        () => {
+          if (!cancelled && current === request) usage.adoptRemote([]);
+        },
+      );
+    };
+    pull();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") pull();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [auth.userId, settingsDeviceId, sync.data.settings.usageEpoch]);
+
+  useEffect(() => {
     let stop = () => {};
     void platform.onShowFloatingControl(() => {
       saveShowIndicator(true);
@@ -275,7 +374,10 @@ export default function App() {
 
   function onControl() {
     switch (state) {
-      case "IDLE": void controller.start(createProvider()); return;
+      case "IDLE":
+        usage.armTrigger("ui-button");
+        void controller.start(createProvider());
+        return;
       case "CONNECTING":
       case "LISTENING": void controller.stop(); return;
       case "ERROR": controller.reset(); return;
@@ -332,12 +434,13 @@ export default function App() {
               <DictationHistoryPanel
                 store={history}
                 snapshot={historySnapshot}
-                insertIntoActiveField={(text) => platform.insertReceivedText(text)}
+                insertIntoActiveField={(text) => pasteReceived(text)}
+                onInserted={() => usage.recordLater({ name: "history_inserted" })}
               />
             </section>
             <section aria-labelledby="dictionary-heading">
               <h2 id="dictionary-heading">Personal dictionary</h2>
-              <DictionaryPanel store={personalSync} sync={sync} />
+              <DictionaryPanel store={personalSync} sync={sync} termUsage={dictionaryTermUsage(usageSnapshot, settingsDeviceId ?? null, sync.data.terms)} />
             </section>
           </div>
           <div className="panel-stack">
@@ -356,7 +459,7 @@ export default function App() {
               <HandoffPanel
                 store={handoffs}
                 snapshot={handoffSnapshot}
-                insertIntoActiveField={(text) => platform.insertReceivedText(text)}
+                insertIntoActiveField={(text) => pasteReceived(text)}
               />
             </section>
           </div>
@@ -400,12 +503,23 @@ export default function App() {
           </section>
           <section aria-labelledby="usage-heading">
             <h2 id="usage-heading">Usage intelligence</h2>
-            <UsagePanel store={personalSync} sync={sync} usage={usageSnapshot} />
+            <UsagePanel store={personalSync} sync={sync} usage={usageSnapshot} onClear={() => { void usage.clearAnalytics(); }} />
           </section>
           <section aria-labelledby="updates-heading">
             <h2 id="updates-heading">Updates</h2>
             <UpdatePanel updates={updates} busy={!idle} />
           </section>
+        </div>
+
+        <div className="analytics" hidden={section !== "analytics"}>
+          <AnalyticsPanel
+            active={section === "analytics"}
+            signedIn={signedIn}
+            deviceId={settingsDeviceId ?? null}
+            devices={deviceSnapshot.devices}
+            dictionary={sync.data.terms}
+            usage={usageSnapshot}
+          />
         </div>
       </main>
     </div>

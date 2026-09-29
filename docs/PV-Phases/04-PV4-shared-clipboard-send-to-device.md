@@ -1,6 +1,6 @@
 # PV4 implementation report — shared clipboard / send to device
 
-Prompt: `prompts/PV-Prompts/04-PV4-shared-clipboard-send-to-device.md`
+Prompt: `prompts/PV-Prompts/Done/04-PV4-shared-clipboard-send-to-device.md`
 
 ## Scope
 

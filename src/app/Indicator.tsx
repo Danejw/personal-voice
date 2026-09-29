@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { emitTo, listen } from "@tauri-apps/api/event";
-import { OverlayPanel } from "@/overlay/OverlayPanel";
+import { OverlayDock } from "@/overlay/OverlayDock";
 import { emptyOverlaySnapshot } from "@/overlay/overlay";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 
@@ -17,5 +17,5 @@ export default function Indicator() {
     void emitTo("main", "overlay-action", action);
   }, []);
 
-  return <OverlayPanel snapshot={snapshot} onAction={onAction} />;
+  return <OverlayDock snapshot={snapshot} onAction={onAction} />;
 }

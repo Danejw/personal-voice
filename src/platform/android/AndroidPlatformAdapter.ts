@@ -5,6 +5,7 @@ import { parseOverlayAction } from "@/overlay/overlay";
 import { NativeAudioCapture } from "@/platform/android/NativeAudioCapture";
 import { callPlugin, listenPlugin } from "@/platform/android/voicePlatformPlugin";
 import type { AvailableUpdate, CaptureSelectionOptions, PlatformAdapter } from "@/platform/PlatformAdapter";
+import { parseTargetApp } from "@/platform/targetApp";
 import { parsePushToTalk } from "@/platform/pushToTalkEvent";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
 import { fetchLatestAndroidRelease } from "@/services/releaseService";
@@ -23,12 +24,12 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
     return new NativeAudioCapture();
   }
 
-  insertText(text: string) {
-    return callPlugin("insert_text", { text });
+  async insertText(text: string) {
+    return parseTargetApp(await callPlugin("insert_text", { text }));
   }
 
-  insertReceivedText(text: string) {
-    return callPlugin("insert_handoff_text", { text });
+  async insertReceivedText(text: string) {
+    return parseTargetApp(await callPlugin("insert_handoff_text", { text }));
   }
 
   async captureSelection(options?: CaptureSelectionOptions) {
@@ -69,7 +70,8 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
   onPushToTalk(handler: (event: PushToTalkEvent) => void) {
     return listenPlugin("pushToTalk", (payload) => {
       const event = parsePushToTalk(payload);
-      if (event) handler(event);
+      if (!event) return;
+      handler(event.event === "press" ? { ...event, trigger: "android-floating-mic" } : event);
     });
   }
 

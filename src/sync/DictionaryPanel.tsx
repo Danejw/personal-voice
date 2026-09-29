@@ -7,10 +7,17 @@ import { MAX_ENABLED_TERMS, MAX_TERM_LENGTH, enabledCount } from "@/sync/persona
 interface DictionaryPanelProps {
   store: PersonalSyncStore;
   sync: SyncSnapshot;
+  /** Lowercased term → appearances and the last day it appeared. */
+  termUsage?: Readonly<Record<string, { uses: number; lastDay: string | null }>>;
+}
+
+function termLabel(stat: { uses: number; lastDay: string | null } | undefined): string {
+  if (!stat || stat.uses === 0) return "Never used";
+  return `${stat.uses} uses`;
 }
 
 /** Names and jargon Gemini should recognize. Only enabled terms are sent, from the next utterance. */
-export function DictionaryPanel({ store, sync }: DictionaryPanelProps) {
+export function DictionaryPanel({ store, sync, termUsage = {} }: DictionaryPanelProps) {
   const [draft, setDraft] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const { terms } = sync.data;
@@ -47,6 +54,7 @@ export function DictionaryPanel({ store, sync }: DictionaryPanelProps) {
                   onChange={(event) => setProblem(store.setTermEnabled(entry.id, event.target.checked))}
                 />
                 <span>{entry.term}</span>
+                <span className="hint">{termLabel(termUsage[entry.term.toLocaleLowerCase()])}</span>
               </label>
               <button
                 type="button" className="term-delete" aria-label={`Delete ${entry.term}`} disabled={!editable}

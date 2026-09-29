@@ -1,4 +1,5 @@
 mod autostart;
+mod handoff_alert;
 mod hook;
 mod insert;
 mod push_to_talk;
@@ -14,6 +15,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 pub use autostart::{launch_at_login, set_launch_at_login};
+pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
 pub use hook::{set_active as set_dictation_active, set_paused};
 pub use insert::{capture_selection, finish_pending_restore, insert_text};
 
@@ -129,8 +131,16 @@ fn pin_overlay_inner(window: &WebviewWindow) -> Result<(), String> {
     // Direct placement. Tauri's setter queues the move, which is why the stack
     // appeared in the center and then slid past the right edge.
     unsafe {
-        SetWindowPos(hwnd, Some(HWND_TOPMOST), x, y, width, height, SWP_NOACTIVATE)
-            .map_err(|e| e.to_string())?;
+        SetWindowPos(
+            hwnd,
+            Some(HWND_TOPMOST),
+            x,
+            y,
+            width,
+            height,
+            SWP_NOACTIVATE,
+        )
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }

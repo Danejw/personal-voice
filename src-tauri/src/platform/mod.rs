@@ -2,6 +2,15 @@
 //! (`android.rs`) that the frontend calls directly, so the Windows commands below report
 //! "unsupported" on other targets.
 
+use serde::Serialize;
+
+/// The application that received a paste. `id` is a file or package name, never a window title.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TargetApp {
+    pub id: String,
+    pub label: String,
+}
+
 #[cfg(target_os = "android")]
 pub mod android;
 
@@ -41,7 +50,7 @@ mod unsupported {
     pub fn set_dictation_active(_active: bool) {}
     #[cfg_attr(mobile, allow(dead_code))]
     pub fn set_paused(_paused: bool) {}
-    pub fn insert_text(_text: &str) -> Result<(), String> {
+    pub fn insert_text(_text: &str) -> Result<Option<super::TargetApp>, String> {
         Err(UNSUPPORTED.into())
     }
     pub fn capture_selection() -> Result<(String, Option<String>), String> {
@@ -66,6 +75,15 @@ mod unsupported {
     pub fn hide_window(window: &WebviewWindow) -> Result<(), String> {
         window.hide().map_err(|e| e.to_string())
     }
+    pub fn show_handoff_alert(
+        _app: &AppHandle,
+        _id: &str,
+        _title: &str,
+        _body: &str,
+    ) -> Result<(), String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn notify_handoff_click(_app: &AppHandle, _id: &str) {}
 }
 #[cfg(not(windows))]
 pub use unsupported::*;

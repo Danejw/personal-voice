@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlatformAdapter, PushToTalkEvent } from "@/platform/PlatformAdapter";
+import { countOutputWords, countTermUses } from "@/usage/words";
 import { usageEventsFromDictation } from "@/usage/usageEvents";
 import type { UsageStore } from "@/usage/UsageStore";
 import type { VoiceProvider } from "@/voice/provider/VoiceProvider";
@@ -18,19 +19,34 @@ function quietly(promise: Promise<unknown>) {
  * Binds one `DictationController` to React state and to the platform:
  * push-to-talk drives it, and Escape is routed while an utterance is cancellable.
  */
+export interface UsageContext {
+  locale: string | null;
+  terms: readonly string[];
+}
+
 export function useDictation(
   platform: PlatformAdapter,
   getProvider: () => VoiceProvider,
   destinations: TranscriptDestinationRouter,
   usage: UsageStore,
+  getUsageContext: () => UsageContext = () => ({ locale: null, terms: [] }),
 ) {
   const [snapshot, setSnapshot] = useState<DictationSnapshot>(initialDictationSnapshot);
   const [paused, setPaused] = useState(false);
+  const contextRef = useRef(getUsageContext);
+  contextRef.current = getUsageContext;
   const [controller] = useState(
     () => new DictationController(() => platform.createCapture(), setSnapshot, destinations, {
-      onTimings: (timings) => {
+      onTimings: (timings, transcript) => {
         if (import.meta.env.DEV) console.info(`[latency] ${formatTimings(timings)}`);
-        usage.recordLater({ name: "dictation_completed", durationMs: timings.totalMs });
+        const context = contextRef.current();
+        usage.recordLater({
+          name: "dictation_completed",
+          outputWords: countOutputWords(transcript, context.locale),
+          completionMs: timings.totalMs,
+          recordingMs: timings.recordingMs,
+          termUses: countTermUses(transcript, context.terms, context.locale),
+        });
         if (timings.recovered) usage.recordLater({ name: "recovery_used" });
       },
     }),
@@ -45,6 +61,7 @@ export function useDictation(
     const onPushToTalk = (event: PushToTalkEvent) => {
       switch (event.event) {
         case "press":
+          if (event.trigger) usage.armTrigger(event.trigger);
           destinations.overrideNext(event.destination ?? null);
           void controller.press(providerRef.current());
           return;
@@ -81,7 +98,8 @@ export function useDictation(
   useEffect(() => {
     const previous = previousRef.current;
     previousRef.current = snapshot;
-    for (const event of usageEventsFromDictation(previous, snapshot)) {
+    const trigger = snapshot.utterance > previous.utterance ? usage.consumeTrigger() : null;
+    for (const event of usageEventsFromDictation(previous, snapshot, trigger)) {
       usage.recordLater(event);
     }
   }, [snapshot, usage]);

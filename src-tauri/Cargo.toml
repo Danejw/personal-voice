@@ -23,14 +23,19 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 
 [target.'cfg(windows)'.dependencies]
+tauri-plugin-notification = "=2.3.1"
 windows = { version = "=0.62.2", features = [
   "Win32_Foundation",
   "Win32_System_DataExchange",
   "Win32_System_LibraryLoader",
   "Win32_System_Memory",
   "Win32_System_Registry",
+  "Win32_System_Threading",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
+  "Data_Xml_Dom",
+  "Foundation",
+  "UI_Notifications",
 ] }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { BrandMark } from "@/app/BrandMark";
 import type { OverlayAction, OverlayDictation, OverlayHoldDestination, OverlaySnapshot } from "@/overlay/overlay";
 
-interface OverlayPanelProps {
+interface OverlayDockProps {
   snapshot: OverlaySnapshot;
   onAction(action: OverlayAction): void;
 }
@@ -24,7 +24,7 @@ function tone(dictation: OverlayDictation, owns: boolean, showError: boolean): B
 }
 
 /** Four small buttons at the corner of the screen. Hold note or handoff for that destination only. */
-export function OverlayPanel({ snapshot, onAction }: OverlayPanelProps) {
+export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   const [held, setHeld] = useState<OverlayHoldDestination | null>(null);
   const heldRef = useRef<OverlayHoldDestination | null>(null);
   const holdId = useRef(0);
@@ -132,4 +132,3 @@ function SendIcon() {
     </svg>
   );
 }
-
