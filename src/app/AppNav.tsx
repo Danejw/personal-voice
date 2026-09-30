@@ -138,6 +138,9 @@ interface AppNavProps {
   drawer?: boolean;
   drawerOpen?: boolean;
   onDrawerClose?(): void;
+  /** Windows floating overlay on/off. Omitted on platforms without that preference. */
+  showFloatingControl?: boolean;
+  onFloatingControlChange?(show: boolean): void;
 }
 
 /** Persistent section switcher. Selection stays in component state; it does not change the route. */
@@ -148,6 +151,8 @@ export function AppNav({
   drawer = false,
   drawerOpen = false,
   onDrawerClose,
+  showFloatingControl,
+  onFloatingControlChange,
 }: AppNavProps) {
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [voiceOpen, setVoiceOpen] = useState(loadVoiceOpen);
@@ -328,7 +333,40 @@ export function AppNav({
           );
         })}
       </nav>
+      {showFloatingControl !== undefined && onFloatingControlChange && (
+        <div className="app-sidebar-footer">
+          <Tooltip
+            content={
+              showFloatingControl
+                ? "Hide the floating control over other apps"
+                : "Show a small button over other apps"
+            }
+          >
+            <label className="app-sidebar-toggle">
+              <input
+                type="checkbox"
+                checked={showFloatingControl}
+                aria-label="Floating control"
+                onChange={(event) => onFloatingControlChange(event.target.checked)}
+              />
+              <span className="app-sidebar-toggle-icon" aria-hidden="true">
+                <FloatingControlIcon />
+              </span>
+              <span className="app-nav-label">Floating control</span>
+            </label>
+          </Tooltip>
+        </div>
+      )}
     </aside>
+  );
+}
+
+function FloatingControlIcon() {
+  return (
+    <svg viewBox="0 0 24 24">
+      <rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
   );
 }
 

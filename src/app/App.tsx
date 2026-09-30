@@ -340,14 +340,10 @@ function statusFor(state: VoiceState, destination: TranscriptDestinationId): str
 function DeviceControls({
   platform,
   settingsReady,
-  showFloatingControl,
-  onFloatingControlChange,
 }: {
   platform: AppPlatform;
   /** False until this install's device record is the one load/save will use. */
   settingsReady: boolean;
-  showFloatingControl: boolean;
-  onFloatingControlChange(show: boolean): void;
 }) {
   switch (platform.platform) {
     case "windows":
@@ -365,9 +361,7 @@ function DeviceControls({
             <h2 id="behavior-heading">On this PC</h2>
             <WindowsBehaviorPanel
               platform={platform}
-              showFloatingControl={showFloatingControl}
               settingsReady={settingsReady}
-              onFloatingControlChange={onFloatingControlChange}
             />
           </section>
         </>
@@ -686,6 +680,13 @@ export default function App() {
         drawer={mobileNav}
         drawerOpen={drawerOpen}
         onDrawerClose={() => setDrawerOpen(false)}
+        showFloatingControl={platform.platform === "windows" ? floatingControl : undefined}
+        onFloatingControlChange={platform.platform === "windows"
+          ? (show) => {
+              saveShowIndicator(show);
+              setFloatingControl(show);
+            }
+          : undefined}
       />
       <main className="app-main hide-scrollbar" aria-labelledby="page-title">
         <header className="page-header">
@@ -888,11 +889,6 @@ export default function App() {
             key={auth.userId ?? "signed-out"}
             platform={platform}
             settingsReady={settingsDeviceId !== undefined}
-            showFloatingControl={floatingControl}
-            onFloatingControlChange={(show) => {
-              saveShowIndicator(show);
-              setFloatingControl(show);
-            }}
           />
         </div>
 

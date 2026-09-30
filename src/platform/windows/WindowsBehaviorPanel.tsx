@@ -5,17 +5,13 @@ import { loadRemoteComputerActions, loadRemoteReads, saveRemoteComputerActions, 
 
 interface WindowsBehaviorPanelProps {
   platform: WindowsPlatformAdapter;
-  showFloatingControl: boolean;
   settingsReady: boolean;
-  onFloatingControlChange(show: boolean): void;
 }
 
-/** How the app sits on this PC. Startup is a Windows setting; the overlay is this device's preference. */
+/** How the app sits on this PC. Startup is a Windows setting; remote access is this device's preference. */
 export function WindowsBehaviorPanel({
   platform,
-  showFloatingControl,
   settingsReady,
-  onFloatingControlChange,
 }: WindowsBehaviorPanelProps) {
   const [launchAtLogin, setLaunchAtLogin] = useState<boolean | null>(null);
   const [remoteReads, setRemoteReads] = useState(false);
@@ -39,10 +35,6 @@ export function WindowsBehaviorPanel({
     );
   }
 
-  function onShowIndicator(show: boolean) {
-    onFloatingControlChange(show);
-  }
-
   return (
     <>
       <Toggle
@@ -50,12 +42,6 @@ export function WindowsBehaviorPanel({
         title="Opens in the tray when you sign in."
         checked={launchAtLogin ?? false} disabled={launchAtLogin === null}
         onChange={onLaunchAtLogin}
-      />
-      <Toggle
-        label="Show floating control"
-        title="A small button over other apps. Close and minimize keep the app in the tray; Quit is on the tray icon."
-        checked={showFloatingControl}
-        onChange={onShowIndicator}
       />
       <Toggle
         label="Allow remote reads"

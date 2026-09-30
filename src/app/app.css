@@ -85,7 +85,34 @@ html.indicator-view .app-tooltip {
 .app-tooltip.is-left::after { right: -4px; }
 /* Tip on the right of the trigger → pointer faces left toward it. */
 .app-tooltip.is-right::after { left: -4px; }
-.app-nav { display: flex; flex-direction: column; gap: 4px; }
+.app-nav { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; overflow: auto; }
+.app-sidebar-footer {
+  flex: none; margin-top: auto; padding-top: 12px;
+}
+.app-sidebar-toggle {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  margin: 0; padding: 10px 12px; border: 0; border-radius: 10px;
+  color: #b2becc; background: transparent; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 500;
+}
+.app-sidebar-toggle:hover { color: #e9edf4; background: #162029; }
+.app-sidebar-toggle:has(input:focus-visible) { outline: 2px solid #88d8c1; outline-offset: 2px; }
+.app-sidebar-toggle input {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.app-sidebar-toggle-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex: none; border-radius: 8px;
+  color: #7d8a99; background: #162029;
+}
+.app-sidebar-toggle-icon svg { width: 16px; height: 16px; }
+.app-sidebar-toggle:has(input:checked) { color: #e9edf4; }
+.app-sidebar-toggle:has(input:checked) .app-sidebar-toggle-icon {
+  color: #0c1218; background: #88d8c1;
+}
+.app-sidebar.is-collapsed .app-sidebar-toggle { justify-content: center; padding: 10px; }
+.app-sidebar.is-collapsed .app-sidebar-footer { padding-left: 0; padding-right: 0; }
 .app-nav-group { display: flex; flex-direction: column; gap: 2px; }
 .app-nav-group.is-active > .app-nav-parent { color: #e9edf4; }
 .app-nav-children { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px; }
