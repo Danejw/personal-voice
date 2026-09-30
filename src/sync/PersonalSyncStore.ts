@@ -6,6 +6,7 @@ import {
   EMPTY_PERSONAL_DATA, MAX_ENABLED_TERMS, enabledCount, isLanguageCode, newTermProblem, normalizeTerm, sortTerms,
 } from "@/sync/personalData";
 import type { PersonalData, SyncedSettings } from "@/sync/personalData";
+import { createId as newId } from "@/sync/createId";
 
 /**
  * - `signed-out`: nothing to sync.
@@ -49,7 +50,7 @@ export class PersonalSyncStore {
     private api: PersonalSyncApi,
     private storage: KeyValueStorage,
     private platform: PlatformName,
-    private createId: () => string = () => crypto.randomUUID(),
+    private createId: () => string = newId,
   ) {}
 
   subscribe = (listener: () => void): (() => void) => {

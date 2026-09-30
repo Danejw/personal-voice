@@ -80,11 +80,15 @@ describe("device readiness", () => {
 describe("onboarding steps", () => {
   it("lists Android recommendations and leaves them off Windows", () => {
     expect(setupSteps("android").map((step) => step.id)).toEqual([
-      "welcome", "microphone", "overlay", "accessibility", "keep-available", "floating", "ready",
+      "welcome", "microphone", "overlay", "accessibility", "keep-available", "floating", "dictation-sync", "ready",
     ]);
     expect(setupSteps("android").find((step) => step.id === "accessibility")?.optional).toBe(true);
     expect(setupSteps("android").find((step) => step.id === "keep-available")?.optional).toBe(true);
-    expect(setupSteps("windows").map((step) => step.id)).toEqual(["welcome", "microphone", "floating", "ready"]);
+    expect(setupSteps("android").find((step) => step.id === "dictation-sync")?.optional).toBe(true);
+    expect(setupSteps("windows").map((step) => step.id)).toEqual([
+      "welcome", "microphone", "floating", "dictation-sync", "ready",
+    ]);
+    expect(setupSteps("windows").find((step) => step.id === "dictation-sync")?.optional).toBe(true);
   });
 
   it("opens on Welcome until a permission has actually been granted", () => {
@@ -106,7 +110,7 @@ describe("onboarding steps", () => {
 
   it("skips the Windows floating step when the control is already shown", () => {
     const granted = windows({ microphoneGranted: true, floatingControl: true });
-    expect(nextStepIndex(stepIndex("microphone", "windows"), granted)).toBe(stepIndex("ready", "windows"));
+    expect(nextStepIndex(stepIndex("microphone", "windows"), granted)).toBe(stepIndex("dictation-sync", "windows"));
     expect(nextStepIndex(stepIndex("welcome", "windows"), windows())).toBe(stepIndex("microphone", "windows"));
   });
 

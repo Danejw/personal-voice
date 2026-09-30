@@ -5,7 +5,7 @@ import { buildAnalytics, mergeUsageDays, panelRanges } from "@/usage/analytics";
 import type { AnalyticsModel } from "@/usage/analytics";
 import type { UsageSnapshot } from "@/usage/usageEvents";
 import type { RemoteUsageDay } from "@/usage/usageEvents";
-import { HorizontalShareBars, PlatformSplitBar } from "@/usage/HorizontalShareBars";
+import { DeviceSplitBar, HorizontalShareBars, PlatformSplitBar } from "@/usage/HorizontalShareBars";
 import { UsageHeatmap } from "@/usage/UsageHeatmap";
 
 interface AnalyticsPanelProps {
@@ -122,7 +122,10 @@ export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary
                 detail: app.words.toLocaleString(),
               }))}
             />
-            <PlatformSplitBar platforms={model.platforms} />
+            <div className="analytics-split-stack">
+              <PlatformSplitBar platforms={model.platforms} />
+              <DeviceSplitBar devices={model.devices} />
+            </div>
           </div>
 
           <div className="analytics-visual-row">

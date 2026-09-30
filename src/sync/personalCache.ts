@@ -39,6 +39,7 @@ export function readPersonalCache(storage: KeyValueStorage, userId: string): Per
       language,
       usageIntelligence: typeof settings.usageIntelligence === "boolean" ? settings.usageIntelligence : DEFAULT_SETTINGS.usageIntelligence,
       usageEpoch: typeof settings.usageEpoch === "number" && settings.usageEpoch >= 0 ? Math.floor(settings.usageEpoch) : 0,
+      cloudDictationHistory: typeof settings.cloudDictationHistory === "boolean" ? settings.cloudDictationHistory : DEFAULT_SETTINGS.cloudDictationHistory,
     },
     terms: fields.terms.map(parseTerm).filter((entry): entry is DictionaryTerm => entry !== null),
   };

@@ -5,9 +5,21 @@ import type {
 } from "@/history/DictationHistoryStore";
 
 /** Subscribes the shared UI and refreshes when the window is shown again, like voice notes. */
-export function useDictationHistory(store: DictationHistoryStore): DictationHistorySnapshot {
+export function useDictationHistory(
+  store: DictationHistoryStore,
+  userId: string | null,
+  cloudEnabled: boolean,
+): DictationHistorySnapshot {
   useEffect(() => {
-    const refresh = () => store.reload();
+    store.setUser(userId);
+    store.setCloudSync(cloudEnabled);
+    void store.reload();
+  }, [store, userId, cloudEnabled]);
+
+  useEffect(() => {
+    const refresh = () => {
+      void store.reload();
+    };
     const onVisible = () => {
       if (document.visibilityState === "visible" && document.hasFocus()) refresh();
     };

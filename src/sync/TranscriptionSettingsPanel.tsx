@@ -34,6 +34,13 @@ export function TranscriptionSettingsPanel({ store, sync }: TranscriptionSetting
         layout="stack"
         onChange={(language) => store.updateSettings({ language: language || null })}
       />
+      <Toggle
+        label="Sync dictations"
+        title="Final text follows this account. Off keeps Recent on this device. No audio."
+        checked={settings.cloudDictationHistory}
+        disabled={!!readOnly}
+        onChange={(cloudDictationHistory) => store.updateSettings({ cloudDictationHistory })}
+      />
     </>
   );
 }

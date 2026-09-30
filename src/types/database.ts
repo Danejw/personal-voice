@@ -129,6 +129,36 @@ export type Database = {
         }
         Relationships: []
       }
+      dictations: {
+        Row: {
+          created_at: string
+          destination: string
+          id: string
+          outcome: string
+          source_device_id: string
+          text: string
+          user_id: string
+        }
+        Insert: {
+          created_at: string
+          destination: string
+          id: string
+          outcome: string
+          source_device_id: string
+          text: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          destination?: string
+          id?: string
+          outcome?: string
+          source_device_id?: string
+          text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       dictionary: {
         Row: {
           created_at: string
@@ -188,6 +218,7 @@ export type Database = {
       }
       settings: {
         Row: {
+          cloud_dictation_history: boolean
           language: string | null
           smart_transcription: boolean
           updated_at: string
@@ -196,6 +227,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
           updated_at?: string
@@ -204,6 +236,7 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
           updated_at?: string

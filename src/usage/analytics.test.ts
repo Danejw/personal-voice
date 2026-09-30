@@ -151,9 +151,11 @@ describe("settings epoch", () => {
   it("treats a missing settings row as epoch 0 and omits the epoch from ordinary saves", () => {
     expect(settingsFromRow(null)).toEqual(DEFAULT_SETTINGS);
     expect(settingsFromRow(null).usageEpoch).toBe(0);
+    expect(settingsFromRow(null).cloudDictationHistory).toBe(false);
     const row = settingsUpsertRow("user", { ...DEFAULT_SETTINGS, usageEpoch: 4, usageIntelligence: false });
     expect(row).not.toHaveProperty("usage_epoch");
     expect(row.usage_intelligence).toBe(false);
+    expect(row.cloud_dictation_history).toBe(false);
   });
 });
 

@@ -7,6 +7,8 @@ export interface SyncedSettings {
   language: string | null;
   /** When false, this device stops recording usage counters. The preference syncs. */
   usageIntelligence: boolean;
+  /** When true, finalized dictation text is stored on the account. Off until the user opts in. */
+  cloudDictationHistory: boolean;
   /**
    * Server-owned analytics generation. Loads may read it. `saveSettings` must not write it.
    * A missing settings row means `0`.
@@ -25,7 +27,13 @@ export interface PersonalData {
   terms: DictionaryTerm[];
 }
 
-export const DEFAULT_SETTINGS: SyncedSettings = { smartTranscription: true, language: null, usageIntelligence: true, usageEpoch: 0 };
+export const DEFAULT_SETTINGS: SyncedSettings = {
+  smartTranscription: true,
+  language: null,
+  usageIntelligence: true,
+  usageEpoch: 0,
+  cloudDictationHistory: false,
+};
 export const EMPTY_PERSONAL_DATA: PersonalData = { settings: DEFAULT_SETTINGS, terms: [] };
 
 /** Mirrors the `enforce_dictionary_limit` trigger and `dictionary.term` check in the migration. */

@@ -47,24 +47,30 @@ export function HorizontalShareBars({ title, empty, items, headingId }: Horizont
   );
 }
 
-interface PlatformSplitBarProps {
-  platforms: readonly { id: string; label: string; share: number; words: number }[];
+interface SplitSegment {
+  id: string;
+  label: string;
+  share: number;
+  /** Segment fill, such as `is-windows` or `is-rank-0`. */
+  tone: string;
+  tooltip: string;
 }
 
-/** One bar split by Windows and Android. Width is the share of words. */
-export function PlatformSplitBar({ platforms }: PlatformSplitBarProps) {
-  if (!platforms.length) return null;
+/** One bar split into labeled shares. A narrow slice keeps a minimum width and ellipsizes. */
+function ShareSplitBar({ headingId, title, segments }: {
+  headingId: string;
+  title: string;
+  segments: readonly SplitSegment[];
+}) {
+  if (!segments.length) return null;
   return (
-    <section aria-labelledby="platform-heading" className="platform-split">
-      <h2 id="platform-heading">Platforms</h2>
-      <div className="platform-bar" role="img" aria-label={platforms.map((item) => `${item.label} ${item.share}%`).join(", ")}>
-        {platforms.map((item) => (
-          <Tooltip
-            key={item.id}
-            content={`${item.label}: ${item.share}% · ${item.words.toLocaleString()} words`}
-          >
+    <section aria-labelledby={headingId} className="platform-split">
+      <h2 id={headingId}>{title}</h2>
+      <div className="platform-bar" role="img" aria-label={segments.map((item) => `${item.label} ${item.share}%`).join(", ")}>
+        {segments.map((item) => (
+          <Tooltip key={item.id} content={item.tooltip}>
             <div
-              className={`platform-segment is-${item.id}`}
+              className={`platform-segment ${item.tone}`}
               style={{ flexGrow: Math.max(item.share, 8), flexBasis: 0 }}
             >
               <span>{item.label}</span>
@@ -74,5 +80,49 @@ export function PlatformSplitBar({ platforms }: PlatformSplitBarProps) {
         ))}
       </div>
     </section>
+  );
+}
+
+interface PlatformSplitBarProps {
+  platforms: readonly { id: string; label: string; share: number; words: number }[];
+}
+
+/** One bar split by Windows and Android. Width is the share of words. */
+export function PlatformSplitBar({ platforms }: PlatformSplitBarProps) {
+  return (
+    <ShareSplitBar
+      headingId="platform-heading"
+      title="Platforms"
+      segments={platforms.map((item) => ({
+        id: item.id,
+        label: item.label,
+        share: item.share,
+        tone: `is-${item.id}`,
+        tooltip: `${item.label}: ${item.share}% · ${item.words.toLocaleString()} words`,
+      }))}
+    />
+  );
+}
+
+const DEVICE_TONES = ["is-rank-0", "is-rank-1", "is-rank-2"] as const;
+
+interface DeviceSplitBarProps {
+  devices: readonly { id: string; label: string; share: number; count: number }[];
+}
+
+/** One bar split by device. Width is each device's share of completed dictations. */
+export function DeviceSplitBar({ devices }: DeviceSplitBarProps) {
+  return (
+    <ShareSplitBar
+      headingId="device-heading"
+      title="Devices"
+      segments={devices.map((device, index) => ({
+        id: device.id,
+        label: device.label,
+        share: device.share,
+        tone: DEVICE_TONES[index % DEVICE_TONES.length] ?? "is-rank-0",
+        tooltip: `${device.label}: ${device.share}% · ${device.count.toLocaleString()} dictations`,
+      }))}
+    />
   );
 }

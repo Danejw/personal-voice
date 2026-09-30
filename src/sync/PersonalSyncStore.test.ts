@@ -96,6 +96,7 @@ describe("PersonalSyncStore", () => {
     expect(store.updateSettings({ smartTranscription: false })).toBeNull();
     expect(store.updateSettings({ language: "fr-FR" })).toBeNull();
     expect(store.updateSettings({ usageIntelligence: false })).toBeNull();
+    expect(store.updateSettings({ cloudDictationHistory: true })).toBeNull();
     const added = store.getSnapshot().data.terms.find((entry) => entry.term === "Seed Dance");
     expect(added).toBeDefined();
     expect(store.setTermEnabled(added?.id ?? "", false)).toBeNull();
@@ -104,7 +105,7 @@ describe("PersonalSyncStore", () => {
     const restarted = new PersonalSyncStore(server.api, memoryStorage(), "windows", ids());
     await restarted.setUser("u1");
     expect(restarted.getSnapshot().data).toEqual({
-      settings: { ...DEFAULT_SETTINGS, smartTranscription: false, language: "fr-FR", usageIntelligence: false },
+      settings: { ...DEFAULT_SETTINGS, smartTranscription: false, language: "fr-FR", usageIntelligence: false, cloudDictationHistory: true },
       terms: [
         { id: "id-3", term: "model_pricing_skus", enabled: true },
         { id: "id-2", term: "Seed Dance", enabled: false },

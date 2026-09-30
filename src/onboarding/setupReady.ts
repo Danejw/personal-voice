@@ -9,6 +9,7 @@ export type SetupStepId =
   | "accessibility"
   | "keep-available"
   | "floating"
+  | "dictation-sync"
   | "ready";
 
 export interface SetupStep {
@@ -67,6 +68,7 @@ export function setupSteps(platform: PlatformName): SetupStep[] {
   const welcome: SetupStep = { id: "welcome", optional: false };
   const microphone: SetupStep = { id: "microphone", optional: false };
   const floating: SetupStep = { id: "floating", optional: false };
+  const dictationSync: SetupStep = { id: "dictation-sync", optional: true };
   const ready: SetupStep = { id: "ready", optional: false };
   switch (platform) {
     case "android":
@@ -77,10 +79,11 @@ export function setupSteps(platform: PlatformName): SetupStep[] {
         { id: "accessibility", optional: true },
         { id: "keep-available", optional: true },
         floating,
+        dictationSync,
         ready,
       ];
     case "windows":
-      return [welcome, microphone, floating, ready];
+      return [welcome, microphone, floating, dictationSync, ready];
     default: {
       const unhandled: never = platform;
       throw new Error(`Unhandled platform: ${String(unhandled)}`);
@@ -98,6 +101,7 @@ export function stepIndex(id: SetupStepId, platform: PlatformName): number {
 export function stepDone(id: SetupStepId, status: DeviceReadiness): boolean {
   switch (id) {
     case "welcome":
+    case "dictation-sync":
     case "ready":
       return false;
     case "microphone":

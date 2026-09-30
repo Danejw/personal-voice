@@ -16,6 +16,7 @@ It is not a transcription server.
 - device metadata
 - explicitly saved voice notes
 - explicitly sent device handoffs
+- opt-in recent dictations (final text only, and only while the account setting is on)
 - secure Google/Gemini credential handling
 - short-lived client token issuance
 
@@ -26,7 +27,7 @@ It is not a transcription server.
 - transcript processing
 - job queues
 - transcript analytics or per-utterance logs
-- recent dictation history
+- automatic transcript history for accounts that have not opted in
 - permanent recording storage
 
 ## Suggested tables
@@ -74,6 +75,7 @@ smart_transcription boolean not null default true
 language text
 usage_intelligence boolean not null default true
 usage_epoch bigint not null default 0
+cloud_dictation_history boolean not null default false
 updated_at timestamptz not null default now()
 ```
 
@@ -81,7 +83,7 @@ updated_at timestamptz not null default now()
 
 Keep device-specific settings local unless there is a concrete reason to sync them.
 
-Account-wide: Smart transcription, language, and usage intelligence.
+Account-wide: Smart transcription, language, usage intelligence, and sync recent dictations.
 
 Device (local, existing device ID): dictation destination, microphone, floating-control visibility, push-to-talk.
 
@@ -99,6 +101,20 @@ source_device_id uuid not null
 status text not null -- inbox | archived
 created_at timestamptz not null
 updated_at timestamptz not null
+```
+
+### dictations
+
+Recent dictations are opt-in. `settings.cloud_dictation_history` defaults to false. While it is on, each new finalized transcript is inserted here. Turning it off stops new uploads and does not delete existing rows. This is not an audio store and it is not filled unless the user opts in.
+
+```sql
+id uuid primary key
+user_id uuid not null references auth.users(id)
+text text not null
+destination text not null -- active-field | voice-note | send-to-device
+outcome text not null -- success | failure
+source_device_id uuid not null
+created_at timestamptz not null
 ```
 
 ### handoffs

@@ -105,4 +105,102 @@ describe("DictationHistoryStore", () => {
       error: "Recent history could not be saved on this device.",
     });
   });
+
+  it("does not upload while cloud sync is off", async () => {
+    const storage = memoryStorage();
+    const inserted: string[] = [];
+    const store = new DictationHistoryStore(storage, 75, () => new Date("2026-09-28T12:00:00.000Z"), {
+      list: async () => [],
+      insert: async (_userId, record) => { inserted.push(record.text); },
+    }, () => "device-1");
+    store.setUser("user-1");
+    store.record({ text: "Local only.", destination: "active-field", outcome: "success" });
+    await store.settled();
+    expect(inserted).toEqual([]);
+  });
+
+  it("uploads a new dictation when cloud sync is on", async () => {
+    const storage = memoryStorage();
+    const inserted: { id: string; text: string; sourceDeviceId: string }[] = [];
+    const store = new DictationHistoryStore(
+      storage,
+      75,
+      () => new Date("2026-09-28T12:00:00.000Z"),
+      {
+        list: async () => [],
+        insert: async (_userId, record) => { inserted.push({ id: record.id, text: record.text, sourceDeviceId: record.sourceDeviceId }); },
+      },
+      () => "device-1",
+      () => "dictation-1",
+    );
+    store.setUser("user-1");
+    store.setCloudSync(true);
+    store.record({ text: "  Hello.  ", destination: "voice-note", outcome: "success" });
+    await store.settled();
+    expect(inserted).toEqual([{ id: "dictation-1", text: "Hello.", sourceDeviceId: "device-1" }]);
+    expect(store.getSnapshot().entries[0]?.text).toBe("  Hello.  ");
+  });
+
+  it("leaves the local entry when the cloud insert fails", async () => {
+    const storage = memoryStorage();
+    const store = new DictationHistoryStore(storage, 75, () => new Date("2026-09-28T12:00:00.000Z"), {
+      list: async () => [],
+      insert: async () => { throw new Error("Sync failed (500)."); },
+    }, () => "device-1");
+    store.setUser("user-1");
+    store.setCloudSync(true);
+    store.record({ text: "Keep me.", destination: "active-field", outcome: "failure" });
+    await store.settled();
+    expect(store.getSnapshot().entries[0]?.text).toBe("Keep me.");
+    expect(store.getSnapshot().error).toBe("Sync failed (500).");
+  });
+
+  it("merges a dictation saved on another device", async () => {
+    const storage = memoryStorage();
+    const store = new DictationHistoryStore(
+      storage,
+      75,
+      () => new Date("2026-09-28T12:00:00.000Z"),
+      {
+        list: async () => [{
+          id: "phone-1",
+          text: "From the phone.",
+          destination: "active-field",
+          outcome: "success",
+          sourceDeviceId: "phone",
+          createdAt: "2026-09-28T12:05:00.000Z",
+        }],
+        insert: async () => undefined,
+      },
+      () => "device-1",
+      () => "desk-1",
+    );
+    store.setUser("user-1");
+    store.setCloudSync(true);
+    store.record({ text: "From the desk.", destination: "active-field", outcome: "success" });
+    await store.reload();
+    expect(store.getSnapshot().entries.map((entry) => entry.text)).toEqual(["From the phone.", "From the desk."]);
+  });
+
+  it("does not upload history that was already on this device", async () => {
+    const storage = memoryStorage();
+    storage.setItem("dictation.history.v1", JSON.stringify([{
+      text: "Already here.",
+      timestamp: "2026-09-28T11:00:00.000Z",
+      destination: "active-field",
+      outcome: "success",
+    }]));
+    const inserted: string[] = [];
+    const store = new DictationHistoryStore(storage, 75, () => new Date("2026-09-28T12:00:00.000Z"), {
+      list: async () => [],
+      insert: async (_userId, record) => { inserted.push(record.text); },
+    }, () => "device-1");
+    store.setUser("user-1");
+    store.setCloudSync(true);
+    await store.reload();
+    await store.settled();
+    expect(inserted).toEqual([]);
+    expect(store.getSnapshot().entries[0]?.text).toBe("Already here.");
+    expect(store.getSnapshot().entries[0]?.id).toBeUndefined();
+  });
 });

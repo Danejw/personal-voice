@@ -201,7 +201,7 @@ created_at
 consumed_at (optional)
 ```
 
-### Local recent dictation history
+### Recent dictation history
 
 Keep at most 75 finalized dictations on the current device:
 
@@ -212,7 +212,9 @@ destination
 success | failure
 ```
 
-This is local recovery data, not a backend table.
+This stays on the device until the user turns on Sync recent dictations. That account setting
+is off by default. When it is on, the same final text is stored in `dictations` and can be
+opened on the user's other devices. No audio is stored.
 
 ### Local device preferences
 
@@ -243,8 +245,10 @@ Keep schema additions conservative.
 - usage analytics stores daily counters only, never transcript text, microphone audio, or raw key logs
 - usage intelligence can be turned off; that preference syncs and stops new counts
 - clearing analytics increments a server-owned epoch and deletes synced daily counters
-- no automatic cloud transcript-history table
-- recent dictation history contains final text only, stays local, and can be cleared
+- recent dictation history contains final text only and stays on the device until the user opts in
+- cloud dictation history is off by default; the choice is saved on the account
+- when it is on, final text is stored in `dictations` for the user's other devices
+- turning it off stops new uploads
 - do not log transcript content unnecessarily
 
 ## Reliability expectations

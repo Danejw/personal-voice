@@ -20,6 +20,7 @@ import { personalContextNote } from "@/assistant/personalContext";
 import type { AssistantEvent } from "@/assistant/events";
 import { PcmPlayback } from "@/assistant/PcmPlayback";
 import { assistantToolResponse } from "@/assistant/protocol";
+import { createId as newId } from "@/sync/createId";
 import {
   acceptSelection,
   selectionContextText,
@@ -151,7 +152,7 @@ export class AssistantController {
       resumeHandle: string | null,
     ) => AssistantSessionHandle,
     private playback: Pick<PcmPlayback, "prime" | "enqueue" | "clear">,
-    private nextId: () => string = () => crypto.randomUUID(),
+    private nextId: () => string = newId,
     private createCapture?: () => AudioCapture,
     private lease: MicrophoneLease = new MicrophoneLease(),
     private actions: AssistantActions = {

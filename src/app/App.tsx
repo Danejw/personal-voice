@@ -31,7 +31,7 @@ import { HandoffStore } from "@/handoffs/HandoffStore";
 import { useHandoffAlerts } from "@/handoffs/useHandoffAlerts";
 import { useHandoffs } from "@/handoffs/useHandoffs";
 import { DictationHistoryPanel } from "@/history/DictationHistoryPanel";
-import { DictationHistoryStore } from "@/history/DictationHistoryStore";
+import { DictationHistoryStore, DICTATION_HISTORY_LIMIT } from "@/history/DictationHistoryStore";
 import { useDictationHistory } from "@/history/useDictationHistory";
 import { VoiceNotesPanel, VoiceNotesToolbar } from "@/notes/VoiceNotesPanel";
 import { Onboarding } from "@/onboarding/Onboarding";
@@ -48,6 +48,7 @@ import { MicrophonePanel } from "@/platform/windows/MicrophonePanel";
 import { PushToTalkShortcutPanel } from "@/platform/windows/PushToTalkShortcutPanel";
 import { WindowsBehaviorPanel } from "@/platform/windows/WindowsBehaviorPanel";
 import { deviceApi } from "@/services/deviceService";
+import { dictationsApi } from "@/services/dictationsService";
 import { remoteContextApi } from "@/services/remoteContextService";
 import { computerActionApi } from "@/services/computerActionService";
 import { RemoteReadStore } from "@/assistant/RemoteReadStore";
@@ -66,6 +67,7 @@ import { PersonalSyncStore } from "@/sync/PersonalSyncStore";
 import { SyncStatus } from "@/sync/SyncStatus";
 import { TranscriptionSettingsPanel } from "@/sync/TranscriptionSettingsPanel";
 import { localDeviceId } from "@/sync/personalCache";
+import { createId } from "@/sync/createId";
 import { transcriptionPreferences } from "@/sync/personalData";
 import type { DictionaryTerm } from "@/sync/personalData";
 import { usePersonalSync } from "@/sync/usePersonalSync";
@@ -109,7 +111,7 @@ const microphone = new MicrophoneLease();
 const assistant = new AssistantController(
   (onEvent, handle) => new AssistantSession(() => assistantTokens.take(), onEvent, handle),
   new PcmPlayback(),
-  () => crypto.randomUUID(),
+  createId,
   () => platform.createCapture(),
   microphone,
 );
@@ -117,23 +119,23 @@ const usage = new UsageStore(localStorage, platform.platform, () => new Date(), 
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
 const voiceNotes = new VoiceNotesStore(
   voiceNotesApi,
-  (userId) => localDeviceId(localStorage, userId, () => crypto.randomUUID()),
+  (userId) => localDeviceId(localStorage, userId, createId),
   () => usage.recordLater({ name: "voice_note_created" }),
 );
 const devices = new DeviceStore(
   deviceApi,
-  (userId) => localDeviceId(localStorage, userId, () => crypto.randomUUID()),
+  (userId) => localDeviceId(localStorage, userId, createId),
 );
 const handoffs = new HandoffStore(
   handoffApi,
-  (userId) => localDeviceId(localStorage, userId, () => crypto.randomUUID()),
+  (userId) => localDeviceId(localStorage, userId, createId),
   () => usage.recordLater({ name: "handoff_created" }),
   () => usage.recordLater({ name: "shared_clipboard" }),
 );
 const remoteReads = new RemoteReadStore(
   remoteContextApi,
   (userId) => deviceApi.list(userId),
-  (userId) => localDeviceId(localStorage, userId, () => crypto.randomUUID()),
+  (userId) => localDeviceId(localStorage, userId, createId),
   platform,
   (id) => {
     if (platform.platform !== "windows") return;
@@ -147,11 +149,17 @@ const remoteReads = new RemoteReadStore(
 const computerActions = new ComputerActionStore(
   computerActionApi,
   (userId) => deviceApi.list(userId),
-  (userId) => localDeviceId(localStorage, userId, () => crypto.randomUUID()),
+  (userId) => localDeviceId(localStorage, userId, createId),
   platform,
 );
 let accountUserId: string | null = null;
-const history = new DictationHistoryStore(localStorage);
+const history = new DictationHistoryStore(
+  localStorage,
+  DICTATION_HISTORY_LIMIT,
+  () => new Date(),
+  dictationsApi,
+  (userId) => localDeviceId(localStorage, userId, createId),
+);
 
 /** Counts a successful paste. A failure here must not fail the paste itself. */
 function recordTargetApp(text: string, app: TargetApp | null): void {
@@ -387,7 +395,7 @@ export default function App() {
   const notes = useVoiceNotes(voiceNotes, auth.userId);
   const deviceSnapshot = useDevices(devices, auth.userId);
   const handoffSnapshot = useHandoffs(handoffs, auth.userId);
-  const historySnapshot = useDictationHistory(history);
+  const historySnapshot = useDictationHistory(history, auth.userId, sync.data.settings.cloudDictationHistory);
   const usageSnapshot = useUsage(usage);
   const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
   const [section, setSection] = useState<AppSection>("dictation");
@@ -461,7 +469,7 @@ export default function App() {
   const settingsDeviceId = !auth.ready
     ? undefined
     : auth.userId
-      ? localDeviceId(localStorage, auth.userId, () => crypto.randomUUID())
+      ? localDeviceId(localStorage, auth.userId, createId)
       : null;
   if (settingsDeviceId !== undefined) bindDeviceSettings(settingsDeviceId);
   const showFloating = settingsDeviceId !== undefined ? loadShowIndicator() : floatingControl;
@@ -621,11 +629,15 @@ export default function App() {
     return (
       <Onboarding
         readiness={readiness}
+        sync={sync}
         refresh={refreshSetup}
         onMicrophoneGranted={markMicrophoneGranted}
         onShowFloatingControl={(show) => {
           saveShowIndicator(show);
           setFloatingControl(show);
+        }}
+        onCloudHistory={(enabled) => {
+          personalSync.updateSettings({ cloudDictationHistory: enabled });
         }}
         onDismiss={() => {
           dismissOnboarding(sessionStorage);
@@ -737,6 +749,7 @@ export default function App() {
           <section aria-labelledby="history-heading" className="page-panel dictations-recent">
             <DictationHistoryPanel
               snapshot={historySnapshot}
+              cloudSync={sync.data.settings.cloudDictationHistory}
               insertIntoActiveField={(text) => pasteReceived(text)}
               onInserted={() => usage.recordLater({ name: "history_inserted" })}
             />

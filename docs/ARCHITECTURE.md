@@ -147,7 +147,8 @@ PV4 reuses that same store and table for explicitly pasted or typed text. The sh
 selection without reading or monitoring either operating system's clipboard.
 PV5 observes each router result after the selected destination resolves or rejects. The observer
 schedules a local `DictationHistoryStore` write without awaiting it, so history persistence
-cannot delay or change dictation delivery.
+cannot delay or change dictation delivery. When the account has opted in, that same write also
+inserts the final text into `dictations`. The insert is not awaited either.
 `DictationController` depends only on the destination interface. A destination failure follows
 the existing `ERROR` transition and leaves the transcript visible. Future destinations can be
 added to the router without changing capture, Gemini, or recovery.
@@ -345,17 +346,23 @@ Writes go through `upsert_usage_day()`. Clients may only select `usage_days`. On
 | Launch at login / start with phone | Local machine | Windows OS startup item; Android boot receiver + local prefs |
 | Android overlay, accessibility, floating mic on/off | Local machine | OS permissions; floating-mic want + start-on-boot are device SharedPreferences |
 | Usage intelligence | Account | Same opt-out on every device |
+| Sync recent dictations | Account | Off until the user opts in. Final text only, on every device |
 | Usage analytics | Account days | Daily counters per device, replaced by the local snapshot for this device |
 
 Overlay layout is not synced. Android start-on-boot and `want_floating_mic` stay on the device.
 
-## Local dictation history
+## Dictation history
 
-PV5 keeps the 75 most recent finalized dictations in local WebView storage. Each entry contains
-only final text, timestamp, selected destination, and success/failure. It stores no audio and has
-no Supabase service or migration. Malformed stored entries are ignored, persistence failures
-leave the current in-memory recovery list available, and Clear history replaces the local list
-with an empty one.
+The 75 most recent finalized dictations stay in local WebView storage. Each entry contains
+only final text, timestamp, selected destination, and success/failure. It stores no audio.
+Malformed stored entries are ignored, and persistence failures leave the current in-memory
+recovery list available.
+
+`settings.cloud_dictation_history` is off until the user turns it on during setup or in
+Transcription settings. While it is on, new entries are also inserted into `dictations` and
+other signed-in devices merge them when the app is focused or comes back online. Turning it
+off stops new uploads and leaves rows already stored. History saved before the switch was
+turned on stays on that device.
 
 ## Failure recovery
 

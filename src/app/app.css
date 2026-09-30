@@ -254,6 +254,7 @@ section > p:last-child { margin-bottom: 0; font-size: 12px; }
   margin: 6px 0 0; font-size: clamp(10px, 1.55vw, 12px); line-height: 1.25; color: #8b97a6;
 }
 .analytics-visual-row { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; align-items: start; }
+.analytics-split-stack { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .heatmap-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .heatmap-head h2 { margin-bottom: 14px; }
 .heatmap-meta { margin: 0 0 14px; font-size: 13px; color: #8b97a6; }
@@ -299,8 +300,11 @@ section > p:last-child { margin-bottom: 0; font-size: 12px; }
   min-width: 0; padding: 0 12px; color: #f4fbf8; font-size: 14px; font-weight: 650;
 }
 .platform-share { font-size: 12px; font-weight: 600; opacity: 0.8; }
-.platform-segment.is-windows { background: #1f6f5e; }
-.platform-segment.is-android { background: #88d8c1; color: #10221c; }
+.platform-segment.is-windows,
+.platform-segment.is-rank-0 { background: #1f6f5e; }
+.platform-segment.is-rank-1 { background: #3d9a84; color: #10221c; }
+.platform-segment.is-android,
+.platform-segment.is-rank-2 { background: #88d8c1; color: #10221c; }
 .platform-segment span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .bars, .metric-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .bar-row, .metric-list li { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 6px; align-items: center; font-size: 12px; }

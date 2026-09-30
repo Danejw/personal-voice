@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GateBrand, GateFrame } from "@/auth/AuthGate";
+import { Toggle } from "@/components/Toggle";
 import { androidSetup, canStartFloatingMic } from "@/platform/android/androidSetup";
 import type { AndroidPermission } from "@/platform/android/androidSetup";
 import { requestMicrophoneAccess } from "@/platform/windows/microphonePermission";
@@ -12,23 +13,29 @@ import {
   type DeviceReadiness,
   type SetupStepId,
 } from "@/onboarding/setupReady";
+import type { SyncSnapshot } from "@/sync/PersonalSyncStore";
+import { readOnlyReason } from "@/sync/SyncStatus";
 
 interface OnboardingProps {
   readiness: DeviceReadiness;
+  sync: SyncSnapshot;
   onEnter(): void;
   onDismiss(): void;
   onShowFloatingControl(show: boolean): void;
   onMicrophoneGranted(): void;
+  onCloudHistory(enabled: boolean): void;
   refresh(): void;
 }
 
 /** One permission at a time, until the floating control is on. */
 export function Onboarding({
   readiness,
+  sync,
   onEnter,
   onDismiss,
   onShowFloatingControl,
   onMicrophoneGranted,
+  onCloudHistory,
   refresh,
 }: OnboardingProps) {
   const steps = useMemo(() => setupSteps(readiness.platform), [readiness.platform]);
@@ -96,6 +103,7 @@ export function Onboarding({
       <StepBody
         id={step.id}
         readiness={readiness}
+        sync={sync}
         busy={busy}
         asked={asked}
         onContinue={continueNext}
@@ -103,6 +111,7 @@ export function Onboarding({
         onRun={run}
         onShowFloatingControl={onShowFloatingControl}
         onMicrophoneGranted={onMicrophoneGranted}
+        onCloudHistory={onCloudHistory}
       />
       {error && <p className="error" role="alert">{error}</p>}
       <div className="onboarding-footer">
@@ -128,6 +137,7 @@ function advancesWhenDone(id: SetupStepId): boolean {
 interface StepBodyProps {
   id: SetupStepId;
   readiness: DeviceReadiness;
+  sync: SyncSnapshot;
   busy: boolean;
   asked: readonly AndroidPermission[];
   onContinue(): void;
@@ -135,11 +145,13 @@ interface StepBodyProps {
   onRun(action: () => Promise<void>): void;
   onShowFloatingControl(show: boolean): void;
   onMicrophoneGranted(): void;
+  onCloudHistory(enabled: boolean): void;
 }
 
 function StepBody({
   id,
   readiness,
+  sync,
   busy,
   asked,
   onContinue,
@@ -147,6 +159,7 @@ function StepBody({
   onRun,
   onShowFloatingControl,
   onMicrophoneGranted,
+  onCloudHistory,
 }: StepBodyProps) {
   switch (id) {
     case "welcome":
@@ -287,6 +300,25 @@ function StepBody({
           )}
         </>
       );
+    case "dictation-sync": {
+      const readOnly = readOnlyReason(sync.status);
+      return (
+        <>
+          <h2>Sync dictations</h2>
+          <p className="onboarding-copy">
+            Save final text to your account so you can open it on your other devices. Leave this off to keep recent dictations on this device. No audio is saved.
+          </p>
+          <Toggle
+            label="Sync dictations"
+            checked={sync.data.settings.cloudDictationHistory}
+            disabled={busy || !!readOnly}
+            onChange={onCloudHistory}
+          />
+          {readOnly && <p className="hint">{readOnly}</p>}
+          <button type="button" className="record" disabled={busy} onClick={onContinue}>Continue</button>
+        </>
+      );
+    }
     case "ready":
       return (
         <>
