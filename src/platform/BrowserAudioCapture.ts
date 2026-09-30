@@ -2,7 +2,8 @@ import type { AudioCapture } from "@/voice/audio/AudioCapture";
 import { PCM_SAMPLE_RATE } from "@/voice/audio/pcm";
 import workletUrl from "@/voice/audio/pcm-worklet.ts?worker&url";
 
-const VOICE_AUDIO: MediaTrackConstraints = { channelCount: 1, echoCancellation: true, noiseSuppression: true };
+/** Constraints used for the permission prompt and for live capture. */
+export const VOICE_AUDIO: MediaTrackConstraints = { channelCount: 1, echoCancellation: true, noiseSuppression: true };
 
 /**
  * Opens the chosen microphone, or the system default when none is chosen or it's unplugged.

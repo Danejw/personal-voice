@@ -14,6 +14,7 @@ import { useAssistant } from "@/assistant/useAssistant";
 import { AppNav, sectionMeta, useMobileNav, type AppSection } from "@/app/AppNav";
 import { BrandMark } from "@/app/BrandMark";
 import { useDictation } from "@/app/useDictation";
+import { AuthGate, BrandSplash } from "@/auth/AuthGate";
 import { AuthPanel } from "@/auth/AuthPanel";
 import { useAuth } from "@/auth/useAuth";
 import { SelectionPanel } from "@/context/SelectionPanel";
@@ -33,6 +34,9 @@ import { DictationHistoryPanel } from "@/history/DictationHistoryPanel";
 import { DictationHistoryStore } from "@/history/DictationHistoryStore";
 import { useDictationHistory } from "@/history/useDictationHistory";
 import { VoiceNotesPanel, VoiceNotesToolbar } from "@/notes/VoiceNotesPanel";
+import { Onboarding } from "@/onboarding/Onboarding";
+import { dismissOnboarding, isDeviceReady, onboardingDismissed } from "@/onboarding/setupReady";
+import { useDeviceSetup } from "@/onboarding/useDeviceSetup";
 import { VoiceNotesStore } from "@/notes/VoiceNotesStore";
 import { useVoiceNotes } from "@/notes/useVoiceNotes";
 import { useOverlay } from "@/overlay/useOverlay";
@@ -401,6 +405,7 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const mobileNav = useMobileNav();
   const [floatingControl, setFloatingControl] = useState(loadShowIndicator);
+  const [entryPhase, setEntryPhase] = useState<"checking" | "wizard" | "app">("checking");
   const [profileEnabled, setProfileEnabled] = useState(true);
   const [autoRun, setAutoRun] = useState(true);
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
@@ -459,6 +464,8 @@ export default function App() {
       ? localDeviceId(localStorage, auth.userId, () => crypto.randomUUID())
       : null;
   if (settingsDeviceId !== undefined) bindDeviceSettings(settingsDeviceId);
+  const showFloating = settingsDeviceId !== undefined ? loadShowIndicator() : floatingControl;
+  const { readiness, refresh: refreshSetup, markMicrophoneGranted } = useDeviceSetup(platform.platform, showFloating);
 
   const personalToday = localDayKey(new Date());
   const personalDevice = deviceSnapshot.devices.find((device) => device.id === deviceSnapshot.currentDeviceId);
@@ -497,6 +504,19 @@ export default function App() {
     setAutoRun(auto);
     assistant.setAutoRun(auto);
   }, [settingsDeviceId]);
+
+  useEffect(() => {
+    if (!auth.email) {
+      setEntryPhase("checking");
+      return;
+    }
+    if (!readiness.known) return;
+    setEntryPhase((current) => {
+      if (current !== "checking") return current;
+      if (onboardingDismissed(sessionStorage) || isDeviceReady(readiness)) return "app";
+      return "wizard";
+    });
+  }, [auth.email, readiness]);
 
   // Warm one token so the first press doesn't wait on it; drop it when the account changes.
   useEffect(() => {
@@ -593,6 +613,28 @@ export default function App() {
   }
 
   const microphoneOn = dictationLive || assistantLive;
+
+  if (!auth.ready) return <BrandSplash label="Starting…" />;
+  if (!signedIn) return <AuthGate auth={auth} />;
+  if (!readiness.known || entryPhase === "checking") return <BrandSplash label="Checking this device…" />;
+  if (entryPhase === "wizard") {
+    return (
+      <Onboarding
+        readiness={readiness}
+        refresh={refreshSetup}
+        onMicrophoneGranted={markMicrophoneGranted}
+        onShowFloatingControl={(show) => {
+          saveShowIndicator(show);
+          setFloatingControl(show);
+        }}
+        onDismiss={() => {
+          dismissOnboarding(sessionStorage);
+          setEntryPhase("app");
+        }}
+        onEnter={() => setEntryPhase("app")}
+      />
+    );
+  }
 
   return (
     <div className={mobileNav ? `app-shell is-mobile${drawerOpen ? " is-drawer-open" : ""}` : "app-shell"}>

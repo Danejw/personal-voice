@@ -43,6 +43,10 @@ Tauri 2
 └── native platform extensions only where required
 ```
 
+## Launch order
+
+The settings window does not open the main shell until two checks pass. The stored Supabase session is read first. With no session, a full-window sign-in screen replaces the nav. Once signed in, the device is ready when the floating control can actually be used: on Android, microphone, display over other apps, and the floating mic service; on Windows, microphone permission and Show floating control. If that is not ready, onboarding walks through one step at a time. Set up later hides it for the current launch only. The next launch shows it again while the floating control is still off. Devices & Controls remains the place to change those settings later.
+
 ## Shared layers
 
 Recommended conceptual organization:
