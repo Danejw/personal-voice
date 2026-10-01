@@ -1,5 +1,5 @@
 import { callPlugin, listenPlugin } from "@/platform/android/voicePlatformPlugin";
-import type { AudioCapture } from "@/voice/audio/AudioCapture";
+import { captureEchoFrom, type AudioCapture, type CaptureEchoStatus, type CapturePurpose } from "@/voice/audio/AudioCapture";
 
 export type CaptureEvent =
   | { kind: "chunk"; id: number; pcm: ArrayBuffer }
@@ -32,6 +32,14 @@ export function parseCaptureEvent(payload: unknown): CaptureEvent | null {
  * same format as `BrowserAudioCapture`. Native because the WebView's `getUserMedia` stalls while
  * the app is hidden behind the floating mic.
  */
+/** A missing payload is not duplex. Only an explicit `fullDuplex: true` opens the microphone during playback. */
+export function parseCaptureEcho(payload: unknown): CaptureEchoStatus {
+  if (typeof payload !== "object" || payload === null) {
+    return { fullDuplex: false, nativePlayback: false, noiseSuppression: false };
+  }
+  return captureEchoFrom(payload as CaptureEchoStatus);
+}
+
 export class NativeAudioCapture implements AudioCapture {
   private readonly id = nextCaptureId++;
   private unlisten?: () => void;
@@ -41,7 +49,9 @@ export class NativeAudioCapture implements AudioCapture {
   private onEnd?: () => void;
   private stopping?: Promise<void>;
 
-  async start(onChunk: (pcm: ArrayBuffer) => void, onError: (message: string) => void) {
+  constructor(private readonly purpose: CapturePurpose = "dictation") {}
+
+  async start(onChunk: (pcm: ArrayBuffer) => void, onError: (message: string) => void): Promise<CaptureEchoStatus> {
     const unlisten = await listenPlugin("audioCapture", (payload) => {
       const event = parseCaptureEvent(payload);
       if (!event || event.id !== this.id) return;
@@ -60,7 +70,7 @@ export class NativeAudioCapture implements AudioCapture {
       throw new Error("Recording cancelled.");
     }
     this.unlisten = unlisten;
-    await callPlugin("start_capture", { id: this.id });
+    return parseCaptureEcho(await callPlugin("start_capture", { id: this.id, purpose: this.purpose }));
   }
 
   stop(flush: boolean): Promise<void> {

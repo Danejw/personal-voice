@@ -64,6 +64,9 @@ export class BrowserAudioCapture implements AudioCapture {
       this.source = context.createMediaStreamSource(stream);
       this.source.connect(node);
       node.connect(context.destination); // Processor emits silence, never microphone playback.
+      // Same-process Web Audio is the reference the browser's echo canceller uses.
+      // This is not an Android effect probe. Android reports its own status from the plugin.
+      return { fullDuplex: true, nativePlayback: false, noiseSuppression: true };
     } catch (error) {
       await this.stop(false);
       const name = error instanceof DOMException ? error.name : "";

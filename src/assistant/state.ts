@@ -46,6 +46,10 @@ export interface AssistantSnapshot {
   computerRunning: boolean;
   /** Set when Computer Use asks the user to confirm one step. */
   computerPrompt: string | null;
+  /** The phone could not enable echo cancellation, so the microphone pauses during playback. */
+  echoFallback: boolean;
+  /** Microphone audio is being withheld until playback and its echo tail finish. */
+  playbackHeld: boolean;
 }
 
 export interface PendingAssistantAction {
@@ -86,7 +90,8 @@ export type AssistantAction =
   | { type: "detachHandoff" }
   | { type: "clearAccount" }
   | { type: "accountError"; message: string }
-  | { type: "seed"; turns: AssistantTurn[]; from: string };
+  | { type: "seed"; turns: AssistantTurn[]; from: string }
+  | { type: "echo"; fallback: boolean; held: boolean };
 
 export const initialAssistantState: AssistantSnapshot = {
   status: "IDLE",
@@ -108,6 +113,8 @@ export const initialAssistantState: AssistantSnapshot = {
   continuedFrom: null,
   computerRunning: false,
   computerPrompt: null,
+  echoFallback: false,
+  playbackHeld: false,
 };
 
 /**
@@ -135,13 +142,15 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         resuming: false,
         pendingAction: null,
         actionNotice: null,
+        echoFallback: false,
+        playbackHeld: false,
       };
     case "ready":
       if (state.status !== "CONNECTING") return state;
       return { ...state, status: "READY", error: null, resuming: false };
     case "blocked":
       if (state.status !== "IDLE" && state.status !== "ERROR") return state;
-      return { ...state, status: "ERROR", error: action.message, liveUser: "", liveText: "", liveSources: [], resuming: false };
+      return { ...state, status: "ERROR", error: action.message, liveUser: "", liveText: "", liveSources: [], resuming: false, echoFallback: false, playbackHeld: false };
     case "send":
       if (state.status !== "READY") return state;
       return {
@@ -230,6 +239,8 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         resuming: false,
         pendingAction: null,
         actionNotice: null,
+        echoFallback: false,
+        playbackHeld: false,
       };
     case "end":
       if (state.status === "IDLE") return state;
@@ -253,6 +264,8 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         continuedFrom: null,
         computerRunning: false,
         computerPrompt: null,
+        echoFallback: false,
+        playbackHeld: false,
       };
     case "attachSelection":
       return { ...state, selection: action.item, selectionError: null };
@@ -289,6 +302,10 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
     case "seed":
       if (state.status === "CONNECTING" || state.status === "READY" || state.status === "RESPONDING") return state;
       return { ...state, turns: action.turns, continuedFrom: action.from, liveUser: "", liveText: "", liveSources: [], error: null };
+    case "echo":
+      if (state.status === "IDLE" || state.status === "ERROR") return state;
+      if (state.echoFallback === action.fallback && state.playbackHeld === action.held) return state;
+      return { ...state, echoFallback: action.fallback, playbackHeld: action.held };
     default: {
       const unhandled: never = action;
       throw new Error(`Unhandled assistant action: ${JSON.stringify(unhandled)}`);
@@ -338,7 +355,8 @@ export function assistantStatusLabel(snapshot: AssistantSnapshot, signedIn: bool
   switch (snapshot.status) {
     case "IDLE": return "Not started";
     case "CONNECTING": return snapshot.resuming ? "Reconnecting…" : "Connecting…";
-    case "READY": return "Listening";
+    case "READY":
+      return snapshot.echoFallback && snapshot.playbackHeld ? "Mic paused briefly" : "Listening";
     case "RESPONDING": return "Responding…";
     case "ERROR": return snapshot.error ?? "Assistant failed";
     default: {

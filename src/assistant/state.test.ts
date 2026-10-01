@@ -127,5 +127,23 @@ describe("assistantStatusLabel", () => {
     expect(assistantStatusLabel({ ...initialAssistantState, status: "READY" }, true)).toBe("Listening");
     expect(assistantStatusLabel(initialAssistantState, false)).toBe("Sign in to use Assistant");
     expect(assistantStatusLabel({ ...initialAssistantState, status: "CONNECTING", resuming: true }, true)).toBe("Reconnecting…");
+    expect(assistantStatusLabel({ ...initialAssistantState, status: "READY", echoFallback: true, playbackHeld: true }, true)).toBe("Mic paused briefly");
+  });
+});
+
+describe("echo fallback flags", () => {
+  it("tracks the fallback while a session is running and clears it when the session ends", () => {
+    const running = run([
+      { type: "start" },
+      { type: "ready" },
+      { type: "echo", fallback: true, held: true },
+    ]);
+    expect(running.echoFallback).toBe(true);
+    expect(running.playbackHeld).toBe(true);
+    expect(assistantReducer(running, { type: "echo", fallback: true, held: true })).toBe(running);
+    const ended = assistantReducer(running, { type: "end" });
+    expect(ended.echoFallback).toBe(false);
+    expect(ended.playbackHeld).toBe(false);
+    expect(assistantReducer(initialAssistantState, { type: "echo", fallback: true, held: true })).toBe(initialAssistantState);
   });
 });

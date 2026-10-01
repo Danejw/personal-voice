@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NativeAudioCapture, parseCaptureEvent } from "@/platform/android/NativeAudioCapture";
+import { NativeAudioCapture, parseCaptureEcho, parseCaptureEvent } from "@/platform/android/NativeAudioCapture";
 
 const plugin = vi.hoisted(() => {
   const state: {
@@ -83,6 +83,25 @@ describe("NativeAudioCapture", () => {
 
     expect(chunks).toEqual([]);
     expect(errors).toEqual(["The microphone is busy or unavailable."]);
+  });
+
+  it("sends the capture purpose and treats a missing echo probe as unavailable", async () => {
+    expect(parseCaptureEcho(undefined)).toEqual({ fullDuplex: false, nativePlayback: false, noiseSuppression: false });
+    expect(parseCaptureEcho({ fullDuplex: true, nativePlayback: true, noiseSuppression: false })).toEqual({
+      fullDuplex: true,
+      nativePlayback: true,
+      noiseSuppression: false,
+    });
+    expect(parseCaptureEcho({ fullDuplex: "yes" }).fullDuplex).toBe(false);
+
+    const dictation = new NativeAudioCapture();
+    await dictation.start(() => undefined, () => undefined);
+    const assistant = new NativeAudioCapture("assistant");
+    await assistant.start(() => undefined, () => undefined);
+    const purposes = plugin.calls
+      .filter((call) => call.command === "start_capture")
+      .map((call) => (call.args as { purpose?: string }).purpose);
+    expect(purposes).toEqual(["dictation", "assistant"]);
   });
 
   it("never starts native capture when stopped before it was listening", async () => {

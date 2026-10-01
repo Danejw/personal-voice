@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classifyHandoffText } from "@/assistant/continuation";
 import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
-import { buildOverlaySnapshot, clipOverlayText, overlayAssistantFrom, overlayAssistantIntent, overlayDictateIntent } from "@/overlay/overlay";
+import { buildOverlaySnapshot, clipOverlayText, overlayAssistantFrom, overlayAssistantIntent, overlayAssistantInterrupt, overlayDictateIntent } from "@/overlay/overlay";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 import type { AssistantController } from "@/assistant/AssistantController";
 import type { AssistantSnapshot } from "@/assistant/state";
@@ -105,6 +105,11 @@ export function useOverlay({
     pendingTitle: assistant.pendingAction?.title ?? null,
     pendingPreview: assistant.pendingAction?.preview ?? null,
     pendingWorking: assistant.pendingAction?.working ?? false,
+    assistantInterrupt: overlayAssistantInterrupt(
+      assistant.echoFallback,
+      assistant.playbackHeld,
+      overlayAssistantFrom(assistant.status),
+    ),
   }), [visible, dictation.state, dictation.error, destination, signedIn, paused, notes, handoffs, devices, capture, notice, assistant]);
 
   const snapshotRef = useRef(snapshot);
@@ -274,6 +279,9 @@ export function useOverlay({
           assistantController.end();
           return;
         }
+        case "assistant-interrupt":
+          assistantController.interruptPlayback();
+          return;
         case "detach-selection":
           assistantController.detachSelection();
           return;

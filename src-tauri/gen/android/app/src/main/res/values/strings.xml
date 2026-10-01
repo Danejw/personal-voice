@@ -10,6 +10,7 @@
     <string name="floating_mic_turn_off">Turn off</string>
     <string name="floating_mic_hold">Tap for actions, hold to dictate</string>
     <string name="floating_assistant_tap">Tap to start or end the assistant</string>
+    <string name="floating_assistant_interrupt">Stop the reply and listen</string>
     <string name="floating_mic_app_closed">Open Personal Voice to use the floating mic.</string>
     <string name="floating_mic_opening_app">Opening Personal Voice… Hold again to dictate.</string>
     <string name="floating_mic_restore_title">Floating mic needs to reopen</string>

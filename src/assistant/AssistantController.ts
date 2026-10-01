@@ -18,7 +18,8 @@ import {
 } from "@/assistant/accountContext";
 import { personalContextNote } from "@/assistant/personalContext";
 import type { AssistantEvent } from "@/assistant/events";
-import { PcmPlayback } from "@/assistant/PcmPlayback";
+import { ECHO_TAIL_MS, duplexEchoGate, gatedEchoGate, microphoneHeld, noteRemaining, shouldForwardMicrophone, type EchoGate } from "@/assistant/echoGate";
+import type { AssistantPlayback } from "@/assistant/playback";
 import { assistantToolResponse } from "@/assistant/protocol";
 import { createId as newId } from "@/sync/createId";
 import {
@@ -41,7 +42,7 @@ import { decideToolCall, type ConfirmToolName, type ParsedToolCall, type ToolDec
 import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
 import { runComputerTask, type ComputerImage } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
-import type { AudioCapture } from "@/voice/audio/AudioCapture";
+import { captureEchoFrom, type AudioCapture, type CaptureEchoStatus } from "@/voice/audio/AudioCapture";
 import { MicrophoneLease } from "@/voice/audio/microphoneLease";
 
 /** The slice of a Live session the controller drives. */
@@ -145,13 +146,17 @@ export class AssistantController {
   private computerConfirm: ((allowed: boolean) => void) | null = null;
   /** Off shows a confirm card. On runs the action when the tool is called. */
   private autoRun = true;
+  /** Duplex until capture reports otherwise, so desktop barge-in stays open. */
+  private echo: EchoGate = duplexEchoGate();
+  private echoKnown = false;
+  private echoTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private openSession: (
       onEvent: (event: AssistantEvent) => void,
       resumeHandle: string | null,
     ) => AssistantSessionHandle,
-    private playback: Pick<PcmPlayback, "prime" | "enqueue" | "clear">,
+    private playback: AssistantPlayback,
     private nextId: () => string = newId,
     private createCapture?: () => AudioCapture,
     private lease: MicrophoneLease = new MicrophoneLease(),
@@ -214,6 +219,7 @@ export class AssistantController {
     this.droppingModel = false;
     this.resuming = false;
     this.session?.close();
+    this.resetEcho();
     this.playback.clear();
     this.pendingAudio = [];
     this.streaming = false;
@@ -231,6 +237,23 @@ export class AssistantController {
   reconnect(): void {
     if (this.snapshot.status === "IDLE" || this.snapshot.status === "ERROR") return;
     this.resumeOrFail();
+  }
+
+  /**
+   * Stops playback and resumes listening. Used when echo cancellation is unavailable,
+   * because speaking over the reply is not forwarded and cannot barge in.
+   */
+  interruptPlayback(): void {
+    if (this.snapshot.status !== "READY" && this.snapshot.status !== "RESPONDING") return;
+    const modelTurn = this.snapshot.status === "RESPONDING";
+    if (!modelTurn && !this.snapshot.playbackHeld) return;
+    if (modelTurn) {
+      this.droppingModel = true;
+      clearTimeout(this.timer);
+    }
+    this.playback.clear();
+    this.syncEcho(Date.now());
+    if (modelTurn) this.dispatch({ type: "interrupt", id: this.nextId() });
   }
 
   /** Sends one typed turn on the current session. No-op unless the session is listening. */
@@ -437,6 +460,7 @@ export class AssistantController {
     this.historySeeded = false;
     this.dropPending();
     clearTimeout(this.timer);
+    this.resetEcho();
     this.playback.clear();
     this.stopCapture();
     this.session?.close();
@@ -473,6 +497,7 @@ export class AssistantController {
     this.dropPending();
     clearTimeout(this.timer);
     this.playback.clear();
+    this.syncEcho(Date.now());
     this.streaming = false;
     this.dispatch({ type: "reconnect", id: this.nextId() });
     this.connection += 1;
@@ -565,16 +590,33 @@ export class AssistantController {
       return;
     }
     this.capture = capture;
+    this.playback.onAudibleChange?.(() => {
+      if (generation !== this.generation) return;
+      this.syncEcho(Date.now());
+    });
+    this.playback.onDuplexChange?.((fullDuplex, nativePlayback) => {
+      if (generation !== this.generation) return;
+      this.echoKnown = true;
+      if (fullDuplex) this.echo = duplexEchoGate();
+      else this.echo = { ...gatedEchoGate(), remainingMs: 1 };
+      this.playback.setNativeRoute?.(nativePlayback);
+      this.syncEcho(Date.now());
+    });
     void capture.start(
       (chunk) => this.onMic(generation, chunk),
       (message) => { if (generation === this.generation) this.failActive(message); },
-    ).catch((error: unknown) => {
+    ).then((status) => {
+      if (generation !== this.generation) return;
+      this.applyCaptureEcho(status);
+    }).catch((error: unknown) => {
       if (generation === this.generation) this.failActive(messageOf(error));
     });
   }
 
   private onMic(generation: number, chunk: ArrayBuffer) {
     if (generation !== this.generation || chunk.byteLength === 0) return;
+    this.syncEcho(Date.now());
+    if (!shouldForwardMicrophone(this.echo, Date.now())) return;
     if (!this.streaming) {
       this.pendingAudio.push(chunk);
       return;
@@ -610,6 +652,51 @@ export class AssistantController {
     this.lease.release("assistant");
   }
 
+  private applyCaptureEcho(status: CaptureEchoStatus | void) {
+    if (this.snapshot.status === "IDLE" || this.snapshot.status === "ERROR") return;
+    const echo = captureEchoFrom(status);
+    this.echoKnown = true;
+    this.echo = echo.fullDuplex ? duplexEchoGate() : gatedEchoGate();
+    this.playback.setNativeRoute?.(echo.nativePlayback);
+    this.syncEcho(Date.now());
+  }
+
+  private syncEcho(now: number) {
+    if (this.snapshot.status === "IDLE" || this.snapshot.status === "ERROR") return;
+    if (!this.echo.duplex) {
+      const pending = this.playback.pendingMs?.(now) ?? 0;
+      this.echo = noteRemaining(this.echo, now, pending, ECHO_TAIL_MS);
+    }
+    this.publishEcho();
+    this.scheduleEcho(now);
+  }
+
+  private publishEcho() {
+    const fallback = this.echoKnown && !this.echo.duplex;
+    const held = fallback && microphoneHeld(this.echo, Date.now());
+    this.dispatch({ type: "echo", fallback, held });
+  }
+
+  private scheduleEcho(now: number) {
+    clearTimeout(this.echoTimer);
+    if (this.echo.duplex) return;
+    const pending = this.playback.pendingMs?.(now) ?? this.echo.remainingMs;
+    const untilSilence = this.echo.holdUntil > now ? this.echo.holdUntil - now : 0;
+    const wait = pending > 0 ? pending : untilSilence;
+    if (wait <= 0) return;
+    const generation = this.generation;
+    this.echoTimer = setTimeout(() => {
+      if (generation !== this.generation) return;
+      this.syncEcho(Date.now());
+    }, Math.min(wait, 500) + 20);
+  }
+
+  private resetEcho() {
+    clearTimeout(this.echoTimer);
+    this.echo = duplexEchoGate();
+    this.echoKnown = false;
+  }
+
   private onEvent(generation: number, connection: number, event: AssistantEvent) {
     if (generation !== this.generation || connection !== this.connection) return;
     switch (event.type) {
@@ -638,6 +725,7 @@ export class AssistantController {
         if (this.droppingModel) return;
         this.dispatch({ type: "assistantSpeaking" });
         this.playback.enqueue(event.pcm);
+        this.syncEcho(Date.now());
         this.armTimer();
         return;
       case "outputTranscription":
@@ -657,6 +745,7 @@ export class AssistantController {
         this.droppingModel = true;
         clearTimeout(this.timer);
         this.playback.clear();
+        this.syncEcho(Date.now());
         this.dispatch({ type: "interrupt", id: this.nextId() });
         return;
       case "goAway":
@@ -988,6 +1077,7 @@ export class AssistantController {
     this.resumeHandle = null;
     this.dropPending();
     clearTimeout(this.timer);
+    this.resetEcho();
     this.playback.clear();
     this.stopCapture();
     this.connection += 1;

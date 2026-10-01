@@ -27,6 +27,8 @@ fn main() {
                     "capture_selection",
                     "start_capture",
                     "stop_capture",
+                    "enqueue_assistant_playback",
+                    "clear_assistant_playback",
                 ])
                 .default_permission(tauri_build::DefaultPermissionRule::AllowAllCommands),
         ),

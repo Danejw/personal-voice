@@ -1,6 +1,6 @@
 import type { ContextItem } from "@/context/ContextItem";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
-import type { AudioCapture } from "@/voice/audio/AudioCapture";
+import type { AudioCapture, CaptureOptions } from "@/voice/audio/AudioCapture";
 import type { TargetApp } from "@/platform/targetApp";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
 
@@ -43,8 +43,8 @@ export type PlatformName = "windows" | "android";
  */
 export interface PlatformAdapter {
   readonly platform: PlatformName;
-  /** A fresh capture per utterance. */
-  createCapture(): AudioCapture;
+  /** A fresh capture per utterance. Assistant passes `purpose: "assistant"` so Android can use voice communication. */
+  createCapture(options?: CaptureOptions): AudioCapture;
   /** Inserts into whatever field is focused when this is called. Returns that app when it can be named. */
   insertText(text: string): Promise<TargetApp | null>;
   /** Hides Settings, restores the previous app, then inserts a received handoff. */

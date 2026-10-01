@@ -59,6 +59,7 @@ describe("PcmPlayback", () => {
     playback.enqueue(pcm([0, 32767]), 24_000);
     playback.enqueue(pcm([-32768]), 24_000);
     expect(started.map((entry) => entry.when)).toEqual([5, 5 + 2 / 24_000]);
+    expect(playback.pendingMs()).toBeCloseTo((3 / 24_000) * 1000);
     expect(started[0]?.rate).toBe(24_000);
     expect(started[0]?.samples[0]).toBe(0);
     expect(started[0]?.samples[1]).toBeCloseTo(32767 / 32768);

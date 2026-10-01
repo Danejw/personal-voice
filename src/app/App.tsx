@@ -10,6 +10,7 @@ import { PersonalContextPanel } from "@/assistant/PersonalContextPanel";
 import { personalContextBody, profileFacts } from "@/assistant/personalContext";
 import { AssistantSession } from "@/assistant/AssistantSession";
 import { PcmPlayback } from "@/assistant/PcmPlayback";
+import { AndroidAssistantPlayback } from "@/platform/android/AndroidAssistantPlayback";
 import { useAssistant } from "@/assistant/useAssistant";
 import { AppNav, sectionMeta, useMobileNav, type AppSection } from "@/app/AppNav";
 import { BrandMark } from "@/app/BrandMark";
@@ -109,11 +110,12 @@ const platform = createPlatformAdapter();
 const tokens = new GeminiTokenSource(fetchGeminiToken);
 const assistantTokens = new GeminiTokenSource(() => fetchGeminiToken("assistant"));
 const microphone = new MicrophoneLease();
+const assistantPlayback = platform.platform === "android" ? new AndroidAssistantPlayback() : new PcmPlayback();
 const assistant = new AssistantController(
   (onEvent, handle) => new AssistantSession(() => assistantTokens.take(), onEvent, handle),
-  new PcmPlayback(),
+  assistantPlayback,
   createId,
-  () => platform.createCapture(),
+  () => platform.createCapture({ purpose: "assistant" }),
   microphone,
 );
 const usage = new UsageStore(localStorage, platform.platform, () => new Date(), usageApi);

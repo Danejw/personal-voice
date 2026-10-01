@@ -115,7 +115,7 @@ If Reconnect is pressed before any resumable handle has arrived, pass if the ses
 - Reconnect runs as soon as `GoAway` arrives. It does not wait out `timeLeft`.
 - One reconnect is attempted. A second immediate failure ends the session.
 - A reply that never starts within 45 seconds of a finished user turn still ends the session.
-- Automatic VAD can treat speaker bleed as the user. Echo cancellation stays the existing capture setting.
+- Android Assistant uses a voice-communication capture and playback path so speaker playback can be echo-cancelled. When that canceller is not actually enabled, microphone audio is withheld until playback finishes. See `docs/ANDROID.md`.
 
 ## Next-phase boundary
 

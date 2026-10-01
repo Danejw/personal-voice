@@ -1,3 +1,4 @@
+import type { AssistantPlayback } from "@/assistant/playback";
 import { ASSISTANT_PCM_RATE } from "@/assistant/protocol";
 
 interface PlaybackBuffer {
@@ -26,7 +27,7 @@ interface PlaybackContext {
  * Plays Gemini's PCM16 chunks in order through Web Audio.
  * Nothing is written to disk. A playback failure is swallowed so the session can continue.
  */
-export class PcmPlayback {
+export class PcmPlayback implements AssistantPlayback {
   private ctx?: PlaybackContext;
   private nextStart = 0;
   private active: PlaybackSource[] = [];
@@ -71,6 +72,13 @@ export class PcmPlayback {
     } catch {
       // A bad chunk or a missing audio device must not take down the page.
     }
+  }
+
+  /** Milliseconds still scheduled on the audio clock. Zero after clear or when the queue has played out. */
+  pendingMs(): number {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state === "closed") return 0;
+    return Math.max(0, (this.nextStart - ctx.currentTime) * 1000);
   }
 
   /** Stops queued audio immediately. Used when Assistant ends or a reply is interrupted. */

@@ -63,6 +63,7 @@ class FloatingMicService : Service() {
   private var stack: LinearLayout? = null
   private var stackLayout: WindowManager.LayoutParams? = null
   private var assistantBubble: AssistantBubbleView? = null
+  private var assistantInterrupt = false
   private var micBubble: MicBubbleView? = null
   private var panel: OverlayPanelView? = null
   private var panelLayout: WindowManager.LayoutParams? = null
@@ -139,12 +140,16 @@ class FloatingMicService : Service() {
       "error" -> MicBubbleView.State.ERROR
       else -> MicBubbleView.State.IDLE
     }
+    assistantInterrupt = snapshot.optBoolean("assistantInterrupt")
     assistantBubble?.state = when (snapshot.optString("assistant", "idle")) {
       "listening" -> AssistantBubbleView.State.LISTENING
       "responding" -> AssistantBubbleView.State.RESPONDING
       "error" -> AssistantBubbleView.State.ERROR
       else -> AssistantBubbleView.State.IDLE
     }
+    assistantBubble?.contentDescription = getString(
+      if (assistantInterrupt) R.string.floating_assistant_interrupt else R.string.floating_assistant_tap,
+    )
     if (dictation == "listening" || dictation == "finalizing") {
       hidePanel()
     } else {
@@ -222,7 +227,8 @@ class FloatingMicService : Service() {
 
     val assistant = AssistantBubbleView(this, object : AssistantBubbleView.Callbacks {
       override fun onTap() {
-        emitOverlay(JSONObject().put("type", "assistant-toggle"))
+        val type = if (assistantInterrupt) "assistant-interrupt" else "assistant-toggle"
+        emitOverlay(JSONObject().put("type", type))
       }
       override fun onDragStart() = dragCallbacks.onDragStart()
       override fun onDragBy(dx: Int, dy: Int) = dragCallbacks.onDragBy(dx, dy)

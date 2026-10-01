@@ -49,9 +49,13 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
       else -> "Start Assistant"
     }
     addButton(assistantLabel) { emit("assistant-toggle") }
+    if (snapshot.optBoolean("assistantInterrupt")) {
+      addButton("Stop and listen", primary = true) { emit("assistant-interrupt") }
+      addPreview("The microphone is paused while the reply plays. Stop and listen interrupts it. Talking over the reply will not.")
+    }
     when (assistant) {
-      "listening" -> addPreview("Assistant is listening")
-      "responding" -> addPreview("Assistant is speaking")
+      "listening" -> if (!snapshot.optBoolean("assistantInterrupt")) addPreview("Assistant is listening")
+      "responding" -> if (!snapshot.optBoolean("assistantInterrupt")) addPreview("Assistant is speaking")
       "error" -> snapshot.optString("assistantError").takeIf { it.isNotEmpty() }?.let { addPreview(it, error = true) }
       else -> Unit
     }

@@ -59,6 +59,14 @@ class CaptureSelectionArgs {
 class CaptureArgs {
   /** Chosen by the web side; tags `audioCapture` events so a late event can't reach a newer capture. */
   var id: Int = 0
+  /** `dictation` keeps recognition capture. `assistant` uses the voice-communication path. */
+  var purpose: String = "dictation"
+}
+
+@InvokeArg
+class AssistantPlaybackArgs {
+  var data: String = ""
+  var token: Int = 0
 }
 
 /**
@@ -78,6 +86,20 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private var webViewWoken = false
   private var capture: NativeMicCapture? = null
   private var captureId = 0
+  private var audioSession: AssistantAudioSession? = null
+  private var playbackTrack: AssistantPcmTrack? = null
+  private val captureBridge = object : CaptureHandle {
+    override fun open(source: AudioSourceChoice): Int {
+      val mic = capture ?: error("Microphone capture is not ready.")
+      return mic.open(androidAudioSource(source))
+    }
+    override fun start() {
+      capture?.start() ?: error("Microphone capture is not ready.")
+    }
+    override fun stop() {
+      capture?.stop()
+    }
+  }
 
   override fun load(webView: WebView) {
     this.webView = webView
@@ -103,7 +125,9 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
 
   /** Without the WebView nothing can answer the bubble, so the service goes with it. */
   override fun onDestroy(activity: AppCompatActivity) {
-    capture?.stop()
+    audioSession?.close()
+    audioSession = null
+    playbackTrack = null
     capture = null
     FloatingMicService.listener = null
     activity.stopService(Intent(activity, FloatingMicService::class.java))
@@ -245,24 +269,84 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   private fun beginCapture(invoke: Invoke) {
-    val id = invoke.parseArgs(CaptureArgs::class.java).id
-    capture?.stop()
+    val args = invoke.parseArgs(CaptureArgs::class.java)
+    val id = args.id
+    val purpose = capturePurpose(args.purpose)
+    audioSession?.close()
+    capture = null
     val event = { kind: String -> JSObject().put("id", id).put("kind", kind) }
     val next = NativeMicCapture(
       onChunk = { pcm -> emitCapture(event("chunk").put("data", Base64.encodeToString(pcm, Base64.NO_WRAP))) },
       onError = { message -> emitCapture(event("error").put("message", message)) },
       onEnd = { emitCapture(event("end")) },
     )
+    capture = next
     try {
-      next.start()
+      val status = session().start(purpose)
+      captureId = id
+      invoke.resolve(
+        JSObject()
+          .put("fullDuplex", status.fullDuplex)
+          .put("nativePlayback", status.nativePlayback)
+          .put("noiseSuppression", status.noiseSuppression),
+      )
     } catch (error: Exception) {
+      audioSession?.close()
       capture = null
       invoke.reject(error.message ?: "Could not start microphone capture.")
+    }
+  }
+
+  /**
+   * Writes one 24 kHz PCM16 chunk to the voice-communication track opened with Assistant capture.
+   * Ignored when that track is not running, so dictation never plays through it.
+   */
+  @Command
+  fun enqueueAssistantPlayback(invoke: Invoke) {
+    val args = invoke.parseArgs(AssistantPlaybackArgs::class.java)
+    val pcm = try {
+      Base64.decode(args.data, Base64.DEFAULT)
+    } catch (_: Exception) {
+      invoke.resolve()
       return
     }
-    capture = next
-    captureId = id
+    playbackTrack?.enqueue(pcm, args.token)
     invoke.resolve()
+  }
+
+  @Command
+  fun clearAssistantPlayback(invoke: Invoke) {
+    playbackTrack?.clear()
+    invoke.resolve()
+  }
+
+  private fun session(): AssistantAudioSession {
+    audioSession?.let { return it }
+    val effects = AndroidCaptureEffects()
+    val track = AssistantPcmTrack(::emitPlayback)
+    val route = AndroidCommunicationRoute(activity) { main.post { audioSession?.reselectRoute() } }
+    effects.onEchoDisabled = { main.post { audioSession?.noteRouteLost() } }
+    route.onFocusLost = { main.post { audioSession?.noteRouteLost() } }
+    val created = AssistantAudioSession(route, captureBridge, effects, track) { route.currentDevices() }
+    created.onStatusChanged = { status -> emitDuplex(status) }
+    playbackTrack = track
+    audioSession = created
+    return created
+  }
+
+  private fun emitPlayback(kind: String, remainingMs: Int, token: Int) {
+    val payload = JSObject().put("kind", kind).put("remainingMs", remainingMs).put("token", token)
+    main.post { trigger("assistantPlayback", payload) }
+  }
+
+  private fun emitDuplex(status: CaptureEchoStatus) {
+    val payload = JSObject()
+      .put("kind", "duplex")
+      .put("fullDuplex", status.fullDuplex)
+      .put("nativePlayback", status.nativePlayback)
+      .put("remainingMs", 0)
+      .put("token", 0)
+    main.post { trigger("assistantPlayback", payload) }
   }
 
   /** Resolves at once; the web side waits for this capture's `end` event, which follows the last chunk. */
@@ -271,8 +355,8 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     val id = invoke.parseArgs(CaptureArgs::class.java).id
     val current = capture
     if (current != null && captureId == id) {
+      audioSession?.close()
       capture = null
-      current.stop()
     } else {
       emitCapture(JSObject().put("id", id).put("kind", "end"))
     }

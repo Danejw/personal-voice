@@ -37,6 +37,8 @@ export interface OverlaySnapshot {
   pendingTitle: string | null;
   pendingPreview: string | null;
   pendingWorking: boolean;
+  /** Fallback mode: Stop and listen cuts off playback and resumes the microphone. */
+  assistantInterrupt: boolean;
 }
 
 export type OverlayHoldDestination = "voice-note" | "send-to-device";
@@ -52,6 +54,7 @@ export type OverlayAction =
   | { type: "copy-handoff"; id: string }
   | { type: "open-settings" }
   | { type: "assistant-toggle" }
+  | { type: "assistant-interrupt" }
   | { type: "detach-selection" }
   | { type: "confirm-action" }
   | { type: "cancel-action" };
@@ -74,6 +77,7 @@ export const emptyOverlaySnapshot: OverlaySnapshot = {
   pendingTitle: null,
   pendingPreview: null,
   pendingWorking: false,
+  assistantInterrupt: false,
 };
 
 export function overlayDictationFrom(state: VoiceState): OverlayDictation {
@@ -121,6 +125,12 @@ export function overlayAssistantFrom(status: AssistantStatus): OverlayAssistant 
       throw new Error(`Unhandled assistant status: ${String(unhandled)}`);
     }
   }
+}
+
+/** True while fallback playback should be cut off from the floating control. */
+export function overlayAssistantInterrupt(echoFallback: boolean, playbackHeld: boolean, assistant: OverlayAssistant): boolean {
+  if (!echoFallback) return false;
+  return playbackHeld || assistant === "responding";
 }
 
 /** Press starts a stopped Assistant and ends a running one. */
@@ -176,6 +186,7 @@ export function buildOverlaySnapshot(input: {
   pendingTitle: string | null;
   pendingPreview: string | null;
   pendingWorking: boolean;
+  assistantInterrupt?: boolean;
 }): OverlaySnapshot {
   return {
     visible: input.visible,
@@ -195,6 +206,7 @@ export function buildOverlaySnapshot(input: {
     pendingTitle: input.pendingTitle,
     pendingPreview: input.pendingPreview,
     pendingWorking: input.pendingWorking,
+    assistantInterrupt: input.assistantInterrupt === true,
   };
 }
 
@@ -231,6 +243,7 @@ export function parseOverlayAction(payload: unknown): OverlayAction | null {
     case "capture-selection":
     case "open-settings":
     case "assistant-toggle":
+    case "assistant-interrupt":
     case "detach-selection":
     case "confirm-action":
     case "cancel-action":

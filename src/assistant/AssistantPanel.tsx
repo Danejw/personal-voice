@@ -26,6 +26,11 @@ export function AssistantHeader({ controller, snapshot, signedIn, micBusy = fals
           Reconnect
         </button>
       )}
+      {snapshot.echoFallback && (snapshot.status === "RESPONDING" || snapshot.playbackHeld) && (
+        <button type="button" className="secondary" onClick={() => controller.interruptPlayback()}>
+          Stop and listen
+        </button>
+      )}
       <button
         type="button"
         className="record"
@@ -60,8 +65,14 @@ export function AssistantPanel({ controller, snapshot, signedIn, onCaptureScreen
     setDraft("");
   }
 
+  const showEchoNote = snapshot.echoFallback && (snapshot.status === "CONNECTING" || snapshot.status === "READY" || snapshot.status === "RESPONDING");
   return (
     <>
+      {showEchoNote && (
+        <p className="assistant-echo" role="note">
+          This phone can't cancel speaker echo, so the microphone pauses while a reply plays and for a short moment after the sound ends. Stop and listen cuts the reply off. Talking over it will not interrupt. Noise reduction lowers background noise. It does not pick out your voice or remove other people.
+        </p>
+      )}
       <ul ref={logRef} className="assistant-log hide-scrollbar" aria-live="polite">
         {snapshot.turns.map((turn) => (
           <li key={turn.id} className={turn.role === "user" ? "assistant-turn is-user" : "assistant-turn"}>

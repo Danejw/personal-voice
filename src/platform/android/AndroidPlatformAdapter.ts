@@ -5,6 +5,7 @@ import { parseOverlayAction } from "@/overlay/overlay";
 import { NativeAudioCapture } from "@/platform/android/NativeAudioCapture";
 import { callPlugin, listenPlugin } from "@/platform/android/voicePlatformPlugin";
 import type { AvailableUpdate, CaptureSelectionOptions, PlatformAdapter } from "@/platform/PlatformAdapter";
+import type { CaptureOptions } from "@/voice/audio/AudioCapture";
 import { parseTargetApp } from "@/platform/targetApp";
 import { parsePushToTalk } from "@/platform/pushToTalkEvent";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
@@ -20,8 +21,8 @@ export { parsePushToTalk } from "@/platform/pushToTalkEvent";
 export class AndroidPlatformAdapter implements PlatformAdapter {
   readonly platform = "android";
 
-  createCapture() {
-    return new NativeAudioCapture();
+  createCapture(options?: CaptureOptions) {
+    return new NativeAudioCapture(options?.purpose ?? "dictation");
   }
 
   async insertText(text: string) {

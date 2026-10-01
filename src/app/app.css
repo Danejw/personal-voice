@@ -741,6 +741,14 @@ textarea:focus {
 .transcript { margin: 0; padding: 8px 10px; border-radius: 8px; background: #111820; min-height: 36px; white-space: pre-wrap; font-size: 13px; }
 .transcript p { margin: 0; }
 .transcript .partial, .transcript .placeholder, .assistant-turn .partial { color: #a2adbc; }
+.assistant-echo {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #19232e;
+  color: #a2adbc;
+  font-size: 12px;
+}
 .assistant-log {
   list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;
   align-content: start;

@@ -5,6 +5,7 @@ import {
   clipOverlayText,
   overlayAssistantFrom,
   overlayAssistantIntent,
+  overlayAssistantInterrupt,
   overlayDictateIntent,
   overlayDictationFrom,
   overlayHandoffsFrom,
@@ -122,6 +123,7 @@ describe("parseOverlayAction", () => {
     expect(parseOverlayAction({ type: "copy-note", id: "n1" })).toEqual({ type: "copy-note", id: "n1" });
     expect(parseOverlayAction({ type: "open-settings" })).toEqual({ type: "open-settings" });
     expect(parseOverlayAction({ type: "assistant-toggle" })).toEqual({ type: "assistant-toggle" });
+    expect(parseOverlayAction({ type: "assistant-interrupt" })).toEqual({ type: "assistant-interrupt" });
     expect(parseOverlayAction({ type: "detach-selection" })).toEqual({ type: "detach-selection" });
     expect(parseOverlayAction({ type: "confirm-action" })).toEqual({ type: "confirm-action" });
     expect(parseOverlayAction({ type: "cancel-action" })).toEqual({ type: "cancel-action" });
@@ -140,6 +142,10 @@ describe("assistant quick access", () => {
     expect(overlayAssistantIntent("error")).toBe("start");
     expect(overlayAssistantIntent("listening")).toBe("end");
     expect(overlayAssistantIntent("responding")).toBe("end");
+    expect(overlayAssistantInterrupt(false, true, "responding")).toBe(false);
+    expect(overlayAssistantInterrupt(true, false, "responding")).toBe(true);
+    expect(overlayAssistantInterrupt(true, true, "listening")).toBe(true);
+    expect(overlayAssistantInterrupt(true, false, "listening")).toBe(false);
     expect(overlayDictateIntent("listening")).toBe("stop");
   });
 

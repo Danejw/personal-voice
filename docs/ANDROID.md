@@ -133,8 +133,14 @@ Shared TypeScript still does everything else: Gemini, vocabulary, settings, auth
 ### Phase 9 polish
 
 - The bubble is kept on screen: its saved position is clamped when it appears and again on rotation. Before, a position saved near the right edge in landscape could leave it off screen in portrait.
-- Android has no microphone picker. `NativeMicCapture` records from `AudioSource.VOICE_RECOGNITION`, which Android routes to a wired headset when one is plugged in. Bluetooth headset mics aren't used, because that needs SCO routing.
+- Android has no microphone picker. Dictation records from `AudioSource.VOICE_RECOGNITION`, which Android routes to a wired headset when one is plugged in. Dictation does not open Bluetooth SCO. Assistant routing is separate and is described under Assistant echo.
 - The floating-control visibility setting is Windows-only. On Android the bubble is the control; tap expands quick actions, hold dictates, and errors also appear as a toast.
+
+### Assistant echo
+
+Assistant and dictation share `NativeMicCapture`, but they do not share a recording mode. Dictation still uses `VOICE_RECOGNITION`. Assistant capture asks for `VOICE_COMMUNICATION`, sets `AudioManager.MODE_IN_COMMUNICATION`, routes to a connected headset or else the loudspeaker, and plays reply PCM through an `AudioTrack` with `USAGE_VOICE_COMMUNICATION`. Web Audio is a media stream, so the platform echo canceller cannot subtract it from the microphone. `AcousticEchoCanceler` and `NoiseSuppressor` are created on the `AudioRecord` session only after `isAvailable` and `create` succeed, and full duplex is claimed only when the canceller reports itself enabled and that voice playback track is open. Noise suppression is not voice identification.
+
+When that probe fails, or the route is lost, the shared controller stops forwarding microphone audio until the playback head reaches the end and for 160 ms after that. The wait follows playback completion, not Gemini's `turnComplete`. Stop and listen, including a tap on the floating Assistant button while that fallback is active, stops the reply and resumes listening after the same short tail. Speaking over the reply does not interrupt it in that mode. Ending the session, or a failed start, releases the effects, the track, audio focus, and communication routing and restores the previous audio mode.
 
 ### Building on this machine
 
