@@ -802,6 +802,11 @@ html.indicator-view #root {
   padding-right: 6px;
   gap: 6px;
 }
+.overlay-dock.is-tip-right {
+  align-items: flex-start;
+  padding-right: 0;
+  padding-left: 6px;
+}
 .overlay-btn {
   width: 32px;
   height: 32px;
@@ -818,6 +823,8 @@ html.indicator-view #root {
 .overlay-btn svg { width: 14px; height: 14px; }
 .overlay-logo { color: #88d8c1; }
 .overlay-logo svg { width: 16px; height: 16px; }
+.overlay-dock.is-dragging,
+.overlay-dock.is-dragging .overlay-btn { cursor: grabbing; }
 .overlay-btn:hover:not(:disabled) { background: #17352d; color: #88d8c1; }
 .overlay-btn:disabled { opacity: 0.45; cursor: default; }
 .overlay-live { color: #111820; background: #e76f51; animation: indicator-pulse 1.2s ease-in-out infinite; }

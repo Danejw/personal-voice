@@ -3,6 +3,7 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import { OverlayDock } from "@/overlay/OverlayDock";
 import { emptyOverlaySnapshot } from "@/overlay/overlay";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
+import { restoreOverlayPosition } from "@/overlay/overlayPosition";
 
 /** Always-on-top Personal Voice buttons. Dictation still runs in the main window. */
 export default function Indicator() {
@@ -11,6 +12,10 @@ export default function Indicator() {
   useEffect(() => {
     const pending = listen<OverlaySnapshot>("overlay-snapshot", (event) => setSnapshot(event.payload));
     return () => void pending.then((unlisten) => unlisten());
+  }, []);
+
+  useEffect(() => {
+    void restoreOverlayPosition();
   }, []);
 
   const onAction = useCallback((action: OverlayAction) => {

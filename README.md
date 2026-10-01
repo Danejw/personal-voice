@@ -1,89 +1,140 @@
-# Personal Voice
+<p align="center">
+  <img src="src-tauri/icons/icon.svg" alt="Personal Voice" width="80" height="80" />
+</p>
 
-Cross-device system-wide dictation for Windows and Android. One Tauri 2 app: hold to talk, release, and cleaned text lands at the cursor (or another destination you choose).
+<h1 align="center">Your Personal Voice App</h1>
+
+<p align="center">
+  <strong>Hold to talk. Clean text at the cursor.</strong><br />
+  Or open Assistant for a live voice conversation.<br />
+  One app for Windows and Android.
+</p>
+
+<p align="center">
+  <code>Windows</code>
+  &nbsp;·&nbsp;
+  <code>Android</code>
+  &nbsp;·&nbsp;
+  <code>v0.3.8</code>
+</p>
+
+<p align="center">
+  <a href="#how-it-works">How it works</a>
+  &nbsp;·&nbsp;
+  <a href="#what-you-can-do">Features</a>
+  &nbsp;·&nbsp;
+  <a href="#privacy">Privacy</a>
+  &nbsp;·&nbsp;
+  <a href="#stack">Stack</a>
+  &nbsp;·&nbsp;
+  <a href="#development">Development</a>
+</p>
+
+---
+
+## How it works
 
 ```text
 Press → Speak → Release → Clean text appears at the cursor
 ```
 
-Stack: Tauri 2, React, TypeScript, Rust, Android Kotlin where native services are required, Gemini Live for transcription, Supabase for auth/sync/tokens.
-
-## What works today
-
-- **Hold-to-talk dictation** — Windows global push-to-talk (multiple bindings per action: keyboard and/or mouse); Android floating microphone
-- **Smart transcription** — punctuation, capitalization, and cleanup via Gemini; no second LLM pass
-- **Personal dictionary** — curated terms synced across devices
-- **Destinations** — insert into the focused field, save a voice note, or send to another of your devices
-- **Shared clipboard** — explicitly paste or type text and send it to a device (no OS clipboard monitoring)
-- **Cross-device handoff** — pending text on other installs; Windows toast to insert without opening Settings
-- **Selection capture** — grab highlighted text (Windows clipboard snapshot / Android focused editable selection)
-- **Recent dictation history** — last 75 finals on this device only (local, clearable; no cloud transcript warehouse)
-- **Account sync** — email/password auth; dictionary and transcription preferences; device-scoped mic, hotkeys, and default destination
-- **Devices** — rename this install, list other installs, remove old ones
-- **Analytics** — opt-in daily usage rollups (words, destinations, apps); no transcript or audio stored
-- **Updates** — Windows signed installer via Tauri updater; Android APK from GitHub Releases
-- **Recovery** — retryable live-session loss replays the in-memory utterance buffer; audio is never written to disk or sent through Supabase
-
-Version is `0.3.3` in `package.json` (kept in sync with `src-tauri/Cargo.toml`).
-
-## Source of truth
-
-Read `AGENTS.md`, `docs/SPEC.md`, `docs/ARCHITECTURE.md`, and the active prompt before changing code.
-
-| Docs | Contents |
+| Platform | Default control |
 | --- | --- |
-| `docs/PHASE_*_REPORT.md` | V1 phases 0–9 |
-| `docs/PV-Phases/` | Personal Voice work after V1 (completed vs skipped) |
-| `docs/WINDOWS.md` / `docs/ANDROID.md` | Platform behavior |
-| `docs/BACKEND_SYNC.md` | Supabase schema and sync |
-| `docs/RELEASING.md` | Tags, CI, signing, GitHub Releases |
+| **Windows** | Hold a global hotkey (or the floating mic) |
+| **Android** | Hold the floating microphone |
 
-## Client config
+Text can go into the focused field, a voice note, or another device you own.
 
-Copy `.env.example` to `.env.local` and set the project URL and publishable key only. Never put a Gemini API key or Supabase service-role key in the client.
+---
+
+## What you can do
+
+| Area | Capabilities |
+| --- | --- |
+| **Dictation** | Hold-to-talk · Gemini cleanup (punctuation, caps, cleanup) · personal dictionary · destinations: active field, voice note, or send to device |
+| **Cross-device** | Handoffs with Windows toast insert · shared clipboard (explicit send only) · rename, list, and remove installs |
+| **Capture & history** | Selection capture · last 75 dictations on device · optional Sync dictations |
+| **Assistant** | Separate Gemini Live chat (voice or typed) · floating control / Windows hotkey · attach selection, notes, or handoffs · optional Windows remote reads and confirmable desktop actions |
+| **Account & controls** | Email/password sync · device-scoped mic, hotkeys, overlay, destination · opt-in analytics · Windows updater / Android APK releases |
+
+---
+
+## Privacy
+
+| Default | Behavior |
+| --- | --- |
+| Microphone audio | Client → Gemini only. Never proxied through our backend. |
+| Storage | Audio is not permanently stored by the app. |
+| Sync | Notes and handoffs sync only when you choose those destinations. |
+| History | Local by default. Cloud only if Sync dictations is on. Selection stays in memory. |
+| Analytics | Opt-in daily counters. No transcript or audio warehouse. |
+
+---
+
+## Stack
+
+| Layer | Tech |
+| --- | --- |
+| App shell | Tauri 2 · React · TypeScript · Rust |
+| Android native | Kotlin platform plugin |
+| Transcription | Gemini Live (dictation) |
+| Assistant | Gemini Live (conversation) |
+| Backend | Supabase (auth, sync, short-lived tokens) |
+
+Gemini API keys stay on the server. The client gets short-lived tokens only.
+
+---
+
+## Development
+
+> Before changing code: [`AGENTS.md`](AGENTS.md) · [`docs/SPEC.md`](docs/SPEC.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+>
+> Also: [`WINDOWS.md`](docs/WINDOWS.md) · [`ANDROID.md`](docs/ANDROID.md) · [`BACKEND_SYNC.md`](docs/BACKEND_SYNC.md) · [`RELEASING.md`](docs/RELEASING.md)
+
+### Quick start (Windows)
+
+**Needs:** Node 22.12+ · pnpm 11.25.0 · MSVC Build Tools · WebView2 · Rust (via rustup; see `rust-toolchain.toml`)
+
+```powershell
+# Client env: copy .env.example → .env.local (URL + publishable key only)
+pnpm install --frozen-lockfile
+pnpm tauri dev
+```
+
+```powershell
+# If rustc is missing from PATH after a fresh install:
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+```
+
+### Validate
+
+```powershell
+pnpm check          # lint + typecheck + test
+pnpm build          # frontend assets only
+pnpm tauri build --debug --no-bundle
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo check --locked --manifest-path src-tauri/Cargo.toml
+cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
+```
+
+`pnpm dev` is Vite only (not the native app). Releases: [`docs/RELEASING.md`](docs/RELEASING.md).
+
+<details>
+<summary><strong>Client config</strong></summary>
 
 ```text
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-Short-lived Gemini credentials come from the authenticated `gemini-token` Edge Function. Live mic audio goes client → Gemini only.
+Never put a Gemini API key or Supabase service-role key in the client.
 
-## Windows setup
+</details>
 
-Install Node.js 22.12+ (tested with 22.19), pnpm 11.25.0, Microsoft C++ Build Tools with Desktop development with C++, and WebView2. Install Rust through rustup; `rust-toolchain.toml` pins the compiler and rustfmt/clippy. Ensure `%USERPROFILE%\.cargo\bin` is on PATH.
+<details>
+<summary><strong>Android setup</strong></summary>
 
-```powershell
-pnpm install --frozen-lockfile
-pnpm tauri dev
-```
-
-If Rust was just installed and is not yet on PATH:
-
-```powershell
-$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-```
-
-## Validation commands
-
-From the repository root:
-
-```powershell
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-cargo check --locked --manifest-path src-tauri/Cargo.toml
-cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
-pnpm tauri build --debug --no-bundle
-```
-
-`pnpm check` runs lint, strict typechecking, and tests. `pnpm build` is frontend assets only. `pnpm tauri build` produces the Windows binary under `src-tauri/target/`. `pnpm dev` is a frontend preview, not a native launch. Release packaging is documented in `docs/RELEASING.md`.
-
-## Android setup (same application)
-
-Install Android Studio, its bundled JDK, SDK Platform, Platform-Tools, Build-Tools, Command-line Tools, and the side-by-side NDK. Set paths to the versions on your machine:
+Install Android Studio (JDK, SDK, Platform-Tools, Build-Tools, Command-line Tools, NDK). Enable Windows Developer Mode if Tauri asks for symlinks.
 
 ```powershell
 $env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
@@ -92,44 +143,48 @@ $env:NDK_HOME = "$env:ANDROID_HOME\ndk\28.2.13676358"
 rustup target add aarch64-linux-android
 pnpm tauri android init
 pnpm tauri android build --debug --target aarch64 --apk
-# With a connected device or running emulator:
-pnpm tauri android dev
+pnpm tauri android dev   # device or emulator
 ```
 
-Use Windows Developer Mode if Tauri requests symlink support. APKs land under `src-tauri/gen/android/app/build/outputs/`. Native capture, floating mic, accessibility insertion, and overlay live in the inlined Android platform plugin (`docs/ANDROID.md`).
+APKs: `src-tauri/gen/android/app/build/outputs/`. Details: [`docs/ANDROID.md`](docs/ANDROID.md).
 
-## Layout
+</details>
+
+<details>
+<summary><strong>Repo layout</strong></summary>
 
 ```text
 src/
-├── app/                 Settings shell, nav, dictation wiring
-├── voice/               Provider boundary, session, audio, destinations
-├── platform/            Windows / Android adapters + capture
+├── app/                   Settings shell, nav, dictation wiring
+├── voice/                 Provider boundary, session, audio, destinations
+├── assistant/             Gemini Live Assistant session and tools
+├── platform/              Windows / Android adapters + capture
+├── overlay/               Floating control
+├── onboarding/            First-run setup
 ├── auth/ settings/ sync/  Account, device prefs, dictionary
-├── notes/ handoffs/ history/ devices/ context/ usage/ updates/
-└── services/            Supabase and Edge Function clients
+├── notes/ handoffs/ …     Notes, handoffs, history, devices, usage, updates
+└── services/              Supabase and Edge Function clients
 
-src-tauri/src/
-├── commands/            Tauri IPC
-├── platform/            OS-specific Rust (Windows + Android registration)
-└── voice/
+src-tauri/
+├── src/
+│   ├── commands/          Tauri IPC
+│   ├── platform/          OS-specific Rust
+│   └── voice/
+└── gen/android/           Generated host + Kotlin platform code
 
-src-tauri/gen/android/   Generated host + Kotlin platform code
-supabase/functions/      gemini-token and related Edge Functions
+supabase/
+└── functions/             gemini-token and related Edge Functions
 ```
 
-Shared product logic stays in TypeScript. Platform behavior stays behind `PlatformAdapter`. Gemini stays behind `VoiceProvider` / `TranscriptionSession`.
+Shared logic stays in TypeScript. Platform behavior stays behind `PlatformAdapter`. Dictation uses `VoiceProvider` / `TranscriptionSession`. Assistant uses `AssistantController`.
 
-## Privacy defaults
+</details>
 
-- Live microphone audio does not go through our backend
-- Audio is not permanently stored by the app
-- Voice notes and handoffs sync only when you choose those destinations
-- Recent history and selection captures stay on-device (selection is in-memory)
-- Analytics are daily counters only; turn off or clear from Settings
+<details>
+<summary><strong>Filesystem note (exFAT)</strong></summary>
 
-## Filesystem note
+This workspace uses exFAT. pnpm 11's `nodeLinker` is hoisted in `pnpm-workspace.yaml` because exFAT cannot create dependency symlinks.
 
-This workspace uses exFAT. pnpm 11's `nodeLinker` is hoisted in `pnpm-workspace.yaml` because exFAT cannot create dependency symlinks. This remains a single-package project.
+Android APK builds from this exFAT workspace stop when Tauri links the native library. Use an NTFS checkout with symlink support for Android builds. The generated host targets SDK 37.
 
-Android APK builds from this exFAT workspace stop when Tauri links the native library. Use an NTFS checkout with symlink support for Android builds. The generated host targets SDK 37; install that SDK platform before completing Gradle assembly.
+</details>

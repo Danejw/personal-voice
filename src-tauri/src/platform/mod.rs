@@ -104,8 +104,25 @@ mod unsupported {
     pub fn pin_overlay(_window: &WebviewWindow) -> Result<(), String> {
         Ok(())
     }
-    pub fn set_overlay_tip_expanded(_expanded: bool) {}
+    pub fn set_overlay_tip_expanded(
+        _window: &WebviewWindow,
+        _expanded: bool,
+        _side: Option<&str>,
+    ) -> Result<&'static str, String> {
+        Ok("left")
+    }
+    pub fn peek_overlay_tip_side(_window: &WebviewWindow) -> Result<&'static str, String> {
+        Ok("left")
+    }
     pub fn set_overlay_confirm_expanded(_expanded: bool) {}
+    pub fn set_overlay_anchor(_anchor: Option<(i32, i32)>) {}
+    pub fn begin_overlay_drag() {}
+    pub fn drag_overlay(_window: &WebviewWindow, _x: i32, _y: i32) -> Result<(), String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn commit_overlay_position(_window: &WebviewWindow) -> Result<(i32, i32), String> {
+        Err(UNSUPPORTED.into())
+    }
     pub fn show_without_focus(window: &WebviewWindow) -> Result<(), String> {
         window.show().map_err(|e| e.to_string())
     }

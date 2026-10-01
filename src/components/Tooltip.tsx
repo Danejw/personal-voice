@@ -19,9 +19,7 @@ interface TooltipProps {
   /** Hover/focus text. Omit or empty to render the child unchanged. */
   content?: string;
   /**
-   * Preferred side. When omitted, the tip picks left or right based on
-   * whichever side of the trigger has more room. When set, that side is kept
-   * even if the tip has to sit closer to the edge.
+   * Preferred side. The tip still flips when that side does not fit next to the trigger.
    */
   side?: TooltipSide;
   /** Delay before the tip appears, like a native title. */
@@ -85,19 +83,17 @@ export function Tooltip({ content, side, delayMs = 350, children }: TooltipProps
     const needs = tipRect.width + gap;
 
     let nextSide: TooltipSide = side ?? (spaceLeft >= spaceRight ? "left" : "right");
-    // Only auto-flip when the caller did not lock a side.
-    if (!side) {
-      const preferredFits = nextSide === "left" ? spaceLeft >= needs : spaceRight >= needs;
-      const otherFits = nextSide === "left" ? spaceRight >= needs : spaceLeft >= needs;
-      if (!preferredFits && otherFits) {
-        nextSide = nextSide === "left" ? "right" : "left";
-      }
+    const preferredFits = nextSide === "left" ? spaceLeft >= needs : spaceRight >= needs;
+    const otherFits = nextSide === "left" ? spaceRight >= needs : spaceLeft >= needs;
+    if (!preferredFits && otherFits) {
+      nextSide = nextSide === "left" ? "right" : "left";
+    } else if (!preferredFits && !otherFits) {
+      nextSide = spaceLeft >= spaceRight ? "left" : "right";
     }
 
     let left = nextSide === "left"
       ? rect.left - tipRect.width - gap
       : rect.right + gap;
-    // Keep the tip on-screen without flipping a locked side.
     left = Math.min(Math.max(edge, left), Math.max(edge, window.innerWidth - tipRect.width - edge));
 
     let top = rect.top + rect.height / 2 - tipRect.height / 2;

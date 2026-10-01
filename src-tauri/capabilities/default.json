@@ -3,5 +3,11 @@
   "identifier": "default",
   "description": "Main and overlay windows: event listening, dragging the overlay, and reading the app version; app commands are defined in src-tauri/src/commands",
   "windows": ["main", "indicator"],
-  "permissions": ["core:event:default", "core:app:allow-version", "core:window:allow-start-dragging"]
+  "permissions": [
+    "core:event:default",
+    "core:app:allow-version",
+    "core:window:allow-start-dragging",
+    "core:window:allow-outer-position",
+    "core:window:allow-scale-factor"
+  ]
 }

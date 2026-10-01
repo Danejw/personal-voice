@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { flushSync } from "react-dom";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { BrandMark } from "@/app/BrandMark";
 import { Tooltip } from "@/components/Tooltip";
 import type { OverlayAction, OverlayAssistant, OverlayDictation, OverlayHoldDestination, OverlaySnapshot } from "@/overlay/overlay";
 import { setOverlayConfirmSpace } from "@/overlay/overlayConfirmSpace";
-import { setOverlayTipSpace } from "@/overlay/overlayTipSpace";
+import {
+  commitOverlayPosition,
+  dragOverlayTo,
+  OVERLAY_DRAG_SLOP,
+  startOverlayWindowDrag,
+} from "@/overlay/overlayPosition";
+import { setOverlayTipSpace, type OverlayTipSide } from "@/overlay/overlayTipSpace";
 
 interface OverlayDockProps {
   snapshot: OverlaySnapshot;
@@ -11,6 +19,18 @@ interface OverlayDockProps {
 }
 
 type ButtonTone = "" | "overlay-live" | "overlay-busy" | "overlay-bad";
+
+interface LogoDrag {
+  pointerId: number;
+  startScreenX: number;
+  startScreenY: number;
+  originX: number | null;
+  originY: number | null;
+  scale: number;
+  dragging: boolean;
+  /** OS `startDragging` took over; commit when moves settle. */
+  osDrag: boolean;
+}
 
 function assistantTone(assistant: OverlayAssistant): ButtonTone {
   switch (assistant) {
@@ -54,8 +74,11 @@ function tone(dictation: OverlayDictation, owns: boolean, showError: boolean): B
 /** Five small buttons. The Assistant button is its own action; the mic stays dictation. */
 export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   const [held, setHeld] = useState<OverlayHoldDestination | null>(null);
+  const [draggingTray, setDraggingTray] = useState(false);
+  const [tipSide, setTipSide] = useState<OverlayTipSide>("left");
   const heldRef = useRef<OverlayHoldDestination | null>(null);
   const holdId = useRef(0);
+  const logoDrag = useRef<LogoDrag | null>(null);
   const blocked = !snapshot.signedIn || snapshot.paused || snapshot.dictation === "finalizing";
   const selectionHint = snapshot.selectionPreview
     ? ` Selection attached${snapshot.selectionSource ? ` from ${snapshot.selectionSource}` : ""}: ${snapshot.selectionPreview}`
@@ -87,6 +110,36 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
     void setOverlayTipSpace(false);
   }, []);
 
+  useEffect(() => {
+    if (draggingTray) void setOverlayTipSpace(false);
+  }, [draggingTray]);
+
+  // After OS drag, pointerup may not reach the button. Commit once movement settles.
+  useEffect(() => {
+    if (!draggingTray) return;
+    const overlay = getCurrentWindow();
+    let settle: ReturnType<typeof setTimeout> | null = null;
+    let active = true;
+    const finish = () => {
+      if (!active) return;
+      active = false;
+      if (settle !== null) clearTimeout(settle);
+      logoDrag.current = null;
+      setDraggingTray(false);
+      void commitOverlayPosition();
+    };
+    const pending = overlay.onMoved(() => {
+      if (!logoDrag.current?.osDrag) return;
+      if (settle !== null) clearTimeout(settle);
+      settle = setTimeout(finish, 160);
+    });
+    return () => {
+      active = false;
+      if (settle !== null) clearTimeout(settle);
+      void pending.then((unlisten) => unlisten());
+    };
+  }, [draggingTray]);
+
   function onHoldDown(destination: OverlayHoldDestination, event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0 || blocked || snapshot.dictation === "listening") return;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -102,13 +155,85 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
     onAction({ type: "dictate-hold", phase: "stop", destination, id: holdId.current });
   }
 
+  function onLogoDown(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const pointerId = event.pointerId;
+    logoDrag.current = {
+      pointerId,
+      startScreenX: event.screenX,
+      startScreenY: event.screenY,
+      originX: null,
+      originY: null,
+      scale: 1,
+      dragging: false,
+      osDrag: false,
+    };
+    // Best-effort origin for the manual fallback. Do not clear the gesture if this fails.
+    void Promise.all([getCurrentWindow().outerPosition(), getCurrentWindow().scaleFactor()])
+      .then(([position, scale]) => {
+        const drag = logoDrag.current;
+        if (!drag || drag.pointerId !== pointerId) return;
+        drag.originX = position.x;
+        drag.originY = position.y;
+        drag.scale = scale;
+      })
+      .catch(() => {});
+  }
+
+  function onLogoMove(event: PointerEvent<HTMLButtonElement>) {
+    const drag = logoDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId || drag.osDrag) return;
+    const dx = event.screenX - drag.startScreenX;
+    const dy = event.screenY - drag.startScreenY;
+    if (!drag.dragging) {
+      if (Math.hypot(dx, dy) < OVERLAY_DRAG_SLOP) return;
+      drag.dragging = true;
+      setDraggingTray(true);
+      // Collapse tip first (buttons stay put), then lock pin and hand drag to the OS.
+      void setOverlayTipSpace(false)
+        .then(() => startOverlayWindowDrag())
+        .then(() => {
+          if (logoDrag.current?.pointerId === drag.pointerId) drag.osDrag = true;
+        })
+        .catch(() => {});
+      return;
+    }
+    if (drag.originX === null || drag.originY === null) return;
+    void dragOverlayTo(drag.originX + dx * drag.scale, drag.originY + dy * drag.scale);
+  }
+
+  function onLogoUp(event: PointerEvent<HTMLButtonElement>) {
+    const drag = logoDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    // OS drag commits from the moved-settle effect.
+    if (drag.osDrag) return;
+    logoDrag.current = null;
+    if (drag.dragging) {
+      setDraggingTray(false);
+      void commitOverlayPosition();
+      return;
+    }
+    onAction({ type: "open-settings" });
+  }
+
   return (
     <div
-      className="overlay-dock"
-      onMouseEnter={() => { void setOverlayTipSpace(true); }}
+      className={[
+        "overlay-dock",
+        draggingTray ? "is-dragging" : "",
+        tipSide === "right" ? "is-tip-right" : "",
+      ].filter(Boolean).join(" ")}
+      onMouseEnter={() => {
+        if (draggingTray) return;
+        void setOverlayTipSpace(true, (side) => {
+          flushSync(() => setTipSide(side));
+        });
+      }}
       onMouseLeave={() => { void setOverlayTipSpace(false); }}
     >
-      <Tooltip content={dictateTitle} side="left" delayMs={280}>
+      <Tooltip content={dictateTitle} side={tipSide} delayMs={280}>
         <button
           type="button"
           className={`overlay-btn ${tone(snapshot.dictation, held === null, true)}`}
@@ -119,7 +244,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           <MicIcon />
         </button>
       </Tooltip>
-      <Tooltip content="Hold for a voice note" side="left" delayMs={280}>
+      <Tooltip content="Hold for a voice note" side={tipSide} delayMs={280}>
         <button
           type="button"
           className={`overlay-btn ${tone(snapshot.dictation, held === "voice-note", false)}`}
@@ -132,7 +257,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           <NoteIcon />
         </button>
       </Tooltip>
-      <Tooltip content="Hold to send a handoff" side="left" delayMs={280}>
+      <Tooltip content="Hold to send a handoff" side={tipSide} delayMs={280}>
         <button
           type="button"
           className={`overlay-btn ${tone(snapshot.dictation, held === "send-to-device", false)}`}
@@ -145,7 +270,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           <SendIcon />
         </button>
       </Tooltip>
-      <Tooltip content={assistantTitle} side="left" delayMs={280}>
+      <Tooltip content={assistantTitle} side={tipSide} delayMs={280}>
         <button
           type="button"
           className={`overlay-btn ${assistantTone(snapshot.assistant)}`}
@@ -158,7 +283,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
       </Tooltip>
       {snapshot.pendingTitle && (
         <>
-          <Tooltip content={snapshot.pendingWorking ? "Working…" : snapshot.pendingTitle} side="left" delayMs={280}>
+          <Tooltip content={snapshot.pendingWorking ? "Working…" : snapshot.pendingTitle} side={tipSide} delayMs={280}>
             <button
               type="button"
               className="overlay-btn"
@@ -169,7 +294,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
               <CheckIcon />
             </button>
           </Tooltip>
-          <Tooltip content="Cancel" side="left" delayMs={280}>
+          <Tooltip content="Cancel" side={tipSide} delayMs={280}>
             <button
               type="button"
               className="overlay-btn"
@@ -182,12 +307,15 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           </Tooltip>
         </>
       )}
-      <Tooltip content="Open Personal Voice" side="left" delayMs={280}>
+      <Tooltip content="Open Personal Voice" side={tipSide} delayMs={280}>
         <button
           type="button"
           className="overlay-btn overlay-logo"
           aria-label="Open Personal Voice"
-          onClick={() => onAction({ type: "open-settings" })}
+          onPointerDown={(event) => { void onLogoDown(event); }}
+          onPointerMove={onLogoMove}
+          onPointerUp={onLogoUp}
+          onPointerCancel={onLogoUp}
         >
           <BrandMark />
         </button>

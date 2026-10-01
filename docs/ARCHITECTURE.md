@@ -180,7 +180,7 @@ Shared UI should call the adapter, not the operating system directly.
 
 As implemented (Phase 2, `src/platform/PlatformAdapter.ts`): `insertText`, `setHotkeys`, `setDictationActive` (routes Escape to cancel), `onPushToTalk` (press/release/cancel, with an optional destination on press) and `onPausedChange`. Phase 6 added `createCapture()`: both platforms produce the same 16 kHz PCM16 chunks for the shared `DictationController`, via Web Audio (`BrowserAudioCapture`) on Windows and native `AudioRecord` (`NativeAudioCapture` → Kotlin `NativeMicCapture`) on Android, because the Android WebView cannot open the microphone while the app is hidden behind the floating mic. The adapter is chosen once in `src/platform/index.ts`. The Rust side is `src-tauri/src/commands` (IPC) plus `src-tauri/src/platform/<os>`.
 
-The floating Personal Voice control stays on top of other apps while idle. `syncOverlay(snapshot)` pushes dictation state, destination, recent notes, and pending handoffs to that control; `onOverlayAction` routes its clicks back into the shared stores. Listening is the same control changing colour/label, not a separate temporary indicator. `openSettings()` brings the Settings window forward when a less common action is needed. `captureSelection({ restoreSettings: false })` keeps Settings hidden so overlay capture does not steal the previous app.
+The floating Personal Voice control stays on top of other apps while idle. `syncOverlay(snapshot)` pushes dictation state, destination, recent notes, and pending handoffs to that control; `onOverlayAction` routes its clicks back into the shared stores. Listening is the same control changing colour/label, not a separate temporary indicator. `openSettings()` brings the Settings window forward when a less common action is needed. On Windows, press-and-drag on the Open Personal Voice button moves the tray; the position is stored only on that install. `captureSelection({ restoreSettings: false })` keeps Settings hidden so overlay capture does not steal the previous app.
 
 PV3 adds `insertReceivedText()`. Windows hides Settings and lets the previous app regain focus
 before invoking the existing native paste path. Android moves the Settings task behind the
@@ -351,7 +351,7 @@ Writes go through `upsert_usage_day()`. Clients may only select `usage_days`. On
 | Sync recent dictations | Account | Off until the user opts in. Final text only, on every device |
 | Usage analytics | Account days | Daily counters per device, replaced by the local snapshot for this device |
 
-Overlay layout is not synced. Android start-on-boot and `want_floating_mic` stay on the device.
+Overlay layout is not synced. Windows tray position after a user drag stays in install-local storage. Android start-on-boot and `want_floating_mic` stay on the device.
 
 ## Dictation history
 

@@ -195,14 +195,30 @@ pub fn sync_overlay(app: AppHandle, snapshot: serde_json::Value) -> Result<(), S
     }
 }
 
-/// Grows the overlay leftward so a tooltip can sit beside the buttons, then pins it.
+/// Grows the overlay beside the buttons so a tooltip fits, then pins it.
+/// Returns `"left"` or `"right"`. Pass `side` after the UI has aligned to that edge
+/// so the button stack does not jump when the window expands.
 #[tauri::command]
-pub fn resize_overlay(app: AppHandle, expanded: bool) -> Result<(), String> {
-    platform::set_overlay_tip_expanded(expanded);
+pub fn resize_overlay(
+    app: AppHandle,
+    expanded: bool,
+    side: Option<String>,
+) -> Result<&'static str, String> {
     let window = app
         .get_webview_window(INDICATOR_WINDOW)
         .ok_or("The overlay window is missing.")?;
-    platform::pin_overlay(&window)
+    let chosen = platform::set_overlay_tip_expanded(&window, expanded, side.as_deref())?;
+    platform::pin_overlay(&window)?;
+    Ok(chosen)
+}
+
+/// Which side has room for a tip, without resizing yet.
+#[tauri::command]
+pub fn peek_overlay_tip_side(app: AppHandle) -> Result<&'static str, String> {
+    let window = app
+        .get_webview_window(INDICATOR_WINDOW)
+        .ok_or("The overlay window is missing.")?;
+    platform::peek_overlay_tip_side(&window)
 }
 
 /// Grows the overlay so Confirm and Cancel fit under the Assistant button, then pins it.
@@ -213,6 +229,44 @@ pub fn resize_overlay_confirm(app: AppHandle, expanded: bool) -> Result<(), Stri
         .get_webview_window(INDICATOR_WINDOW)
         .ok_or("The overlay window is missing.")?;
     platform::pin_overlay(&window)
+}
+
+/// Restores a saved bottom-right anchor (physical pixels), or clears it for the default corner.
+#[tauri::command]
+pub fn set_overlay_anchor(app: AppHandle, x: Option<i32>, y: Option<i32>) -> Result<(), String> {
+    let anchor = match (x, y) {
+        (Some(right), Some(bottom)) => Some((right, bottom)),
+        _ => None,
+    };
+    platform::set_overlay_anchor(anchor);
+    let window = app
+        .get_webview_window(INDICATOR_WINDOW)
+        .ok_or("The overlay window is missing.")?;
+    platform::pin_overlay(&window)
+}
+
+/// Stops `pin_overlay` from fighting a user drag (OS or manual).
+#[tauri::command]
+pub fn begin_overlay_drag() {
+    platform::begin_overlay_drag();
+}
+
+/// Moves the overlay to a physical top-left while the user is dragging it.
+#[tauri::command]
+pub fn drag_overlay(app: AppHandle, x: i32, y: i32) -> Result<(), String> {
+    let window = app
+        .get_webview_window(INDICATOR_WINDOW)
+        .ok_or("The overlay window is missing.")?;
+    platform::drag_overlay(&window, x, y)
+}
+
+/// Saves the current bottom-right as the custom anchor and ends the drag.
+#[tauri::command]
+pub fn commit_overlay_position(app: AppHandle) -> Result<(i32, i32), String> {
+    let window = app
+        .get_webview_window(INDICATOR_WINDOW)
+        .ok_or("The overlay window is missing.")?;
+    platform::commit_overlay_position(&window)
 }
 
 #[tauri::command]
