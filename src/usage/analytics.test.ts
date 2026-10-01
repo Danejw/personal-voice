@@ -154,8 +154,10 @@ describe("settings epoch", () => {
     expect(settingsFromRow(null).cloudDictationHistory).toBe(false);
     const row = settingsUpsertRow("user", { ...DEFAULT_SETTINGS, usageEpoch: 4, usageIntelligence: false });
     expect(row).not.toHaveProperty("usage_epoch");
+    expect(row).not.toHaveProperty("assistant_learning_since");
     expect(row.usage_intelligence).toBe(false);
     expect(row.cloud_dictation_history).toBe(false);
+    expect(row.assistant_memory_learning).toBe(false);
   });
 });
 

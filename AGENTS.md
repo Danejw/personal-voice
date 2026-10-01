@@ -115,7 +115,7 @@ Do not model the lifecycle with many unrelated booleans.
 - Do not log API keys or short-lived tokens.
 - Do not permanently store microphone audio.
 - Do not sync microphone audio.
-- Transcript history is out of scope unless explicitly added later.
+- Saved Assistant conversation text may be stored for the signed-in account. Automatic dictation transcript warehouses stay out of scope. Microphone audio is never stored or synced.
 
 ## Git discipline
 

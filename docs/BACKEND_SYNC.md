@@ -17,6 +17,7 @@ It is not a transcription server.
 - explicitly saved voice notes
 - explicitly sent device handoffs
 - opt-in recent dictations (final text only, and only while the account setting is on)
+- saved Assistant conversations (final or interrupted text, url/title citations, and a tool name plus outcome)
 - secure Google/Gemini credential handling
 - short-lived client token issuance
 
@@ -29,6 +30,7 @@ It is not a transcription server.
 - transcript analytics or per-utterance logs
 - automatic transcript history for accounts that have not opted in
 - permanent recording storage
+- Assistant resumption handles, raw microphone audio, or tool arguments that could be replayed
 
 ## Suggested tables
 

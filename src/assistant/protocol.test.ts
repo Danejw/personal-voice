@@ -64,6 +64,10 @@ describe("assistant setup and typed turns", () => {
       "open_app",
       "press_shortcut",
       "supervise_screen",
+      "list_memories",
+      "remember_memory",
+      "change_memory",
+      "forget_memory",
       "remote_action",
     ]);
     expect(ASSISTANT_PCM_RATE).toBe(24_000);

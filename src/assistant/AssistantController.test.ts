@@ -108,12 +108,40 @@ describe("AssistantController", () => {
     const snapshot = created.getSnapshot();
     expect(snapshot.status).toBe("IDLE");
     expect(snapshot.liveText).toBe("");
-    expect(snapshot.turns).toEqual([{ id: "id-1", role: "user", text: "Hello" }]);
+    expect(snapshot.turns).toEqual([
+      { id: "id-1", role: "user", text: "Hello" },
+      { id: "id-2", role: "assistant", text: "partial", status: "interrupted" },
+    ]);
     expect(JSON.stringify(snapshot)).not.toContain("should not appear");
-    expect(JSON.stringify(snapshot)).not.toContain("partial");
     expect(session.closed).toBe(true);
     expect(playback.cleared).toBeGreaterThan(0);
     expect(playback.chunks).toEqual([]);
+  });
+
+  it("reports each committed turn once and does not report a reloaded transcript", () => {
+    const { created } = controller();
+    const seen: string[] = [];
+    created.setCommittedTurnHandler((turn) => seen.push(`${turn.id}:${turn.status ?? "final"}:${turn.text}`));
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "inputTranscription", text: "Hello", partial: false });
+    session.emit({ type: "outputTranscription", text: "Hi there" });
+    created.end();
+    expect(seen).toEqual(["id-1:final:Hello", "id-2:interrupted:Hi there"]);
+    created.showSaved([{ id: "id-1", role: "user", text: "Hello" }]);
+    expect(seen).toEqual(["id-1:final:Hello", "id-2:interrupted:Hi there"]);
+    expect(created.getSnapshot().turns).toEqual([{ id: "id-1", role: "user", text: "Hello" }]);
+  });
+
+  it("keeps a user line cut off by a refused connection as interrupted", () => {
+    const { created } = controller();
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "inputTranscription", text: "half a sentence", partial: true });
+    session.emit({ type: "error", message: "Assistant disconnected (1008: refused).", retryable: false });
+    expect(created.getSnapshot().turns).toEqual([
+      { id: "id-1", role: "user", text: "half a sentence", status: "interrupted" },
+    ]);
   });
 
   it("ignores the previous session after a new start", () => {
@@ -433,6 +461,22 @@ describe("AssistantController", () => {
         functionResponses: [{ id: "call-1", name: "copy_text", response: { result: "Copied to the clipboard." } }],
       },
     }]);
+  });
+
+  it("does not run a tool when this device is not producing", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setActions(used);
+    created.setProducer(() => false);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({
+      type: "toolCalls",
+      calls: [{ id: "call-1", name: "copy_text", args: { text: "copied by assistant" } }],
+    });
+    await settle();
+    expect(used.copyText).not.toHaveBeenCalled();
+    expect(created.getSnapshot().actionNotice).toBeNull();
   });
 
   it("captures the screen when asked and reports a capture failure", async () => {
@@ -795,9 +839,20 @@ describe("AssistantController", () => {
     const idle = new AssistantController((onEvent) => new FakeSession(onEvent), new FakePlayback());
     const note = { id: "a", text: "Offline fact.", createdAt: "2026-09-28T00:00:00.000Z" };
     expect(idle.attachNote(note)).toBeNull();
+    expect(idle.attachSelection({
+      type: "selection",
+      text: "Account A secret.",
+      capturedAt: "2026-09-28T00:00:00.000Z",
+    })).toBeNull();
+    idle.setSavedHistory([{ role: "user", text: "The old thread says pineapple." }]);
     expect(idle.getSnapshot().status).toBe("IDLE");
     idle.clearAccountContext();
     expect(idle.getSnapshot().notes).toEqual([]);
+    expect(idle.getSnapshot().selection).toBeNull();
+    idle.start();
+    expect((FakeSession.opened.at(-1) as FakeSession).histories).toEqual([]);
+    expect(JSON.stringify((FakeSession.opened.at(-1) as FakeSession).accounts)).not.toContain("Account A secret.");
+    idle.end();
 
     const { created } = controller();
     created.start();
@@ -852,6 +907,67 @@ describe("AssistantController", () => {
     expect(session.histories).toHaveLength(1);
     expect(session.turns).toEqual(["What was the cross-device code word?"]);
     expect(session.accounts[0]).toContain("Desk fact.");
+  });
+
+  it("seeds saved history once and skips it when the socket resumes", () => {
+    const { created } = controller();
+    created.setSavedHistory([
+      { role: "user", text: "Meet on Friday." },
+      { role: "model", text: "Friday is set." },
+    ]);
+    created.start();
+    const first = FakeSession.opened[0] as FakeSession;
+    expect(first.histories).toHaveLength(1);
+    expect(first.histories[0]?.map((turn) => turn.text).join(" ")).toContain("Meet on Friday.");
+    expect(created.getSnapshot().turns.map((turn) => turn.text)).not.toContain("Meet on Friday.");
+    first.emit({ type: "resumption", handle: "resume-1" });
+    first.emit({ type: "goAway" });
+    expect(FakeSession.opened).toHaveLength(2);
+    expect((FakeSession.opened[1] as FakeSession).histories).toEqual([]);
+    expect(first.histories).toHaveLength(1);
+  });
+
+  it("sends a remembered preference once and restarts when it is forgotten", () => {
+    const handles: Array<string | null> = [];
+    let next = 0;
+    const created = new AssistantController(
+      (onEvent, handle) => {
+        handles.push(handle ?? null);
+        return new FakeSession(onEvent);
+      },
+      new FakePlayback(),
+      () => `id-${next += 1}`,
+    );
+    const preference = {
+      id: "00000000-0000-4000-8000-000000000010",
+      kind: "preference" as const,
+      key: "answer_length",
+      value: "Prefer short answers.",
+      scope: "account" as const,
+      status: "active" as const,
+      origin: "explicit" as const,
+      sourceConversationId: null,
+      sourceMessageId: null,
+      supersedesId: null,
+      revision: 1,
+      createdAt: "2026-09-30T12:00:00.000Z",
+      updatedAt: "2026-09-30T12:00:00.000Z",
+      forgottenAt: null,
+    };
+    created.setMemories([preference]);
+    created.start();
+    const first = FakeSession.opened[0] as FakeSession;
+    expect(first.notes.some((note) => note.includes("Prefer short answers."))).toBe(true);
+    expect(first.notes.filter((note) => note.includes("Prefer short answers."))).toHaveLength(1);
+    first.emit({ type: "resumption", handle: "resume-1" });
+    first.emit({ type: "goAway" });
+    expect(handles[1]).toBe("resume-1");
+    expect((FakeSession.opened[1] as FakeSession).notes.some((note) => note.includes("Prefer short answers."))).toBe(false);
+    created.setMemories([]);
+    expect(handles.at(-1)).toBeNull();
+    const restarted = FakeSession.opened.at(-1) as FakeSession;
+    expect(restarted.notes.some((note) => note.includes("Prefer short answers."))).toBe(false);
+    expect(created.getSnapshot().actionNotice).toMatch(/restarting/);
   });
 
   it("sends profile facts, then stops sending them when the profile is turned off", () => {
@@ -942,6 +1058,10 @@ function toolActions() {
     archiveVoiceNote: vi.fn(async () => {}),
     deleteVoiceNote: vi.fn(async () => {}),
     dismissHandoff: vi.fn(async () => {}),
+    listMemories: vi.fn(async () => "No memories are remembered."),
+    rememberMemory: vi.fn(async () => "Remembered answer_length: Prefer short answers."),
+    changeMemory: vi.fn(async () => "Changed answer_length."),
+    forgetMemory: vi.fn(async () => "Forgot answer_length."),
     captureScreen: vi.fn(async () => ({
       source: "screen" as const,
       capturedAt: "2026-09-28T12:00:00.000Z",

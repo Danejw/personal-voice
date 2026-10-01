@@ -331,7 +331,7 @@ No dashboard.
 
 ## Explicitly out of scope for V1
 
-The original dictation scope did not include an assistant. Assistant now exists as a second mode. It does not replace dictation. Its limits are in `docs/Assistant-Phases/`.
+The original dictation scope did not include an assistant. Assistant now exists as a second mode. It does not replace dictation. Its limits are in `docs/Assistant-Phases/`. Saved Assistant conversation text is account data (`docs/Shared-Assistant-Phases/06.md`). The Assistant screen saves and reopens that transcript on every signed-in device. One device at a time holds the conversation and can answer. Starting Assistant on a saved thread sends that thread once as earlier context. A resumed connection does not send it again. Old actions are not run again. Explicit memories are separate from that transcript and from the analytics profile. A new session hears the active ones. Forgetting a memory does not delete the conversation. Learning new memories from saved Assistant messages is off until the account turns it on (`docs/Shared-Assistant-Phases/07.md`). Voice notes and dictations are not read for that.
 
 Still out of scope:
 

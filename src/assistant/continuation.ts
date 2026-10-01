@@ -8,6 +8,7 @@ export const CONTINUATION_TURN_LIMIT = 12;
 export const CONTINUATION_TURN_CHARS = 2_000;
 export const CONTINUATION_PAYLOAD_LIMIT = 24_000;
 const TITLE_CHARS = 120;
+const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface ContinuationTurn {
   role: "user" | "assistant";
@@ -45,6 +46,8 @@ export interface AssistantContinuation {
   sourceDeviceId: string;
   sourceDeviceName: string;
   createdAt: string;
+  /** Present when the other device already saved this thread. Older packages omit it. */
+  conversationId?: string;
 }
 
 export interface ContinuationDraft {
@@ -56,6 +59,7 @@ export interface ContinuationDraft {
   sourceDeviceId: string;
   sourceDeviceName: string;
   createdAt: string;
+  conversationId?: string | null;
 }
 
 export type ClassifiedHandoff =
@@ -70,6 +74,10 @@ export function buildContinuation(
   const sourceDeviceId = draft.sourceDeviceId.trim();
   const sourceDeviceName = draft.sourceDeviceName.trim();
   if (!sourceDeviceId || !sourceDeviceName) return { ok: false, message: "This device is not ready to send a continuation." };
+  const conversationId = draft.conversationId?.trim() || null;
+  if (conversationId && !CONVERSATION_ID.test(conversationId)) {
+    return { ok: false, message: "That conversation could not be continued." };
+  }
   const turns = clipTurns(draft.turns);
   if (!turns.length) return { ok: false, message: "Start a conversation before continuing it on another device." };
   const payload = fitPayload({
@@ -98,6 +106,7 @@ export function buildContinuation(
     sourceDeviceId,
     sourceDeviceName,
     createdAt: draft.createdAt,
+    ...(conversationId ? { conversationId } : {}),
   });
   if (!payload.turns.length || packed(payload).length > CONTINUATION_PAYLOAD_LIMIT) {
     return { ok: false, message: "That conversation is too large to continue on another device." };
@@ -217,7 +226,7 @@ function readPayload(parsed: unknown): ClassifiedHandoff {
   const record = parsed as Record<string, unknown>;
   const allowed = new Set([
     "version", "title", "turns", "selection", "notes", "handoff", "screen",
-    "sourceDeviceId", "sourceDeviceName", "createdAt",
+    "sourceDeviceId", "sourceDeviceName", "createdAt", "conversationId",
   ]);
   if (Object.keys(record).some((key) => !allowed.has(key))) {
     return { kind: "malformed", message: "This continuation could not be read." };
@@ -251,6 +260,13 @@ function readPayload(parsed: unknown): ClassifiedHandoff {
   ) {
     return { kind: "malformed", message: "This continuation could not be read." };
   }
+  let conversationId: string | undefined;
+  if ("conversationId" in record && record.conversationId != null) {
+    if (typeof record.conversationId !== "string" || !CONVERSATION_ID.test(record.conversationId)) {
+      return { kind: "malformed", message: "This continuation could not be read." };
+    }
+    conversationId = record.conversationId;
+  }
   return {
     kind: "continuation",
     payload: {
@@ -264,6 +280,7 @@ function readPayload(parsed: unknown): ClassifiedHandoff {
       sourceDeviceId: record.sourceDeviceId,
       sourceDeviceName: record.sourceDeviceName,
       createdAt: record.createdAt,
+      ...(conversationId ? { conversationId } : {}),
     },
   };
 }

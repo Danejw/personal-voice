@@ -9,6 +9,8 @@ export interface AssistantTurn {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /** Omitted on a finished turn. Set when speech stopped before the turn finished. */
+  status?: "interrupted";
   /** Present only when this reply was actually grounded. */
   sources?: AssistantSource[];
 }
@@ -65,15 +67,16 @@ export type AssistantAction =
   | { type: "blocked"; message: string }
   | { type: "send"; id: string; text: string }
   | { type: "userPartial"; text: string }
-  | { type: "userFinal"; id: string; text: string }
+  | { type: "userFinal"; id: string; text: string; spokenId?: string }
   | { type: "assistantSpeaking" }
   | { type: "output"; text: string }
   | { type: "grounding"; sources: AssistantSource[] }
   | { type: "interrupt"; id: string }
   | { type: "turnComplete"; id: string }
   | { type: "reconnect"; id: string }
-  | { type: "fail"; message: string }
-  | { type: "end" }
+  | { type: "fail"; message: string; user?: { id: string; text: string }; assistant?: { id: string; text: string } }
+  | { type: "end"; user?: { id: string; text: string }; assistant?: { id: string; text: string } }
+  | { type: "replaceTurns"; turns: AssistantTurn[] }
   | { type: "attachSelection"; item: ContextItem }
   | { type: "detachSelection" }
   | { type: "selectionError"; message: string }
@@ -166,7 +169,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
       return { ...state, liveUser: action.text };
     case "userFinal": {
       if ((state.status !== "READY" && state.status !== "RESPONDING") || !action.text.trim()) return state;
-      const spoken = state.status === "RESPONDING" ? replyTurn(state, `${action.id}-spoken`) : null;
+      const spoken = state.status === "RESPONDING" ? replyTurn(state, action.spokenId ?? `${action.id}-spoken`, "interrupted") : null;
       return {
         ...state,
         status: "RESPONDING",
@@ -193,7 +196,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
       return { ...state, liveSources: mergeSources(state.liveSources, action.sources) };
     case "interrupt": {
       if (state.status !== "RESPONDING") return state;
-      const interrupted = replyTurn(state, action.id);
+      const interrupted = replyTurn(state, action.id, "interrupted");
       return {
         ...state,
         status: "READY",
@@ -215,7 +218,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
     }
     case "reconnect": {
       if (state.status === "IDLE" || state.status === "ERROR") return state;
-      const resumed = replyTurn(state, action.id);
+      const resumed = replyTurn(state, action.id, "interrupted");
       return {
         ...state,
         status: "CONNECTING",
@@ -233,6 +236,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         ...state,
         status: "ERROR",
         error: action.message,
+        turns: [...state.turns, ...sealedTurns(state, action)],
         liveUser: "",
         liveText: "",
         liveSources: [],
@@ -247,6 +251,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
       return {
         ...state,
         status: "IDLE",
+        turns: [...state.turns, ...sealedTurns(state, action)],
         liveUser: "",
         liveText: "",
         liveSources: [],
@@ -296,9 +301,31 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
     case "detachHandoff":
       return { ...state, handoff: null, accountError: null };
     case "clearAccount":
-      return { ...state, notes: [], handoff: null, accountError: null };
+      return {
+        ...state,
+        notes: [],
+        handoff: null,
+        accountError: null,
+        selection: null,
+        selectionError: null,
+        screen: null,
+        screenError: null,
+      };
     case "accountError":
       return { ...state, accountError: action.message };
+    case "replaceTurns":
+      if (state.status === "CONNECTING" || state.status === "READY" || state.status === "RESPONDING") return state;
+      return {
+        ...state,
+        status: "IDLE",
+        turns: action.turns,
+        liveUser: "",
+        liveText: "",
+        liveSources: [],
+        error: null,
+        resuming: false,
+        continuedFrom: null,
+      };
     case "seed":
       if (state.status === "CONNECTING" || state.status === "READY" || state.status === "RESPONDING") return state;
       return { ...state, turns: action.turns, continuedFrom: action.from, liveUser: "", liveText: "", liveSources: [], error: null };
@@ -328,14 +355,36 @@ function mergeSources(current: AssistantSource[], incoming: AssistantSource[]): 
 }
 
 /** Keeps citations on the reply that was spoken. No text means no sourced turn. */
-function replyTurn(state: AssistantSnapshot, id: string): AssistantTurn | null {
+function replyTurn(state: AssistantSnapshot, id: string, status?: "interrupted"): AssistantTurn | null {
   if (!state.liveText) return null;
   return {
     id,
     role: "assistant",
     text: state.liveText,
+    ...(status === "interrupted" ? { status } : {}),
     ...(state.liveSources.length ? { sources: state.liveSources } : {}),
   };
+}
+
+/** Keeps speech that was still on screen when the session stopped, marked interrupted. */
+function sealedTurns(
+  state: AssistantSnapshot,
+  extra: { user?: { id: string; text: string }; assistant?: { id: string; text: string } },
+): AssistantTurn[] {
+  const turns: AssistantTurn[] = [];
+  const assistant = extra.assistant?.text.trim();
+  if (assistant && extra.assistant) {
+    turns.push({
+      id: extra.assistant.id,
+      role: "assistant",
+      text: assistant,
+      status: "interrupted",
+      ...(state.liveSources.length ? { sources: state.liveSources } : {}),
+    });
+  }
+  const user = extra.user?.text.trim();
+  if (user && extra.user) turns.push({ id: extra.user.id, role: "user", text: user, status: "interrupted" });
+  return turns;
 }
 
 /** A citation that arrives after the reply is already on screen stays with that reply. */

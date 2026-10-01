@@ -39,6 +39,10 @@ describe("assistant tool schema", () => {
       "open_app",
       "press_shortcut",
       "supervise_screen",
+      "list_memories",
+      "remember_memory",
+      "change_memory",
+      "forget_memory",
       "remote_action",
     ]);
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
@@ -152,6 +156,26 @@ describe("assistant tool schema", () => {
       kind: "reject",
       id: "missing",
       message: "No other device is named Laptop.",
+    });
+    expect(decideToolCall({ id: "mem", name: "remember_memory", args: { key: "Answer length", value: "Prefer short answers." } }, plan)).toMatchObject({
+      kind: "confirm",
+      name: "remember_memory",
+      memory: { action: "remember", key: "answer_length", kind: "preference", value: "Prefer short answers." },
+    });
+    expect(decideToolCall({ id: "chg", name: "change_memory", args: { key: "answer_length", value: "Prefer long answers." } }, plan)).toMatchObject({
+      kind: "confirm",
+      memory: { action: "change", key: "answer_length", value: "Prefer long answers." },
+    });
+    expect(decideToolCall({ id: "gone", name: "forget_memory", args: { key: "answer_length" } }, plan)).toMatchObject({
+      kind: "confirm",
+      title: "Forget answer_length",
+      memory: { action: "forget", key: "answer_length" },
+    });
+    expect(decideToolCall({ id: "bad", name: "forget_memory", args: { key: "!!!" } }, plan)).toMatchObject({ kind: "reject" });
+    expect(decideToolCall({ id: "list", name: "list_memories", args: {} }, plan)).toEqual({
+      kind: "memories",
+      id: "list",
+      name: "list_memories",
     });
   });
 

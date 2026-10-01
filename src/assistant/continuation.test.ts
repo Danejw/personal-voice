@@ -34,6 +34,7 @@ describe("assistant continuation", () => {
     if (classified.kind !== "continuation") return;
     expect(classified.payload.turns[0]?.text).toContain("pineapple seven");
     expect(classified.payload.version).toBe(1);
+    expect(classified.payload.conversationId).toBeUndefined();
     expect(classifyHandoffText("Meet at noon.").kind).toBe("text");
     expect(classifyHandoffText(`Notes\n${CONTINUATION_PREFIX}{}`).kind).toBe("text");
   });
@@ -55,6 +56,15 @@ describe("assistant continuation", () => {
     expect(newer.kind).toBe("malformed");
     if (newer.kind === "malformed") expect(newer.message).toMatch(/newer/);
     expect(classifyHandoffText(`${CONTINUATION_PREFIX}${JSON.stringify({ ...body, resumeHandle: "secret" })}`).kind).toBe("malformed");
+    const savedId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const saved = buildContinuation({ ...draft, conversationId: savedId });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    const savedClass = classifyHandoffText(saved.text);
+    expect(savedClass.kind).toBe("continuation");
+    if (savedClass.kind === "continuation") expect(savedClass.payload.conversationId).toBe(savedId);
+    expect(buildContinuation({ ...draft, conversationId: "not-a-thread" }).ok).toBe(false);
+    expect(classifyHandoffText(`${CONTINUATION_PREFIX}${JSON.stringify({ ...body, conversationId: "not-a-thread" })}`).kind).toBe("malformed");
   });
 
   it("requires the sending device on the handoff row", () => {

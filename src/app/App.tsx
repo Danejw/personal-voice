@@ -4,6 +4,11 @@ import { buildContinuation, handoffDisplayText } from "@/assistant/continuation"
 import { selectionPreview } from "@/assistant/selectionContext";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
+import { AssistantConversationStore } from "@/assistant/AssistantConversationStore";
+import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
+import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
+import { MemoryPanel } from "@/assistant/MemoryPanel";
+import { useAssistantMemory } from "@/assistant/useAssistantMemory";
 import { AssistantController } from "@/assistant/AssistantController";
 import { AssistantHeader, AssistantPanel } from "@/assistant/AssistantPanel";
 import { PersonalContextPanel } from "@/assistant/PersonalContextPanel";
@@ -12,6 +17,7 @@ import { AssistantSession } from "@/assistant/AssistantSession";
 import { PcmPlayback } from "@/assistant/PcmPlayback";
 import { AndroidAssistantPlayback } from "@/platform/android/AndroidAssistantPlayback";
 import { useAssistant } from "@/assistant/useAssistant";
+import { useAssistantLibrary } from "@/assistant/useAssistantLibrary";
 import { AppNav, sectionMeta, useMobileNav, type AppSection } from "@/app/AppNav";
 import { BrandMark } from "@/app/BrandMark";
 import { useDictation } from "@/app/useDictation";
@@ -48,6 +54,9 @@ import { AndroidSetupPanel } from "@/platform/android/AndroidSetupPanel";
 import { MicrophonePanel } from "@/platform/windows/MicrophonePanel";
 import { PushToTalkShortcutPanel } from "@/platform/windows/PushToTalkShortcutPanel";
 import { WindowsBehaviorPanel } from "@/platform/windows/WindowsBehaviorPanel";
+import { assistantConversationsApi } from "@/services/assistantConversationsService";
+import { assistantMemoriesApi } from "@/services/assistantMemoriesService";
+import { requestMemoryLearn } from "@/services/memoryLearnService";
 import { deviceApi } from "@/services/deviceService";
 import { dictationsApi } from "@/services/dictationsService";
 import { remoteContextApi } from "@/services/remoteContextService";
@@ -118,6 +127,26 @@ const assistant = new AssistantController(
   () => platform.createCapture({ purpose: "assistant" }),
   microphone,
 );
+const assistantLibrary = new AssistantConversationStore(
+  assistant,
+  assistantConversationsApi,
+  localStorage,
+  createId,
+  (userId) => localDeviceId(localStorage, userId, createId),
+  supabaseAssistantFeed(),
+);
+const assistantMemory = new AssistantMemoryStore(
+  assistantMemoriesApi,
+  localStorage,
+  supabaseMemoryFeed(),
+  (rows) => assistant.setMemories(rows),
+  () => assistantLibrary.getSnapshot().currentId,
+);
+assistantLibrary.setOnUserSaved(() => {
+  void assistantMemory.learn();
+});
+assistantMemory.setRemoteLearn(() => requestMemoryLearn());
+assistant.setProducer(() => assistantLibrary.holdingLease());
 const usage = new UsageStore(localStorage, platform.platform, () => new Date(), usageApi);
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
 const voiceNotes = new VoiceNotesStore(
@@ -250,6 +279,10 @@ assistant.setActions({
   archiveVoiceNote: (id, archived) => voiceNotes.setArchived(id, archived),
   deleteVoiceNote: (id) => voiceNotes.remove(id),
   dismissHandoff: (id) => handoffs.consume(id),
+  listMemories: () => assistantMemory.listText(),
+  rememberMemory: (input) => assistantMemory.remember(input.kind, input.key, input.value),
+  changeMemory: (input) => assistantMemory.change(input.key, input.value),
+  forgetMemory: (key) => assistantMemory.forget(key),
   readRemote: async (kind, deviceName) => {
     if (!accountUserId) throw new Error("Sign in to check another device.");
     return remoteReads.ask(accountUserId, kind, deviceName);
@@ -407,6 +440,8 @@ export default function App() {
   const remoteSnapshot = useRemoteReads(remoteReads, auth.userId);
   const computerSnapshot = useComputerActions(computerActions, auth.userId);
   const assistantSnapshot = useAssistant(assistant);
+  const assistantLibrarySnapshot = useAssistantLibrary(assistantLibrary);
+  const assistantMemorySnapshot = useAssistantMemory(assistantMemory);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const mobileNav = useMobileNav();
   const [floatingControl, setFloatingControl] = useState(loadShowIndicator);
@@ -499,6 +534,10 @@ export default function App() {
   }, [personalBody]);
 
   useEffect(() => {
+    assistantLibrary.setDeviceLabel((id) => deviceSnapshot.devices.find((device) => device.id === id)?.name ?? null);
+  }, [deviceSnapshot.devices]);
+
+  useEffect(() => {
     if (settingsDeviceId === undefined) return;
     bindDeviceSettings(settingsDeviceId);
     const next = loadDestination();
@@ -531,6 +570,8 @@ export default function App() {
     assistantTokens.clear();
     assistant.end();
     assistant.clearAccountContext();
+    void assistantLibrary.setUser(auth.userId);
+    void assistantMemory.setUser(auth.userId);
     accountUserId = auth.userId;
     computerActions.userId = auth.userId;
     if (auth.email) tokens.prefetch();
@@ -539,6 +580,10 @@ export default function App() {
   useEffect(() => {
     usage.setEnabled(sync.data.settings.usageIntelligence);
   }, [sync.data.settings.usageIntelligence]);
+
+  useEffect(() => {
+    assistantMemory.setLearning(sync.data.settings.assistantMemoryLearning);
+  }, [sync.data.settings.assistantMemoryLearning]);
 
   useEffect(() => {
     if (!auth.userId || !settingsDeviceId) {
@@ -705,7 +750,14 @@ export default function App() {
           {section === "notes" && <VoiceNotesToolbar store={voiceNotes} snapshot={notes} />}
           {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
           {section === "assistant" && (
-            <AssistantHeader controller={assistant} snapshot={assistantSnapshot} signedIn={signedIn} micBusy={dictationLive} />
+            <AssistantHeader
+              controller={assistant}
+              snapshot={assistantSnapshot}
+              signedIn={signedIn}
+              micBusy={dictationLive}
+              library={assistantLibrarySnapshot}
+              onProduce={() => { void assistantLibrary.produce(); }}
+            />
           )}
           <div id="page-header-actions" className="page-header-actions" hidden={section !== "capture"} />
         </header>
@@ -816,10 +868,24 @@ export default function App() {
               deviceLine={personalDeviceLine}
               facts={personalFacts}
             />
+            <MemoryPanel
+              store={assistantMemory}
+              snapshot={assistantMemorySnapshot}
+              signedIn={signedIn}
+              learning={sync.data.settings.assistantMemoryLearning}
+              onLearningChange={(enabled) => { personalSync.updateSettings({ assistantMemoryLearning: enabled }); }}
+            />
             <AssistantPanel
               controller={assistant}
               snapshot={assistantSnapshot}
               signedIn={signedIn}
+              library={assistantLibrarySnapshot}
+              onNewThread={() => assistantLibrary.startThread()}
+              onOpenThread={(id) => assistantLibrary.open(id)}
+              onRenameThread={(id, title) => { void assistantLibrary.rename(id, title); }}
+              onDeleteThread={(id) => { void assistantLibrary.delete(id); }}
+              onRetrySave={() => assistantLibrary.retry()}
+              onDismissRecovery={(id) => assistantLibrary.dismissRecovery(id)}
               onContinueTask={async () => {
                 const current = deviceSnapshot.devices.find((device) => device.id === deviceSnapshot.currentDeviceId);
                 if (!current) throw new Error("Sign in to continue Assistant on another device.");
@@ -844,6 +910,7 @@ export default function App() {
                   sourceDeviceId: current.id,
                   sourceDeviceName: current.name,
                   createdAt: new Date().toISOString(),
+                  conversationId: assistantLibrarySnapshot.currentId,
                 });
                 if (!built.ok) throw new Error(built.message);
                 const target = handoffs.resolveTarget();
@@ -876,6 +943,12 @@ export default function App() {
               })}
               onDetachHandoff={() => assistant.detachHandoff()}
               onOpenContinuation={(payload) => {
+                if (payload.conversationId) {
+                  assistantLibrary.open(payload.conversationId);
+                  setSection("assistant");
+                  return null;
+                }
+                assistantLibrary.startThread();
                 const message = assistant.openContinuation(payload);
                 if (!message) setSection("assistant");
                 return message;

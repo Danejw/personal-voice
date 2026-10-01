@@ -749,6 +749,27 @@ textarea:focus {
   color: #a2adbc;
   font-size: 12px;
 }
+.assistant-threads { display: grid; gap: 8px; }
+.assistant-thread-bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.assistant-save { margin: 0; color: #a2adbc; font-size: 12px; }
+.assistant-thread-list {
+  list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; overflow-x: auto; max-width: 100%;
+}
+.assistant-thread-list li {
+  display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 8px; background: #111820; flex: 0 0 auto;
+}
+.assistant-thread-list li.is-current { background: #17352d; }
+.assistant-thread {
+  border: 0; background: transparent; color: #e9edf4; font: inherit; font-size: 13px;
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 4px 6px; border-radius: 8px; cursor: pointer;
+}
+.assistant-thread:hover { color: #88d8c1; }
+.assistant-thread-rename { display: flex; align-items: center; gap: 4px; }
+.assistant-thread-rename input {
+  width: 160px; border: 0; border-radius: 8px; background: #0c1218; color: inherit;
+  font: inherit; font-size: 13px; padding: 4px 8px;
+}
 .assistant-log {
   list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;
   align-content: start;

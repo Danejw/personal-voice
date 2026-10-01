@@ -10,6 +10,11 @@ export interface SyncedSettings {
   /** When true, finalized dictation text is stored on the account. Off until the user opts in. */
   cloudDictationHistory: boolean;
   /**
+   * When true, finalized Assistant user lines saved after the switch may become memories.
+   * Off until the user opts in. This is not consent to read dictation history.
+   */
+  assistantMemoryLearning: boolean;
+  /**
    * Server-owned analytics generation. Loads may read it. `saveSettings` must not write it.
    * A missing settings row means `0`.
    */
@@ -33,6 +38,7 @@ export const DEFAULT_SETTINGS: SyncedSettings = {
   usageIntelligence: true,
   usageEpoch: 0,
   cloudDictationHistory: false,
+  assistantMemoryLearning: false,
 };
 export const EMPTY_PERSONAL_DATA: PersonalData = { settings: DEFAULT_SETTINGS, terms: [] };
 

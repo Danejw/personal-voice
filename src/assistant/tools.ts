@@ -1,4 +1,5 @@
 import { selectionPreview } from "@/assistant/selectionContext";
+import { parseMemoryCommand, type MemoryCommand } from "@/assistant/memory";
 import { isRemoteKind, type RemoteKind } from "@/assistant/remoteContext";
 import {
   isUnsupportedAction,
@@ -134,6 +135,47 @@ export function assistantFunctionDeclarations() {
       parameters: { type: "object", properties: { goal: { type: "string", description: "The harmless on-screen goal." } }, required: ["goal"] },
     },
     {
+      name: "list_memories",
+      description: "List what this account asked to remember. Call this before changing or forgetting when the key is unclear. Forgotten keys are listed so you do not teach them again. Answer from this result.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
+      name: "remember_memory",
+      description: "Remember one explicit preference or fact for this account, on every device. Call this when the user says to remember something, such as preferring short answers. Use a short key such as answer_length. Do not call this to change an existing key.",
+      parameters: {
+        type: "object",
+        properties: {
+          key: { type: "string", description: "Stable key such as answer_length." },
+          value: { type: "string", description: "The exact preference or fact, such as Prefer short answers." },
+          kind: { type: "string", description: "preference or fact. Omit for preference." },
+        },
+        required: ["key", "value"],
+      },
+    },
+    {
+      name: "change_memory",
+      description: "Replace one remembered preference or fact. Call list_memories first if the key is unclear. The new value wins over the old one. Do not invent a second key for the same preference.",
+      parameters: {
+        type: "object",
+        properties: {
+          key: { type: "string", description: "The existing key, such as answer_length." },
+          value: { type: "string", description: "The corrected value." },
+        },
+        required: ["key", "value"],
+      },
+    },
+    {
+      name: "forget_memory",
+      description: "Forget one remembered preference or fact. It leaves new sessions and is not learned again from the same conversation. This does not delete the conversation. Call list_memories first if the key is unclear.",
+      parameters: {
+        type: "object",
+        properties: {
+          key: { type: "string", description: "The key to forget, such as answer_length." },
+        },
+        required: ["key"],
+      },
+    },
+    {
       name: "remote_action",
       description: "Ask another owned Windows device to open Notepad or Calculator, press an allowlisted shortcut, or insert text. No shell, delete, or click. The other device must allow remote actions and confirm. Name the device.",
       parameters: {
@@ -171,7 +213,10 @@ export type ConfirmToolName =
   | "open_app"
   | "press_shortcut"
   | "supervise_screen"
-  | "remote_action";
+  | "remote_action"
+  | "remember_memory"
+  | "change_memory"
+  | "forget_memory";
 
 export type ToolDecision =
   | { kind: "ignore" }
@@ -180,6 +225,7 @@ export type ToolDecision =
   | { kind: "capture"; id: string; name: "capture_screen" }
   | { kind: "selection"; id: string; name: "capture_selection" }
   | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
+  | { kind: "memories"; id: string; name: "list_memories" }
   | { kind: "handoffs"; id: string; name: "list_handoffs" }
   | {
     kind: "confirm";
@@ -190,6 +236,7 @@ export type ToolDecision =
     preview: string;
     deviceId: string | null;
     remote: { action: RemoteComputerAction; device: string } | null;
+    memory: MemoryCommand | null;
   }
   | { kind: "remote"; id: string; name: "read_remote_device"; read: RemoteKind; device: string | null };
 
@@ -241,6 +288,21 @@ export function decideToolCall(
       return { kind: "notes", id: call.id, name: "list_voice_notes", includeArchived: args.include_archived === true || args.includeArchived === true };
     case "list_handoffs":
       return { kind: "handoffs", id: call.id, name: "list_handoffs" };
+    case "list_memories":
+      return { kind: "memories", id: call.id, name: "list_memories" };
+    case "remember_memory":
+    case "change_memory":
+    case "forget_memory": {
+      const memory = parseMemoryCommand(call.name, args);
+      if ("error" in memory) return { kind: "reject", id: call.id, name: call.name, message: memory.error };
+      const title = memory.action === "forget"
+        ? `Forget ${memory.key}`
+        : memory.action === "change"
+          ? `Change ${memory.key}`
+          : `Remember ${memory.key}`;
+      const body = memory.action === "forget" ? memory.key : memory.value;
+      return confirm(call.id, call.name, body, title, null, null, memory);
+    }
     case "archive_voice_note":
     case "restore_voice_note":
     case "delete_voice_note":
@@ -322,8 +384,9 @@ function confirm(
   title: string,
   deviceId: string | null,
   remote: { action: RemoteComputerAction; device: string } | null,
+  memory: MemoryCommand | null = null,
 ): ToolDecision {
-  return { kind: "confirm", id, name, text, title, preview: selectionPreview(text), deviceId, remote };
+  return { kind: "confirm", id, name, text, title, preview: selectionPreview(text), deviceId, remote, memory };
 }
 
 function plainArgs(value: unknown): Record<string, unknown> | null {

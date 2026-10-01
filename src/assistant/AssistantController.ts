@@ -17,6 +17,7 @@ import {
   type AttachedNote,
 } from "@/assistant/accountContext";
 import { personalContextNote } from "@/assistant/personalContext";
+import { memoryInjection, type AssistantMemory, type MemoryCommand } from "@/assistant/memory";
 import type { AssistantEvent } from "@/assistant/events";
 import { ECHO_TAIL_MS, duplexEchoGate, gatedEchoGate, microphoneHeld, noteRemaining, shouldForwardMicrophone, type EchoGate } from "@/assistant/echoGate";
 import type { AssistantPlayback } from "@/assistant/playback";
@@ -31,6 +32,7 @@ import {
   assistantReducer,
   initialAssistantState,
   type AssistantSnapshot,
+  type AssistantTurn,
   type PendingAssistantAction,
 } from "@/assistant/state";
 import {
@@ -80,6 +82,11 @@ export interface AssistantActions {
   archiveVoiceNote(id: string, archived: boolean): Promise<void>;
   deleteVoiceNote(id: string): Promise<void>;
   dismissHandoff(id: string): Promise<void>;
+  /** Active and forgotten memories for this account. */
+  listMemories(): Promise<string>;
+  rememberMemory(input: { key: string; kind: "preference" | "fact"; value: string }): Promise<string>;
+  changeMemory(input: { key: string; value: string }): Promise<string>;
+  forgetMemory(key: string): Promise<string>;
   /** Allowlisted desktop actions and the Computer Use step executor. No shell. */
   computer: ComputerHost;
 }
@@ -128,6 +135,13 @@ export class AssistantController {
   private personalText: string | null = null;
   private personalNoted = false;
   private personalWasSent = false;
+  private memoryText: string | null = null;
+  private memoryFingerprint = "none";
+  private memoryNoted = false;
+  private memorySent = false;
+  private injectedFingerprint: string | null = null;
+  private memoryRestartPending = false;
+  private toolDepth = 0;
   private screenShot: ScreenSnapshot | null = null;
   /** True after this socket has been sent the current screenshot. */
   private screenNoted = false;
@@ -137,11 +151,19 @@ export class AssistantController {
   private handoffNoted = false;
   private historyTurns: { role: "user" | "model"; text: string }[] = [];
   private historySeeded = false;
+  /** True when this socket was opened with a resumption handle. That socket already has the history. */
+  private openedWithHandle = false;
+  private onToolRecord: ((record: { name: string; outcome: string }) => void) | null = null;
   private timer?: ReturnType<typeof setTimeout>;
   private pending: ConfirmedTool | null = null;
   /** Bumped when a pending action is dropped so an in-flight confirm cannot report success. */
   private toolEpoch = 0;
   private toolQueue = Promise.resolve();
+  /** Turn ids already handed to storage, so a reload does not append them again. */
+  private published = new Set<string>();
+  private onCommitted: ((turn: AssistantTurn) => void) | null = null;
+  private onRevised: ((turn: AssistantTurn) => void) | null = null;
+  private mayProduce: () => boolean = () => true;
   private computerStopped = false;
   private computerConfirm: ((allowed: boolean) => void) | null = null;
   /** Off shows a confirm card. On runs the action when the tool is called. */
@@ -175,6 +197,10 @@ export class AssistantController {
       archiveVoiceNote: unavailable,
       deleteVoiceNote: unavailable,
       dismissHandoff: unavailable,
+      listMemories: async () => { throw new Error("Assistant actions are not available."); },
+      rememberMemory: async () => { throw new Error("Assistant actions are not available."); },
+      changeMemory: async () => { throw new Error("Assistant actions are not available."); },
+      forgetMemory: async () => { throw new Error("Assistant actions are not available."); },
       computer: {
         openApp: async () => { throw new Error("Assistant actions are not available."); },
         pressShortcut: async () => { throw new Error("Assistant actions are not available."); },
@@ -201,6 +227,45 @@ export class AssistantController {
     return this.snapshot;
   }
 
+  /** When this returns false, new tool work does not start. Already-running work is not repeated. */
+  setProducer(mayProduce: () => boolean): void {
+    this.mayProduce = mayProduce;
+  }
+
+  /** Receives each committed turn once. Streaming text is not included. */
+  setCommittedTurnHandler(handler: ((turn: AssistantTurn) => void) | null): void {
+    this.onCommitted = handler;
+  }
+
+  /** Receives a citation update for a turn that is still waiting to be written. */
+  setTurnRevisionHandler(handler: ((turn: AssistantTurn) => void) | null): void {
+    this.onRevised = handler;
+  }
+
+  /** Replaces the history a fresh session will receive once. Ignored while a session is open. */
+  setSavedHistory(turns: readonly { role: "user" | "model"; text: string }[]): void {
+    const status = this.snapshot.status;
+    if (status === "CONNECTING" || status === "READY" || status === "RESPONDING") return;
+    this.historyTurns = turns.map((turn) => ({ role: turn.role, text: turn.text }));
+    this.historySeeded = false;
+  }
+
+  /** Records a finished tool result so a later session can describe it without running it again. */
+  setToolRecordHandler(handler: ((record: { name: string; outcome: string }) => void) | null): void {
+    this.onToolRecord = handler;
+  }
+
+  /**
+   * Shows a saved transcript and does not write those turns again.
+   * Ignored while a live session is open; end that session first.
+   */
+  showSaved(turns: AssistantTurn[]): void {
+    const status = this.snapshot.status;
+    if (status === "CONNECTING" || status === "READY" || status === "RESPONDING") return;
+    for (const turn of turns) this.published.add(turn.id);
+    this.dispatch({ type: "replaceTurns", turns });
+  }
+
   subscribe(listener: (snapshot: AssistantSnapshot) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -216,6 +281,12 @@ export class AssistantController {
     this.generation += 1;
     const generation = this.generation;
     this.resumeHandle = null;
+    this.historySeeded = false;
+    this.openedWithHandle = false;
+    this.memoryNoted = false;
+    this.memorySent = false;
+    this.injectedFingerprint = null;
+    this.memoryRestartPending = false;
     this.droppingModel = false;
     this.resuming = false;
     this.session?.close();
@@ -423,23 +494,37 @@ export class AssistantController {
   }
 
   /**
-   * Drops attached notes and the handoff. Used on sign-out, including when
-   * Assistant is idle and End would do nothing.
+   * Drops account attachments and the saved-transcript seed.
+   * Used on sign-out, including when Assistant is idle and End would do nothing.
    */
   clearAccountContext(): void {
     const notes = this.notes;
     const handoff = this.handoffItem;
-    if (!notes.length && !handoff) return;
+    const hadSelection = this.selectionItem !== null;
+    const hadScreen = this.screenShot !== null;
     this.notes = [];
     this.handoffItem = null;
     this.notedNoteIds.clear();
     this.handoffNoted = false;
+    this.selectionItem = null;
+    this.selectionNoted = false;
+    this.screenShot = null;
+    this.screenNoted = false;
+    this.historyTurns = [];
+    this.historySeeded = false;
+    this.resumeHandle = null;
+    this.openedWithHandle = false;
+    this.dropPending();
     this.dispatch({ type: "clearAccount" });
+    this.dispatch({ type: "clearPending" });
+    if (!notes.length && !handoff && !hadSelection && !hadScreen) return;
     for (const note of notes) this.sendNote(noteDetachedText(note));
     if (handoff) this.sendNote(handoffDetachedText());
+    if (hadSelection) this.sendNote(selectionDetachedText());
+    if (hadScreen) this.sendNote(snapshotDetachedText());
   }
 
-  /** Closes the session, stops the microphone and playback, and drops an unfinished reply. */
+  /** Closes the session and stops the microphone and playback. An unfinished line is kept as interrupted. */
   end(): void {
     this.haltComputer();
     if (this.snapshot.status === "IDLE") return;
@@ -458,6 +543,11 @@ export class AssistantController {
     this.handoffNoted = false;
     this.historyTurns = [];
     this.historySeeded = false;
+    this.openedWithHandle = false;
+    this.memoryNoted = false;
+    this.memorySent = false;
+    this.injectedFingerprint = null;
+    this.memoryRestartPending = false;
     this.dropPending();
     clearTimeout(this.timer);
     this.resetEcho();
@@ -465,15 +555,17 @@ export class AssistantController {
     this.stopCapture();
     this.session?.close();
     this.session = undefined;
-    this.dispatch({ type: "end" });
+    this.dispatch({ type: "end", ...this.sealedSpeech() });
   }
 
   private openConnection(generation: number) {
+    this.openedWithHandle = this.resumeHandle !== null;
     this.connection += 1;
     const connection = this.connection;
     this.streaming = false;
     this.selectionNoted = false;
     this.personalNoted = false;
+    this.memoryNoted = false;
     this.screenNoted = false;
     this.notedNoteIds.clear();
     this.handoffNoted = false;
@@ -485,9 +577,14 @@ export class AssistantController {
     void session.connect().catch(() => undefined);
   }
 
-  /** Opens a new socket with the newest handle. The microphone stays claimed. */
+  /** Opens a new socket with the newest handle. A changed memory drops that handle. */
   private resumeOrFail() {
     if (this.snapshot.status === "IDLE") return;
+    if (this.memorySent && this.injectedFingerprint !== this.memoryFingerprint) {
+      this.resumeHandle = null;
+      this.restartWithoutResume();
+      return;
+    }
     if (this.resuming || !this.resumeHandle) {
       this.failActive(this.resumeHandle && this.resuming ? RESUME_FAILED : RESUME_LOST);
       return;
@@ -534,9 +631,9 @@ export class AssistantController {
     this.selectionNoted = true;
   }
 
-  /** Sends the carried conversation once. A later resume of this new session does not send it again. */
+  /** Sends the carried conversation once. A resumed socket already has it. */
   private seedHistory() {
-    if (!this.historyTurns.length || this.historySeeded || !this.session) return;
+    if (this.openedWithHandle || !this.historyTurns.length || this.historySeeded || !this.session) return;
     try {
       this.session.sendHistory(this.historyTurns);
       this.historySeeded = true;
@@ -553,6 +650,71 @@ export class AssistantController {
     if (!this.sendNote(text)) return;
     this.personalNoted = true;
     this.personalWasSent = Boolean(this.personalText);
+  }
+
+  /**
+   * Replaces the explicit memories a new session will hear.
+   * A live session that already heard a different list is restarted, because
+   * the provider cannot remove a fact from the open socket.
+   */
+  setMemories(rows: readonly AssistantMemory[]): void {
+    const next = memoryInjection(rows);
+    if (next.fingerprint === this.memoryFingerprint) return;
+    const sent = this.memorySent;
+    this.memoryText = next.text;
+    this.memoryFingerprint = next.fingerprint;
+    this.memoryNoted = false;
+    const live = this.snapshot.status === "CONNECTING" || this.snapshot.status === "READY" || this.snapshot.status === "RESPONDING";
+    if (sent && live) {
+      this.memorySent = false;
+      if (this.toolDepth > 0) {
+        this.memoryRestartPending = true;
+        return;
+      }
+      this.restartWithoutResume();
+      return;
+    }
+    this.noteMemories();
+  }
+
+  /** Sends the account memories once. A resumed socket keeps the same list. */
+  private noteMemories() {
+    if (this.memoryNoted) return;
+    if (this.openedWithHandle && this.injectedFingerprint === this.memoryFingerprint) {
+      this.memoryNoted = true;
+      return;
+    }
+    if (!this.memoryText) {
+      this.memoryNoted = true;
+      this.injectedFingerprint = this.memoryFingerprint;
+      return;
+    }
+    if (!this.sendNote(this.memoryText)) return;
+    this.memoryNoted = true;
+    this.memorySent = true;
+    this.injectedFingerprint = this.memoryFingerprint;
+  }
+
+  /**
+   * Opens a new socket without the resumption handle so the forgotten or
+   * corrected memory is not still in the provider context.
+   */
+  private restartWithoutResume(): void {
+    if (this.snapshot.status === "IDLE" || this.snapshot.status === "ERROR") return;
+    this.memoryRestartPending = false;
+    this.resumeHandle = null;
+    this.resuming = false;
+    this.droppingModel = false;
+    this.dropPending();
+    clearTimeout(this.timer);
+    this.playback.clear();
+    this.dispatch({
+      type: "actionNotice",
+      message: "A remembered preference changed. This session is restarting so it does not keep the old one.",
+    });
+    this.dispatch({ type: "reconnect", id: this.nextId() });
+    this.session?.close();
+    this.openConnection(this.generation);
   }
 
   /** Sends each attached note and the handoff once per connection. */
@@ -708,6 +870,7 @@ export class AssistantController {
         this.noteSelection();
         this.noteAccount();
         this.notePersonal();
+        this.noteMemories();
         this.noteSnapshot();
         this.flushPending();
         return;
@@ -717,7 +880,14 @@ export class AssistantController {
       case "inputTranscription":
         if (event.partial) this.dispatch({ type: "userPartial", text: event.text });
         else {
-          this.dispatch({ type: "userFinal", id: this.nextId(), text: event.text });
+          const id = this.nextId();
+          const spokenId = this.snapshot.status === "RESPONDING" ? this.nextId() : undefined;
+          this.dispatch({
+            type: "userFinal",
+            id,
+            text: event.text,
+            ...(spokenId ? { spokenId } : {}),
+          });
           this.armTimer();
         }
         return;
@@ -809,69 +979,84 @@ export class AssistantController {
   }
 
   private async handleToolCalls(calls: ParsedToolCall[]) {
-    for (const call of calls) {
-      const decision = decideToolCall(call, (deviceName) => this.actions.planHandoff(deviceName));
-      if (decision.kind === "ignore") continue;
-      if (decision.kind === "reject") {
-        this.replyTool(decision.id, decision.name, false, decision.message);
-        continue;
-      }
-      if (decision.kind === "copy") {
-        await this.runCopy(decision);
-        continue;
-      }
-      if (decision.kind === "capture") {
-        await this.runCapture(decision);
-        continue;
-      }
-      if (decision.kind === "selection") {
-        await this.runSelection(decision);
-        continue;
-      }
-      if (decision.kind === "notes") {
-        await this.runNotes(decision);
-        continue;
-      }
-      if (decision.kind === "handoffs") {
-        await this.runHandoffs(decision);
-        continue;
-      }
-      if (decision.kind === "remote") {
-        await this.runRemote(decision);
-        continue;
-      }
-      if (this.pending) {
-        this.replyTool(decision.id, decision.name, false, ACTION_BUSY);
-        continue;
-      }
-      let preview = decision.preview;
-      const kind = itemKind(decision.name);
-      if (kind) {
-        try {
-          preview = this.actions.describeItem(kind, decision.text);
-        } catch (error) {
-          this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    this.toolDepth += 1;
+    try {
+      for (const call of calls) {
+        if (!this.mayProduce()) {
+          if (call.id) this.replyTool(call.id, call.name, false, "Another device is continuing this conversation.");
           continue;
         }
+        const decision = decideToolCall(call, (deviceName) => this.actions.planHandoff(deviceName));
+        if (decision.kind === "ignore") continue;
+        if (decision.kind === "reject") {
+          this.replyTool(decision.id, decision.name, false, decision.message);
+          continue;
+        }
+        if (decision.kind === "copy") {
+          await this.runCopy(decision);
+          continue;
+        }
+        if (decision.kind === "capture") {
+          await this.runCapture(decision);
+          continue;
+        }
+        if (decision.kind === "selection") {
+          await this.runSelection(decision);
+          continue;
+        }
+        if (decision.kind === "notes") {
+          await this.runNotes(decision);
+          continue;
+        }
+        if (decision.kind === "memories") {
+          await this.runMemories(decision);
+          continue;
+        }
+        if (decision.kind === "handoffs") {
+          await this.runHandoffs(decision);
+          continue;
+        }
+        if (decision.kind === "remote") {
+          await this.runRemote(decision);
+          continue;
+        }
+        if (this.pending) {
+          this.replyTool(decision.id, decision.name, false, ACTION_BUSY);
+          continue;
+        }
+        let preview = decision.preview;
+        const kind = itemKind(decision.name);
+        if (kind) {
+          try {
+            preview = this.actions.describeItem(kind, decision.text);
+          } catch (error) {
+            this.replyTool(decision.id, decision.name, false, toolFailure(error));
+            continue;
+          }
+        }
+        this.pending = {
+          id: decision.id,
+          name: decision.name,
+          text: decision.text,
+          title: decision.title,
+          preview,
+          deviceId: decision.deviceId,
+          label: decision.name === "send_handoff" ? decision.title.slice("Send this text to ".length) : null,
+          remote: decision.remote,
+          memory: decision.memory,
+          working: false,
+        };
+        if (this.autoRun) {
+          this.pending.working = true;
+          const epoch = this.toolEpoch;
+          await this.finishPending(this.pending, epoch);
+          continue;
+        }
+        this.dispatch({ type: "setPending", pending: pendingCard(this.pending) });
       }
-      this.pending = {
-        id: decision.id,
-        name: decision.name,
-        text: decision.text,
-        title: decision.title,
-        preview,
-        deviceId: decision.deviceId,
-        label: decision.name === "send_handoff" ? decision.title.slice("Send this text to ".length) : null,
-        remote: decision.remote,
-        working: false,
-      };
-      if (this.autoRun) {
-        this.pending.working = true;
-        const epoch = this.toolEpoch;
-        await this.finishPending(this.pending, epoch);
-        continue;
-      }
-      this.dispatch({ type: "setPending", pending: pendingCard(this.pending) });
+    } finally {
+      this.toolDepth -= 1;
+      if (this.toolDepth === 0 && this.memoryRestartPending) this.restartWithoutResume();
     }
   }
 
@@ -931,6 +1116,18 @@ export class AssistantController {
     }
   }
 
+  private async runMemories(decision: Extract<ToolDecision, { kind: "memories" }>) {
+    const epoch = this.toolEpoch;
+    try {
+      const text = await this.actions.listMemories();
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, true, text);
+    } catch (error) {
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
   private async runHandoffs(decision: Extract<ToolDecision, { kind: "handoffs" }>) {
     const epoch = this.toolEpoch;
     try {
@@ -957,9 +1154,23 @@ export class AssistantController {
   }
 
   private async finishPending(pending: ConfirmedTool, epoch: number) {
+    if (!this.mayProduce()) {
+      this.dispatch({ type: "actionNotice", message: "Another device is continuing this conversation. This device did not run that action." });
+      this.replyTool(pending.id, pending.name, false, "Another device is continuing this conversation.");
+      if (epoch === this.toolEpoch && this.pending?.id === pending.id) {
+        this.pending = null;
+        this.dispatch({ type: "clearPending" });
+      }
+      return;
+    }
     try {
       const message = await this.execute(pending);
       if (epoch !== this.toolEpoch) return;
+      if (!this.mayProduce()) {
+        this.dispatch({ type: "actionNotice", message: "That action finished on this device. It was not run again." });
+        this.onToolRecord?.({ name: pending.name, outcome: message });
+        return;
+      }
       this.replyTool(pending.id, pending.name, true, message);
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
@@ -1049,6 +1260,15 @@ export class AssistantController {
       }
       case "supervise_screen":
         return this.runSupervised(pending.text);
+      case "remember_memory":
+        if (!pending.memory || pending.memory.action !== "remember") throw new Error("That memory is not available.");
+        return this.actions.rememberMemory(pending.memory);
+      case "change_memory":
+        if (!pending.memory || pending.memory.action !== "change") throw new Error("That memory is not available.");
+        return this.actions.changeMemory(pending.memory);
+      case "forget_memory":
+        if (!pending.memory || pending.memory.action !== "forget") throw new Error("That memory is not available.");
+        return this.actions.forgetMemory(pending.memory.key);
       default: {
         const unhandled: never = pending.name;
         throw new Error(`Unhandled assistant action: ${String(unhandled)}`);
@@ -1057,6 +1277,7 @@ export class AssistantController {
   }
 
   private replyTool(id: string, name: string, ok: boolean, message: string) {
+    if (ok) this.onToolRecord?.({ name, outcome: message });
     const session = this.session;
     if (!session) return;
     try {
@@ -1083,7 +1304,7 @@ export class AssistantController {
     this.connection += 1;
     this.session?.close();
     this.session = undefined;
-    this.dispatch({ type: "fail", message });
+    this.dispatch({ type: "fail", message, ...this.sealedSpeech() });
   }
 
   private armTimer() {
@@ -1096,12 +1317,46 @@ export class AssistantController {
     }, RESPONSE_TIMEOUT_MS);
   }
 
+  /** Ids for speech still on screen, so a stop or a dropped connection can store it as interrupted. */
+  private sealedSpeech(): { user?: { id: string; text: string }; assistant?: { id: string; text: string } } {
+    const assistant = this.snapshot.liveText.trim();
+    const user = this.snapshot.liveUser.trim();
+    return {
+      ...(assistant ? { assistant: { id: this.nextId(), text: assistant } } : {}),
+      ...(user ? { user: { id: this.nextId(), text: user } } : {}),
+    };
+  }
+
   private dispatch(action: Parameters<typeof assistantReducer>[1]) {
+    const previous = this.snapshot.turns;
     const next = assistantReducer(this.snapshot, action);
     if (next === this.snapshot) return;
     this.snapshot = next;
     for (const listener of this.listeners) listener(next);
+    this.publishTurns(previous, next.turns);
   }
+
+  /** Hands new turns to storage once. A later reload of the same ids is not a second copy. */
+  private publishTurns(previous: readonly AssistantTurn[], turns: readonly AssistantTurn[]) {
+    const before = new Map(previous.map((turn) => [turn.id, turn]));
+    for (const turn of turns) {
+      const prior = before.get(turn.id);
+      if (!prior) {
+        if (this.published.has(turn.id)) continue;
+        this.published.add(turn.id);
+        this.onCommitted?.(turn);
+        continue;
+      }
+      if (sourcesChanged(prior, turn)) this.onRevised?.(turn);
+    }
+  }
+}
+
+function sourcesChanged(previous: AssistantTurn, next: AssistantTurn): boolean {
+  const left = previous.sources ?? [];
+  const right = next.sources ?? [];
+  if (left.length !== right.length) return true;
+  return left.some((source, index) => source.url !== right[index]?.url || source.title !== right[index]?.title);
 }
 
 function messageOf(error: unknown): string {
@@ -1123,6 +1378,7 @@ interface ConfirmedTool {
   deviceId: string | null;
   label: string | null;
   remote: { action: RemoteComputerAction; device: string } | null;
+  memory: MemoryCommand | null;
   working: boolean;
 }
 

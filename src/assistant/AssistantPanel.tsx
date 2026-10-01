@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { ConversationBar } from "@/assistant/ConversationBar";
+import type { AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 import { selectionPreview } from "@/assistant/selectionContext";
 import { previewUrl } from "@/assistant/snapshotEncode";
 import type { AssistantController } from "@/assistant/AssistantController";
@@ -12,11 +14,20 @@ interface AssistantChromeProps {
   micBusy?: boolean;
   onCaptureScreen?: () => Promise<void>;
   onContinueTask?: () => Promise<void>;
+  library?: AssistantLibrarySnapshot;
+  onNewThread?: () => void;
+  onOpenThread?: (id: string) => void;
+  onRenameThread?: (id: string, title: string) => void;
+  onDeleteThread?: (id: string) => void;
+  onRetrySave?: () => void;
+  onProduce?: () => void;
+  onDismissRecovery?: (id: string) => void;
 }
 
-/** Header status and the Start / End control. */
-export function AssistantHeader({ controller, snapshot, signedIn, micBusy = false }: AssistantChromeProps) {
+/** Header status and the Start / End control. Continue here is the only way a second device takes the microphone. */
+export function AssistantHeader({ controller, snapshot, signedIn, micBusy = false, library, onProduce }: AssistantChromeProps) {
   const running = snapshot.status === "CONNECTING" || snapshot.status === "READY" || snapshot.status === "RESPONDING";
+  const viewingElsewhere = !running && Boolean(library && !library.holding && library.activeLabel && library.activeLabel !== "this device");
   const label = assistantStatusLabel(snapshot, signedIn);
   return (
     <div className="page-header-actions">
@@ -35,16 +46,33 @@ export function AssistantHeader({ controller, snapshot, signedIn, micBusy = fals
         type="button"
         className="record"
         disabled={(!running && !signedIn) || (!running && micBusy)}
-        onClick={() => { if (running) controller.end(); else controller.start(); }}
+        onClick={() => {
+          if (running) controller.end();
+          else if (onProduce) void onProduce();
+          else controller.start();
+        }}
       >
-        {running ? "End Assistant" : "Start Assistant"}
+        {running ? "End Assistant" : viewingElsewhere ? "Continue here" : "Start Assistant"}
       </button>
     </div>
   );
 }
 
-/** In-memory conversation and the typed-turn composer. */
-export function AssistantPanel({ controller, snapshot, signedIn, onCaptureScreen, onContinueTask }: AssistantChromeProps) {
+/** Saved transcript and the typed-turn composer. Starting again sends the saved conversation once. */
+export function AssistantPanel({
+  controller,
+  snapshot,
+  signedIn,
+  onCaptureScreen,
+  onContinueTask,
+  library,
+  onNewThread,
+  onOpenThread,
+  onRenameThread,
+  onDeleteThread,
+  onRetrySave,
+  onDismissRecovery,
+}: AssistantChromeProps) {
   const [draft, setDraft] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [continuing, setContinuing] = useState(false);
@@ -66,8 +94,22 @@ export function AssistantPanel({ controller, snapshot, signedIn, onCaptureScreen
   }
 
   const showEchoNote = snapshot.echoFallback && (snapshot.status === "CONNECTING" || snapshot.status === "READY" || snapshot.status === "RESPONDING");
+  const sessionIdle = snapshot.status === "IDLE" || snapshot.status === "ERROR";
   return (
     <>
+      {library && onNewThread && onOpenThread && onRenameThread && onDeleteThread && onRetrySave && (
+        <ConversationBar
+          library={library}
+          signedIn={signedIn}
+          sessionIdle={sessionIdle}
+          onNew={onNewThread}
+          onOpen={onOpenThread}
+          onRename={onRenameThread}
+          onDelete={onDeleteThread}
+          onRetry={onRetrySave}
+          onDismissRecovery={onDismissRecovery}
+        />
+      )}
       {showEchoNote && (
         <p className="assistant-echo" role="note">
           This phone can't cancel speaker echo, so the microphone pauses while a reply plays and for a short moment after the sound ends. Stop and listen cuts the reply off. Talking over it will not interrupt. Noise reduction lowers background noise. It does not pick out your voice or remove other people.
@@ -76,7 +118,10 @@ export function AssistantPanel({ controller, snapshot, signedIn, onCaptureScreen
       <ul ref={logRef} className="assistant-log hide-scrollbar" aria-live="polite">
         {snapshot.turns.map((turn) => (
           <li key={turn.id} className={turn.role === "user" ? "assistant-turn is-user" : "assistant-turn"}>
-            <span className="assistant-role">{turn.role === "user" ? "You" : "Assistant"}</span>
+            <span className="assistant-role">
+              {turn.role === "user" ? "You" : "Assistant"}
+              {turn.status === "interrupted" ? " · interrupted" : ""}
+            </span>
             <p>{turn.text}</p>
             {turn.role === "assistant" && turn.sources && <SourceList sources={turn.sources} />}
           </li>

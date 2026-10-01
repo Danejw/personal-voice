@@ -110,7 +110,64 @@ describe("assistant lifecycle", () => {
       "Noted.",
       "Still talking",
     ]);
+    expect(live.turns[2]).toMatchObject({ status: "interrupted" });
+    expect(live.turns[1]).not.toHaveProperty("status");
     expect(assistantReducer(live, { type: "ready" })).toMatchObject({ status: "READY", resuming: false });
+  });
+
+  it("keeps an unfinished reply when end supplies its id", () => {
+    const responding = run([
+      { type: "start" },
+      { type: "ready" },
+      { type: "send", id: "u1", text: "Hello" },
+      { type: "output", text: "late" },
+    ]);
+    const sealed = assistantReducer(responding, { type: "end", assistant: { id: "a1", text: "late" } });
+    expect(sealed.turns).toEqual([
+      { id: "u1", role: "user", text: "Hello" },
+      { id: "a1", role: "assistant", text: "late", status: "interrupted" },
+    ]);
+    expect(sealed.liveText).toBe("");
+  });
+
+  it("keeps a user line and a reply cut off by a connection failure", () => {
+    const failed = run([
+      { type: "start" },
+      { type: "ready" },
+      { type: "userPartial", text: "half" },
+      { type: "output", text: "nope" },
+      { type: "fail", message: "Could not reach Assistant.", user: { id: "u", text: "half" }, assistant: { id: "a", text: "nope" } },
+    ]);
+    expect(failed.status).toBe("ERROR");
+    expect(failed.liveUser).toBe("");
+    expect(failed.liveText).toBe("");
+    expect(failed.turns).toEqual([
+      { id: "a", role: "assistant", text: "nope", status: "interrupted" },
+      { id: "u", role: "user", text: "half", status: "interrupted" },
+    ]);
+  });
+
+  it("marks a reply cut off by the next user line as interrupted", () => {
+    const state = run([
+      { type: "start" },
+      { type: "ready" },
+      { type: "output", text: "Long answer" },
+      { type: "userFinal", id: "u1", spokenId: "a1", text: "Stop." },
+    ]);
+    expect(state.turns).toEqual([
+      { id: "a1", role: "assistant", text: "Long answer", status: "interrupted" },
+      { id: "u1", role: "user", text: "Stop." },
+    ]);
+  });
+
+  it("replaces the transcript only while the session is stopped", () => {
+    const saved = assistantReducer(initialAssistantState, {
+      type: "replaceTurns",
+      turns: [{ id: "u", role: "user", text: "Saved" }],
+    });
+    expect(saved.turns).toEqual([{ id: "u", role: "user", text: "Saved" }]);
+    const ready = run([{ type: "start" }, { type: "ready" }]);
+    expect(assistantReducer(ready, { type: "replaceTurns", turns: [] })).toBe(ready);
   });
 });
 

@@ -1,5 +1,9 @@
 // Generated from the Supabase schema (Supabase MCP `generate_typescript_types`, 2026-09-28).
-// Regenerate after any migration instead of editing by hand.
+// assistant_conversations, assistant_messages, and their RPCs match
+// supabase/migrations/20260930200000_assistant_conversations.sql,
+// 20260930210000_assistant_lease.sql, 20260930220000_assistant_context.sql,
+// 20260930230000_assistant_memories.sql, and 20260930240000_assistant_memory_learning.sql.
+// Regenerate from the deployed project after those migrations are applied.
 
 export type Json =
   | string
@@ -218,6 +222,8 @@ export type Database = {
       }
       settings: {
         Row: {
+          assistant_learning_since: string | null
+          assistant_memory_learning: boolean
           cloud_dictation_history: boolean
           language: string | null
           smart_transcription: boolean
@@ -227,6 +233,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          assistant_learning_since?: string | null
+          assistant_memory_learning?: boolean
           cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
@@ -236,6 +244,8 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          assistant_learning_since?: string | null
+          assistant_memory_learning?: boolean
           cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
@@ -306,6 +316,159 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_conversations: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          fence: number
+          id: string
+          lease_device_id: string | null
+          lease_expires_at: string | null
+          revision: number
+          summary_body: string | null
+          summary_fingerprint: string | null
+          summary_through_seq: number | null
+          context_items: Json
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          fence?: number
+          id: string
+          lease_device_id?: string | null
+          lease_expires_at?: string | null
+          revision?: number
+          summary_body?: string | null
+          summary_fingerprint?: string | null
+          summary_through_seq?: number | null
+          context_items?: Json
+          title: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          fence?: number
+          id?: string
+          lease_device_id?: string | null
+          lease_expires_at?: string | null
+          revision?: number
+          summary_body?: string | null
+          summary_fingerprint?: string | null
+          summary_through_seq?: number | null
+          context_items?: Json
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      assistant_memories: {
+        Row: {
+          category: string | null
+          confidence: string | null
+          created_at: string
+          extractor_version: string | null
+          forgotten_at: string | null
+          id: string
+          kind: string
+          memory_key: string
+          origin: string
+          revision: number
+          scope: string
+          source_conversation_id: string | null
+          source_message_id: string | null
+          status: string
+          supersedes_id: string | null
+          updated_at: string
+          user_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          forgotten_at?: string | null
+          id: string
+          kind: string
+          memory_key: string
+          origin: string
+          revision: number
+          scope?: string
+          source_conversation_id?: string | null
+          source_message_id?: string | null
+          status: string
+          supersedes_id?: string | null
+          updated_at?: string
+          user_id?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          forgotten_at?: string | null
+          id?: string
+          kind?: string
+          memory_key?: string
+          origin?: string
+          revision?: number
+          scope?: string
+          source_conversation_id?: string | null
+          source_message_id?: string | null
+          status?: string
+          supersedes_id?: string | null
+          updated_at?: string
+          user_id?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      assistant_messages: {
+        Row: {
+          body: string
+          citations: Json
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+          seq: number
+          source_device_id: string
+          status: string
+          tool_name: string | null
+          tool_outcome: string | null
+          user_id: string
+        }
+        Insert: {
+          body: string
+          citations?: Json
+          conversation_id: string
+          created_at?: string
+          id: string
+          role: string
+          seq: number
+          source_device_id: string
+          status: string
+          tool_name?: string | null
+          tool_outcome?: string | null
+          user_id: string
+        }
+        Update: {
+          body?: string
+          citations?: Json
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+          seq?: number
+          source_device_id?: string
+          status?: string
+          tool_name?: string | null
+          tool_outcome?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -325,6 +488,165 @@ export type Database = {
           p_updated_at: string
         }
         Returns: undefined
+      }
+      append_assistant_message: {
+        Args: {
+          p_body: string
+          p_citations: Json
+          p_conversation_id: string
+          p_message_id: string
+          p_role: string
+          p_source_device_id: string
+          p_status: string
+          p_tool_name: string | null
+          p_tool_outcome: string | null
+          p_user_id: string
+          p_fence: number | null
+        }
+        Returns: Json
+      }
+      claim_assistant_conversation: {
+        Args: {
+          p_device_id: string
+          p_id: string
+          p_takeover: boolean
+          p_ttl_seconds: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      create_assistant_conversation: {
+        Args: {
+          p_id: string
+          p_title: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      delete_assistant_conversation: {
+        Args: {
+          p_id: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      get_assistant_conversation: {
+        Args: {
+          p_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      list_assistant_conversations: {
+        Args: {
+          p_before_id: string | null
+          p_before_updated_at: string | null
+          p_limit: number
+          p_user_id: string
+        }
+        Returns: Database["public"]["Tables"]["assistant_conversations"]["Row"][]
+      }
+      list_assistant_messages: {
+        Args: {
+          p_after_seq: number
+          p_conversation_id: string
+          p_limit: number
+          p_user_id: string
+        }
+        Returns: Database["public"]["Tables"]["assistant_messages"]["Row"][]
+      }
+      release_assistant_conversation: {
+        Args: {
+          p_device_id: string
+          p_fence: number
+          p_id: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      save_assistant_context_items: {
+        Args: {
+          p_id: string
+          p_items: Json
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      save_assistant_summary: {
+        Args: {
+          p_body: string
+          p_fingerprint: string
+          p_id: string
+          p_replaces: string | null
+          p_through_seq: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      forget_assistant_memory: {
+        Args: {
+          p_expected_revision: number
+          p_key: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      list_assistant_memories: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      remember_assistant_memory: {
+        Args: {
+          p_expected_revision: number | null
+          p_id: string
+          p_kind: string
+          p_key: string
+          p_replace: boolean
+          p_source_conversation_id: string | null
+          p_source_message_id: string | null
+          p_user_id: string
+          p_value: string
+        }
+        Returns: Json
+      }
+      assistant_memory_suppressed: {
+        Args: {
+          p_key: string
+          p_source_conversation_id: string | null
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      commit_assistant_learning: {
+        Args: {
+          p_batch: Json
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      list_assistant_learning_batch: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      settle_assistant_memory_candidate: {
+        Args: {
+          p_id: string
+          p_keep: boolean
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      rename_assistant_conversation: {
+        Args: {
+          p_id: string
+          p_title: string
+          p_user_id: string
+        }
+        Returns: Json
       }
     }
     Enums: {

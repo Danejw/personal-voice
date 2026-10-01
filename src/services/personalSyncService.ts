@@ -46,6 +46,7 @@ export function settingsFromRow(row: {
   usage_intelligence: boolean | null;
   usage_epoch?: number | null;
   cloud_dictation_history?: boolean | null;
+  assistant_memory_learning?: boolean | null;
 } | null): SyncedSettings {
   if (!row) return DEFAULT_SETTINGS;
   return {
@@ -54,6 +55,7 @@ export function settingsFromRow(row: {
     usageIntelligence: row.usage_intelligence ?? true,
     usageEpoch: typeof row.usage_epoch === "number" && row.usage_epoch >= 0 ? row.usage_epoch : 0,
     cloudDictationHistory: row.cloud_dictation_history ?? false,
+    assistantMemoryLearning: row.assistant_memory_learning ?? false,
   };
 }
 
@@ -64,6 +66,7 @@ export function settingsUpsertRow(userId: string, settings: SyncedSettings): {
   language: string | null;
   usage_intelligence: boolean;
   cloud_dictation_history: boolean;
+  assistant_memory_learning: boolean;
 } {
   return {
     user_id: userId,
@@ -71,6 +74,7 @@ export function settingsUpsertRow(userId: string, settings: SyncedSettings): {
     language: settings.language,
     usage_intelligence: settings.usageIntelligence,
     cloud_dictation_history: settings.cloudDictationHistory,
+    assistant_memory_learning: settings.assistantMemoryLearning,
   };
 }
 
@@ -84,7 +88,7 @@ export const personalSyncApi: PersonalSyncApi = {
   async load(userId) {
     const client = requireClient();
     const [settings, dictionary] = await Promise.all([
-      client.from("settings").select("smart_transcription, language, usage_intelligence, usage_epoch, cloud_dictation_history").eq("user_id", userId).maybeSingle(),
+      client.from("settings").select("smart_transcription, language, usage_intelligence, usage_epoch, cloud_dictation_history, assistant_memory_learning").eq("user_id", userId).maybeSingle(),
       client.from("dictionary").select("id, term, enabled").eq("user_id", userId).order("term"),
     ]);
     check(settings.error);
