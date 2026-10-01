@@ -61,7 +61,7 @@ import { handoffApi } from "@/services/handoffService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
 import { voiceNotesApi } from "@/services/voiceNotesService";
-import { bindDeviceSettings, loadAssistantAutoRun, loadAssistantProfile, loadDestination, loadShowIndicator, saveAssistantAutoRun, saveAssistantProfile, saveDestination, saveShowIndicator } from "@/settings/deviceSettings";
+import { bindDeviceSettings, loadAssistantAutoRun, loadAssistantProfile, loadAutoUpdate, loadDestination, loadShowIndicator, saveAssistantAutoRun, saveAssistantProfile, saveAutoUpdate, saveDestination, saveShowIndicator } from "@/settings/deviceSettings";
 import { DictionaryPanel, DictionaryToolbar } from "@/sync/DictionaryPanel";
 import { PersonalSyncStore } from "@/sync/PersonalSyncStore";
 import { SyncStatus } from "@/sync/SyncStatus";
@@ -79,6 +79,7 @@ import type { UsageSnapshot } from "@/usage/usageEvents";
 import { useUsage } from "@/usage/useUsage";
 import { countOutputWords } from "@/usage/words";
 import { UpdatePanel } from "@/updates/UpdatePanel";
+import { UpdateToast } from "@/updates/UpdateToast";
 import { useUpdates } from "@/updates/useUpdates";
 import { GeminiProvider, geminiConfigFrom } from "@/voice/provider/gemini/GeminiProvider";
 import { GeminiTokenSource } from "@/voice/provider/gemini/GeminiTokenSource";
@@ -410,6 +411,7 @@ export default function App() {
   const [entryPhase, setEntryPhase] = useState<"checking" | "wizard" | "app">("checking");
   const [profileEnabled, setProfileEnabled] = useState(true);
   const [autoRun, setAutoRun] = useState(true);
+  const [autoUpdate, setAutoUpdate] = useState(() => loadAutoUpdate());
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
     const data = personalSync.getSnapshot().data;
     return {
@@ -417,12 +419,12 @@ export default function App() {
       terms: data.terms.filter((entry) => entry.enabled).map((entry) => entry.term),
     };
   }, microphone);
-  const updates = useUpdates(platform);
   const { state, partial, transcript, error } = snapshot;
   const control = controlFor(state, destination);
   const page = sectionMeta(section);
   const signedIn = !!auth.email;
   const idle = state === "IDLE" || state === "ERROR";
+  const updates = useUpdates(platform, { autoUpdate, busy: !idle });
   const assistantLive = assistantSnapshot.status === "CONNECTING" || assistantSnapshot.status === "READY" || assistantSnapshot.status === "RESPONDING";
   const dictationLive = state === "CONNECTING" || state === "LISTENING";
   const status = !auth.ready ? "Starting…" : !signedIn ? "Sign in to start dictating" : paused ? "Paused from the tray" : statusFor(state, destination);
@@ -505,6 +507,7 @@ export default function App() {
     const auto = loadAssistantAutoRun();
     setAutoRun(auto);
     assistant.setAutoRun(auto);
+    setAutoUpdate(loadAutoUpdate());
   }, [settingsDeviceId]);
 
   useEffect(() => {
@@ -722,6 +725,14 @@ export default function App() {
             </div>
           </div>
         )}
+        {updates.offer && (
+          <UpdateToast
+            update={updates.offer}
+            busy={!idle}
+            onUpdate={updates.install}
+            onDismiss={updates.dismissOffer}
+          />
+        )}
 
         <div className="panel-stack" hidden={section !== "dictation"}>
           <section aria-labelledby="page-title" className="page-panel dictations-live">
@@ -930,6 +941,15 @@ export default function App() {
           </section>
           <section aria-labelledby="updates-heading">
             <h2 id="updates-heading">Updates</h2>
+            <Toggle
+              label="Auto-update"
+              description="When Personal Voice opens, install updates automatically. Turn this off to choose when to update."
+              checked={autoUpdate}
+              onChange={(enabled) => {
+                saveAutoUpdate(enabled);
+                setAutoUpdate(enabled);
+              }}
+            />
             <UpdatePanel updates={updates} busy={!idle} />
           </section>
         </div>

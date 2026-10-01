@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bindDeviceSettings,
   loadAssistantAutoRun,
+  loadAutoUpdate,
   loadDestination,
   loadMicrophone,
   loadShowIndicator,
@@ -10,6 +11,7 @@ import {
   loadStoredPushToTalk,
   loadStoredVoiceNoteHotkey,
   saveAssistantAutoRun,
+  saveAutoUpdate,
   saveDestination,
   saveMicrophone,
   saveShowIndicator,
@@ -78,6 +80,14 @@ describe("device settings", () => {
     saveAssistantAutoRun(false, storage, "windows");
     expect(loadAssistantAutoRun(storage, "windows")).toBe(false);
     expect(loadAssistantAutoRun(storage, "android")).toBe(true);
+  });
+
+  it("auto-updates until turned off, per device", () => {
+    const storage = memoryStorage();
+    expect(loadAutoUpdate(storage, "windows")).toBe(true);
+    saveAutoUpdate(false, storage, "windows");
+    expect(loadAutoUpdate(storage, "windows")).toBe(false);
+    expect(loadAutoUpdate(storage, "android")).toBe(true);
   });
 
   it("keeps the Assistant shortcut on this Windows device", () => {

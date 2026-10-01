@@ -32,6 +32,8 @@ export interface DevicePreferences {
   assistantAutoRun: boolean;
   /** This PC may run an allowlisted action asked by another owned device. */
   remoteComputerActions: boolean;
+  /** Install updates found at startup without asking. Off means toast + manual install. */
+  autoUpdate: boolean;
 }
 
 function prefsKey(deviceId: string): string {
@@ -84,6 +86,7 @@ function fromLegacy(storage: KeyValueStorage): DevicePreferences {
     assistantProfile: true,
     assistantAutoRun: true,
     remoteComputerActions: false,
+    autoUpdate: true,
   };
 }
 
@@ -108,6 +111,7 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
       assistantProfile: fields.assistantProfile !== false,
       assistantAutoRun: fields.assistantAutoRun !== false,
       remoteComputerActions: fields.remoteComputerActions === true,
+      autoUpdate: fields.autoUpdate !== false,
     };
   } catch {
     return fallback;
@@ -249,4 +253,13 @@ export function loadRemoteComputerActions(storage: KeyValueStorage = localStorag
 
 export function saveRemoteComputerActions(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
   write(storage, scope(deviceId), { remoteComputerActions: enabled });
+}
+
+/** Install updates found at startup without asking. On by default. */
+export function loadAutoUpdate(storage: KeyValueStorage = localStorage, deviceId?: string | null): boolean {
+  return read(storage, scope(deviceId)).autoUpdate;
+}
+
+export function saveAutoUpdate(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { autoUpdate: enabled });
 }
