@@ -8,6 +8,26 @@ export interface RemoteDictationDevice {
   lastSeen: string | null;
 }
 
+/** Icon kind for Remote Dictation controls (phone / laptop / desktop). */
+export type RemoteDeviceKind = "phone" | "laptop" | "desktop" | "unknown";
+
+/** Maps account device platform + name onto a compact control icon. */
+export function remoteDeviceKind(platform: string, name: string): RemoteDeviceKind {
+  const normalized = platform.trim().toLowerCase();
+  if (normalized === "android" || normalized === "ios") return "phone";
+  if (
+    normalized === "windows"
+    || normalized === "macos"
+    || normalized === "linux"
+    || normalized === "desktop"
+  ) {
+    const label = name.toLowerCase();
+    if (/\b(laptop|notebook|macbook|surface\s*laptop)\b/.test(label)) return "laptop";
+    return "desktop";
+  }
+  return "unknown";
+}
+
 export function isRemoteDictationOnline(lastSeen: string | null, nowMs: number): boolean {
   if (!lastSeen) return false;
   const seen = Date.parse(lastSeen);

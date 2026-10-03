@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Base64
 import android.view.View
@@ -73,6 +74,11 @@ class AssistantPlaybackArgs {
 class CameraArgs {
   /** `default`, `front`, or `back`. */
   var facing: String = "default"
+}
+
+@InvokeArg
+class StartOnBootArgs {
+  var enabled: Boolean = true
 }
 
 /**
@@ -152,7 +158,10 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
         .put("notifications", NotificationManagerCompat.from(activity).areNotificationsEnabled())
         .put("overlay", Settings.canDrawOverlays(activity))
         .put("accessibility", VoiceAccessibilityService.isConnected)
-        .put("floatingMic", FloatingMicService.isRunning),
+        .put("floatingMic", FloatingMicService.isRunning)
+        .put("startOnBoot", FloatingMicPrefs.startOnBoot(activity))
+        .put("wantFloatingMic", FloatingMicPrefs.wantFloatingMic(activity))
+        .put("batteryUnrestricted", batteryUnrestricted()),
     )
   }
 
@@ -170,6 +179,30 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun openAppSettings(invoke: Invoke) {
     open(invoke, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", activity.packageName, null)))
+  }
+
+  /** System dialog (or list) so the floating mic is not battery-optimized. */
+  @Command
+  fun openBatterySettings(invoke: Invoke) {
+    if (!batteryUnrestricted()) {
+      try {
+        open(
+          invoke,
+          Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${activity.packageName}")),
+        )
+        return
+      } catch (_: ActivityNotFoundException) {
+        // Fall through to the battery-optimization list.
+      }
+    }
+    open(invoke, Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+  }
+
+  @Command
+  fun setStartOnBoot(invoke: Invoke) {
+    val enabled = invoke.parseArgs(StartOnBootArgs::class.java).enabled
+    FloatingMicPrefs.setStartOnBoot(activity, enabled)
+    invoke.resolve()
   }
 
   /**
@@ -686,6 +719,11 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private fun open(invoke: Invoke, intent: Intent) {
     activity.startActivity(intent)
     invoke.resolve()
+  }
+
+  private fun batteryUnrestricted(): Boolean {
+    val pm = activity.getSystemService(PowerManager::class.java) ?: return false
+    return pm.isIgnoringBatteryOptimizations(activity.packageName)
   }
 
   private companion object {

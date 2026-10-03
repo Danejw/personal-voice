@@ -558,6 +558,8 @@ export default function App() {
     assistantController: assistant,
     remoteTargetId: remoteDictationSnapshot.targetDeviceId,
     remoteTargetLabel: remoteDictationSnapshot.targetLabel,
+    remoteTargetPlatform: remoteDictationSnapshot.targetPlatform,
+    remoteTargetKind: remoteDictationSnapshot.targetKind,
     remoteTargetOnline: remoteDictationSnapshot.targetOnline,
     remoteTargetCount: remoteDictationSnapshot.targetCount,
     remoteDictationActive: remoteDictationSnapshot.active,

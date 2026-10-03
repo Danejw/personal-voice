@@ -3,6 +3,7 @@ import { REMOTE_DICTATION_ONLINE_MS } from "@/remote-dictation/constants";
 import {
   cycleRemoteTarget,
   eligibleRemoteTargets,
+  remoteDeviceKind,
   resolveRemoteTarget,
   type RemoteDictationDevice,
 } from "@/remote-dictation/targets";
@@ -92,5 +93,14 @@ describe("cycleRemoteTarget", () => {
     const result = cycleRemoteTarget(devices, "phone", "laptop", NOW);
     expect(result.onlyOne).toBe(true);
     expect(result.target?.id).toBe("laptop");
+  });
+});
+
+describe("remoteDeviceKind", () => {
+  it("maps android to phone and windows names to laptop or desktop", () => {
+    expect(remoteDeviceKind("android", "Pixel")).toBe("phone");
+    expect(remoteDeviceKind("windows", "Office PC")).toBe("desktop");
+    expect(remoteDeviceKind("windows", "Travel Laptop")).toBe("laptop");
+    expect(remoteDeviceKind("mystery", "Box")).toBe("unknown");
   });
 });

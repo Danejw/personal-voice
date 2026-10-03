@@ -43,6 +43,8 @@ export interface OverlayBindings {
   assistantController: AssistantController;
   remoteTargetId: string | null;
   remoteTargetLabel: string | null;
+  remoteTargetPlatform: string | null;
+  remoteTargetKind: "phone" | "laptop" | "desktop" | "unknown";
   remoteTargetOnline: boolean;
   remoteTargetCount: number;
   remoteDictationActive: boolean;
@@ -88,6 +90,8 @@ export function useOverlay({
   assistantController,
   remoteTargetId,
   remoteTargetLabel,
+  remoteTargetPlatform,
+  remoteTargetKind,
   remoteTargetOnline,
   remoteTargetCount,
   remoteDictationActive,
@@ -138,6 +142,8 @@ export function useOverlay({
     cameraOn: assistant.cameraContextActive,
     remoteTargetId,
     remoteTargetLabel,
+    remoteTargetPlatform,
+    remoteTargetKind,
     remoteTargetOnline,
     remoteTargetCount,
     remoteDictationActive,
@@ -157,6 +163,8 @@ export function useOverlay({
     assistant,
     remoteTargetId,
     remoteTargetLabel,
+    remoteTargetPlatform,
+    remoteTargetKind,
     remoteTargetOnline,
     remoteTargetCount,
     remoteDictationActive,

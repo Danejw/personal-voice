@@ -190,16 +190,14 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
         stroke = !(online && targetId != null),
       )
       setPadding(dp(10), dp(8), dp(10), dp(8))
-      isEnabled = online && targetId != null
-      if (online && targetId != null) {
-        bindRemoteHold(this, targetId)
-      }
+      // Always tappable: short tap cycles (or flashes "no device"); hold only when online.
+      bindRemoteHold(this, targetId, online && targetId != null)
     }
     stack.addView(button, itemParams())
   }
 
   @SuppressLint("ClickableViewAccessibility")
-  private fun bindRemoteHold(view: TextView, targetId: String) {
+  private fun bindRemoteHold(view: TextView, targetId: String?, holdEnabled: Boolean) {
     var holdStarted = false
     var pointerDown = false
     var holdRunnable: Runnable? = null
@@ -212,23 +210,27 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
           remoteHoldId += 1
           gestureId = remoteHoldId
           val id = gestureId
-          holdRunnable = Runnable {
-            if (!pointerDown || holdStarted) return@Runnable
-            holdStarted = true
-            emit("remote-dictate-hold") {
-              it.put("phase", "start")
-              it.put("targetId", targetId)
-              it.put("id", id)
+          val lockedTarget = targetId
+          if (holdEnabled && lockedTarget != null) {
+            holdRunnable = Runnable {
+              if (!pointerDown || holdStarted) return@Runnable
+              holdStarted = true
+              emit("remote-dictate-hold") {
+                it.put("phase", "start")
+                it.put("targetId", lockedTarget)
+                it.put("id", id)
+              }
             }
+            // Match MicBubbleView / RemoteDictationBubbleView (touch-friendly).
+            mainHandler.postDelayed(holdRunnable!!, 400L)
           }
-          mainHandler.postDelayed(holdRunnable!!, 300L)
           true
         }
         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
           pointerDown = false
           holdRunnable?.let { mainHandler.removeCallbacks(it) }
           holdRunnable = null
-          if (holdStarted) {
+          if (holdStarted && targetId != null) {
             emit("remote-dictate-hold") {
               it.put("phase", "stop")
               it.put("targetId", targetId)

@@ -8,7 +8,9 @@ import type { RemoteDictationChangeFeed } from "@/remote-dictation/remoteDictati
 import {
   cycleRemoteTarget,
   eligibleRemoteTargets,
+  remoteDeviceKind,
   resolveRemoteTarget,
+  type RemoteDeviceKind,
   type RemoteDictationDevice,
 } from "@/remote-dictation/targets";
 import type { RemoteDictationRequest } from "@/remote-dictation/types";
@@ -26,6 +28,8 @@ export interface RemoteDictationSnapshot {
   devices: RemoteDictationDevice[];
   targetDeviceId: string | null;
   targetLabel: string | null;
+  targetPlatform: string | null;
+  targetKind: RemoteDeviceKind;
   targetOnline: boolean;
   targetCount: number;
   notice: string | null;
@@ -51,6 +55,8 @@ export class RemoteDictationStore {
     devices: [],
     targetDeviceId: null,
     targetLabel: null,
+    targetPlatform: null,
+    targetKind: "unknown",
     targetOnline: false,
     targetCount: 0,
     notice: null,
@@ -95,6 +101,8 @@ export class RemoteDictationStore {
         devices: [],
         targetDeviceId: null,
         targetLabel: null,
+        targetPlatform: null,
+        targetKind: "unknown",
         targetOnline: false,
         targetCount: 0,
         notice: null,
@@ -132,11 +140,14 @@ export class RemoteDictationStore {
       ...this.snapshot,
       targetDeviceId: target.id,
       targetLabel: target.name,
+      targetPlatform: target.platform,
+      targetKind: remoteDeviceKind(target.platform, target.name),
       targetOnline: true,
-      notice: onlyOne ? "Only device available" : null,
+      notice: null,
       error: null,
     });
-    if (onlyOne) this.flash("Only device available");
+    // Windows overlay tip / Android side tip both read this notice.
+    this.flash(onlyOne ? `Only device available · ${target.name}` : target.name);
     return this.snapshot;
   }
 
@@ -168,6 +179,8 @@ export class RemoteDictationStore {
       ...this.snapshot,
       targetDeviceId: target.id,
       targetLabel: target.name,
+      targetPlatform: target.platform,
+      targetKind: remoteDeviceKind(target.platform, target.name),
       targetOnline: true,
       active: true,
       error: null,
@@ -284,6 +297,8 @@ export class RemoteDictationStore {
         devices,
         targetDeviceId: target?.id ?? null,
         targetLabel: target?.name ?? null,
+        targetPlatform: target?.platform ?? null,
+        targetKind: target ? remoteDeviceKind(target.platform, target.name) : "unknown",
         targetOnline: Boolean(target),
         targetCount: eligible.length,
         notice: null,

@@ -107,7 +107,9 @@ Kotlin lives in `src-tauri/gen/android/app/src/main/java/com/personal/voiceapp/p
 | `FloatingMicService` | One foreground service (type `microphone`) that also owns the overlay bubble and its quick-actions panel. Ongoing notification with "Turn off". Uses `START_STICKY`; if a background sticky restart cannot start the mic FGS, it posts a tap-to-restore notification instead. |
 | `FloatingMicPrefs` | Local prefs: `want_floating_mic` (left on until the user turns it off) and `start_on_boot` (default on). |
 | `BootReceiver` | On `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`, if the floating mic was left on and start-on-boot is enabled, briefly opens `MainActivity` so a visible activity can start the FGS, then the plugin sends the task to the back. |
-| `MicBubbleView` | Tap for quick actions. Hold (~400 ms) to talk, release to insert. Dragging moves the bubble; a drag after hold starts cancels the utterance. Colour shows idle, listening, finalizing, or error. |
+| `AssistantBubbleView` | Top of the floating stack. Tap toggles Assistant (or interrupts while speaking). |
+| `RemoteDictationBubbleView` | Middle bubble. Icon shows the selected device kind (phone / laptop / desktop). Tap cycles the target and shows a side tip with the device name. Hold (~400 ms, same as the mic) dictates to the locked target; release finalizes and sends. Dimmed when no other device is online. |
+| `MicBubbleView` | Bottom bubble. Tap for quick actions. Hold (~400 ms) to talk, release to insert locally. Dragging moves the stack; a drag after hold starts cancels the utterance. Colour shows idle, listening, finalizing, or error. |
 | `OverlayPanelView` | Compact native sheet: start dictation, destination, Remote Dictation tap/hold target control, capture, recent notes, pending handoffs, Open Settings. |
 | `NativeMicCapture` | `AudioRecord` producing 16 kHz mono PCM16 in 100 ms chunks, sent to the WebView as base64 events. Runs only between press and release. |
 | `VoiceAccessibilityService` | Subscribes to no events. At insert or selection-capture time it reads only the input-focused field, never password fields. Native fields get an exact splice with `ACTION_SET_TEXT`; web and rich editors get `ACTION_PASTE`. Selection capture returns the node's highlighted substring, not a clipboard copy. Otherwise dictated text goes to the clipboard with a message. |
@@ -134,7 +136,7 @@ Shared TypeScript still does everything else: Gemini, vocabulary, settings, auth
 
 - The bubble is kept on screen: its saved position is clamped when it appears and again on rotation. Before, a position saved near the right edge in landscape could leave it off screen in portrait.
 - Android has no microphone picker. Dictation records from `AudioSource.VOICE_RECOGNITION`, which Android routes to a wired headset when one is plugged in. Dictation does not open Bluetooth SCO. Assistant routing is separate and is described under Assistant echo.
-- The floating-control visibility setting is Windows-only. On Android the bubble is the control; tap expands quick actions, hold dictates, and errors also appear as a toast.
+- The floating-control visibility setting is Windows-only. On Android the floating stack is the control: Assistant (top), Remote Dictation (middle), Dictation mic (bottom). Tap the mic for quick actions, hold the mic to dictate locally, tap Remote Dictation to cycle targets, hold it to send Remote Dictation, and errors also appear as a toast.
 
 ### Assistant echo
 

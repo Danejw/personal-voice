@@ -332,12 +332,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           onPointerUp={(event) => onRemoteUp(event)}
           onPointerCancel={(event) => onRemoteCancel(event)}
         >
-          <SendIcon />
-          {snapshot.remoteTargetLabel && (
-            <span className="overlay-remote-badge" aria-hidden="true">
-              {snapshot.remoteTargetLabel.slice(0, 8)}
-            </span>
-          )}
+          <RemoteDeviceIcon kind={snapshot.remoteTargetKind} />
         </button>
       </Tooltip>
       <Tooltip content={assistantTitle} side={tipSide} delayMs={280}>
@@ -413,12 +408,40 @@ function NoteIcon() {
   );
 }
 
-function SendIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 12h12M13 7l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+function RemoteDeviceIcon({ kind }: { kind: OverlaySnapshot["remoteTargetKind"] }) {
+  switch (kind) {
+    case "phone":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="8" y="3.5" width="8" height="17" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M11 17.5h2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case "laptop":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="5" y="5.5" width="14" height="9.5" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M3.5 17.5h17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case "desktop":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4.5" y="4" width="15" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M9.5 18.5h5M12 15v3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+      );
+    case "unknown":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 12h12M13 7l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    default: {
+      const unhandled: never = kind;
+      throw new Error(`Unhandled remote device kind: ${String(unhandled)}`);
+    }
+  }
 }
 
 function CheckIcon() {

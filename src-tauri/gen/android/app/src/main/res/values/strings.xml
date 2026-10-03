@@ -6,9 +6,13 @@
     <string name="floating_mic_channel">Floating mic</string>
     <string name="floating_mic_channel_description">Shown while the floating mic is on.</string>
     <string name="floating_mic_title">Floating mic is on</string>
-    <string name="floating_mic_text">Tap the mic for quick actions. Hold it to dictate. Tap the assistant button above it to talk with the assistant.</string>
+    <string name="floating_mic_text">Tap the mic for quick actions. Hold it to dictate. Tap Remote Dictation to choose a device, or hold it to dictate into that device. Tap Assistant to talk with the assistant.</string>
     <string name="floating_mic_turn_off">Turn off</string>
     <string name="floating_mic_hold">Tap for actions, hold to dictate</string>
+    <string name="floating_remote_dictation">Tap to choose a device, hold to Remote Dictate</string>
+    <string name="floating_remote_dictation_target">Remote Dictation to %1$s. Tap to cycle, hold to dictate.</string>
+    <string name="floating_remote_dictation_selected">Remote Dictation → %1$s</string>
+    <string name="floating_remote_dictation_unavailable">No other device is online for Remote Dictation</string>
     <string name="floating_assistant_tap">Tap to start or end the assistant</string>
     <string name="floating_assistant_interrupt">Stop the reply and listen</string>
     <string name="floating_mic_app_closed">Open Personal Voice to use the floating mic.</string>

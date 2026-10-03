@@ -43,6 +43,10 @@ export interface OverlaySnapshot {
   cameraOn: boolean;
   remoteTargetId: string | null;
   remoteTargetLabel: string | null;
+  /** Account device platform string (`android`, `windows`, …). */
+  remoteTargetPlatform: string | null;
+  /** Compact icon kind for the Remote Dictation control. */
+  remoteTargetKind: "phone" | "laptop" | "desktop" | "unknown";
   remoteTargetOnline: boolean;
   remoteTargetCount: number;
   remoteDictationActive: boolean;
@@ -90,6 +94,8 @@ export const emptyOverlaySnapshot: OverlaySnapshot = {
   cameraOn: false,
   remoteTargetId: null,
   remoteTargetLabel: null,
+  remoteTargetPlatform: null,
+  remoteTargetKind: "unknown",
   remoteTargetOnline: false,
   remoteTargetCount: 0,
   remoteDictationActive: false,
@@ -205,6 +211,8 @@ export function buildOverlaySnapshot(input: {
   cameraOn?: boolean;
   remoteTargetId?: string | null;
   remoteTargetLabel?: string | null;
+  remoteTargetPlatform?: string | null;
+  remoteTargetKind?: "phone" | "laptop" | "desktop" | "unknown";
   remoteTargetOnline?: boolean;
   remoteTargetCount?: number;
   remoteDictationActive?: boolean;
@@ -231,6 +239,8 @@ export function buildOverlaySnapshot(input: {
     cameraOn: input.cameraOn === true,
     remoteTargetId: input.remoteTargetId ?? null,
     remoteTargetLabel: input.remoteTargetLabel ?? null,
+    remoteTargetPlatform: input.remoteTargetPlatform ?? null,
+    remoteTargetKind: input.remoteTargetKind ?? "unknown",
     remoteTargetOnline: input.remoteTargetOnline === true,
     remoteTargetCount: input.remoteTargetCount ?? 0,
     remoteDictationActive: input.remoteDictationActive === true,
