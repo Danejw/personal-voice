@@ -12,6 +12,7 @@ import {
   startOverlayWindowDrag,
 } from "@/overlay/overlayPosition";
 import { setOverlayTipSpace, type OverlayTipSide } from "@/overlay/overlayTipSpace";
+import { REMOTE_DICTATION_HOLD_MS } from "@/remote-dictation/constants";
 
 interface OverlayDockProps {
   snapshot: OverlaySnapshot;
@@ -73,20 +74,37 @@ function tone(dictation: OverlayDictation, owns: boolean, showError: boolean): B
 
 /** Five small buttons. The Assistant button is its own action; the mic stays dictation. */
 export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
-  const [held, setHeld] = useState<OverlayHoldDestination | null>(null);
+  const [held, setHeld] = useState<OverlayHoldDestination | "remote" | null>(null);
   const [draggingTray, setDraggingTray] = useState(false);
   const [tipSide, setTipSide] = useState<OverlayTipSide>("left");
-  const heldRef = useRef<OverlayHoldDestination | null>(null);
+  const heldRef = useRef<OverlayHoldDestination | "remote" | null>(null);
   const holdId = useRef(0);
+  const remoteHold = useRef<{
+    pointerId: number;
+    timer: ReturnType<typeof setTimeout> | null;
+    started: boolean;
+    targetId: string;
+    id: number;
+  } | null>(null);
   const logoDrag = useRef<LogoDrag | null>(null);
   const blocked = !snapshot.signedIn || snapshot.paused || snapshot.dictation === "finalizing";
+  const remoteUnavailable = !snapshot.remoteTargetOnline || !snapshot.remoteTargetId;
+  const remoteLabel = snapshot.remoteTargetLabel
+    ? snapshot.remoteTargetOnline
+      ? snapshot.remoteTargetLabel
+      : `${snapshot.remoteTargetLabel} offline`
+    : "No device online";
+  const remoteTitle = snapshot.remoteDictationActive || held === "remote"
+    ? `Remote Dictation → ${remoteLabel}`
+    : `Tap to cycle · Hold for ${remoteLabel}`;
   const selectionHint = snapshot.selectionPreview
     ? ` Selection attached${snapshot.selectionSource ? ` from ${snapshot.selectionSource}` : ""}: ${snapshot.selectionPreview}`
     : "";
   const pendingHint = snapshot.pendingTitle
     ? ` Assistant wants to: ${snapshot.pendingTitle}${snapshot.pendingPreview ? `. ${snapshot.pendingPreview}` : ""}`
     : "";
-  const assistantTitle = `${assistantLabel(snapshot.assistant, snapshot.assistantError)}${selectionHint}${pendingHint}`;
+  const cameraHint = snapshot.cameraOn ? " Camera On." : "";
+  const assistantTitle = `${assistantLabel(snapshot.assistant, snapshot.assistantError)}${cameraHint}${selectionHint}${pendingHint}`;
   useEffect(() => {
     void setOverlayConfirmSpace(Boolean(snapshot.pendingTitle));
   }, [snapshot.pendingTitle]);
@@ -153,6 +171,53 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
     if (heldRef.current !== destination) return;
     heldRef.current = null;
     onAction({ type: "dictate-hold", phase: "stop", destination, id: holdId.current });
+  }
+
+  function onRemoteDown(event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0 || blocked || snapshot.dictation === "listening" || remoteUnavailable || !snapshot.remoteTargetId) {
+      return;
+    }
+    event.currentTarget.setPointerCapture(event.pointerId);
+    holdId.current += 1;
+    const id = holdId.current;
+    const targetId = snapshot.remoteTargetId;
+    const pointerId = event.pointerId;
+    remoteHold.current = { pointerId, timer: null, started: false, targetId, id };
+    heldRef.current = "remote";
+    setHeld("remote");
+    remoteHold.current.timer = setTimeout(() => {
+      const gesture = remoteHold.current;
+      if (!gesture || gesture.pointerId !== pointerId || gesture.id !== id) return;
+      gesture.started = true;
+      onAction({ type: "remote-dictate-hold", phase: "start", targetId: gesture.targetId, id: gesture.id });
+    }, REMOTE_DICTATION_HOLD_MS);
+  }
+
+  function onRemoteUp(event: PointerEvent<HTMLButtonElement>) {
+    const gesture = remoteHold.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (gesture.timer) clearTimeout(gesture.timer);
+    remoteHold.current = null;
+    heldRef.current = null;
+    setHeld(null);
+    if (gesture.started) {
+      onAction({ type: "remote-dictate-hold", phase: "stop", targetId: gesture.targetId, id: gesture.id });
+      return;
+    }
+    // Short tap cycles the target and never starts the microphone.
+    onAction({ type: "cycle-remote-target" });
+  }
+
+  function onRemoteCancel(event: PointerEvent<HTMLButtonElement>) {
+    const gesture = remoteHold.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (gesture.timer) clearTimeout(gesture.timer);
+    remoteHold.current = null;
+    heldRef.current = null;
+    setHeld(null);
+    if (gesture.started) {
+      onAction({ type: "remote-dictate-hold", phase: "stop", targetId: gesture.targetId, id: gesture.id });
+    }
   }
 
   function onLogoDown(event: PointerEvent<HTMLButtonElement>) {
@@ -257,28 +322,34 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           <NoteIcon />
         </button>
       </Tooltip>
-      <Tooltip content="Hold to send a handoff" side={tipSide} delayMs={280}>
+      <Tooltip content={remoteTitle} side={tipSide} delayMs={280}>
         <button
           type="button"
-          className={`overlay-btn ${tone(snapshot.dictation, held === "send-to-device", false)}`}
-          aria-label="Hold to send a handoff"
-          disabled={blocked || (snapshot.dictation === "listening" && held !== "send-to-device")}
-          onPointerDown={(event) => onHoldDown("send-to-device", event)}
-          onPointerUp={() => onHoldUp("send-to-device")}
-          onPointerCancel={() => onHoldUp("send-to-device")}
+          className={`overlay-btn ${tone(snapshot.dictation, held === "remote" || snapshot.remoteDictationActive, false)}${remoteUnavailable ? " is-dim" : ""}`}
+          aria-label={remoteTitle}
+          disabled={blocked || remoteUnavailable || (snapshot.dictation === "listening" && held !== "remote" && !snapshot.remoteDictationActive)}
+          onPointerDown={(event) => onRemoteDown(event)}
+          onPointerUp={(event) => onRemoteUp(event)}
+          onPointerCancel={(event) => onRemoteCancel(event)}
         >
           <SendIcon />
+          {snapshot.remoteTargetLabel && (
+            <span className="overlay-remote-badge" aria-hidden="true">
+              {snapshot.remoteTargetLabel.slice(0, 8)}
+            </span>
+          )}
         </button>
       </Tooltip>
       <Tooltip content={assistantTitle} side={tipSide} delayMs={280}>
         <button
           type="button"
-          className={`overlay-btn ${assistantTone(snapshot.assistant)}`}
+          className={`overlay-btn ${assistantTone(snapshot.assistant)}${snapshot.cameraOn ? " overlay-camera-on" : ""}`}
           aria-label={assistantTitle}
           disabled={assistantBlocked}
           onClick={() => onAction({ type: "assistant-toggle" })}
         >
           <AssistantIcon />
+          {snapshot.cameraOn && <span className="overlay-camera-dot" aria-hidden="true" />}
         </button>
       </Tooltip>
       {snapshot.pendingTitle && (

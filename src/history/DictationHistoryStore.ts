@@ -1,6 +1,7 @@
 import type { DictationRecord } from "@/history/dictation";
 import type { DictationsApi } from "@/services/dictationsService";
 import { createId as newId } from "@/sync/createId";
+import { migrateDestinationId } from "@/voice/transcript/TranscriptDestination";
 import type {
   TranscriptDeliveryResult,
   TranscriptDestinationId,
@@ -25,18 +26,15 @@ export interface DictationHistorySnapshot {
   error: string | null;
 }
 
-function isDestination(value: unknown): value is TranscriptDestinationId {
-  return value === "active-field" || value === "voice-note" || value === "send-to-device";
-}
-
 function parseEntry(value: unknown): DictationHistoryEntry | null {
   if (typeof value !== "object" || value === null) return null;
   const entry = value as Record<string, unknown>;
+  const destination = migrateDestinationId(entry.destination);
   if (
     typeof entry.text !== "string"
     || typeof entry.timestamp !== "string"
     || Number.isNaN(Date.parse(entry.timestamp))
-    || !isDestination(entry.destination)
+    || !destination
     || (entry.outcome !== "success" && entry.outcome !== "failure")
   ) {
     return null;
@@ -46,7 +44,7 @@ function parseEntry(value: unknown): DictationHistoryEntry | null {
     id,
     text: entry.text,
     timestamp: entry.timestamp,
-    destination: entry.destination,
+    destination,
     outcome: entry.outcome,
   };
 }

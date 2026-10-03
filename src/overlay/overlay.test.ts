@@ -77,6 +77,32 @@ describe("overlay lists", () => {
     expect(snapshot.dictation).toBe("listening");
     expect(snapshot.destination).toBe("voice-note");
     expect(snapshot.notes).toHaveLength(1);
+    expect(snapshot.cameraOn).toBe(false);
+  });
+
+  it("marks Camera On on the floating control snapshot", () => {
+    const snapshot = buildOverlaySnapshot({
+      visible: true,
+      state: "IDLE",
+      error: null,
+      destination: "active-field",
+      signedIn: true,
+      paused: false,
+      notes: [],
+      handoffs: [],
+      devices: [],
+      capture: null,
+      notice: null,
+      assistant: "listening",
+      assistantError: null,
+      selectionPreview: null,
+      selectionSource: null,
+      pendingTitle: null,
+      pendingPreview: null,
+      pendingWorking: false,
+      cameraOn: true,
+    });
+    expect(snapshot.cameraOn).toBe(true);
   });
 
   it("labels handoffs from the device list", () => {
@@ -114,11 +140,28 @@ describe("parseOverlayAction", () => {
     expect(parseOverlayAction({ type: "dictate-toggle" })).toEqual({ type: "dictate-toggle" });
     expect(parseOverlayAction({ type: "dictate-hold", phase: "start", destination: "voice-note", id: 1 }))
       .toEqual({ type: "dictate-hold", phase: "start", destination: "voice-note", id: 1 });
-    expect(parseOverlayAction({ type: "dictate-hold", phase: "stop", destination: "send-to-device", id: 2 }))
-      .toEqual({ type: "dictate-hold", phase: "stop", destination: "send-to-device", id: 2 });
+    expect(parseOverlayAction({ type: "dictate-hold", phase: "stop", destination: "voice-note", id: 2 }))
+      .toEqual({ type: "dictate-hold", phase: "stop", destination: "voice-note", id: 2 });
     expect(parseOverlayAction({ type: "dictate-hold", phase: "start", destination: "active-field", id: 1 })).toBeNull();
+    expect(parseOverlayAction({ type: "dictate-hold", phase: "start", destination: "send-to-device", id: 1 })).toBeNull();
+    expect(parseOverlayAction({ type: "cycle-remote-target" })).toEqual({ type: "cycle-remote-target" });
+    expect(parseOverlayAction({
+      type: "remote-dictate-hold",
+      phase: "start",
+      targetId: "11111111-2222-4333-8444-555555555555",
+      id: 3,
+    })).toEqual({
+      type: "remote-dictate-hold",
+      phase: "start",
+      targetId: "11111111-2222-4333-8444-555555555555",
+      id: 3,
+    });
+    expect(parseOverlayAction({ type: "remote-dictate-hold", phase: "start", targetId: "bad id", id: 3 })).toBeNull();
+    expect(parseOverlayAction({ type: "remote-dictate-hold", phase: "start", id: 3 })).toBeNull();
     expect(parseOverlayAction({ type: "set-destination", destination: "voice-note" }))
       .toEqual({ type: "set-destination", destination: "voice-note" });
+    expect(parseOverlayAction({ type: "set-destination", destination: "send-to-device" }))
+      .toEqual({ type: "set-destination", destination: "remote-dictation" });
     expect(parseOverlayAction({ type: "insert-handoff", id: "h1" })).toEqual({ type: "insert-handoff", id: "h1" });
     expect(parseOverlayAction({ type: "copy-note", id: "n1" })).toEqual({ type: "copy-note", id: "n1" });
     expect(parseOverlayAction({ type: "open-settings" })).toEqual({ type: "open-settings" });

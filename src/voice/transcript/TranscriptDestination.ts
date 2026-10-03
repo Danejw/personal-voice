@@ -3,8 +3,16 @@ export interface TranscriptDestination {
   deliver(transcript: string): Promise<void>;
 }
 
-/** The destinations available to dictation in this phase. */
-export type TranscriptDestinationId = "active-field" | "voice-note" | "send-to-device";
+/** The destinations available to dictation. */
+export type TranscriptDestinationId = "active-field" | "voice-note" | "remote-dictation";
+
+/** Maps a persisted or legacy destination id onto the current set. */
+export function migrateDestinationId(value: unknown): TranscriptDestinationId | null {
+  if (value === "active-field" || value === "voice-note" || value === "remote-dictation") return value;
+  // Pre-Remote-Dictation installs stored immediate device delivery as send-to-device.
+  if (value === "send-to-device") return "remote-dictation";
+  return null;
+}
 
 export interface TranscriptDeliveryResult {
   text: string;

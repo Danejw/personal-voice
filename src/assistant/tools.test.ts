@@ -34,6 +34,9 @@ describe("assistant tool schema", () => {
       "list_handoffs",
       "dismiss_handoff",
       "capture_screen",
+      "capture_camera_photo",
+      "start_camera_context",
+      "stop_camera_context",
       "capture_selection",
       "read_remote_device",
       "open_app",
@@ -129,6 +132,27 @@ describe("assistant tool schema", () => {
       kind: "capture",
       id: "see",
       name: "capture_screen",
+    });
+    expect(decideToolCall({ id: "cam", name: "capture_camera_photo", args: { camera: "back" } }, plan)).toEqual({
+      kind: "cameraPhoto",
+      id: "cam",
+      name: "capture_camera_photo",
+      facing: "back",
+    });
+    expect(decideToolCall({ id: "live", name: "start_camera_context", args: { camera: "front" } }, plan)).toEqual({
+      kind: "cameraStart",
+      id: "live",
+      name: "start_camera_context",
+      facing: "front",
+    });
+    expect(decideToolCall({ id: "off", name: "stop_camera_context", args: {} }, plan)).toEqual({
+      kind: "cameraStop",
+      id: "off",
+      name: "stop_camera_context",
+    });
+    expect(decideToolCall({ id: "bad", name: "capture_camera_photo", args: { camera: "side" } }, plan)).toMatchObject({
+      kind: "reject",
+      message: "Camera must be default, front, or back.",
     });
     expect(decideToolCall({ id: "click", name: "click", args: {} }, plan)).toMatchObject({ kind: "reject" });
     expect(decideToolCall({ id: "ins", name: "insert_text", args: "{\"text\":\"Hello\"}" }, plan)).toMatchObject({

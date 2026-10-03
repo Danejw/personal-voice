@@ -38,7 +38,7 @@ export const USAGE_FEATURES: readonly UsageFeature[] = [
   "shared_clipboard",
 ];
 
-export const DESTINATION_IDS: readonly TranscriptDestinationId[] = ["active-field", "voice-note", "send-to-device"];
+export const DESTINATION_IDS: readonly TranscriptDestinationId[] = ["active-field", "voice-note", "remote-dictation"];
 
 /** Rollup schema. Later Personal Insights can tell this shape from a newer one. */
 export const COUNTERS_VERSION = 1;
@@ -147,7 +147,7 @@ export type UsageEvent =
   | { name: "target_app"; appId: string; appLabel: string; words: number };
 
 export function emptyDestinations(): Record<TranscriptDestinationId, number> {
-  return { "active-field": 0, "voice-note": 0, "send-to-device": 0 };
+  return { "active-field": 0, "voice-note": 0, "remote-dictation": 0 };
 }
 
 export function emptyTriggers(): Record<UsageTrigger, number> {
@@ -286,6 +286,8 @@ export function parseCounters(value: unknown): UsageCounters {
     ? fields.destinations as Record<string, unknown>
     : {};
   for (const id of DESTINATION_IDS) destinations[id] = count(destinationSource[id]);
+  // Pre-Remote-Dictation counters used send-to-device for immediate device delivery.
+  destinations["remote-dictation"] += count(destinationSource["send-to-device"]);
   const triggers = emptyTriggers();
   const triggerSource = typeof fields.triggers === "object" && fields.triggers !== null
     ? fields.triggers as Record<string, unknown>

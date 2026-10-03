@@ -36,6 +36,14 @@ import {
   type PendingAssistantAction,
 } from "@/assistant/state";
 import {
+  cameraContextStartedText,
+  cameraContextStoppedText,
+  cameraPhotoContextText,
+  cameraPhotoDetachedText,
+  cameraPhotoFromFrame,
+  type CameraPhoto,
+} from "@/assistant/cameraPhoto";
+import {
   snapshotContextText,
   snapshotDetachedText,
   type ScreenSnapshot,
@@ -44,6 +52,13 @@ import { decideToolCall, type ConfirmToolName, type ParsedToolCall, type ToolDec
 import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
 import { runComputerTask, type ComputerImage } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
+import type { CameraCapture } from "@/platform/camera/CameraCapture";
+import {
+  cameraFacingLabel,
+  LatestFrameGate,
+  UnavailableCameraCapture,
+  type CameraFacing,
+} from "@/platform/camera";
 import { captureEchoFrom, type AudioCapture, type CaptureEchoStatus } from "@/voice/audio/AudioCapture";
 import { MicrophoneLease } from "@/voice/audio/microphoneLease";
 
@@ -145,6 +160,18 @@ export class AssistantController {
   private screenShot: ScreenSnapshot | null = null;
   /** True after this socket has been sent the current screenshot. */
   private screenNoted = false;
+  private cameraPhoto: CameraPhoto | null = null;
+  /** True after this socket has been sent the current camera still. */
+  private cameraPhotoNoted = false;
+  /**
+   * Explicit Camera Context intent. A Gemini reconnect does not reopen the hardware
+   * unless this remains set; old frames are never replayed.
+   */
+  private cameraDesired: { facing: CameraFacing } | null = null;
+  private cameraGate = new LatestFrameGate();
+  private camera: CameraCapture = new UnavailableCameraCapture();
+  /** Serializes stop before a post-reconnect restart so hardware is not left racing. */
+  private cameraStop: Promise<void> = Promise.resolve();
   private notes: AttachedNote[] = [];
   private handoffItem: AttachedHandoff | null = null;
   private notedNoteIds = new Set<string>();
@@ -216,6 +243,12 @@ export class AssistantController {
   /** Wires clipboard, insert, voice notes, and handoff. Safe to call once at startup. */
   setActions(actions: AssistantActions): void {
     this.actions = actions;
+  }
+
+  /** Platform camera boundary. Safe to call once at startup. */
+  setCamera(camera: CameraCapture): void {
+    void this.stopCameraHardware();
+    this.camera = camera;
   }
 
   /** Auto runs confirming actions. Review waits for Confirm or Cancel. */
@@ -399,6 +432,67 @@ export class AssistantController {
     this.dispatch({ type: "screenError", message });
   }
 
+  /** Remembers one explicit camera still until Remove or End. Does not start a capture loop. */
+  attachCameraPhoto(photo: CameraPhoto): void {
+    this.cameraPhoto = photo;
+    this.cameraPhotoNoted = false;
+    this.dispatch({ type: "attachCameraPhoto", photo });
+    this.noteCameraPhoto();
+  }
+
+  /** Drops the camera still and, when a session is open, tells Gemini it is no longer active. */
+  detachCameraPhoto(): void {
+    const had = this.cameraPhoto;
+    this.cameraPhoto = null;
+    this.cameraPhotoNoted = false;
+    this.dispatch({ type: "detachCameraPhoto" });
+    if (!had) return;
+    this.sendNote(cameraPhotoDetachedText());
+  }
+
+  reportCameraPhotoError(message: string): void {
+    this.dispatch({ type: "cameraPhotoError", message });
+  }
+
+  /** UI / tool entry: one still from the device camera. */
+  async captureCameraPhoto(facing: CameraFacing = "default"): Promise<void> {
+    try {
+      const frame = await this.camera.capturePhoto({ facing });
+      this.attachCameraPhoto(cameraPhotoFromFrame(frame));
+    } catch (error) {
+      this.reportCameraPhotoError(messageOf(error));
+      throw error;
+    }
+  }
+
+  /** UI / tool entry: start live Camera Context. */
+  async startCameraContext(facing: CameraFacing = "default"): Promise<void> {
+    this.cameraDesired = { facing };
+    this.dispatch({ type: "cameraContext", active: true, facing });
+    this.dispatch({ type: "cameraContextError", message: null });
+    await this.openCameraFrames(facing);
+    this.sendNote(cameraContextStartedText(facing));
+  }
+
+  /** UI / tool entry: stop live Camera Context; conversation stays up. */
+  async stopCameraContext(): Promise<void> {
+    const was = this.cameraDesired !== null || this.camera.isActive();
+    this.cameraDesired = null;
+    await this.stopCameraHardware();
+    this.dispatch({ type: "cameraContext", active: false, facing: null });
+    if (was) this.sendNote(cameraContextStoppedText());
+  }
+
+  /** Switch front/back without ending the Live session. */
+  async switchCameraContext(facing: CameraFacing): Promise<void> {
+    if (!this.cameraDesired) throw new Error("Camera Context is not active.");
+    this.cameraDesired = { facing };
+    if (this.camera.isActive()) await this.camera.switchCamera(facing);
+    else await this.openCameraFrames(facing);
+    this.dispatch({ type: "cameraContext", active: true, facing });
+    this.sendNote(cameraContextStartedText(facing));
+  }
+
   /**
    * Remembers one voice note until Remove, End, or sign-out.
    * Does not archive, edit, or delete the saved note.
@@ -502,6 +596,8 @@ export class AssistantController {
     const handoff = this.handoffItem;
     const hadSelection = this.selectionItem !== null;
     const hadScreen = this.screenShot !== null;
+    const hadCamera = this.cameraPhoto !== null;
+    const hadCameraContext = this.cameraDesired !== null || this.camera.isActive();
     this.notes = [];
     this.handoffItem = null;
     this.notedNoteIds.clear();
@@ -510,6 +606,10 @@ export class AssistantController {
     this.selectionNoted = false;
     this.screenShot = null;
     this.screenNoted = false;
+    this.cameraPhoto = null;
+    this.cameraPhotoNoted = false;
+    this.cameraDesired = null;
+    void this.stopCameraHardware();
     this.historyTurns = [];
     this.historySeeded = false;
     this.resumeHandle = null;
@@ -517,11 +617,13 @@ export class AssistantController {
     this.dropPending();
     this.dispatch({ type: "clearAccount" });
     this.dispatch({ type: "clearPending" });
-    if (!notes.length && !handoff && !hadSelection && !hadScreen) return;
+    if (!notes.length && !handoff && !hadSelection && !hadScreen && !hadCamera && !hadCameraContext) return;
     for (const note of notes) this.sendNote(noteDetachedText(note));
     if (handoff) this.sendNote(handoffDetachedText());
     if (hadSelection) this.sendNote(selectionDetachedText());
     if (hadScreen) this.sendNote(snapshotDetachedText());
+    if (hadCamera) this.sendNote(cameraPhotoDetachedText());
+    if (hadCameraContext) this.sendNote(cameraContextStoppedText());
   }
 
   /** Closes the session and stops the microphone and playback. An unfinished line is kept as interrupted. */
@@ -537,6 +639,10 @@ export class AssistantController {
     this.selectionNoted = false;
     this.screenShot = null;
     this.screenNoted = false;
+    this.cameraPhoto = null;
+    this.cameraPhotoNoted = false;
+    this.cameraDesired = null;
+    void this.stopCameraHardware();
     this.notes = [];
     this.handoffItem = null;
     this.notedNoteIds.clear();
@@ -567,8 +673,11 @@ export class AssistantController {
     this.personalNoted = false;
     this.memoryNoted = false;
     this.screenNoted = false;
+    this.cameraPhotoNoted = false;
     this.notedNoteIds.clear();
     this.handoffNoted = false;
+    // Physical camera stays off across a socket hop until ready resumes an explicit intent.
+    void this.stopCameraHardware();
     const session = this.openSession(
       (event) => this.onEvent(generation, connection, event),
       this.resumeHandle,
@@ -742,6 +851,70 @@ export class AssistantController {
     }
   }
 
+  /** Sends the camera still once per connection. Distinct from screen context. */
+  private noteCameraPhoto() {
+    if (!this.cameraPhoto || this.cameraPhotoNoted || !this.session) return;
+    if (this.snapshot.status !== "READY" && this.snapshot.status !== "RESPONDING") return;
+    try {
+      this.session.sendVideo(this.cameraPhoto.jpeg);
+      if (!this.sendNote(cameraPhotoContextText(this.cameraPhoto))) return;
+      this.cameraPhotoNoted = true;
+    } catch {
+      this.cameraPhotoNoted = false;
+    }
+  }
+
+  private async openCameraFrames(facing: CameraFacing): Promise<void> {
+    const generation = this.generation;
+    this.cameraGate.clear();
+    await this.camera.startFrames(
+      { facing, maxFps: 1 },
+      (frame) => {
+        if (generation !== this.generation || !this.cameraDesired) return;
+        if (this.snapshot.status !== "READY" && this.snapshot.status !== "RESPONDING") return;
+        const ready = this.cameraGate.offer(frame);
+        if (!ready) return;
+        try {
+          this.session?.sendVideo(ready.jpeg);
+        } catch {
+          // Drop the frame while the socket is not ready; never replay it.
+        }
+      },
+      (message) => {
+        if (generation !== this.generation) return;
+        this.cameraDesired = null;
+        void this.stopCameraHardware();
+        this.dispatch({ type: "cameraContext", active: false, facing: null });
+        this.dispatch({ type: "cameraContextError", message });
+      },
+    );
+    this.dispatch({ type: "cameraContext", active: true, facing: this.camera.activeFacing() ?? facing });
+  }
+
+  private stopCameraHardware(): Promise<void> {
+    this.cameraGate.clear();
+    this.cameraStop = this.camera.stop().catch(() => undefined);
+    return this.cameraStop;
+  }
+
+  /** After a Live socket is ready, resume Camera Context only when still explicitly desired. */
+  private resumeCameraIfDesired() {
+    const desired = this.cameraDesired;
+    if (!desired) return;
+    void this.cameraStop.then(async () => {
+      if (!this.cameraDesired) return;
+      if (this.camera.isActive()) return;
+      try {
+        await this.openCameraFrames(desired.facing);
+        this.sendNote(cameraContextStartedText(desired.facing));
+      } catch (error) {
+        this.cameraDesired = null;
+        this.dispatch({ type: "cameraContext", active: false, facing: null });
+        this.dispatch({ type: "cameraContextError", message: messageOf(error) });
+      }
+    });
+  }
+
   private beginCapture(generation: number) {
     if (!this.createCapture) return;
     let capture: AudioCapture;
@@ -872,6 +1045,8 @@ export class AssistantController {
         this.notePersonal();
         this.noteMemories();
         this.noteSnapshot();
+        this.noteCameraPhoto();
+        this.resumeCameraIfDesired();
         this.flushPending();
         return;
       case "resumption":
@@ -1000,6 +1175,18 @@ export class AssistantController {
           await this.runCapture(decision);
           continue;
         }
+        if (decision.kind === "cameraPhoto") {
+          await this.runCameraPhoto(decision);
+          continue;
+        }
+        if (decision.kind === "cameraStart") {
+          await this.runCameraStart(decision);
+          continue;
+        }
+        if (decision.kind === "cameraStop") {
+          await this.runCameraStop(decision);
+          continue;
+        }
         if (decision.kind === "selection") {
           await this.runSelection(decision);
           continue;
@@ -1080,6 +1267,54 @@ export class AssistantController {
       if (epoch !== this.toolEpoch) return;
       this.attachSnapshot(screen);
       this.replyTool(decision.id, decision.name, true, "Captured the screen.");
+    } catch (error) {
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runCameraPhoto(decision: Extract<ToolDecision, { kind: "cameraPhoto" }>) {
+    const epoch = this.toolEpoch;
+    try {
+      await this.captureCameraPhoto(decision.facing);
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(
+        decision.id,
+        decision.name,
+        true,
+        `Captured a photo from the ${cameraFacingLabel(decision.facing)}.`,
+      );
+    } catch (error) {
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runCameraStart(decision: Extract<ToolDecision, { kind: "cameraStart" }>) {
+    const epoch = this.toolEpoch;
+    try {
+      await this.startCameraContext(decision.facing);
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(
+        decision.id,
+        decision.name,
+        true,
+        `Camera Context is on using the ${cameraFacingLabel(decision.facing)}.`,
+      );
+    } catch (error) {
+      if (epoch !== this.toolEpoch) return;
+      this.cameraDesired = null;
+      this.dispatch({ type: "cameraContext", active: false, facing: null });
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runCameraStop(decision: Extract<ToolDecision, { kind: "cameraStop" }>) {
+    const epoch = this.toolEpoch;
+    try {
+      await this.stopCameraContext();
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, true, "Camera Context is off.");
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
       this.replyTool(decision.id, decision.name, false, toolFailure(error));
@@ -1296,6 +1531,8 @@ export class AssistantController {
     this.resuming = false;
     this.droppingModel = false;
     this.resumeHandle = null;
+    this.cameraDesired = null;
+    void this.stopCameraHardware();
     this.dropPending();
     clearTimeout(this.timer);
     this.resetEcho();
@@ -1304,6 +1541,7 @@ export class AssistantController {
     this.connection += 1;
     this.session?.close();
     this.session = undefined;
+    this.dispatch({ type: "cameraContext", active: false, facing: null });
     this.dispatch({ type: "fail", message, ...this.sealedSpeech() });
   }
 

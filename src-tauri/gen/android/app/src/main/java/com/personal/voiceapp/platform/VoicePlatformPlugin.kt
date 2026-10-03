@@ -69,6 +69,12 @@ class AssistantPlaybackArgs {
   var token: Int = 0
 }
 
+@InvokeArg
+class CameraArgs {
+  /** `default`, `front`, or `back`. */
+  var facing: String = "default"
+}
+
 /**
  * Android side of the shared `PlatformAdapter`: the floating mic, its foreground service,
  * setup helpers, and focused-field insertion. Dictation itself (capture, Gemini, settings,
@@ -77,6 +83,7 @@ class AssistantPlaybackArgs {
 @TauriPlugin(
   permissions = [
     Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone"),
+    Permission(strings = [Manifest.permission.CAMERA], alias = "camera"),
     Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = "notifications"),
   ],
 )
@@ -88,6 +95,8 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private var captureId = 0
   private var audioSession: AssistantAudioSession? = null
   private var playbackTrack: AssistantPcmTrack? = null
+  private var cameraSession: AndroidCameraSession? = null
+  private var pendingCamera: (() -> Unit)? = null
   private val captureBridge = object : CaptureHandle {
     override fun open(source: AudioSourceChoice): Int {
       val mic = capture ?: error("Microphone capture is not ready.")
@@ -125,6 +134,8 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
 
   /** Without the WebView nothing can answer the bubble, so the service goes with it. */
   override fun onDestroy(activity: AppCompatActivity) {
+    cameraSession?.stop()
+    cameraSession = null
     audioSession?.close()
     audioSession = null
     playbackTrack = null
@@ -249,6 +260,181 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       invoke.resolve()
     }
   }
+
+  /** Lists front/rear cameras when present. Brings the app forward so permission prompts can show. */
+  @Command
+  fun listCameras(invoke: Invoke) {
+    main.post {
+      bringAppForward()
+      ensureCameraPermission(invoke) {
+        try {
+          val session = cameraOrCreate()
+          val devices = session.listDevices()
+          val list = org.json.JSONArray()
+          for (device in devices) {
+            list.put(
+              JSONObject()
+                .put("id", device.id)
+                .put("label", device.label)
+                .put("facing", CameraFacingSelect.wireName(device.facing)),
+            )
+          }
+          invoke.resolve(JSObject().put("devices", list))
+        } catch (error: Exception) {
+          invoke.reject(error.message ?: "Could not list cameras.")
+        }
+      }
+    }
+  }
+
+  /** One still JPEG. Requires an explicit user/tool request from TypeScript. */
+  @Command
+  fun captureCameraPhoto(invoke: Invoke) {
+    val facingRaw = invoke.parseArgs(CameraArgs::class.java).facing
+    main.post {
+      bringAppForward()
+      ensureCameraPermission(invoke) {
+        val facing = try {
+          CameraFacingSelect.parse(facingRaw)
+        } catch (error: Exception) {
+          invoke.reject(error.message ?: "Camera must be default, front, or back.")
+          return@ensureCameraPermission
+        }
+        try {
+          cameraOrCreate().capturePhoto(facing) { result ->
+            result.fold(
+              onSuccess = { photo ->
+                val payload = JSObject()
+                  .put("jpeg", photo.jpegBase64)
+                  .put("width", photo.width)
+                  .put("height", photo.height)
+                  .put("facing", photo.facing)
+                  .put("capturedAt", isoNow())
+                photo.label?.let { payload.put("label", it) }
+                invoke.resolve(payload)
+              },
+              onFailure = { error ->
+                invoke.reject(error.message ?: "Could not capture a camera photo.")
+              },
+            )
+          }
+        } catch (error: Exception) {
+          invoke.reject(error.message ?: "Could not open the camera.")
+        }
+      }
+    }
+  }
+
+  /** Starts 1 FPS JPEG frames via `cameraFrame` events. Always shows a visible preview. */
+  @Command
+  fun startCameraFrames(invoke: Invoke) {
+    val facingRaw = invoke.parseArgs(CameraArgs::class.java).facing
+    main.post {
+      bringAppForward()
+      ensureCameraPermission(invoke) {
+        val facing = try {
+          CameraFacingSelect.parse(facingRaw)
+        } catch (error: Exception) {
+          invoke.reject(error.message ?: "Camera must be default, front, or back.")
+          return@ensureCameraPermission
+        }
+        try {
+          cameraOrCreate().startFrames(facing)
+          invoke.resolve(
+            JSObject()
+              .put("facing", CameraFacingSelect.wireName(facing))
+              .put("active", true),
+          )
+        } catch (error: Exception) {
+          invoke.reject(error.message ?: "Could not start Camera Context.")
+        }
+      }
+    }
+  }
+
+  @Command
+  fun switchCamera(invoke: Invoke) {
+    val facingRaw = invoke.parseArgs(CameraArgs::class.java).facing
+    main.post {
+      bringAppForward()
+      val facing = try {
+        CameraFacingSelect.parse(facingRaw)
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Camera must be default, front, or back.")
+        return@post
+      }
+      try {
+        val session = cameraSession ?: throw IllegalStateException("Camera Context is not active.")
+        session.switchFacing(facing)
+        invoke.resolve(JSObject().put("facing", session.facingWire).put("active", true))
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Could not switch the camera.")
+      }
+    }
+  }
+
+  @Command
+  fun stopCameraFrames(invoke: Invoke) {
+    main.post {
+      cameraSession?.stop()
+      invoke.resolve(JSObject().put("active", false))
+    }
+  }
+
+  private fun cameraOrCreate(): AndroidCameraSession {
+    val owner = activity as? androidx.lifecycle.LifecycleOwner
+      ?: error("Camera requires a lifecycle activity.")
+    val existing = cameraSession
+    if (existing != null) return existing
+    val created = AndroidCameraSession(
+      activity = activity,
+      lifecycleOwner = owner,
+      onFrame = { jpeg, width, height, facing, label ->
+        val payload = JSObject()
+          .put("jpeg", jpeg)
+          .put("width", width)
+          .put("height", height)
+          .put("facing", facing)
+          .put("capturedAt", isoNow())
+        if (label != null) payload.put("label", label)
+        trigger("cameraFrame", payload)
+      },
+      onError = { message ->
+        trigger("cameraError", JSObject().put("message", message))
+      },
+    )
+    cameraSession = created
+    return created
+  }
+
+  private fun ensureCameraPermission(invoke: Invoke, onGranted: () -> Unit) {
+    if (cameraGranted()) {
+      onGranted()
+      return
+    }
+    pendingCamera = onGranted
+    requestPermissionForAlias("camera", invoke, "cameraPermissionResult")
+  }
+
+  @PermissionCallback
+  private fun cameraPermissionResult(invoke: Invoke) {
+    val pending = pendingCamera
+    pendingCamera = null
+    if (getPermissionState("camera") == PermissionState.GRANTED && pending != null) {
+      pending()
+    } else {
+      invoke.reject(AndroidCameraSession.CAMERA_DENIED)
+    }
+  }
+
+  private fun isoNow(): String {
+    val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+    format.timeZone = java.util.TimeZone.getTimeZone("UTC")
+    return format.format(java.util.Date())
+  }
+
+  private fun cameraGranted(): Boolean =
+    ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
   /**
    * Starts streaming `audioCapture` events: `chunk` (base64 PCM), `error`, and finally `end`.

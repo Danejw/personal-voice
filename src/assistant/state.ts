@@ -1,7 +1,9 @@
 import type { ContextItem } from "@/context/ContextItem";
 import type { AttachedHandoff, AttachedNote } from "@/assistant/accountContext";
+import type { CameraPhoto } from "@/assistant/cameraPhoto";
 import type { AssistantSource } from "@/assistant/grounding";
 import type { ScreenSnapshot } from "@/assistant/snapshot";
+import type { CameraFacing } from "@/platform/camera";
 
 export type AssistantStatus = "IDLE" | "CONNECTING" | "READY" | "RESPONDING" | "ERROR";
 
@@ -37,6 +39,13 @@ export interface AssistantSnapshot {
   /** One explicit screenshot. Null after Remove or End. Not written to disk. */
   screen: ScreenSnapshot | null;
   screenError: string | null;
+  /** One explicit camera still. Null after Remove or End. Not written to disk. */
+  cameraPhoto: CameraPhoto | null;
+  cameraPhotoError: string | null;
+  /** Live Camera Context. Frames are not stored; only the active facing is. */
+  cameraContextActive: boolean;
+  cameraContextFacing: CameraFacing | null;
+  cameraContextError: string | null;
   /** Voice notes the user attached for this session. Not a copy of the account. */
   notes: AttachedNote[];
   /** The one handoff the user attached for this session. */
@@ -87,6 +96,11 @@ export type AssistantAction =
   | { type: "attachScreen"; screen: ScreenSnapshot }
   | { type: "detachScreen" }
   | { type: "screenError"; message: string }
+  | { type: "attachCameraPhoto"; photo: CameraPhoto }
+  | { type: "detachCameraPhoto" }
+  | { type: "cameraPhotoError"; message: string }
+  | { type: "cameraContext"; active: boolean; facing: CameraFacing | null }
+  | { type: "cameraContextError"; message: string | null }
   | { type: "attachNote"; note: AttachedNote }
   | { type: "detachNote"; id: string }
   | { type: "attachHandoff"; handoff: AttachedHandoff }
@@ -110,6 +124,11 @@ export const initialAssistantState: AssistantSnapshot = {
   actionNotice: null,
   screen: null,
   screenError: null,
+  cameraPhoto: null,
+  cameraPhotoError: null,
+  cameraContextActive: false,
+  cameraContextFacing: null,
+  cameraContextError: null,
   notes: [],
   handoff: null,
   accountError: null,
@@ -263,6 +282,11 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         actionNotice: null,
         screen: null,
         screenError: null,
+        cameraPhoto: null,
+        cameraPhotoError: null,
+        cameraContextActive: false,
+        cameraContextFacing: null,
+        cameraContextError: null,
         notes: [],
         handoff: null,
         accountError: null,
@@ -292,6 +316,21 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
       return { ...state, screen: null, screenError: null };
     case "screenError":
       return { ...state, screenError: action.message };
+    case "attachCameraPhoto":
+      return { ...state, cameraPhoto: action.photo, cameraPhotoError: null };
+    case "detachCameraPhoto":
+      return { ...state, cameraPhoto: null, cameraPhotoError: null };
+    case "cameraPhotoError":
+      return { ...state, cameraPhotoError: action.message };
+    case "cameraContext":
+      return {
+        ...state,
+        cameraContextActive: action.active,
+        cameraContextFacing: action.facing,
+        cameraContextError: action.active ? null : state.cameraContextError,
+      };
+    case "cameraContextError":
+      return { ...state, cameraContextError: action.message };
     case "attachNote":
       return { ...state, notes: [...state.notes, action.note], accountError: null };
     case "detachNote":
@@ -310,6 +349,11 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         selectionError: null,
         screen: null,
         screenError: null,
+        cameraPhoto: null,
+        cameraPhotoError: null,
+        cameraContextActive: false,
+        cameraContextFacing: null,
+        cameraContextError: null,
       };
     case "accountError":
       return { ...state, accountError: action.message };

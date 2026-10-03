@@ -147,9 +147,15 @@ class FloatingMicService : Service() {
       "error" -> AssistantBubbleView.State.ERROR
       else -> AssistantBubbleView.State.IDLE
     }
-    assistantBubble?.contentDescription = getString(
-      if (assistantInterrupt) R.string.floating_assistant_interrupt else R.string.floating_assistant_tap,
-    )
+    val cameraOn = snapshot.optBoolean("cameraOn")
+    assistantBubble?.contentDescription = buildString {
+      append(
+        getString(
+          if (assistantInterrupt) R.string.floating_assistant_interrupt else R.string.floating_assistant_tap,
+        ),
+      )
+      if (cameraOn) append(". Camera On")
+    }
     if (dictation == "listening" || dictation == "finalizing") {
       hidePanel()
     } else {

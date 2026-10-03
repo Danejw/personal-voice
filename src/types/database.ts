@@ -88,6 +88,45 @@ export type Database = {
         }
         Relationships: []
       }
+      remote_dictation_requests: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          expires_at: string
+          id: string
+          source_device_id: string
+          status: string
+          target_device_id: string
+          text: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          expires_at: string
+          id?: string
+          source_device_id: string
+          status?: string
+          target_device_id: string
+          text: string
+          user_id?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          expires_at?: string
+          id?: string
+          source_device_id?: string
+          status?: string
+          target_device_id?: string
+          text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       device_action_requests: {
         Row: {
           action: string
@@ -474,6 +513,49 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_remote_dictation_request: {
+        Args: {
+          p_source_device_id: string
+          p_target_device_id: string
+          p_text: string
+          p_ttl_seconds?: number
+        }
+        Returns: string
+      }
+      claim_remote_dictation_request: {
+        Args: {
+          p_id: string
+          p_target_device_id: string
+        }
+        Returns: Json
+      }
+      complete_remote_dictation_request: {
+        Args: {
+          p_id: string
+          p_target_device_id: string
+          p_ok: boolean
+          p_error?: string | null
+        }
+        Returns: boolean
+      }
+      get_remote_dictation_request: {
+        Args: {
+          p_id: string
+        }
+        Returns: Json
+      }
+      list_pending_remote_dictation_requests: {
+        Args: {
+          p_target_device_id: string
+        }
+        Returns: Json
+      }
+      delete_remote_dictation_request: {
+        Args: {
+          p_id: string
+        }
+        Returns: undefined
+      }
       clear_usage_analytics: {
         Args: Record<string, never>
         Returns: number

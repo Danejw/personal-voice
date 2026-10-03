@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Toggle } from "@/components/Toggle";
 import type { WindowsPlatformAdapter } from "@/platform/windows/WindowsPlatformAdapter";
-import { loadRemoteComputerActions, loadRemoteReads, saveRemoteComputerActions, saveRemoteReads } from "@/settings/deviceSettings";
+import {
+  loadRemoteComputerActions,
+  loadRemoteDictation,
+  loadRemoteReads,
+  saveRemoteComputerActions,
+  saveRemoteDictation,
+  saveRemoteReads,
+} from "@/settings/deviceSettings";
 
 interface WindowsBehaviorPanelProps {
   platform: WindowsPlatformAdapter;
@@ -16,6 +23,7 @@ export function WindowsBehaviorPanel({
   const [launchAtLogin, setLaunchAtLogin] = useState<boolean | null>(null);
   const [remoteReads, setRemoteReads] = useState(false);
   const [remoteComputerActions, setRemoteComputerActions] = useState(false);
+  const [remoteDictation, setRemoteDictation] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,6 +33,7 @@ export function WindowsBehaviorPanel({
   useEffect(() => {
     setRemoteReads(loadRemoteReads());
     setRemoteComputerActions(loadRemoteComputerActions());
+    setRemoteDictation(loadRemoteDictation());
   }, [settingsReady]);
 
   function onLaunchAtLogin(enabled: boolean) {
@@ -50,6 +59,15 @@ export function WindowsBehaviorPanel({
         onChange={(enabled) => {
           saveRemoteReads(enabled);
           setRemoteReads(enabled);
+        }}
+      />
+      <Toggle
+        label="Allow remote dictation"
+        title="Allow my other Personal Voice devices to insert dictated text into this device's active field."
+        checked={remoteDictation}
+        onChange={(enabled) => {
+          saveRemoteDictation(enabled);
+          setRemoteDictation(enabled);
         }}
       />
       <Toggle

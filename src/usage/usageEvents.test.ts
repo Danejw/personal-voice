@@ -141,7 +141,7 @@ describe("shortcut identity", () => {
   it("maps Windows bindings and leaves the Android mic as its own trigger", () => {
     expect(windowsShortcutTrigger(undefined)).toBe("shortcut-dictate");
     expect(windowsShortcutTrigger("voice-note")).toBe("shortcut-note");
-    expect(windowsShortcutTrigger("send-to-device")).toBe("shortcut-handoff");
+    expect(windowsShortcutTrigger("remote-dictation")).toBe("shortcut-handoff");
     expect(windowsShortcutTrigger("active-field")).not.toBe("android-floating-mic");
   });
 });

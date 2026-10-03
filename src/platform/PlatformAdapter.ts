@@ -1,5 +1,6 @@
 import type { ContextItem } from "@/context/ContextItem";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
+import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import type { AudioCapture, CaptureOptions } from "@/voice/audio/AudioCapture";
 import type { TargetApp } from "@/platform/targetApp";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
@@ -45,6 +46,11 @@ export interface PlatformAdapter {
   readonly platform: PlatformName;
   /** A fresh capture per utterance. Assistant passes `purpose: "assistant"` so Android can use voice communication. */
   createCapture(options?: CaptureOptions): AudioCapture;
+  /**
+   * Device camera for Assistant photo / Camera Context. Separate from microphone capture and screen snapshots.
+   * One long-lived instance per platform adapter; start/stop release hardware.
+   */
+  createCamera(): CameraCapture;
   /** Inserts into whatever field is focused when this is called. Returns that app when it can be named. */
   insertText(text: string): Promise<TargetApp | null>;
   /** Hides Settings, restores the previous app, then inserts a received handoff. */

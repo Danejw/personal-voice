@@ -32,11 +32,14 @@ import { Tooltip } from "@/components/Tooltip";
 import { DevicesPanel } from "@/devices/DevicesPanel";
 import { DeviceStore } from "@/devices/DeviceStore";
 import { useDevices } from "@/devices/useDevices";
-import { DeviceTargetField } from "@/handoffs/DeviceTargetField";
 import { HandoffPanel, HandoffToolbar } from "@/handoffs/HandoffPanel";
 import { HandoffStore } from "@/handoffs/HandoffStore";
 import { useHandoffAlerts } from "@/handoffs/useHandoffAlerts";
 import { useHandoffs } from "@/handoffs/useHandoffs";
+import { RemoteDictationDestination } from "@/remote-dictation/RemoteDictationDestination";
+import { RemoteDictationStore } from "@/remote-dictation/RemoteDictationStore";
+import { supabaseRemoteDictationFeed } from "@/remote-dictation/remoteDictationFeed";
+import { useRemoteDictation } from "@/remote-dictation/useRemoteDictation";
 import { DictationHistoryPanel } from "@/history/DictationHistoryPanel";
 import { DictationHistoryStore, DICTATION_HISTORY_LIMIT } from "@/history/DictationHistoryStore";
 import { useDictationHistory } from "@/history/useDictationHistory";
@@ -68,10 +71,25 @@ import { useComputerActions } from "@/assistant/useComputerActions";
 import { showHandoffAlert } from "@/platform/windows/handoffNotification";
 import { fetchGeminiToken } from "@/services/geminiTokenService";
 import { handoffApi } from "@/services/handoffService";
+import { remoteDictationApi } from "@/services/remoteDictationService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
 import { voiceNotesApi } from "@/services/voiceNotesService";
-import { bindDeviceSettings, loadAssistantAutoRun, loadAssistantProfile, loadAutoUpdate, loadDestination, loadShowIndicator, saveAssistantAutoRun, saveAssistantProfile, saveAutoUpdate, saveDestination, saveShowIndicator } from "@/settings/deviceSettings";
+import {
+  bindDeviceSettings,
+  loadAssistantAutoRun,
+  loadAssistantProfile,
+  loadAutoUpdate,
+  loadDestination,
+  loadRemoteDictation,
+  loadShowIndicator,
+  saveAssistantAutoRun,
+  saveAssistantProfile,
+  saveAutoUpdate,
+  saveDestination,
+  saveRemoteDictation,
+  saveShowIndicator,
+} from "@/settings/deviceSettings";
 import { DictionaryPanel, DictionaryToolbar } from "@/sync/DictionaryPanel";
 import { PersonalSyncStore } from "@/sync/PersonalSyncStore";
 import { SyncStatus } from "@/sync/SyncStatus";
@@ -127,6 +145,7 @@ const assistant = new AssistantController(
   () => platform.createCapture({ purpose: "assistant" }),
   microphone,
 );
+assistant.setCamera(platform.createCamera());
 const assistantLibrary = new AssistantConversationStore(
   assistant,
   assistantConversationsApi,
@@ -184,6 +203,16 @@ const computerActions = new ComputerActionStore(
   (userId) => localDeviceId(localStorage, userId, createId),
   platform,
 );
+const remoteDictation = new RemoteDictationStore(
+  remoteDictationApi,
+  (userId) => deviceApi.list(userId),
+  (userId) => localDeviceId(localStorage, userId, createId),
+  (text) => pasteReceived(text),
+  supabaseRemoteDictationFeed(),
+);
+const remoteDictationDestination = new RemoteDictationDestination({
+  send: (transcript, target) => remoteDictation.send(transcript, target),
+});
 let accountUserId: string | null = null;
 const history = new DictationHistoryStore(
   localStorage,
@@ -302,7 +331,7 @@ assistant.setActions({
 const destinations = new TranscriptDestinationRouter({
   "active-field": { deliver: (transcript) => pasteIntoField(transcript) },
   "voice-note": { deliver: (transcript) => voiceNotes.create(transcript) },
-  "send-to-device": { deliver: (transcript) => handoffs.send(transcript) },
+  "remote-dictation": remoteDictationDestination,
 }, "active-field", (result) => {
   history.recordLater(result);
   if (result.outcome === "success") {
@@ -312,7 +341,7 @@ const destinations = new TranscriptDestinationRouter({
 const DESTINATION_OPTIONS: readonly SelectOption[] = [
   { value: "active-field", label: "Active field" },
   { value: "voice-note", label: "Voice note" },
-  { value: "send-to-device", label: "Send to device" },
+  { value: "remote-dictation", label: "Remote Dictation" },
 ];
 
 /** Read at press time, so a settings or dictionary change applies to the very next utterance. */
@@ -331,7 +360,7 @@ function controlFor(state: VoiceState, destination: TranscriptDestinationId): { 
       switch (destination) {
         case "active-field": return { label: "Typing…", enabled: false };
         case "voice-note": return { label: "Saving…", enabled: false };
-        case "send-to-device": return { label: "Sending…", enabled: false };
+        case "remote-dictation": return { label: "Sending…", enabled: false };
         default: {
           const unhandled: never = destination;
           throw new Error(`Unhandled transcript destination: ${String(unhandled)}`);
@@ -357,7 +386,7 @@ function statusFor(state: VoiceState, destination: TranscriptDestinationId): str
       switch (destination) {
         case "active-field": return "Typing";
         case "voice-note": return "Saving note";
-        case "send-to-device": return "Sending";
+        case "remote-dictation": return "Sending";
         default: {
           const unhandled: never = destination;
           throw new Error(`Unhandled transcript destination: ${String(unhandled)}`);
@@ -370,6 +399,27 @@ function statusFor(state: VoiceState, destination: TranscriptDestinationId): str
       throw new Error(`Unhandled voice state: ${String(unhandled)}`);
     }
   }
+}
+
+function AndroidRemoteDictationToggle({ settingsReady }: { settingsReady: boolean }) {
+  const [enabled, setEnabled] = useState(() => loadRemoteDictation());
+  useEffect(() => {
+    setEnabled(loadRemoteDictation());
+  }, [settingsReady]);
+  return (
+    <section aria-labelledby="remote-dictation-heading">
+      <h2 id="remote-dictation-heading">On this phone</h2>
+      <Toggle
+        label="Allow remote dictation"
+        description="Allow my other Personal Voice devices to insert dictated text into this device's active field."
+        checked={enabled}
+        onChange={(next) => {
+          saveRemoteDictation(next);
+          setEnabled(next);
+        }}
+      />
+    </section>
+  );
 }
 
 /** Shortcuts and on-device behavior. Account devices stay in the shared devices panel. */
@@ -404,13 +454,16 @@ function DeviceControls({
       );
     case "android":
       return (
-        <section aria-labelledby="trigger-heading">
-          <h2 id="trigger-heading">Floating mic</h2>
-          <p className="hint">
-            Stays on over other apps until you turn it off. Start with phone restores it after reboot.
-          </p>
-          <AndroidSetupPanel />
-        </section>
+        <>
+          <section aria-labelledby="trigger-heading">
+            <h2 id="trigger-heading">Floating mic</h2>
+            <p className="hint">
+              Stays on over other apps until you turn it off. Start with phone restores it after reboot.
+            </p>
+            <AndroidSetupPanel />
+          </section>
+          <AndroidRemoteDictationToggle settingsReady={settingsReady} />
+        </>
       );
     default: {
       const unhandled: never = platform;
@@ -439,6 +492,7 @@ export default function App() {
   );
   const remoteSnapshot = useRemoteReads(remoteReads, auth.userId);
   const computerSnapshot = useComputerActions(computerActions, auth.userId);
+  const remoteDictationSnapshot = useRemoteDictation(remoteDictation, auth.userId);
   const assistantSnapshot = useAssistant(assistant);
   const assistantLibrarySnapshot = useAssistantLibrary(assistantLibrary);
   const assistantMemorySnapshot = useAssistantMemory(assistantMemory);
@@ -455,7 +509,15 @@ export default function App() {
       locale: data.settings.language,
       terms: data.terms.filter((entry) => entry.enabled).map((entry) => entry.term),
     };
-  }, microphone);
+  }, microphone, (nextDestination) => {
+    if (nextDestination !== "remote-dictation") {
+      remoteDictationDestination.clearLock();
+      remoteDictation.setActive(false);
+      return;
+    }
+    const target = remoteDictation.lockSelectedTarget();
+    remoteDictationDestination.lockTarget(target);
+  });
   const { state, partial, transcript, error } = snapshot;
   const control = controlFor(state, destination);
   const page = sectionMeta(section);
@@ -467,7 +529,7 @@ export default function App() {
   const status = !auth.ready ? "Starting…" : !signedIn ? "Sign in to start dictating" : paused ? "Paused from the tray" : statusFor(state, destination);
 
   function chooseDestination(value: string) {
-    if (value !== "active-field" && value !== "voice-note" && value !== "send-to-device") return;
+    if (value !== "active-field" && value !== "voice-note" && value !== "remote-dictation") return;
     destinations.select(value);
     setDestination(value);
     saveDestination(value);
@@ -494,6 +556,22 @@ export default function App() {
     canDictate: () => microphone.heldBy() !== "assistant",
     assistant: assistantSnapshot,
     assistantController: assistant,
+    remoteTargetId: remoteDictationSnapshot.targetDeviceId,
+    remoteTargetLabel: remoteDictationSnapshot.targetLabel,
+    remoteTargetOnline: remoteDictationSnapshot.targetOnline,
+    remoteTargetCount: remoteDictationSnapshot.targetCount,
+    remoteDictationActive: remoteDictationSnapshot.active,
+    remoteNotice: remoteDictationSnapshot.notice,
+    onCycleRemoteTarget: () => { remoteDictation.cycleTarget(); },
+    onLockRemoteTarget: (targetId) => {
+      const target = remoteDictation.lockTarget(targetId);
+      remoteDictationDestination.lockTarget(target);
+      return target;
+    },
+    onRemoteDictationEnded: () => {
+      remoteDictation.setActive(false);
+      remoteDictationDestination.clearLock();
+    },
   });
 
   // Bind before the keybinding panel's first read. Child state initializers run during this
@@ -645,6 +723,17 @@ export default function App() {
       case "IDLE":
         if (microphone.heldBy() === "assistant") return;
         usage.armTrigger("ui-button");
+        try {
+          if (destination === "remote-dictation") {
+            const target = remoteDictation.lockSelectedTarget();
+            remoteDictationDestination.lockTarget(target);
+          } else {
+            remoteDictationDestination.clearLock();
+            remoteDictation.setActive(false);
+          }
+        } catch {
+          return;
+        }
         void controller.start(createProvider());
         return;
       case "CONNECTING":
@@ -799,11 +888,12 @@ export default function App() {
                 {control.label}
               </button>
             </div>
-            {destination === "send-to-device" && (
-              <DeviceTargetField
-                label="Target" store={handoffs} snapshot={handoffSnapshot} disabled={!idle}
-                layout={mobileNav ? "stack" : "row"}
-              />
+            {destination === "remote-dictation" && (
+              <p className="hint">
+                {remoteDictationSnapshot.targetOnline && remoteDictationSnapshot.targetLabel
+                  ? `Target: ${remoteDictationSnapshot.targetLabel}. Tap the Remote Dictation control to cycle.`
+                  : "No other device is online for Remote Dictation."}
+              </p>
             )}
             {error && <p className="error" role="alert">{error}</p>}
             <div className="transcript" aria-live="polite">
@@ -922,6 +1012,15 @@ export default function App() {
                   assistant.attachSnapshot(snapshotFromNative(native, encodeSnapshotJpeg));
                 } catch (reason) {
                   assistant.reportSnapshotError(reason instanceof Error ? reason.message : "Couldn't capture the screen.");
+                }
+              }}
+              onCaptureCamera={async () => {
+                try {
+                  await assistant.captureCameraPhoto("default");
+                } catch (reason) {
+                  assistant.reportCameraPhotoError(
+                    reason instanceof Error ? reason.message : "Couldn't capture a camera photo.",
+                  );
                 }
               }}
             />

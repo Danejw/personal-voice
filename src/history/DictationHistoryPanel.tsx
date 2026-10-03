@@ -18,7 +18,7 @@ function destinationLabel(destination: TranscriptDestinationId): string {
   switch (destination) {
     case "active-field": return "Active field";
     case "voice-note": return "Voice note";
-    case "send-to-device": return "Send to device";
+    case "remote-dictation": return "Remote Dictation";
     default: {
       const unhandled: never = destination;
       throw new Error(`Unhandled transcript destination: ${String(unhandled)}`);

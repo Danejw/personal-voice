@@ -29,6 +29,11 @@ fn main() {
                     "stop_capture",
                     "enqueue_assistant_playback",
                     "clear_assistant_playback",
+                    "list_cameras",
+                    "capture_camera_photo",
+                    "start_camera_frames",
+                    "switch_camera",
+                    "stop_camera_frames",
                 ])
                 .default_permission(tauri_build::DefaultPermissionRule::AllowAllCommands),
         ),

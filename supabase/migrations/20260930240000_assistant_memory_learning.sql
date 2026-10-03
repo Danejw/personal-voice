@@ -88,7 +88,7 @@ begin
   foreach marker in array array[
     'draft', 'hypothetically', 'what if', 'suppose', 'for example', 'if i ',
     'she said', 'he said', 'they said', 'my friend', 'email', 'tell them',
-    'write to', 'say to', 'screenshot'
+    'write to', 'say to', 'screenshot', 'camera photo', 'camera context'
   ]
   loop
     if pg_catalog.strpos(lower, marker) > 0 then

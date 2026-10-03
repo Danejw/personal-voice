@@ -5,15 +5,19 @@ import {
   loadAutoUpdate,
   loadDestination,
   loadMicrophone,
+  loadRemoteComputerActions,
+  loadRemoteDictation,
   loadShowIndicator,
   loadStoredAssistantHotkey,
   loadStoredHandoffHotkey,
   loadStoredPushToTalk,
+  loadStoredRemoteDictationHotkey,
   loadStoredVoiceNoteHotkey,
   saveAssistantAutoRun,
   saveAutoUpdate,
   saveDestination,
   saveMicrophone,
+  saveRemoteDictation,
   saveShowIndicator,
   saveStoredAssistantHotkey,
   saveStoredHandoffHotkey,
@@ -99,9 +103,31 @@ describe("device settings", () => {
 
   it("persists this device's dictation destination without touching another device", () => {
     const storage = memoryStorage();
-    saveDestination("send-to-device", storage, "windows");
-    expect(loadDestination(storage, "windows")).toBe("send-to-device");
+    saveDestination("remote-dictation", storage, "windows");
+    expect(loadDestination(storage, "windows")).toBe("remote-dictation");
     expect(loadDestination(storage, "android")).toBe("active-field");
+  });
+
+  it("migrates legacy send-to-device destinations onto remote-dictation", () => {
+    const storage = memoryStorage();
+    storage.setItem("device.prefs.windows", JSON.stringify({ destination: "send-to-device" }));
+    expect(loadDestination(storage, "windows")).toBe("remote-dictation");
+  });
+
+  it("defaults Allow remote dictation ON when the field is absent, and keeps explicit OFF", () => {
+    const storage = memoryStorage();
+    storage.setItem("device.prefs.windows", JSON.stringify({ destination: "active-field" }));
+    expect(loadRemoteDictation(storage, "windows")).toBe(true);
+    saveRemoteDictation(false, storage, "windows");
+    expect(loadRemoteDictation(storage, "windows")).toBe(false);
+    expect(loadRemoteComputerActions(storage, "windows")).toBe(false);
+  });
+
+  it("migrates legacy handoffHotkey bindings onto remoteDictationHotkey", () => {
+    const storage = memoryStorage();
+    storage.setItem("device.prefs.windows", JSON.stringify({ handoffHotkey: ["Mouse5"] }));
+    expect(loadStoredRemoteDictationHotkey(storage, "windows")).toEqual(["Mouse5"]);
+    expect(loadStoredHandoffHotkey(storage, "windows")).toEqual(["Mouse5"]);
   });
 
   it("restores this device's bindings after the session is bound again", () => {

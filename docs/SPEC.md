@@ -189,7 +189,7 @@ updated_at
 
 ### handoffs
 
-Intentionally sent pasted text, typed text, or dictated transcripts:
+Intentionally sent pasted text, typed text, or continuation packages:
 
 ```text
 id
@@ -200,6 +200,27 @@ target_device_id (optional)
 created_at
 consumed_at (optional)
 ```
+
+Handoffs stay in an inbox until Insert / Copy / Dismiss. They are not automatic cursor insertion.
+
+### remote_dictation_requests
+
+Short-lived exact-transcript delivery from one owned device to another's active cursor:
+
+```text
+id
+user_id
+source_device_id
+target_device_id
+text
+status (pending | processing | inserted | failed)
+created_at
+expires_at
+completed_at
+error
+```
+
+Requests expire in about six seconds. Successful rows are deleted after the sender observes completion. Audio is never sent device-to-device.
 
 ### Recent dictation history
 
@@ -226,7 +247,9 @@ microphone
 showIndicator
 pushToTalk
 voiceNoteHotkey
-handoffHotkey
+remoteDictationHotkey (legacy handoffHotkey still read)
+remoteDictation (Allow remote dictation; default ON)
+remoteDictationTargetDeviceId
 ```
 
 Launch at login and Android overlay/accessibility/floating-mic state stay on the machine.
@@ -239,7 +262,8 @@ Keep schema additions conservative.
 - backend does not receive live audio
 - audio is not permanently retained by the app
 - voice notes sync only when the user explicitly chooses the Voice note destination
-- handoffs sync only when the user explicitly sends text or chooses Send to device
+- handoffs sync only when the user explicitly sends text to the Handoffs inbox
+- Remote Dictation sends only a finalized transcript to one selected device and expires quickly
 - never monitor or continuously synchronize the OS clipboard
 - selection capture is an explicit user action; Windows copies briefly and restores the clipboard
 - usage analytics stores daily counters only, never transcript text, microphone audio, or raw key logs
@@ -359,6 +383,16 @@ Voice Engine
 ```
 
 Assistant Mode is implemented beside Dictation. Dictation stays Gemini 3.5 Transcribe Live. Assistant is Gemini 3.8 Live and reuses the capture, account, and platform boundaries. It does not share Dictation's session.
+
+### Camera Context
+
+Assistant may use the device camera when the user explicitly asks (spoken, typed, tool, or UI). Capabilities:
+
+- one still photo (`capture_camera_photo`) from default / front / back
+- temporary live Camera Context (`start_camera_context` / `stop_camera_context`) at ≤ 1 JPEG frame per second over the existing Gemini Live session
+- Windows webcams and Android front/rear cameras behind `PlatformAdapter.createCamera()`
+
+Camera frames are ephemeral. They are not uploaded to Supabase, not stored in Assistant messages, not written to disk by Personal Voice, and not used for memory learning. Seeing something on camera is not authorization to click, type, or change the device. Reports: [`docs/Camera-Context-Phases/`](Camera-Context-Phases/README.md).
 
 ## V1 definition of done
 

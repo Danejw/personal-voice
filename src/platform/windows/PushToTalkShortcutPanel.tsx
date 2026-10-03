@@ -251,7 +251,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
         onRemove={(shortcut) => removeShortcut("voiceNote", shortcut)}
       />
       <HotkeyField
-        label="Hold to send a handoff"
+        label="Hold for Remote Dictation"
         shortcuts={handoff}
         listening={recording === "handoff"}
         canRemoveLast

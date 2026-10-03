@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { ConversationBar } from "@/assistant/ConversationBar";
 import type { AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 import { selectionPreview } from "@/assistant/selectionContext";
+import { cameraContextPreviewUrl } from "@/assistant/cameraPhoto";
 import { previewUrl } from "@/assistant/snapshotEncode";
 import type { AssistantController } from "@/assistant/AssistantController";
 import type { AssistantSource } from "@/assistant/grounding";
 import { assistantStatusLabel, type AssistantSnapshot } from "@/assistant/state";
+import { cameraFacingLabel } from "@/platform/camera";
 
 interface AssistantChromeProps {
   controller: AssistantController;
@@ -13,6 +15,7 @@ interface AssistantChromeProps {
   signedIn: boolean;
   micBusy?: boolean;
   onCaptureScreen?: () => Promise<void>;
+  onCaptureCamera?: () => Promise<void>;
   onContinueTask?: () => Promise<void>;
   library?: AssistantLibrarySnapshot;
   onNewThread?: () => void;
@@ -64,6 +67,7 @@ export function AssistantPanel({
   snapshot,
   signedIn,
   onCaptureScreen,
+  onCaptureCamera,
   onContinueTask,
   library,
   onNewThread,
@@ -75,6 +79,7 @@ export function AssistantPanel({
 }: AssistantChromeProps) {
   const [draft, setDraft] = useState("");
   const [capturing, setCapturing] = useState(false);
+  const [capturingCamera, setCapturingCamera] = useState(false);
   const [continuing, setContinuing] = useState(false);
   const [continueNotice, setContinueNotice] = useState<string | null>(null);
   const [continueError, setContinueError] = useState<string | null>(null);
@@ -200,6 +205,76 @@ export function AssistantPanel({
         )}
       </div>
       {snapshot.screenError && <p className="error" role="alert">{snapshot.screenError}</p>}
+      <div className="assistant-selection">
+        <button
+          type="button"
+          className="secondary"
+          disabled={!onCaptureCamera || capturingCamera}
+          onClick={() => {
+            if (!onCaptureCamera) return;
+            setCapturingCamera(true);
+            void onCaptureCamera().finally(() => setCapturingCamera(false));
+          }}
+        >
+          {capturingCamera ? "Opening camera…" : snapshot.cameraPhoto ? "Retake photo" : "Camera photo"}
+        </button>
+        {snapshot.cameraPhoto && (
+          <>
+            <img
+              src={cameraContextPreviewUrl(snapshot.cameraPhoto)}
+              alt="Captured camera photo"
+              className="assistant-shot"
+            />
+            <p className="note-meta">
+              Attached camera photo
+              {` · ${cameraFacingLabel(snapshot.cameraPhoto.facing)}`}
+              {snapshot.cameraPhoto.label ? ` · ${snapshot.cameraPhoto.label}` : ""}
+              {` · ${new Date(snapshot.cameraPhoto.capturedAt).toLocaleTimeString()}`}
+            </p>
+            <button type="button" className="secondary" onClick={() => controller.detachCameraPhoto()}>Remove</button>
+          </>
+        )}
+      </div>
+      {snapshot.cameraPhotoError && <p className="error" role="alert">{snapshot.cameraPhotoError}</p>}
+      <div className="assistant-action" role="region" aria-label="Camera Context">
+        <p className="note-meta">
+          {snapshot.cameraContextActive
+            ? `Camera On · ${cameraFacingLabel(snapshot.cameraContextFacing ?? "default")}`
+            : "Camera Context off"}
+        </p>
+        {snapshot.cameraContextError && <p className="error" role="alert">{snapshot.cameraContextError}</p>}
+        <div className="assistant-action-buttons">
+          {snapshot.cameraContextActive ? (
+            <>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void controller.switchCameraContext(
+                  snapshot.cameraContextFacing === "front" ? "back" : "front",
+                ).catch(() => undefined)}
+              >
+                Switch camera
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void controller.stopCameraContext().catch(() => undefined)}
+              >
+                Stop camera
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="secondary"
+              disabled={snapshot.status === "IDLE" || snapshot.status === "ERROR"}
+              onClick={() => void controller.startCameraContext("default").catch(() => undefined)}
+            >
+              Start camera
+            </button>
+          )}
+        </div>
+      </div>
       {(snapshot.computerRunning || snapshot.computerPrompt) && (
         <div className="assistant-action" role="region" aria-label="Supervised screen task">
           <p>{snapshot.computerPrompt ?? "A supervised screen task is running."}</p>
