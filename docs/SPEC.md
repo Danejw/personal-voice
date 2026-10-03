@@ -360,6 +360,16 @@ Voice Engine
 
 Assistant Mode is implemented beside Dictation. Dictation stays Gemini 3.5 Transcribe Live. Assistant is Gemini 3.8 Live and reuses the capture, account, and platform boundaries. It does not share Dictation's session.
 
+### Camera Context
+
+Assistant may use the device camera when the user explicitly asks (spoken, typed, tool, or UI). Capabilities:
+
+- one still photo (`capture_camera_photo`) from default / front / back
+- temporary live Camera Context (`start_camera_context` / `stop_camera_context`) at ≤ 1 JPEG frame per second over the existing Gemini Live session
+- Windows webcams and Android front/rear cameras behind `PlatformAdapter.createCamera()`
+
+Camera frames are ephemeral. They are not uploaded to Supabase, not stored in Assistant messages, not written to disk by Personal Voice, and not used for memory learning. Seeing something on camera is not authorization to click, type, or change the device. Reports: [`docs/Camera-Context-Phases/`](Camera-Context-Phases/README.md).
+
 ## V1 definition of done
 
 Windows:

@@ -4,6 +4,8 @@ import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 import { parseOverlayAction } from "@/overlay/overlay";
 import { NativeAudioCapture } from "@/platform/android/NativeAudioCapture";
 import { callPlugin, listenPlugin } from "@/platform/android/voicePlatformPlugin";
+import { AndroidCameraCapture } from "@/platform/android/AndroidCameraCapture";
+import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import type { AvailableUpdate, CaptureSelectionOptions, PlatformAdapter } from "@/platform/PlatformAdapter";
 import type { CaptureOptions } from "@/voice/audio/AudioCapture";
 import { parseTargetApp } from "@/platform/targetApp";
@@ -23,6 +25,11 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
 
   createCapture(options?: CaptureOptions) {
     return new NativeAudioCapture(options?.purpose ?? "dictation");
+  }
+
+  /** CameraX through the Kotlin plugin. Brings Settings forward for permission and preview. */
+  createCamera(): CameraCapture {
+    return new AndroidCameraCapture();
   }
 
   async insertText(text: string) {

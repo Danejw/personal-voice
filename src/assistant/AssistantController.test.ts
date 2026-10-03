@@ -1031,7 +1031,168 @@ describe("AssistantController", () => {
     expect(actions.computer.execute).not.toHaveBeenCalled();
     expect(created.getSnapshot().computerRunning).toBe(false);
   });
+
+  it("captures a camera photo, labels it as camera not screen, and clears on end", async () => {
+    const { created } = controller();
+    const camera = new FakeCamera();
+    created.setCamera(camera);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({
+      type: "toolCalls",
+      calls: [{ id: "cam", name: "capture_camera_photo", args: { camera: "back" } }],
+    });
+    await settle();
+    expect(camera.photoFacing).toBe("back");
+    expect(created.getSnapshot().cameraPhoto?.facing).toBe("back");
+    expect(created.getSnapshot().screen).toBeNull();
+    expect(session.frames.at(-1)).toBe(TINY_CAMERA_JPEG);
+    expect(session.notes.some((note) => note.includes("Camera photo") && note.includes("not a screenshot"))).toBe(true);
+    expect(session.responses.at(-1)).toMatchObject({
+      toolResponse: { functionResponses: [{ id: "cam", response: { result: expect.stringContaining("rear camera") } }] },
+    });
+    created.end();
+    expect(created.getSnapshot().cameraPhoto).toBeNull();
+  });
+
+  it("starts and stops Camera Context without a second microphone and cleans up on end", async () => {
+    const lease = new MicrophoneLease();
+    const mic = new FakeMic();
+    const camera = new FakeCamera();
+    const playback = new FakePlayback();
+    let next = 0;
+    const created = new AssistantController(
+      (onEvent) => new FakeSession(onEvent),
+      playback,
+      () => `id-${next += 1}`,
+      () => mic,
+      lease,
+    );
+    created.setCamera(camera);
+    created.start();
+    expect(mic.stopped).toBe(false);
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({
+      type: "toolCalls",
+      calls: [{ id: "on", name: "start_camera_context", args: { camera: "front" } }],
+    });
+    await settle();
+    expect(created.getSnapshot().cameraContextActive).toBe(true);
+    expect(camera.active).toBe(true);
+    expect(camera.frameFacing).toBe("front");
+    camera.pushFrame();
+    expect(session.frames.length).toBeGreaterThanOrEqual(1);
+    session.emit({ type: "toolCalls", calls: [{ id: "off", name: "stop_camera_context", args: {} }] });
+    await settle();
+    expect(created.getSnapshot().cameraContextActive).toBe(false);
+    expect(camera.active).toBe(false);
+    expect(mic.stopped).toBe(false);
+    session.emit({ type: "toolCalls", calls: [{ id: "on2", name: "start_camera_context", args: {} }] });
+    await settle();
+    created.end();
+    expect(camera.active).toBe(false);
+    expect(created.getSnapshot().cameraContextActive).toBe(false);
+  });
+
+  it("resumes Camera Context after reconnect only while it is still explicitly desired", async () => {
+    const { created } = controller();
+    const camera = new FakeCamera();
+    created.setCamera(camera);
+    created.start();
+    const first = FakeSession.opened[0] as FakeSession;
+    first.emit({ type: "toolCalls", calls: [{ id: "on", name: "start_camera_context", args: {} }] });
+    await settle();
+    expect(camera.active).toBe(true);
+    first.emit({ type: "resumption", handle: "h1" });
+    first.emit({ type: "goAway" });
+    await settle();
+    expect(created.getSnapshot().cameraContextActive).toBe(true);
+    expect(camera.active).toBe(true);
+    await created.stopCameraContext();
+    expect(camera.active).toBe(false);
+    const mid = FakeSession.opened.at(-1) as FakeSession;
+    mid.emit({ type: "resumption", handle: "h2" });
+    mid.emit({ type: "goAway" });
+    await settle();
+    expect(camera.active).toBe(false);
+  });
 });
+
+const TINY_CAMERA_JPEG = btoa(String.fromCharCode(0xff, 0xd8, 0xff, 0xd9));
+
+class FakeCamera {
+  active = false;
+  photoFacing: string | null = null;
+  frameFacing: string | null = null;
+  private onFrame: ((frame: {
+    jpeg: string;
+    width: number;
+    height: number;
+    capturedAt: string;
+    facing: "default" | "front" | "back";
+  }) => void) | null = null;
+
+  listDevices() {
+    return Promise.resolve([{ id: "1", label: "Cam", facing: "back" as const }]);
+  }
+
+  capturePhoto(options?: { facing?: "default" | "front" | "back" }) {
+    this.photoFacing = options?.facing ?? "default";
+    return Promise.resolve({
+      jpeg: TINY_CAMERA_JPEG,
+      width: 64,
+      height: 48,
+      capturedAt: "2026-10-03T20:00:00.000Z",
+      facing: this.photoFacing as "default" | "front" | "back",
+      label: "Test camera",
+    });
+  }
+
+  startFrames(
+    options: { facing?: "default" | "front" | "back" },
+    onFrame: (frame: {
+      jpeg: string;
+      width: number;
+      height: number;
+      capturedAt: string;
+      facing: "default" | "front" | "back";
+    }) => void,
+  ) {
+    this.active = true;
+    this.frameFacing = options.facing ?? "default";
+    this.onFrame = onFrame;
+    return Promise.resolve();
+  }
+
+  switchCamera(facing: "default" | "front" | "back") {
+    this.frameFacing = facing;
+    return Promise.resolve();
+  }
+
+  stop() {
+    this.active = false;
+    this.onFrame = null;
+    return Promise.resolve();
+  }
+
+  isActive() {
+    return this.active;
+  }
+
+  activeFacing() {
+    return this.active ? (this.frameFacing as "default" | "front" | "back") : null;
+  }
+
+  pushFrame() {
+    this.onFrame?.({
+      jpeg: TINY_CAMERA_JPEG,
+      width: 64,
+      height: 48,
+      capturedAt: "2026-10-03T20:00:01.000Z",
+      facing: (this.frameFacing as "default" | "front" | "back") ?? "default",
+    });
+  }
+}
 
 function toolActions() {
   return {

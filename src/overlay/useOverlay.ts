@@ -110,6 +110,7 @@ export function useOverlay({
       assistant.playbackHeld,
       overlayAssistantFrom(assistant.status),
     ),
+    cameraOn: assistant.cameraContextActive,
   }), [visible, dictation.state, dictation.error, destination, signedIn, paused, notes, handoffs, devices, capture, notice, assistant]);
 
   const snapshotRef = useRef(snapshot);

@@ -837,6 +837,7 @@ html.indicator-view #root {
   padding-left: 6px;
 }
 .overlay-btn {
+  position: relative;
   width: 32px;
   height: 32px;
   display: grid;
@@ -850,6 +851,17 @@ html.indicator-view #root {
   cursor: pointer;
 }
 .overlay-btn svg { width: 14px; height: 14px; }
+.overlay-camera-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e76f51;
+  box-shadow: 0 0 0 2px rgba(17, 24, 32, 0.9);
+}
+.overlay-camera-on { outline: 2px solid rgba(231, 111, 81, 0.85); outline-offset: 1px; }
 .overlay-logo { color: #88d8c1; }
 .overlay-logo svg { width: 16px; height: 16px; }
 .overlay-dock.is-dragging,

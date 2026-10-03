@@ -127,6 +127,7 @@ const assistant = new AssistantController(
   () => platform.createCapture({ purpose: "assistant" }),
   microphone,
 );
+assistant.setCamera(platform.createCamera());
 const assistantLibrary = new AssistantConversationStore(
   assistant,
   assistantConversationsApi,
@@ -922,6 +923,15 @@ export default function App() {
                   assistant.attachSnapshot(snapshotFromNative(native, encodeSnapshotJpeg));
                 } catch (reason) {
                   assistant.reportSnapshotError(reason instanceof Error ? reason.message : "Couldn't capture the screen.");
+                }
+              }}
+              onCaptureCamera={async () => {
+                try {
+                  await assistant.captureCameraPhoto("default");
+                } catch (reason) {
+                  assistant.reportCameraPhotoError(
+                    reason instanceof Error ? reason.message : "Couldn't capture a camera photo.",
+                  );
                 }
               }}
             />

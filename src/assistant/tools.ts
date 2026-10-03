@@ -8,6 +8,7 @@ import {
   validateShortcut,
   type RemoteComputerAction,
 } from "@/assistant/computerActions";
+import { cameraFacingFromArgs, type CameraFacing } from "@/platform/camera";
 
 /**
  * Gemini 3.8 Live function calls, checked against the Live tools guide on 2026-09-15:
@@ -100,6 +101,31 @@ export function assistantFunctionDeclarations() {
     {
       name: "capture_screen",
       description: "Capture what is on this device's screen right now and attach that still image. Call this when the user asks to look at, see, or check the screen, or to look again. Do not tell them to press a button. This does not click or type. Do not describe a screen until this tool has returned.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
+      name: "capture_camera_photo",
+      description: "Take one still photo from this device's camera and attach it. Call this only when the user explicitly asks to use the camera, take a picture, or look through the camera. camera may be default, front, or back. Do not turn the camera on just because visual context might help. This is not a screenshot.",
+      parameters: {
+        type: "object",
+        properties: {
+          camera: { type: "string", description: "default, front, or back. Omit for default." },
+        },
+      },
+    },
+    {
+      name: "start_camera_context",
+      description: "Turn on live Camera Context so fresh camera frames are sent while the user keeps talking. Call this only when the user explicitly asks to turn the camera on, look through the camera with them, or use the front/back camera continuously. camera may be default, front, or back. Do not activate the camera without that request. This is not a screenshot and does not save frames.",
+      parameters: {
+        type: "object",
+        properties: {
+          camera: { type: "string", description: "default, front, or back. Omit for default." },
+        },
+      },
+    },
+    {
+      name: "stop_camera_context",
+      description: "Turn Camera Context off, release the camera, and stop sending frames. Call this when the user asks to turn the camera off, stop looking, or that they are done. The conversation and microphone stay active.",
       parameters: { type: "object", properties: {} },
     },
     {
@@ -223,6 +249,9 @@ export type ToolDecision =
   | { kind: "reject"; id: string; name: string; message: string }
   | { kind: "copy"; id: string; name: "copy_text"; text: string }
   | { kind: "capture"; id: string; name: "capture_screen" }
+  | { kind: "cameraPhoto"; id: string; name: "capture_camera_photo"; facing: CameraFacing }
+  | { kind: "cameraStart"; id: string; name: "start_camera_context"; facing: CameraFacing }
+  | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
   | { kind: "selection"; id: string; name: "capture_selection" }
   | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
   | { kind: "memories"; id: string; name: "list_memories" }
@@ -282,6 +311,18 @@ export function decideToolCall(
     }
     case "capture_screen":
       return { kind: "capture", id: call.id, name: "capture_screen" };
+    case "capture_camera_photo": {
+      const facing = cameraFacingFromArgs(args);
+      if (typeof facing === "object") return { kind: "reject", id: call.id, name: call.name, message: facing.error };
+      return { kind: "cameraPhoto", id: call.id, name: "capture_camera_photo", facing };
+    }
+    case "start_camera_context": {
+      const facing = cameraFacingFromArgs(args);
+      if (typeof facing === "object") return { kind: "reject", id: call.id, name: call.name, message: facing.error };
+      return { kind: "cameraStart", id: call.id, name: "start_camera_context", facing };
+    }
+    case "stop_camera_context":
+      return { kind: "cameraStop", id: call.id, name: "stop_camera_context" };
     case "capture_selection":
       return { kind: "selection", id: call.id, name: "capture_selection" };
     case "list_voice_notes":

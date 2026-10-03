@@ -54,7 +54,7 @@ Text can go into the focused field, a voice note, or another device you own.
 | **Dictation** | Hold-to-talk · Gemini cleanup (punctuation, caps, cleanup) · personal dictionary · destinations: active field, voice note, or send to device |
 | **Cross-device** | Handoffs with Windows toast insert · shared clipboard (explicit send only) · rename, list, and remove installs |
 | **Capture & history** | Selection capture · last 75 dictations on device · optional Sync dictations |
-| **Assistant** | Separate Gemini Live chat (voice or typed) · floating control / Windows hotkey · attach selection, notes, or handoffs · optional Windows remote reads and confirmable desktop actions |
+| **Assistant** | Separate Gemini Live chat (voice or typed) · floating control / Windows hotkey · attach selection, notes, or handoffs · optional camera photo / live Camera Context · optional Windows remote reads and confirmable desktop actions |
 | **Account & controls** | Email/password sync · device-scoped mic, hotkeys, overlay, destination · opt-in analytics · Windows updater / Android APK releases |
 
 ---
@@ -176,7 +176,7 @@ supabase/
 └── functions/             gemini-token and related Edge Functions
 ```
 
-Shared logic stays in TypeScript. Platform behavior stays behind `PlatformAdapter`. Dictation uses `VoiceProvider` / `TranscriptionSession`. Assistant uses `AssistantController`.
+Shared logic stays in TypeScript. Platform behavior stays behind `PlatformAdapter`. Dictation uses `VoiceProvider` / `TranscriptionSession`. Assistant uses `AssistantController`. Camera Context uses `CameraCapture` (`createCamera()`): Windows webcams via WebView `getUserMedia`, Android via CameraX in the Kotlin plugin. Frames go to Gemini Live only (≤ 1 FPS); Personal Voice does not store them. See [`docs/Camera-Context-Phases/`](docs/Camera-Context-Phases/README.md).
 
 </details>
 

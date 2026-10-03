@@ -4,6 +4,10 @@
     <!-- Microphone for the shared WebView capture; WebView also requests MODIFY_AUDIO_SETTINGS. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Assistant Camera Context / photo tools. Optional hardware; not required to install. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <!-- The floating mic runs as a microphone foreground service (required from Android 14). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />

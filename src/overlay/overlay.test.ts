@@ -77,6 +77,32 @@ describe("overlay lists", () => {
     expect(snapshot.dictation).toBe("listening");
     expect(snapshot.destination).toBe("voice-note");
     expect(snapshot.notes).toHaveLength(1);
+    expect(snapshot.cameraOn).toBe(false);
+  });
+
+  it("marks Camera On on the floating control snapshot", () => {
+    const snapshot = buildOverlaySnapshot({
+      visible: true,
+      state: "IDLE",
+      error: null,
+      destination: "active-field",
+      signedIn: true,
+      paused: false,
+      notes: [],
+      handoffs: [],
+      devices: [],
+      capture: null,
+      notice: null,
+      assistant: "listening",
+      assistantError: null,
+      selectionPreview: null,
+      selectionSource: null,
+      pendingTitle: null,
+      pendingPreview: null,
+      pendingWorking: false,
+      cameraOn: true,
+    });
+    expect(snapshot.cameraOn).toBe(true);
   });
 
   it("labels handoffs from the device list", () => {

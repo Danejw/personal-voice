@@ -142,6 +142,17 @@ Assistant and dictation share `NativeMicCapture`, but they do not share a record
 
 When that probe fails, or the route is lost, the shared controller stops forwarding microphone audio until the playback head reaches the end and for 160 ms after that. The wait follows playback completion, not Gemini's `turnComplete`. Stop and listen, including a tap on the floating Assistant button while that fallback is active, stops the reply and resumes listening after the same short tail. Speaking over the reply does not interrupt it in that mode. Ending the session, or a failed start, releases the effects, the track, audio focus, and communication routing and restores the previous audio mode.
 
+### Camera Context
+
+Assistant camera use is native CameraX in `AndroidCameraSession`, exposed through the existing `voice-platform` plugin (`list_cameras`, `capture_camera_photo`, `start_camera_frames`, `switch_camera`, `stop_camera_frames`). TypeScript talks to it via `AndroidCameraCapture` and `PlatformAdapter.createCamera()`.
+
+- Requires the `CAMERA` permission (requested when the user/tool asks).
+- Starting the camera brings `MainActivity` forward and shows a visible “Camera On” preview pill. There is no hidden capture behind the floating control alone.
+- Frames are JPEG at ≤ 1 FPS for Gemini Live; nothing is written to disk or Supabase.
+- Stopping Camera Context, ending Assistant, or destroying the plugin releases the camera.
+
+Reports: [`docs/Camera-Context-Phases/`](Camera-Context-Phases/README.md).
+
 ### Building on this machine
 
 The repo is on an exFAT drive (E:), which can't hold symlinks. `tauri android build` symlinks the Rust library into `jniLibs` and fails there. On NTFS it also needs Windows Developer Mode. Until the project is moved or Developer Mode is on:

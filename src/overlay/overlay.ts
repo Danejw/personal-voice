@@ -39,6 +39,8 @@ export interface OverlaySnapshot {
   pendingWorking: boolean;
   /** Fallback mode: Stop and listen cuts off playback and resumes the microphone. */
   assistantInterrupt: boolean;
+  /** Live Camera Context is sending frames. Keep the indicator obvious and small. */
+  cameraOn: boolean;
 }
 
 export type OverlayHoldDestination = "voice-note" | "send-to-device";
@@ -78,6 +80,7 @@ export const emptyOverlaySnapshot: OverlaySnapshot = {
   pendingPreview: null,
   pendingWorking: false,
   assistantInterrupt: false,
+  cameraOn: false,
 };
 
 export function overlayDictationFrom(state: VoiceState): OverlayDictation {
@@ -187,6 +190,7 @@ export function buildOverlaySnapshot(input: {
   pendingPreview: string | null;
   pendingWorking: boolean;
   assistantInterrupt?: boolean;
+  cameraOn?: boolean;
 }): OverlaySnapshot {
   return {
     visible: input.visible,
@@ -207,6 +211,7 @@ export function buildOverlaySnapshot(input: {
     pendingPreview: input.pendingPreview,
     pendingWorking: input.pendingWorking,
     assistantInterrupt: input.assistantInterrupt === true,
+    cameraOn: input.cameraOn === true,
   };
 }
 

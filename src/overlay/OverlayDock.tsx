@@ -86,7 +86,8 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   const pendingHint = snapshot.pendingTitle
     ? ` Assistant wants to: ${snapshot.pendingTitle}${snapshot.pendingPreview ? `. ${snapshot.pendingPreview}` : ""}`
     : "";
-  const assistantTitle = `${assistantLabel(snapshot.assistant, snapshot.assistantError)}${selectionHint}${pendingHint}`;
+  const cameraHint = snapshot.cameraOn ? " Camera On." : "";
+  const assistantTitle = `${assistantLabel(snapshot.assistant, snapshot.assistantError)}${cameraHint}${selectionHint}${pendingHint}`;
   useEffect(() => {
     void setOverlayConfirmSpace(Boolean(snapshot.pendingTitle));
   }, [snapshot.pendingTitle]);
@@ -273,12 +274,13 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
       <Tooltip content={assistantTitle} side={tipSide} delayMs={280}>
         <button
           type="button"
-          className={`overlay-btn ${assistantTone(snapshot.assistant)}`}
+          className={`overlay-btn ${assistantTone(snapshot.assistant)}${snapshot.cameraOn ? " overlay-camera-on" : ""}`}
           aria-label={assistantTitle}
           disabled={assistantBlocked}
           onClick={() => onAction({ type: "assistant-toggle" })}
         >
           <AssistantIcon />
+          {snapshot.cameraOn && <span className="overlay-camera-dot" aria-hidden="true" />}
         </button>
       </Tooltip>
       {snapshot.pendingTitle && (

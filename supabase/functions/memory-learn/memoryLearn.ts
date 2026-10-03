@@ -25,6 +25,8 @@ export const LEARN_REJECT_MARKERS = [
   "write to",
   "say to",
   "screenshot",
+  "camera photo",
+  "camera context",
 ] as const;
 
 export type LearningCategory = "preference" | "fact" | "project";

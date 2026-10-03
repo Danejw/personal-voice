@@ -5,6 +5,8 @@ import { contextItemFromCapture } from "@/context/ContextItem";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 import { parseOverlayAction } from "@/overlay/overlay";
 import { BrowserAudioCapture } from "@/platform/BrowserAudioCapture";
+import type { CameraCapture } from "@/platform/camera/CameraCapture";
+import { WebCameraCapture } from "@/platform/camera/WebCameraCapture";
 import type { AvailableUpdate, CaptureSelectionOptions, HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
 import { parsePushToTalk, windowsShortcutTrigger } from "@/platform/pushToTalkEvent";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
@@ -18,6 +20,11 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
   /** Reads the chosen microphone per utterance, so a new choice applies to the next press. */
   createCapture() {
     return new BrowserAudioCapture(loadMicrophone());
+  }
+
+  /** Webcam via WebView `getUserMedia`. One long-lived instance; stop releases the device. */
+  createCamera(): CameraCapture {
+    return new WebCameraCapture();
   }
 
   /** Whether Windows starts the app (hidden in the tray) when the user signs in. */

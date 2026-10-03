@@ -59,6 +59,9 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
       "error" -> snapshot.optString("assistantError").takeIf { it.isNotEmpty() }?.let { addPreview(it, error = true) }
       else -> Unit
     }
+    if (snapshot.optBoolean("cameraOn")) {
+      addPreview("Camera On")
+    }
     val pending = snapshot.optString("pendingTitle")
     if (pending.isNotEmpty() && snapshot.has("pendingTitle") && !snapshot.isNull("pendingTitle")) {
       addLabel("Assistant wants to:")
