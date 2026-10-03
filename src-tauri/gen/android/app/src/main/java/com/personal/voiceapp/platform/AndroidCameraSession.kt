@@ -303,7 +303,7 @@ class AndroidCameraSession(
   companion object {
     const val CAMERA_DENIED = "Camera permission was denied. Allow camera access and try again."
 
-    fun imageProxyToJpeg(image: ImageProxy, maxEdge: Int, quality: Int): EncodedJpeg {
+    private fun imageProxyToJpeg(image: ImageProxy, maxEdge: Int, quality: Int): EncodedJpeg {
       val bitmap = when (image.format) {
         ImageFormat.JPEG -> {
           val buffer = image.planes[0].buffer
