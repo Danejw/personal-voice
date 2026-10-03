@@ -49,6 +49,7 @@ export interface OverlayBindings {
   remoteTargetCount: number;
   remoteDictationActive: boolean;
   remoteNotice: string | null;
+  remoteTipEpoch: number;
   onCycleRemoteTarget(): void;
   /** Locks the utterance target and returns it. Throws when unavailable. */
   onLockRemoteTarget(targetId: string): { id: string; name: string };
@@ -96,6 +97,7 @@ export function useOverlay({
   remoteTargetCount,
   remoteDictationActive,
   remoteNotice,
+  remoteTipEpoch,
   onCycleRemoteTarget,
   onLockRemoteTarget,
   onRemoteDictationEnded,
@@ -147,6 +149,7 @@ export function useOverlay({
     remoteTargetOnline,
     remoteTargetCount,
     remoteDictationActive,
+    remoteTipEpoch,
   }), [
     visible,
     dictation.state,
@@ -168,6 +171,7 @@ export function useOverlay({
     remoteTargetOnline,
     remoteTargetCount,
     remoteDictationActive,
+    remoteTipEpoch,
   ]);
 
   const snapshotRef = useRef(snapshot);

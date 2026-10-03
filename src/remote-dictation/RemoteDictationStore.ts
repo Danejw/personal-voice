@@ -33,6 +33,8 @@ export interface RemoteDictationSnapshot {
   targetOnline: boolean;
   targetCount: number;
   notice: string | null;
+  /** Bumps on each cycle flash so the Windows indicator tip can reopen for the same text. */
+  tipEpoch: number;
   error: string | null;
   active: boolean;
 }
@@ -60,6 +62,7 @@ export class RemoteDictationStore {
     targetOnline: false,
     targetCount: 0,
     notice: null,
+    tipEpoch: 0,
     error: null,
     active: false,
   };
@@ -106,6 +109,7 @@ export class RemoteDictationStore {
         targetOnline: false,
         targetCount: 0,
         notice: null,
+        tipEpoch: 0,
         error: null,
         active: false,
       });
@@ -301,7 +305,8 @@ export class RemoteDictationStore {
         targetKind: target ? remoteDeviceKind(target.platform, target.name) : "unknown",
         targetOnline: Boolean(target),
         targetCount: eligible.length,
-        notice: null,
+        notice: this.snapshot.notice,
+        tipEpoch: this.snapshot.tipEpoch,
         error: null,
         active: this.snapshot.active,
       });
@@ -354,7 +359,11 @@ export class RemoteDictationStore {
 
   private flash(message: string): void {
     if (this.noticeTimer) clearTimeout(this.noticeTimer);
-    this.publish({ ...this.snapshot, notice: message });
+    this.publish({
+      ...this.snapshot,
+      notice: message,
+      tipEpoch: this.snapshot.tipEpoch + 1,
+    });
     this.noticeTimer = setTimeout(() => {
       if (this.snapshot.notice === message) this.publish({ ...this.snapshot, notice: null });
     }, 2500);

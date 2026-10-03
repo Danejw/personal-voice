@@ -564,6 +564,7 @@ export default function App() {
     remoteTargetCount: remoteDictationSnapshot.targetCount,
     remoteDictationActive: remoteDictationSnapshot.active,
     remoteNotice: remoteDictationSnapshot.notice,
+    remoteTipEpoch: remoteDictationSnapshot.tipEpoch,
     onCycleRemoteTarget: () => { remoteDictation.cycleTarget(); },
     onLockRemoteTarget: (targetId) => {
       const target = remoteDictation.lockTarget(targetId);

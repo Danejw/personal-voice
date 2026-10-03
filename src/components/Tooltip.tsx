@@ -24,6 +24,11 @@ interface TooltipProps {
   side?: TooltipSide;
   /** Delay before the tip appears, like a native title. */
   delayMs?: number;
+  /**
+   * Keep the tip open (no delay) — used for Remote Dictation cycle feedback so
+   * Windows matches Android's side tip on tap.
+   */
+  forceOpen?: boolean;
   children: ReactElement;
 }
 
@@ -39,7 +44,7 @@ interface TipPosition {
  * Branded tooltip for the whole app. Prefer this over the native `title` attribute
  * so tips match our colors and are not clipped by overflow parents.
  */
-export function Tooltip({ content, side, delayMs = 350, children }: TooltipProps) {
+export function Tooltip({ content, side, delayMs = 350, forceOpen = false, children }: TooltipProps) {
   const tipId = useId();
   const triggerRef = useRef<HTMLElement | null>(null);
   const tipRef = useRef<HTMLSpanElement | null>(null);
@@ -58,6 +63,7 @@ export function Tooltip({ content, side, delayMs = 350, children }: TooltipProps
   }
 
   function hide() {
+    if (forceOpen) return;
     clearTimer();
     setOpen(false);
     setPos(null);
@@ -68,6 +74,24 @@ export function Tooltip({ content, side, delayMs = 350, children }: TooltipProps
     clearTimer();
     showTimer.current = window.setTimeout(() => setOpen(true), delayMs);
   }
+
+  useEffect(() => {
+    if (!text) {
+      clearTimer();
+      setOpen(false);
+      setPos(null);
+      return;
+    }
+    if (forceOpen) {
+      clearTimer();
+      setOpen(true);
+      return;
+    }
+    // Drop a forced tip when forceOpen clears; hover can reopen via scheduleShow.
+    clearTimer();
+    setOpen(false);
+    setPos(null);
+  }, [forceOpen, text]);
 
   function place() {
     const trigger = triggerRef.current;

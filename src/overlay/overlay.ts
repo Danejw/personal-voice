@@ -50,6 +50,8 @@ export interface OverlaySnapshot {
   remoteTargetOnline: boolean;
   remoteTargetCount: number;
   remoteDictationActive: boolean;
+  /** Increments when Remote Dictation flashes a cycle tip. */
+  remoteTipEpoch: number;
 }
 
 export type OverlayHoldDestination = "voice-note";
@@ -99,6 +101,7 @@ export const emptyOverlaySnapshot: OverlaySnapshot = {
   remoteTargetOnline: false,
   remoteTargetCount: 0,
   remoteDictationActive: false,
+  remoteTipEpoch: 0,
 };
 
 export function overlayDictationFrom(state: VoiceState): OverlayDictation {
@@ -216,6 +219,7 @@ export function buildOverlaySnapshot(input: {
   remoteTargetOnline?: boolean;
   remoteTargetCount?: number;
   remoteDictationActive?: boolean;
+  remoteTipEpoch?: number;
 }): OverlaySnapshot {
   return {
     visible: input.visible,
@@ -244,6 +248,7 @@ export function buildOverlaySnapshot(input: {
     remoteTargetOnline: input.remoteTargetOnline === true,
     remoteTargetCount: input.remoteTargetCount ?? 0,
     remoteDictationActive: input.remoteDictationActive === true,
+    remoteTipEpoch: input.remoteTipEpoch ?? 0,
   };
 }
 

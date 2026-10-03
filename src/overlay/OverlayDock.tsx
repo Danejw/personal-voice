@@ -77,12 +77,16 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   const [held, setHeld] = useState<OverlayHoldDestination | "remote" | null>(null);
   const [draggingTray, setDraggingTray] = useState(false);
   const [tipSide, setTipSide] = useState<OverlayTipSide>("left");
+  /** Side tip after a Remote Dictation tap-cycle (matches Android floating tip). */
+  const [cycleTip, setCycleTip] = useState<string | null>(null);
+  const lastTipEpoch = useRef(0);
   const heldRef = useRef<OverlayHoldDestination | "remote" | null>(null);
   const holdId = useRef(0);
   const remoteHold = useRef<{
     pointerId: number;
     timer: ReturnType<typeof setTimeout> | null;
     started: boolean;
+    /** Empty when the gesture is tap-only (unavailable target). */
     targetId: string;
     id: number;
   } | null>(null);
@@ -94,9 +98,15 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
       ? snapshot.remoteTargetLabel
       : `${snapshot.remoteTargetLabel} offline`
     : "No device online";
-  const remoteTitle = snapshot.remoteDictationActive || held === "remote"
+  const remoteHoverTitle = snapshot.remoteDictationActive || held === "remote"
     ? `Remote Dictation → ${remoteLabel}`
-    : `Tap to cycle · Hold for ${remoteLabel}`;
+    : remoteUnavailable
+      ? "Tap to choose a device, hold to Remote Dictate"
+      : `Tap to cycle · Hold for ${remoteLabel}`;
+  const remoteTipContent = cycleTip ?? remoteHoverTitle;
+  const remoteAria = remoteUnavailable
+    ? "No other device is online for Remote Dictation"
+    : `Remote Dictation to ${remoteLabel}. Tap to cycle, hold to dictate.`;
   const selectionHint = snapshot.selectionPreview
     ? ` Selection attached${snapshot.selectionSource ? ` from ${snapshot.selectionSource}` : ""}: ${snapshot.selectionPreview}`
     : "";
@@ -127,6 +137,28 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   useEffect(() => () => {
     void setOverlayTipSpace(false);
   }, []);
+
+  // After a tap-cycle, show the device name beside the button like Android's side tip.
+  useEffect(() => {
+    if (snapshot.remoteTipEpoch <= 0 || snapshot.remoteTipEpoch === lastTipEpoch.current) return;
+    lastTipEpoch.current = snapshot.remoteTipEpoch;
+    const tip = snapshot.notice
+      ?? (snapshot.remoteTargetOnline && snapshot.remoteTargetLabel
+        ? snapshot.remoteTargetLabel
+        : "No other device is online.");
+    setCycleTip(tip);
+    void setOverlayTipSpace(true, (side) => {
+      flushSync(() => setTipSide(side));
+    });
+    const hide = window.setTimeout(() => setCycleTip(null), 2200);
+    return () => window.clearTimeout(hide);
+  }, [
+    snapshot.remoteTipEpoch,
+    snapshot.notice,
+    snapshot.remoteTargetId,
+    snapshot.remoteTargetLabel,
+    snapshot.remoteTargetOnline,
+  ]);
 
   useEffect(() => {
     if (draggingTray) void setOverlayTipSpace(false);
@@ -174,20 +206,23 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   }
 
   function onRemoteDown(event: PointerEvent<HTMLButtonElement>) {
-    if (event.button !== 0 || blocked || snapshot.dictation === "listening" || remoteUnavailable || !snapshot.remoteTargetId) {
-      return;
-    }
+    if (event.button !== 0 || blocked || snapshot.dictation === "listening") return;
     event.currentTarget.setPointerCapture(event.pointerId);
     holdId.current += 1;
     const id = holdId.current;
-    const targetId = snapshot.remoteTargetId;
     const pointerId = event.pointerId;
+    // Unavailable still accepts a short tap so cycling can flash "no device".
+    if (remoteUnavailable || !snapshot.remoteTargetId) {
+      remoteHold.current = { pointerId, timer: null, started: false, targetId: "", id };
+      return;
+    }
+    const targetId = snapshot.remoteTargetId;
     remoteHold.current = { pointerId, timer: null, started: false, targetId, id };
     heldRef.current = "remote";
     setHeld("remote");
     remoteHold.current.timer = setTimeout(() => {
       const gesture = remoteHold.current;
-      if (!gesture || gesture.pointerId !== pointerId || gesture.id !== id) return;
+      if (!gesture || gesture.pointerId !== pointerId || gesture.id !== id || !gesture.targetId) return;
       gesture.started = true;
       onAction({ type: "remote-dictate-hold", phase: "start", targetId: gesture.targetId, id: gesture.id });
     }, REMOTE_DICTATION_HOLD_MS);
@@ -200,7 +235,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
     remoteHold.current = null;
     heldRef.current = null;
     setHeld(null);
-    if (gesture.started) {
+    if (gesture.started && gesture.targetId) {
       onAction({ type: "remote-dictate-hold", phase: "stop", targetId: gesture.targetId, id: gesture.id });
       return;
     }
@@ -215,7 +250,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
     remoteHold.current = null;
     heldRef.current = null;
     setHeld(null);
-    if (gesture.started) {
+    if (gesture.started && gesture.targetId) {
       onAction({ type: "remote-dictate-hold", phase: "stop", targetId: gesture.targetId, id: gesture.id });
     }
   }
@@ -322,17 +357,17 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           <NoteIcon />
         </button>
       </Tooltip>
-      <Tooltip content={remoteTitle} side={tipSide} delayMs={280}>
+      <Tooltip content={remoteTipContent} side={tipSide} delayMs={cycleTip ? 0 : 280} forceOpen={Boolean(cycleTip)}>
         <button
           type="button"
           className={`overlay-btn ${tone(snapshot.dictation, held === "remote" || snapshot.remoteDictationActive, false)}${remoteUnavailable ? " is-dim" : ""}`}
-          aria-label={remoteTitle}
-          disabled={blocked || remoteUnavailable || (snapshot.dictation === "listening" && held !== "remote" && !snapshot.remoteDictationActive)}
+          aria-label={remoteAria}
+          disabled={blocked || (snapshot.dictation === "listening" && held !== "remote" && !snapshot.remoteDictationActive)}
           onPointerDown={(event) => onRemoteDown(event)}
           onPointerUp={(event) => onRemoteUp(event)}
           onPointerCancel={(event) => onRemoteCancel(event)}
         >
-          <RemoteDeviceIcon kind={snapshot.remoteTargetKind} />
+          <RemoteDeviceIcon kind={remoteUnavailable ? "unknown" : snapshot.remoteTargetKind} />
         </button>
       </Tooltip>
       <Tooltip content={assistantTitle} side={tipSide} delayMs={280}>
