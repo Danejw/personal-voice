@@ -108,7 +108,7 @@ Kotlin lives in `src-tauri/gen/android/app/src/main/java/com/personal/voiceapp/p
 | `FloatingMicPrefs` | Local prefs: `want_floating_mic` (left on until the user turns it off) and `start_on_boot` (default on). |
 | `BootReceiver` | On `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`, if the floating mic was left on and start-on-boot is enabled, briefly opens `MainActivity` so a visible activity can start the FGS, then the plugin sends the task to the back. |
 | `MicBubbleView` | Tap for quick actions. Hold (~400 ms) to talk, release to insert. Dragging moves the bubble; a drag after hold starts cancels the utterance. Colour shows idle, listening, finalizing, or error. |
-| `OverlayPanelView` | Compact native sheet: start dictation, destination, capture, recent notes, pending handoffs, Open Settings. |
+| `OverlayPanelView` | Compact native sheet: start dictation, destination, Remote Dictation tap/hold target control, capture, recent notes, pending handoffs, Open Settings. |
 | `NativeMicCapture` | `AudioRecord` producing 16 kHz mono PCM16 in 100 ms chunks, sent to the WebView as base64 events. Runs only between press and release. |
 | `VoiceAccessibilityService` | Subscribes to no events. At insert or selection-capture time it reads only the input-focused field, never password fields. Native fields get an exact splice with `ACTION_SET_TEXT`; web and rich editors get `ACTION_PASTE`. Selection capture returns the node's highlighted substring, not a clipboard copy. Otherwise dictated text goes to the clipboard with a message. |
 
@@ -141,6 +141,17 @@ Shared TypeScript still does everything else: Gemini, vocabulary, settings, auth
 Assistant and dictation share `NativeMicCapture`, but they do not share a recording mode. Dictation still uses `VOICE_RECOGNITION`. Assistant capture asks for `VOICE_COMMUNICATION`, sets `AudioManager.MODE_IN_COMMUNICATION`, routes to a connected headset or else the loudspeaker, and plays reply PCM through an `AudioTrack` with `USAGE_VOICE_COMMUNICATION`. Web Audio is a media stream, so the platform echo canceller cannot subtract it from the microphone. `AcousticEchoCanceler` and `NoiseSuppressor` are created on the `AudioRecord` session only after `isAvailable` and `create` succeed, and full duplex is claimed only when the canceller reports itself enabled and that voice playback track is open. Noise suppression is not voice identification.
 
 When that probe fails, or the route is lost, the shared controller stops forwarding microphone audio until the playback head reaches the end and for 160 ms after that. The wait follows playback completion, not Gemini's `turnComplete`. Stop and listen, including a tap on the floating Assistant button while that fallback is active, stops the reply and resumes listening after the same short tail. Speaking over the reply does not interrupt it in that mode. Ending the session, or a failed start, releases the effects, the track, audio focus, and communication routing and restores the previous audio mode.
+
+### Camera Context
+
+Assistant camera use is native CameraX in `AndroidCameraSession`, exposed through the existing `voice-platform` plugin (`list_cameras`, `capture_camera_photo`, `start_camera_frames`, `switch_camera`, `stop_camera_frames`). TypeScript talks to it via `AndroidCameraCapture` and `PlatformAdapter.createCamera()`.
+
+- Requires the `CAMERA` permission (requested when the user/tool asks).
+- Starting the camera brings `MainActivity` forward and shows a visible “Camera On” preview pill. There is no hidden capture behind the floating control alone.
+- Frames are JPEG at ≤ 1 FPS for Gemini Live; nothing is written to disk or Supabase.
+- Stopping Camera Context, ending Assistant, or destroying the plugin releases the camera.
+
+Reports: [`docs/Camera-Context-Phases/`](Camera-Context-Phases/README.md).
 
 ### Building on this machine
 
