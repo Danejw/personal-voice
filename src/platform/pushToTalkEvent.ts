@@ -1,5 +1,5 @@
 import type { UsageTrigger } from "@/usage/usageEvents";
-import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
+import { migrateDestinationId, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 export interface PushToTalkEvent {
   event: "press" | "release" | "cancel" | "capture-selection" | "toggle-assistant";
@@ -13,7 +13,7 @@ export interface PushToTalkEvent {
 export function windowsShortcutTrigger(destination?: TranscriptDestinationId): UsageTrigger {
   switch (destination) {
     case "voice-note": return "shortcut-note";
-    case "send-to-device": return "shortcut-handoff";
+    case "remote-dictation": return "shortcut-handoff";
     case "active-field":
     case undefined: return "shortcut-dictate";
     default: {
@@ -45,12 +45,7 @@ export function parsePushToTalk(payload: unknown): PushToTalkEvent | null {
     return null;
   }
   if (record.event !== "press") return { event: record.event };
-  if (
-    record.destination === "active-field"
-    || record.destination === "voice-note"
-    || record.destination === "send-to-device"
-  ) {
-    return { event: "press", destination: record.destination };
-  }
+  const destination = migrateDestinationId(record.destination);
+  if (destination) return { event: "press", destination };
   return { event: "press" };
 }

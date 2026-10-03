@@ -43,7 +43,7 @@ Press → Speak → Release → Clean text appears at the cursor
 | **Windows** | Hold a global hotkey (or the floating mic) |
 | **Android** | Hold the floating microphone |
 
-Text can go into the focused field, a voice note, or another device you own.
+Text can go into the focused field, a voice note, or another device's active cursor via Remote Dictation.
 
 ---
 
@@ -51,8 +51,8 @@ Text can go into the focused field, a voice note, or another device you own.
 
 | Area | Capabilities |
 | --- | --- |
-| **Dictation** | Hold-to-talk · Gemini cleanup (punctuation, caps, cleanup) · personal dictionary · destinations: active field, voice note, or send to device |
-| **Cross-device** | Handoffs with Windows toast insert · shared clipboard (explicit send only) · rename, list, and remove installs |
+| **Dictation** | Hold-to-talk · Gemini cleanup (punctuation, caps, cleanup) · personal dictionary · destinations: active field, voice note, or Remote Dictation |
+| **Cross-device** | Remote Dictation (tap to choose device, hold to speak, release to paste at the other cursor) · Handoffs inbox · shared clipboard (explicit send only) · rename, list, and remove installs |
 | **Capture & history** | Selection capture · last 75 dictations on device · optional Sync dictations |
 | **Assistant** | Separate Gemini Live chat (voice or typed) · floating control / Windows hotkey · attach selection, notes, or handoffs · optional camera photo / live Camera Context · optional Windows remote reads and confirmable desktop actions |
 | **Account & controls** | Email/password sync · device-scoped mic, hotkeys, overlay, destination · opt-in analytics · Windows updater / Android APK releases |

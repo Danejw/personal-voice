@@ -21,7 +21,7 @@ describe("DictationHistoryStore", () => {
 
     store.record({ text: "One", destination: "active-field", outcome: "success" });
     store.record({ text: "Two", destination: "voice-note", outcome: "success" });
-    store.record({ text: "Three", destination: "send-to-device", outcome: "failure" });
+    store.record({ text: "Three", destination: "remote-dictation", outcome: "failure" });
     store.record({ text: "Four", destination: "active-field", outcome: "success" });
 
     expect(store.getSnapshot().entries.map((entry) => entry.text)).toEqual(["Four", "Three", "Two"]);
@@ -97,7 +97,7 @@ describe("DictationHistoryStore", () => {
 
     expect(() => store.record({
       text: "Still visible.",
-      destination: "send-to-device",
+      destination: "remote-dictation",
       outcome: "failure",
     })).not.toThrow();
     expect(store.getSnapshot()).toMatchObject({

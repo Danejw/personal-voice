@@ -41,7 +41,7 @@ fn push_to_talk_payload(event: PttEvent) -> PushToTalkPayload {
             event: "press",
             destination: match destination {
                 Some(DestOverride::VoiceNote) => Some("voice-note"),
-                Some(DestOverride::Handoff) => Some("send-to-device"),
+                Some(DestOverride::Handoff) => Some("remote-dictation"),
                 None => None,
             },
         },

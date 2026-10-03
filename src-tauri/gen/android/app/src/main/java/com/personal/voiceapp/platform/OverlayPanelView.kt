@@ -7,7 +7,10 @@ import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -26,6 +29,8 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
     orientation = LinearLayout.VERTICAL
     setPadding(dp(12), dp(10), dp(12), dp(12))
   }
+  private val mainHandler = Handler(Looper.getMainLooper())
+  private var remoteHoldId = 0
 
   init {
     addView(stack, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
@@ -90,7 +95,7 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
     listOf(
       "active-field" to "Active field",
       "voice-note" to "Voice note",
-      "send-to-device" to "Handoff",
+      "remote-dictation" to "Remote",
     ).forEach { (id, label) ->
       destinations.addView(
         chip(label, selected == id) {
@@ -100,6 +105,8 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
       )
     }
     stack.addView(destinations, itemParams())
+
+    addRemoteDictationControl(snapshot)
 
     addButton("Capture selection") { emit("capture-selection") }
     snapshot.optString("capture").takeIf { it.isNotEmpty() && snapshot.has("capture") && !snapshot.isNull("capture") }
@@ -155,6 +162,86 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
     addView(smallButton("Copy", onCopy), chipParams())
     if (onInsert != null) addView(smallButton("Insert", onInsert), chipParams())
     if (onDismiss != null) addView(smallButton("Dismiss", onDismiss), chipParams())
+  }
+
+  private fun addRemoteDictationControl(snapshot: JSONObject) {
+    addLabel("Remote Dictation")
+    val targetId = snapshot.optString("remoteTargetId").takeIf { it.isNotEmpty() && snapshot.has("remoteTargetId") && !snapshot.isNull("remoteTargetId") }
+    val targetLabel = snapshot.optString("remoteTargetLabel").takeIf { it.isNotEmpty() } ?: "No device online"
+    val online = snapshot.optBoolean("remoteTargetOnline", false)
+    val active = snapshot.optBoolean("remoteDictationActive", false)
+    val count = snapshot.optInt("remoteTargetCount", 0)
+    val status = when {
+      active -> "Listening → $targetLabel"
+      !online || targetId == null -> "Unavailable"
+      count == 1 -> "Hold for $targetLabel"
+      else -> "Tap to cycle · Hold for $targetLabel"
+    }
+    addPreview(status, error = !online || targetId == null)
+    val button = text(
+      if (online && targetId != null) "→ $targetLabel" else "Remote Dictation",
+      13f,
+      if (online && targetId != null) 0xFF111820.toInt() else 0xFFE9EDF4.toInt(),
+    ).apply {
+      gravity = Gravity.CENTER
+      background = roundRect(
+        if (online && targetId != null) 0xFF88D8C1.toInt() else 0x00000000,
+        dp(999).toFloat(),
+        stroke = !(online && targetId != null),
+      )
+      setPadding(dp(10), dp(8), dp(10), dp(8))
+      isEnabled = online && targetId != null
+      if (online && targetId != null) {
+        bindRemoteHold(this, targetId)
+      }
+    }
+    stack.addView(button, itemParams())
+  }
+
+  @SuppressLint("ClickableViewAccessibility")
+  private fun bindRemoteHold(view: TextView, targetId: String) {
+    var holdStarted = false
+    var pointerDown = false
+    var holdRunnable: Runnable? = null
+    var gestureId = 0
+    view.setOnTouchListener { _, event ->
+      when (event.actionMasked) {
+        MotionEvent.ACTION_DOWN -> {
+          pointerDown = true
+          holdStarted = false
+          remoteHoldId += 1
+          gestureId = remoteHoldId
+          val id = gestureId
+          holdRunnable = Runnable {
+            if (!pointerDown || holdStarted) return@Runnable
+            holdStarted = true
+            emit("remote-dictate-hold") {
+              it.put("phase", "start")
+              it.put("targetId", targetId)
+              it.put("id", id)
+            }
+          }
+          mainHandler.postDelayed(holdRunnable!!, 300L)
+          true
+        }
+        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+          pointerDown = false
+          holdRunnable?.let { mainHandler.removeCallbacks(it) }
+          holdRunnable = null
+          if (holdStarted) {
+            emit("remote-dictate-hold") {
+              it.put("phase", "stop")
+              it.put("targetId", targetId)
+              it.put("id", gestureId)
+            }
+          } else if (event.actionMasked == MotionEvent.ACTION_UP) {
+            emit("cycle-remote-target")
+          }
+          true
+        }
+        else -> false
+      }
+    }
   }
 
   private fun addButton(label: String, primary: Boolean = false, onClick: () -> Unit) {

@@ -41,6 +41,16 @@ export interface OverlayBindings {
   canDictate?(): boolean;
   assistant: AssistantSnapshot;
   assistantController: AssistantController;
+  remoteTargetId: string | null;
+  remoteTargetLabel: string | null;
+  remoteTargetOnline: boolean;
+  remoteTargetCount: number;
+  remoteDictationActive: boolean;
+  remoteNotice: string | null;
+  onCycleRemoteTarget(): void;
+  /** Locks the utterance target and returns it. Throws when unavailable. */
+  onLockRemoteTarget(targetId: string): { id: string; name: string };
+  onRemoteDictationEnded(): void;
 }
 
 async function copyText(text: string): Promise<void> {
@@ -76,15 +86,30 @@ export function useOverlay({
   canDictate,
   assistant,
   assistantController,
+  remoteTargetId,
+  remoteTargetLabel,
+  remoteTargetOnline,
+  remoteTargetCount,
+  remoteDictationActive,
+  remoteNotice,
+  onCycleRemoteTarget,
+  onLockRemoteTarget,
+  onRemoteDictationEnded,
 }: OverlayBindings): OverlaySnapshot {
   const [capture, setCapture] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const providerRef = useRef(getProvider);
   const armRef = useRef(onArmDictation);
   const canDictateRef = useRef(canDictate);
+  const cycleRef = useRef(onCycleRemoteTarget);
+  const lockRef = useRef(onLockRemoteTarget);
+  const remoteEndedRef = useRef(onRemoteDictationEnded);
   useEffect(() => { providerRef.current = getProvider; }, [getProvider]);
   armRef.current = onArmDictation;
   canDictateRef.current = canDictate;
+  cycleRef.current = onCycleRemoteTarget;
+  lockRef.current = onLockRemoteTarget;
+  remoteEndedRef.current = onRemoteDictationEnded;
 
   const snapshot = useMemo(() => buildOverlaySnapshot({
     visible,
@@ -97,7 +122,7 @@ export function useOverlay({
     handoffs,
     devices,
     capture,
-    notice,
+    notice: notice ?? remoteNotice,
     assistant: overlayAssistantFrom(assistant.status),
     assistantError: assistant.status === "ERROR" ? assistant.error : null,
     selectionPreview: assistant.selection ? clipOverlayText(assistant.selection.text) : null,
@@ -111,7 +136,31 @@ export function useOverlay({
       overlayAssistantFrom(assistant.status),
     ),
     cameraOn: assistant.cameraContextActive,
-  }), [visible, dictation.state, dictation.error, destination, signedIn, paused, notes, handoffs, devices, capture, notice, assistant]);
+    remoteTargetId,
+    remoteTargetLabel,
+    remoteTargetOnline,
+    remoteTargetCount,
+    remoteDictationActive,
+  }), [
+    visible,
+    dictation.state,
+    dictation.error,
+    destination,
+    signedIn,
+    paused,
+    notes,
+    handoffs,
+    devices,
+    capture,
+    notice,
+    remoteNotice,
+    assistant,
+    remoteTargetId,
+    remoteTargetLabel,
+    remoteTargetOnline,
+    remoteTargetCount,
+    remoteDictationActive,
+  ]);
 
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
@@ -212,6 +261,36 @@ export function useOverlay({
           if (releasedHolds.current.has(action.id)) await controller.stop();
           return;
         }
+        case "cycle-remote-target":
+          cycleRef.current();
+          return;
+        case "remote-dictate-hold": {
+          if (action.phase === "stop") {
+            releasedHolds.current.add(action.id);
+            await controller.stop();
+            remoteEndedRef.current();
+            return;
+          }
+          if (releasedHolds.current.has(action.id)) return;
+          if (snapshotRef.current.paused || !snapshotRef.current.signedIn) return;
+          if (canDictateRef.current && !canDictateRef.current()) return;
+          if (overlayDictateIntent(snapshotRef.current.dictation) !== "start") return;
+          try {
+            lockRef.current(action.targetId);
+          } catch (reason) {
+            flash(reason instanceof Error ? reason.message : String(reason));
+            return;
+          }
+          overrideDestination("remote-dictation");
+          armRef.current?.();
+          controller.reset();
+          await controller.start(providerRef.current());
+          if (releasedHolds.current.has(action.id)) {
+            await controller.stop();
+            remoteEndedRef.current();
+          }
+          return;
+        }
         case "set-destination":
           onDestination(action.destination);
           return;
@@ -298,7 +377,17 @@ export function useOverlay({
         }
       }
     }
-  }, [platform, controller, assistantController, onDestination, overrideDestination, insertHandoff, dismissHandoff, captureSelection, flash]);
+  }, [
+    platform,
+    controller,
+    assistantController,
+    onDestination,
+    overrideDestination,
+    insertHandoff,
+    dismissHandoff,
+    captureSelection,
+    flash,
+  ]);
 
   return snapshot;
 }

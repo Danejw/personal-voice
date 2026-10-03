@@ -130,21 +130,19 @@ DictationController
 TranscriptDestinationRouter
 ├─ active-field → PlatformAdapter.insertText()
 ├─ voice-note → VoiceNotesStore → Supabase
-└─ send-to-device → HandoffStore → Supabase
+└─ remote-dictation → RemoteDictationDestination → remote_dictation_requests → target insertReceivedText()
 ```
 
 PV2 introduced the boundary with `active-field` as its only destination. PV1 adds `voice-note`,
 which saves the finalized transcript as an inbox note only after Supabase confirms the insert.
-PV3 adds `send-to-device`; the selected owned device, or all other devices when no target is
-selected, receives the text through the `handoffs` table. `HandoffStore` refreshes when Settings
-regains focus or visibility, and while signed in it also reloads about every 8 seconds so a
-computer sitting in the tray can notice a new handoff. There are still no sockets and no realtime
-subscriptions. On Windows, each new arrival shows a toast with the sending device's name and a
-short preview. Clicking it inserts the text with `insertReceivedText` and leaves Settings hidden.
-The row stays pending until it is dismissed.
-PV4 reuses that same store and table for explicitly pasted or typed text. The shared
-`DeviceTargetField` keeps the Voice handoff and Shared clipboard entry points on one target
-selection without reading or monitoring either operating system's clipboard.
+PV3 originally added `send-to-device` through the persistent `handoffs` inbox. Remote Dictation
+replaces that dictation destination with `remote-dictation`: one locked target, exact final text
+only, Realtime-first delivery, atomic claim, and a ~6s expiry. Legacy saved `send-to-device`
+preferences migrate to `remote-dictation`. Persistent Handoffs remain a separate feature for
+clipboard-style sharing and Assistant continuation packages; `HandoffStore` still refreshes on
+focus/visibility and about every 8 seconds. Remote Dictation does not use that interval as its
+primary path.
+PV4 keeps Shared clipboard / manual Handoff sends on the `handoffs` table and `DeviceTargetField`.
 PV5 observes each router result after the selected destination resolves or rejects. The observer
 schedules a local `DictationHistoryStore` write without awaiting it, so history persistence
 cannot delay or change dictation delivery. When the account has opted in, that same write also
@@ -153,7 +151,7 @@ inserts the final text into `dictations`. The insert is not awaited either.
 the existing `ERROR` transition and leaves the transcript visible. Future destinations can be
 added to the router without changing capture, Gemini, or recovery.
 
-Reports: [PV2](PV-Phases/01-PV2-dictation-destinations.md), [PV1](PV-Phases/02-PV1-voice-notes-inbox.md), [PV3](PV-Phases/03-PV3-cross-device-handoff.md), [PV4](PV-Phases/04-PV4-shared-clipboard-send-to-device.md), [PV5](PV-Phases/05-PV5-recent-dictation-history.md).
+Reports: [PV2](PV-Phases/01-PV2-dictation-destinations.md), [PV1](PV-Phases/02-PV1-voice-notes-inbox.md), [PV3](PV-Phases/03-PV3-cross-device-handoff.md), [PV4](PV-Phases/04-PV4-shared-clipboard-send-to-device.md), [PV5](PV-Phases/05-PV5-recent-dictation-history.md), [Remote Dictation](Remote-Dictation-Phases/README.md).
 
 ## Platform boundary
 

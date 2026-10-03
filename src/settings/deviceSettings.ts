@@ -1,5 +1,5 @@
 import type { KeyValueStorage } from "@/sync/personalCache";
-import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
+import { migrateDestinationId, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 /** Settings that describe this install. Never written to the account `settings` row. */
 const LEGACY_MICROPHONE_KEY = "settings.microphone";
@@ -20,7 +20,11 @@ export interface DevicePreferences {
   /** Recorded dictate bindings. A legacy install stored one shortcut string. */
   pushToTalk: string[];
   voiceNoteHotkey: string[];
-  handoffHotkey: string[];
+  /**
+   * Hold-to-Remote-Dictation bindings.
+   * Legacy installs stored this as `handoffHotkey`; both keys are still read.
+   */
+  remoteDictationHotkey: string[];
   selectionHotkey: string[];
   /** Windows press-to-toggle Assistant. Empty until the user records one. */
   assistantHotkey: string[];
@@ -32,16 +36,19 @@ export interface DevicePreferences {
   assistantAutoRun: boolean;
   /** This PC may run an allowlisted action asked by another owned device. */
   remoteComputerActions: boolean;
+  /**
+   * Other Personal Voice devices may insert Remote Dictation into this device's active field.
+   * Absence means enabled so upgrades default ON.
+   */
+  remoteDictation: boolean;
+  /** Last Remote Dictation target chosen on this source device. Not synced account-wide. */
+  remoteDictationTargetDeviceId: string | null;
   /** Install updates found at startup without asking. Off means toast + manual install. */
   autoUpdate: boolean;
 }
 
 function prefsKey(deviceId: string): string {
   return `device.prefs.${deviceId}`;
-}
-
-function isDestination(value: unknown): value is TranscriptDestinationId {
-  return value === "active-field" || value === "voice-note" || value === "send-to-device";
 }
 
 /** Accepts a recorded list, a legacy single shortcut, or a JSON list stored in an old string key. */
@@ -70,22 +77,28 @@ function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
 }
 
+function deviceIdOrNull(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
 function fromLegacy(storage: KeyValueStorage): DevicePreferences {
   const microphone = storage.getItem(LEGACY_MICROPHONE_KEY) || null;
-  const destination = storage.getItem(LEGACY_DESTINATION_KEY);
+  const destination = migrateDestinationId(storage.getItem(LEGACY_DESTINATION_KEY)) ?? "active-field";
   return {
-    destination: isDestination(destination) ? destination : "active-field",
+    destination,
     microphone,
     showIndicator: storage.getItem(LEGACY_INDICATOR_KEY) !== "false",
     pushToTalk: shortcutList(storage.getItem(LEGACY_PUSH_TO_TALK_KEY), []),
     voiceNoteHotkey: shortcutList(storage.getItem(LEGACY_VOICE_NOTE_HOTKEY_KEY), []),
-    handoffHotkey: shortcutList(storage.getItem(LEGACY_HANDOFF_HOTKEY_KEY), []),
+    remoteDictationHotkey: shortcutList(storage.getItem(LEGACY_HANDOFF_HOTKEY_KEY), []),
     selectionHotkey: shortcutList(storage.getItem(LEGACY_SELECTION_HOTKEY_KEY), []),
     assistantHotkey: shortcutList(storage.getItem(LEGACY_ASSISTANT_HOTKEY_KEY), []),
     remoteReads: false,
     assistantProfile: true,
     assistantAutoRun: true,
     remoteComputerActions: false,
+    remoteDictation: true,
+    remoteDictationTargetDeviceId: null,
     autoUpdate: true,
   };
 }
@@ -94,8 +107,12 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
   if (!raw) return fallback;
   try {
     const fields = record(JSON.parse(raw));
+    const destination = migrateDestinationId(fields.destination) ?? fallback.destination;
+    const remoteHotkey = fields.remoteDictationHotkey !== undefined
+      ? shortcutList(fields.remoteDictationHotkey, fallback.remoteDictationHotkey)
+      : shortcutList(fields.handoffHotkey, fallback.remoteDictationHotkey);
     return {
-      destination: isDestination(fields.destination) ? fields.destination : fallback.destination,
+      destination,
       microphone: typeof fields.microphone === "string" && fields.microphone
         ? fields.microphone
         : fields.microphone === null || fields.microphone === ""
@@ -104,13 +121,18 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
       showIndicator: typeof fields.showIndicator === "boolean" ? fields.showIndicator : fallback.showIndicator,
       pushToTalk: shortcutList(fields.pushToTalk, fallback.pushToTalk),
       voiceNoteHotkey: shortcutList(fields.voiceNoteHotkey, fallback.voiceNoteHotkey),
-      handoffHotkey: shortcutList(fields.handoffHotkey, fallback.handoffHotkey),
+      remoteDictationHotkey: remoteHotkey,
       selectionHotkey: shortcutList(fields.selectionHotkey, fallback.selectionHotkey),
       assistantHotkey: shortcutList(fields.assistantHotkey, fallback.assistantHotkey),
       remoteReads: fields.remoteReads === true,
       assistantProfile: fields.assistantProfile !== false,
       assistantAutoRun: fields.assistantAutoRun !== false,
       remoteComputerActions: fields.remoteComputerActions === true,
+      // Absence means ON. Do not use === true.
+      remoteDictation: fields.remoteDictation !== false,
+      remoteDictationTargetDeviceId: fields.remoteDictationTargetDeviceId === undefined
+        ? fallback.remoteDictationTargetDeviceId
+        : deviceIdOrNull(fields.remoteDictationTargetDeviceId),
       autoUpdate: fields.autoUpdate !== false,
     };
   } catch {
@@ -138,7 +160,7 @@ function write(storage: KeyValueStorage, deviceId: string | null, patch: Partial
   storage.setItem(LEGACY_DESTINATION_KEY, next.destination);
   storage.setItem(LEGACY_PUSH_TO_TALK_KEY, JSON.stringify(next.pushToTalk));
   storage.setItem(LEGACY_VOICE_NOTE_HOTKEY_KEY, JSON.stringify(next.voiceNoteHotkey));
-  storage.setItem(LEGACY_HANDOFF_HOTKEY_KEY, JSON.stringify(next.handoffHotkey));
+  storage.setItem(LEGACY_HANDOFF_HOTKEY_KEY, JSON.stringify(next.remoteDictationHotkey));
   storage.setItem(LEGACY_SELECTION_HOTKEY_KEY, JSON.stringify(next.selectionHotkey));
   storage.setItem(LEGACY_ASSISTANT_HOTKEY_KEY, JSON.stringify(next.assistantHotkey));
   return next;
@@ -199,12 +221,21 @@ export function saveStoredVoiceNoteHotkey(shortcuts: readonly string[], storage:
   write(storage, scope(deviceId), { voiceNoteHotkey: [...shortcuts] });
 }
 
+/** Legacy name kept for call sites that still say handoff; same storage as Remote Dictation. */
 export function loadStoredHandoffHotkey(storage: KeyValueStorage = localStorage, deviceId?: string | null): string[] {
-  return read(storage, scope(deviceId)).handoffHotkey;
+  return loadStoredRemoteDictationHotkey(storage, deviceId);
 }
 
 export function saveStoredHandoffHotkey(shortcuts: readonly string[], storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
-  write(storage, scope(deviceId), { handoffHotkey: [...shortcuts] });
+  saveStoredRemoteDictationHotkey(shortcuts, storage, deviceId);
+}
+
+export function loadStoredRemoteDictationHotkey(storage: KeyValueStorage = localStorage, deviceId?: string | null): string[] {
+  return read(storage, scope(deviceId)).remoteDictationHotkey;
+}
+
+export function saveStoredRemoteDictationHotkey(shortcuts: readonly string[], storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { remoteDictationHotkey: [...shortcuts] });
 }
 
 export function loadStoredSelectionHotkey(storage: KeyValueStorage = localStorage, deviceId?: string | null): string[] {
@@ -253,6 +284,27 @@ export function loadRemoteComputerActions(storage: KeyValueStorage = localStorag
 
 export function saveRemoteComputerActions(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
   write(storage, scope(deviceId), { remoteComputerActions: enabled });
+}
+
+/** Allow Remote Dictation into this device. Defaults ON when the field is absent. */
+export function loadRemoteDictation(storage: KeyValueStorage = localStorage, deviceId?: string | null): boolean {
+  return read(storage, scope(deviceId)).remoteDictation;
+}
+
+export function saveRemoteDictation(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { remoteDictation: enabled });
+}
+
+export function loadRemoteDictationTargetDeviceId(storage: KeyValueStorage = localStorage, deviceId?: string | null): string | null {
+  return read(storage, scope(deviceId)).remoteDictationTargetDeviceId;
+}
+
+export function saveRemoteDictationTargetDeviceId(
+  targetDeviceId: string | null,
+  storage: KeyValueStorage = localStorage,
+  deviceId?: string | null,
+): void {
+  write(storage, scope(deviceId), { remoteDictationTargetDeviceId: targetDeviceId });
 }
 
 /** Install updates found at startup without asking. On by default. */

@@ -2,7 +2,7 @@ import type { AssistantStatus } from "@/assistant/state";
 import { handoffDisplayText } from "@/assistant/continuation";
 import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
 import type { VoiceNote } from "@/notes/voiceNote";
-import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
+import { migrateDestinationId, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 import type { VoiceState } from "@/voice/session/state";
 
 export const OVERLAY_ITEM_LIMIT = 3;
@@ -41,13 +41,20 @@ export interface OverlaySnapshot {
   assistantInterrupt: boolean;
   /** Live Camera Context is sending frames. Keep the indicator obvious and small. */
   cameraOn: boolean;
+  remoteTargetId: string | null;
+  remoteTargetLabel: string | null;
+  remoteTargetOnline: boolean;
+  remoteTargetCount: number;
+  remoteDictationActive: boolean;
 }
 
-export type OverlayHoldDestination = "voice-note" | "send-to-device";
+export type OverlayHoldDestination = "voice-note";
 
 export type OverlayAction =
   | { type: "dictate-toggle" }
   | { type: "dictate-hold"; phase: "start" | "stop"; destination: OverlayHoldDestination; id: number }
+  | { type: "cycle-remote-target" }
+  | { type: "remote-dictate-hold"; phase: "start" | "stop"; targetId: string; id: number }
   | { type: "set-destination"; destination: TranscriptDestinationId }
   | { type: "capture-selection" }
   | { type: "insert-handoff"; id: string }
@@ -81,6 +88,11 @@ export const emptyOverlaySnapshot: OverlaySnapshot = {
   pendingWorking: false,
   assistantInterrupt: false,
   cameraOn: false,
+  remoteTargetId: null,
+  remoteTargetLabel: null,
+  remoteTargetOnline: false,
+  remoteTargetCount: 0,
+  remoteDictationActive: false,
 };
 
 export function overlayDictationFrom(state: VoiceState): OverlayDictation {
@@ -191,6 +203,11 @@ export function buildOverlaySnapshot(input: {
   pendingWorking: boolean;
   assistantInterrupt?: boolean;
   cameraOn?: boolean;
+  remoteTargetId?: string | null;
+  remoteTargetLabel?: string | null;
+  remoteTargetOnline?: boolean;
+  remoteTargetCount?: number;
+  remoteDictationActive?: boolean;
 }): OverlaySnapshot {
   return {
     visible: input.visible,
@@ -212,6 +229,11 @@ export function buildOverlaySnapshot(input: {
     pendingWorking: input.pendingWorking,
     assistantInterrupt: input.assistantInterrupt === true,
     cameraOn: input.cameraOn === true,
+    remoteTargetId: input.remoteTargetId ?? null,
+    remoteTargetLabel: input.remoteTargetLabel ?? null,
+    remoteTargetOnline: input.remoteTargetOnline === true,
+    remoteTargetCount: input.remoteTargetCount ?? 0,
+    remoteDictationActive: input.remoteDictationActive === true,
   };
 }
 
@@ -240,9 +262,19 @@ export function overlayHandoffsFrom(handoffs: Handoff[], devices: OwnedDevice[])
   }));
 }
 
+function isDeviceId(value: unknown): value is string {
+  return typeof value === "string" && value.length >= 8 && value.length <= 80 && !/\s/.test(value);
+}
+
 export function parseOverlayAction(payload: unknown): OverlayAction | null {
   if (typeof payload !== "object" || payload === null) return null;
-  const record = payload as { type?: unknown; destination?: unknown; id?: unknown; phase?: unknown };
+  const record = payload as {
+    type?: unknown;
+    destination?: unknown;
+    id?: unknown;
+    phase?: unknown;
+    targetId?: unknown;
+  };
   switch (record.type) {
     case "dictate-toggle":
     case "capture-selection":
@@ -252,19 +284,24 @@ export function parseOverlayAction(payload: unknown): OverlayAction | null {
     case "detach-selection":
     case "confirm-action":
     case "cancel-action":
+    case "cycle-remote-target":
       return { type: record.type };
     case "dictate-hold":
       return (record.phase === "start" || record.phase === "stop")
-        && (record.destination === "voice-note" || record.destination === "send-to-device")
+        && record.destination === "voice-note"
         && typeof record.id === "number"
         ? { type: "dictate-hold", phase: record.phase, destination: record.destination, id: record.id }
         : null;
-    case "set-destination":
-      return record.destination === "active-field"
-        || record.destination === "voice-note"
-        || record.destination === "send-to-device"
-        ? { type: "set-destination", destination: record.destination }
+    case "remote-dictate-hold":
+      return (record.phase === "start" || record.phase === "stop")
+        && isDeviceId(record.targetId)
+        && typeof record.id === "number"
+        ? { type: "remote-dictate-hold", phase: record.phase, targetId: record.targetId, id: record.id }
         : null;
+    case "set-destination": {
+      const destination = migrateDestinationId(record.destination);
+      return destination ? { type: "set-destination", destination } : null;
+    }
     case "insert-handoff":
     case "dismiss-handoff":
     case "copy-note":

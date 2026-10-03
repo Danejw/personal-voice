@@ -868,6 +868,22 @@ html.indicator-view #root {
 .overlay-dock.is-dragging .overlay-btn { cursor: grabbing; }
 .overlay-btn:hover:not(:disabled) { background: #17352d; color: #88d8c1; }
 .overlay-btn:disabled { opacity: 0.45; cursor: default; }
+.overlay-btn.is-dim { opacity: 0.45; }
+.overlay-remote-badge {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  transform: translateX(-50%);
+  max-width: 30px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 7px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #88d8c1;
+  pointer-events: none;
+}
 .overlay-live { color: #111820; background: #e76f51; animation: indicator-pulse 1.2s ease-in-out infinite; }
 .overlay-busy { color: #111820; background: #e9c46a; }
 .overlay-bad { color: #f3a7a7; background: #3a2228; }

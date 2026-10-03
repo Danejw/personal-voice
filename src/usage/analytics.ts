@@ -226,7 +226,7 @@ export interface AnalyticsModel {
 const DESTINATION_LABELS: Record<TranscriptDestinationId, string> = {
   "active-field": "Active field",
   "voice-note": "Voice Notes",
-  "send-to-device": "Handoffs",
+  "remote-dictation": "Remote Dictation",
 };
 
 export const TRIGGER_LABELS: Record<UsageTrigger, string> = {

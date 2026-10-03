@@ -10,7 +10,7 @@ import { DictationController, initialDictationSnapshot } from "@/voice/session/D
 import type { DictationSnapshot } from "@/voice/session/DictationController";
 import { isCancellable } from "@/voice/session/indicator";
 import { formatTimings } from "@/voice/session/timings";
-import type { TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
+import type { TranscriptDestinationId, TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
 
 /** Indicator/Escape IPC must never break dictation itself. */
 function quietly(promise: Promise<unknown>) {
@@ -33,6 +33,8 @@ export function useDictation(
   usage: UsageStore,
   getUsageContext: () => UsageContext = () => ({ locale: null, terms: [] }),
   lease?: MicrophoneLease,
+  /** Runs before capture starts so destinations can lock utterance-scoped state. */
+  prepareUtterance?: (destination: TranscriptDestinationId) => void,
 ) {
   const [snapshot, setSnapshot] = useState<DictationSnapshot>(initialDictationSnapshot);
   const [paused, setPaused] = useState(false);
@@ -60,7 +62,9 @@ export function useDictation(
   );
   const previousRef = useRef(snapshot);
   const providerRef = useRef(getProvider);
+  const prepareRef = useRef(prepareUtterance);
   useEffect(() => { providerRef.current = getProvider; }, [getProvider]);
+  prepareRef.current = prepareUtterance;
 
   useEffect(() => () => void controller.dispose(), [controller]);
 
@@ -71,6 +75,12 @@ export function useDictation(
           if (lease?.heldBy() === "assistant") return;
           if (event.trigger) usage.armTrigger(event.trigger);
           destinations.overrideNext(event.destination ?? null);
+          try {
+            prepareRef.current?.(event.destination ?? destinations.selected);
+          } catch {
+            destinations.overrideNext(null);
+            return;
+          }
           void controller.press(providerRef.current());
           return;
         case "release": void controller.stop(); return;

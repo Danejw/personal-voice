@@ -108,7 +108,7 @@ Kotlin lives in `src-tauri/gen/android/app/src/main/java/com/personal/voiceapp/p
 | `FloatingMicPrefs` | Local prefs: `want_floating_mic` (left on until the user turns it off) and `start_on_boot` (default on). |
 | `BootReceiver` | On `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`, if the floating mic was left on and start-on-boot is enabled, briefly opens `MainActivity` so a visible activity can start the FGS, then the plugin sends the task to the back. |
 | `MicBubbleView` | Tap for quick actions. Hold (~400 ms) to talk, release to insert. Dragging moves the bubble; a drag after hold starts cancels the utterance. Colour shows idle, listening, finalizing, or error. |
-| `OverlayPanelView` | Compact native sheet: start dictation, destination, capture, recent notes, pending handoffs, Open Settings. |
+| `OverlayPanelView` | Compact native sheet: start dictation, destination, Remote Dictation tap/hold target control, capture, recent notes, pending handoffs, Open Settings. |
 | `NativeMicCapture` | `AudioRecord` producing 16 kHz mono PCM16 in 100 ms chunks, sent to the WebView as base64 events. Runs only between press and release. |
 | `VoiceAccessibilityService` | Subscribes to no events. At insert or selection-capture time it reads only the input-focused field, never password fields. Native fields get an exact splice with `ACTION_SET_TEXT`; web and rich editors get `ACTION_PASTE`. Selection capture returns the node's highlighted substring, not a clipboard copy. Otherwise dictated text goes to the clipboard with a message. |
 
