@@ -61,7 +61,7 @@ function fakeServer() {
       note.updatedAt = new Date(Date.UTC(2026, 8, 28, 13, 0, sequence)).toISOString();
       return structuredClone(note);
     },
-    async updateDetails(id, text, title, groupId) { const note = notes.find((n) => n.id === id); if (!note) throw new Error("Note not found."); note.text = text; note.title = title; note.titleSource = "manual"; note.groupId = groupId; note.groupSource = groupId ? "manual" : null; note.organizedAt = new Date().toISOString(); return structuredClone(note); },
+    async updateDetails(id, text, title, groupId, groupEdited) { const note = notes.find((n) => n.id === id); if (!note) throw new Error("Note not found."); note.text = text; note.title = title; note.titleSource = "manual"; if (groupEdited) { note.groupId = groupId; note.groupSource = "manual"; note.organizedAt = new Date().toISOString(); } return structuredClone(note); },
     async updatePresentation(id, update) { const note = notes.find((n) => n.id === id); if (!note) throw new Error("Note not found."); if (update.title !== undefined) note.title = update.title; if (update.titleSource !== undefined) note.titleSource = update.titleSource; if (update.groupId !== undefined) note.groupId = update.groupId; if (update.groupSource !== undefined) note.groupSource = update.groupSource; if (update.organizedAt !== undefined) note.organizedAt = update.organizedAt; note.updatedAt = new Date().toISOString(); return structuredClone(note); },
     async addAttachment(_userId, noteId, file) {
       guard();
