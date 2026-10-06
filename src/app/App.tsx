@@ -75,6 +75,7 @@ import { remoteDictationApi } from "@/services/remoteDictationService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
 import { notesApi } from "@/services/notesService";
+import { snippetsApi } from "@/services/snippetsService";
 import { transformProfilesApi } from "@/services/transformProfilesService";
 import {
   bindDeviceSettings,
@@ -102,6 +103,10 @@ import { createId } from "@/sync/createId";
 import { transcriptionPreferences } from "@/sync/personalData";
 import type { DictionaryTerm } from "@/sync/personalData";
 import { usePersonalSync } from "@/sync/usePersonalSync";
+import { SnippetPanel, SnippetToolbar } from "@/snippets/SnippetPanel";
+import { SnippetStore } from "@/snippets/SnippetStore";
+import { useSnippets } from "@/snippets/useSnippets";
+import { resolveSnippet } from "@/snippets/snippet";
 import { TransformPanel, TransformToolbar } from "@/transforms/TransformPanel";
 import { TransformStore } from "@/transforms/TransformStore";
 import { useTransforms } from "@/transforms/useTransforms";
@@ -178,6 +183,7 @@ assistantMemory.setRemoteLearn(() => requestMemoryLearn());
 assistant.setProducer(() => assistantLibrary.holdingLease());
 const usage = new UsageStore(localStorage, platform.platform, () => new Date(), usageApi);
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
+const snippetStore = new SnippetStore(snippetsApi, localStorage);
 const transformStore = new TransformStore(transformProfilesApi);
 const notesStore = new NotesStore(
   notesApi,
@@ -342,6 +348,9 @@ assistant.setActions({
 });
 
 async function transformFinalDictation(text: string): Promise<string> {
+  const snippet = resolveSnippet(text, snippetStore.getSnapshot().snippets);
+  if (snippet.matched) return snippet.text;
+
   const selectedId = loadTransformProfileId();
   if (!selectedId) return text;
   const profile = transformById(transformStore.getSnapshot().profiles, selectedId);
@@ -499,6 +508,7 @@ export default function App() {
   const auth = useAuth();
   const sync = usePersonalSync(personalSync, auth.userId);
   const notes = useNotes(notesStore, auth.userId);
+  const snippets = useSnippets(snippetStore, auth.userId);
   const transforms = useTransforms(transformStore, auth.userId);
   const deviceSnapshot = useDevices(devices, auth.userId);
   const handoffSnapshot = useHandoffs(handoffs, auth.userId);
@@ -887,6 +897,7 @@ export default function App() {
           {section === "dictionary" && <DictionaryToolbar store={personalSync} sync={sync} />}
           {section === "notes" && <NotesToolbar store={notesStore} snapshot={notes} />}
           {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
+          {section === "snippets" && <SnippetToolbar store={snippetStore} snapshot={snippets} />}
           {section === "transforms" && <TransformToolbar store={transformStore} snapshot={transforms} />}
           {section === "assistant" && (
             <AssistantHeader
@@ -1010,6 +1021,12 @@ export default function App() {
               onDetachNote={(id) => assistant.detachNote(id)}
               transformProfiles={availableTransforms}
             />
+          </section>
+        </div>
+
+        <div className="panel-stack" hidden={section !== "snippets"}>
+          <section aria-labelledby="page-title" className="page-panel">
+            <SnippetPanel store={snippetStore} snapshot={snippets} />
           </section>
         </div>
 

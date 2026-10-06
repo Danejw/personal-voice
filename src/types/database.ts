@@ -19,6 +19,37 @@ export type Database = {
   }
   public: {
     Tables: {
+      snippets: {
+        Row: {
+          content: string
+          created_at: string
+          enabled: boolean
+          id: string
+          normalized_trigger: string
+          trigger: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          trigger: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          trigger?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transform_profiles: {
         Row: {
           created_at: string

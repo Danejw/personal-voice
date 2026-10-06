@@ -1133,3 +1133,90 @@ html.indicator-view #root {
 .app-shell.is-mobile .transform-result-actions {
   align-items: stretch;
 }
+
+
+/* Deterministic voice snippets */
+.snippet-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.snippet-form textarea {
+  width: 100%;
+  min-height: 130px;
+  resize: vertical;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  background: #111820;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+.snippet-form-actions,
+.snippet-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.snippet-groups {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+.snippet-group {
+  display: grid;
+  gap: 6px;
+}
+.snippet-group > h3 {
+  margin: 0;
+  color: #b2becc;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.snippet-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.snippet-list > .action-item {
+  background: #111820;
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+.snippet-card-content {
+  display: grid;
+  gap: 5px;
+}
+.snippet-card-content.is-disabled {
+  opacity: 0.55;
+}
+.snippet-card-heading {
+  justify-content: space-between;
+}
+.snippet-trigger {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.snippet-content {
+  margin: 0;
+  color: #a2adbc;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.snippet-toggle {
+  flex: 0 0 auto;
+}
+.app-shell.is-mobile .snippet-form-actions {
+  align-items: stretch;
+}

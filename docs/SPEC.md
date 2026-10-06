@@ -127,6 +127,14 @@ Users may create account-synced custom profiles with a name and instruction. The
 
 The selected automatic Dictation transform is a per-device preference. `None` is the default. If a selected transform is unavailable or fails, the destination is not given untransformed text silently; the original finalized transcript remains available through the existing Dictation error/history path.
 
+## Snippets
+
+Snippets are deterministic whole-utterance text expansions. A user saves a short voice trigger such as `read only mode` or `my LinkedIn` and an exact expansion. After final transcription, Personal Voice normalizes case, repeated whitespace, and trailing sentence punctuation and checks for an enabled exact trigger match. Matching never uses fuzzy semantics or substring replacement in V1.
+
+A matched snippet bypasses the automatic Dictation Transform so saved URLs, signatures, instructions, and other exact text are delivered unchanged. No additional model call is made for expansion. Server-confirmed snippets are cached locally so they can still expand while sync is offline, while creation/editing remains read-only until sync reconnects.
+
+See [SNIPPETS.md](SNIPPETS.md) for matching rules and acceptance criteria.
+
 ## Backend responsibilities
 
 The backend should remain tiny.
@@ -182,6 +190,21 @@ updated_at
 user_id
 smart_transcription
 language
+updated_at
+```
+
+### snippets
+
+Account-synced exact voice expansions.
+
+```text
+id
+user_id
+trigger
+normalized_trigger
+content
+enabled
+created_at
 updated_at
 ```
 
@@ -298,6 +321,7 @@ Keep schema additions conservative.
 - Remote Dictation sends only a finalized transcript to one selected device and expires quickly
 - never monitor or continuously synchronize the OS clipboard
 - selection capture is an explicit user action; Windows copies briefly and restores the clipboard
+- snippet triggers and expansion text sync only because the user explicitly saves them; expansion itself is local and makes no extra model call
 - usage analytics stores daily counters only, never transcript text, microphone audio, or raw key logs
 - usage intelligence can be turned off; that preference syncs and stops new counts
 - clearing analytics increments a server-owned epoch and deletes synced daily counters
