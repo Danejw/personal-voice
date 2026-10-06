@@ -1220,3 +1220,148 @@ html.indicator-view #root {
 .app-shell.is-mobile .snippet-form-actions {
   align-items: stretch;
 }
+
+
+/* Dictation Insights */
+.insights-page,
+.insights-stack {
+  display: grid;
+  gap: 12px;
+}
+.insights-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.insights-tab {
+  border: 0;
+  border-radius: 9px;
+  padding: 7px 10px;
+  background: #111820;
+  color: #9da9b7;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.insights-tab.is-active {
+  background: #1a242f;
+  color: #edf3f8;
+}
+.insights-callout,
+.insights-card {
+  background: #111820;
+  border-radius: 12px;
+  padding: 12px;
+}
+.insights-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.insights-callout-title,
+.insights-card h3,
+.candidate-kind,
+.candidate-payload,
+.voice-profile {
+  margin: 0;
+}
+.insights-callout-title,
+.insights-card h3 {
+  font-size: 13px;
+  font-weight: 650;
+}
+.insights-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.voice-profile {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.insights-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+.insights-stat {
+  min-width: 0;
+  background: #111820;
+  border-radius: 10px;
+  padding: 10px;
+}
+.insights-stat .stat-value {
+  overflow-wrap: anywhere;
+}
+.phrase-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.phrase-pill,
+.candidate-confidence {
+  border-radius: 999px;
+  background: #18232d;
+  padding: 5px 8px;
+  color: #aebbc8;
+  font-size: 11px;
+}
+.insight-candidate-list {
+  display: grid;
+  gap: 8px;
+}
+.candidate-kind {
+  color: #7f8c9b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.candidate-payload {
+  margin-top: 8px;
+  color: #d7e0e9;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.candidate-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.compaction-stats {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.compaction-stats p,
+.compact-confirm p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.compact-confirm {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 9px;
+  background: #0d141b;
+}
+.app-shell.is-mobile .insights-stat-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.app-shell.is-mobile .insights-heading-row,
+.app-shell.is-mobile .insights-callout {
+  align-items: stretch;
+  flex-direction: column;
+}
