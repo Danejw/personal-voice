@@ -135,6 +135,26 @@ A matched snippet bypasses the automatic Dictation Transform so saved URLs, sign
 
 See [SNIPPETS.md](SNIPPETS.md) for matching rules and acceptance criteria.
 
+## Personal Insights
+
+Insights begins with synced Dictations only. It does not mine Notes, Handoffs, or Assistant conversations in this version.
+
+The first voice profile becomes eligible after at least 200 synced dictations across at least 3 active days. The newest 50 dictations are always protected from analysis/compaction until they age out of that recent window. After the first run, Insights becomes ready again at 250 new dictations, or after 7 days when at least 100 new dictations have accumulated.
+
+An Insights run combines deterministic facts with semantic analysis:
+- peak day and three-hour usage window
+- peak device during that window
+- average words per dictation
+- recurring phrases
+- a free-form voice profile that describes observed speaking patterns without fixed personality/style categories
+- Dictionary, Snippet, Transform, and Assistant-memory candidates
+
+Suggestions are filtered against the user's current Dictionary, Snippets, built-in/custom Transforms, Assistant memories, and every prior Insight candidate fingerprint. Accepting a suggestion writes through the existing feature store. Dismissed/accepted suggestions are not proposed again.
+
+Semantic analysis is chunked and merged through the authenticated `dictation-insights` Edge Function. The model must not infer sensitive traits, demographics, diagnoses, or predefined personality categories.
+
+A completed run is stored before any destructive cleanup is possible. Explicit compaction deletes only analyzed cloud Dictation rows and always preserves at least the newest 50. Notes, Handoffs, Assistant conversations, and audio are never touched by Dictation compaction.
+
 ## Backend responsibilities
 
 The backend should remain tiny.

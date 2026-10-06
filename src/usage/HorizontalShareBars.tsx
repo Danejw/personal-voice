@@ -108,13 +108,14 @@ const DEVICE_TONES = ["is-rank-0", "is-rank-1", "is-rank-2"] as const;
 
 interface DeviceSplitBarProps {
   devices: readonly { id: string; label: string; share: number; count: number }[];
+  headingId?: string;
 }
 
 /** One bar split by device. Width is each device's share of completed dictations. */
-export function DeviceSplitBar({ devices }: DeviceSplitBarProps) {
+export function DeviceSplitBar({ devices, headingId = "device-heading" }: DeviceSplitBarProps) {
   return (
     <ShareSplitBar
-      headingId="device-heading"
+      headingId={headingId}
       title="Devices"
       segments={devices.map((device, index) => ({
         id: device.id,

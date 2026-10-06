@@ -383,6 +383,20 @@ other signed-in devices merge them when the app is focused or comes back online.
 off stops new uploads and leaves rows already stored. History saved before the switch was
 turned on stays on that device.
 
+## Dictation Insights
+
+`InsightsStore` is a separate consumer of cloud Dictation history. The Recent Dictations UI remains capped at 75; Insights pages every account Dictation row so high-volume users can analyze and compact history without turning the recent-history screen into an archive.
+
+Readiness is volume-first and time-aware. A first run requires 200 synced dictations over 3 active days. Later runs require either 250 newer dictations or 100 newer dictations after 7 days. `eligibleDictations` excludes the newest 50 before applying the prior run watermark, so protected recent rows are analyzed later once they age out.
+
+Analysis has two layers:
+1. deterministic local facts: volume, active days, word counts, peak day/time, and peak device within that time window
+2. semantic chunk + merge requests through the authenticated `dictation-insights` Edge Function using Gemini 3.5 Flash-Lite
+
+The semantic merge writes natural free-form `voice_profile` prose plus candidate suggestions. Client-side dedupe is authoritative: candidates are compared with current Dictionary terms, Snippet triggers/content, built-in and custom Transform instructions, Assistant memory keys, and all prior candidate fingerprints before persistence.
+
+`insight_runs` stores a durable analysis watermark and profile. `insight_candidates` stores independently reviewable suggestions. Compaction is a separate explicit RPC tied to a saved run. The RPC deletes analyzed Dictation rows through that run's watermark while excluding the newest 50 current rows. No model call is part of compaction.
+
 ## Failure recovery
 
 Maintain the current utterance locally until:
