@@ -87,12 +87,10 @@ function AttachmentPreview({
       )}
       {kind === "video" && (
         <video className="note-attachment-preview" src={attachment.downloadUrl} controls preload="metadata">
-          <track kind="captions" />
         </video>
       )}
       {kind === "audio" && (
         <audio className="note-attachment-audio" src={attachment.downloadUrl} controls preload="metadata">
-          <track kind="captions" />
         </audio>
       )}
       <div className="note-attachment-meta">
