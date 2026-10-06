@@ -144,6 +144,9 @@ describe("parseOverlayAction", () => {
       .toEqual({ type: "dictate-hold", phase: "start", destination: "voice-note", id: 1 });
     expect(parseOverlayAction({ type: "dictate-hold", phase: "stop", destination: "voice-note", id: 2 }))
       .toEqual({ type: "dictate-hold", phase: "stop", destination: "voice-note", id: 2 });
+    expect(parseOverlayAction({ type: "dictate-hold", phase: "cancel", destination: "voice-note", id: 3 }))
+      .toEqual({ type: "dictate-hold", phase: "cancel", destination: "voice-note", id: 3 });
+    expect(parseOverlayAction({ type: "dictate-hold", phase: "invalid", destination: "voice-note", id: 4 })).toBeNull();
     expect(parseOverlayAction({ type: "dictate-hold", phase: "start", destination: "active-field", id: 1 })).toBeNull();
     expect(parseOverlayAction({ type: "dictate-hold", phase: "start", destination: "send-to-device", id: 1 })).toBeNull();
     expect(parseOverlayAction({ type: "cycle-remote-target" })).toEqual({ type: "cycle-remote-target" });
