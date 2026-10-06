@@ -19,6 +19,102 @@ export type Database = {
   }
   public: {
     Tables: {
+      insight_runs: {
+        Row: {
+          active_days: number
+          catchphrases: Json
+          compacted_at: string | null
+          compacted_count: number
+          created_at: string
+          dictation_count: number
+          id: string
+          source_from_created_at: string
+          source_through_created_at: string
+          usage_facts: Json
+          user_id: string
+          voice_profile: string
+          word_count: number
+        }
+        Insert: {
+          active_days: number
+          catchphrases?: Json
+          compacted_at?: string | null
+          compacted_count?: number
+          created_at?: string
+          dictation_count: number
+          id?: string
+          source_from_created_at: string
+          source_through_created_at: string
+          usage_facts?: Json
+          user_id?: string
+          voice_profile: string
+          word_count: number
+        }
+        Update: {
+          active_days?: number
+          catchphrases?: Json
+          compacted_at?: string | null
+          compacted_count?: number
+          created_at?: string
+          dictation_count?: number
+          id?: string
+          source_from_created_at?: string
+          source_through_created_at?: string
+          usage_facts?: Json
+          user_id?: string
+          voice_profile?: string
+          word_count?: number
+        }
+        Relationships: []
+      }
+      insight_candidates: {
+        Row: {
+          confidence: string
+          created_at: string
+          evidence_count: number
+          fingerprint: string
+          id: string
+          kind: string
+          payload: Json
+          reason: string
+          run_id: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence: string
+          created_at?: string
+          evidence_count: number
+          fingerprint: string
+          id?: string
+          kind: string
+          payload: Json
+          reason: string
+          run_id: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          confidence?: string
+          created_at?: string
+          evidence_count?: number
+          fingerprint?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          reason?: string
+          run_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       snippets: {
         Row: {
           content: string
@@ -607,6 +703,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      compact_insight_run: {
+        Args: {
+          p_keep_newest?: number
+          p_run_id: string
+          p_user_id: string
+        }
+        Returns: number
+      }
       create_remote_dictation_request: {
         Args: {
           p_source_device_id: string
