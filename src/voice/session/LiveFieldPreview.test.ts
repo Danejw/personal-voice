@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { LiveFieldPreview } from "@/voice/session/LiveFieldPreview";
 import type { DictationSnapshot } from "@/voice/session/DictationController";
 
+async function flushNativeMicrotasks() {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function state(
   utterance: number,
   kind: DictationSnapshot["state"],
@@ -16,12 +22,26 @@ describe("LiveFieldPreview", () => {
     const preview = new LiveFieldPreview({ liveDictationText: text });
     preview.observe(state(1, "CONNECTING"), "active-field");
     preview.observe(state(1, "LISTENING", "Hello wor"), "active-field");
+    await flushNativeMicrotasks();
     preview.observe(state(1, "LISTENING", "Hello world"), "active-field");
     expect(await preview.commit("Hello, world.")).toBe(true);
     expect(text.mock.calls).toEqual([
       ["update", "Hello wor"],
       ["update", "Hello world"],
       ["commit", "Hello, world."],
+    ]);
+  });
+
+  it("coalesces queued interim hypotheses to avoid unnecessary native writes", async () => {
+    const text = vi.fn(async () => true);
+    const preview = new LiveFieldPreview({ liveDictationText: text });
+    preview.observe(state(1, "LISTENING", "Hel"), "active-field");
+    preview.observe(state(1, "LISTENING", "Hello"), "active-field");
+    preview.observe(state(1, "LISTENING", "Hello world"), "active-field");
+    expect(await preview.commit("Hello world.")).toBe(true);
+    expect(text.mock.calls).toEqual([
+      ["update", "Hello world"],
+      ["commit", "Hello world."],
     ]);
   });
 
@@ -47,7 +67,7 @@ describe("LiveFieldPreview", () => {
     const text = vi.fn(async () => true);
     const preview = new LiveFieldPreview({ liveDictationText: text });
     preview.observe(state(1, "LISTENING", "Draft"), "active-field");
-    await Promise.resolve();
+    await flushNativeMicrotasks();
     preview.observe(state(1, "IDLE"), "active-field");
     // The next operation is serialized after cancellation, so no external timing is needed.
     preview.observe(state(2, "LISTENING", "Another"), "active-field");
@@ -64,6 +84,7 @@ describe("LiveFieldPreview", () => {
     const text = vi.fn(async (phase: string, value: string) => phase === "update" && value === "First");
     const preview = new LiveFieldPreview({ liveDictationText: text });
     preview.observe(state(1, "LISTENING", "First"), "active-field");
+    await flushNativeMicrotasks();
     preview.observe(state(1, "LISTENING", "Second"), "active-field");
     await expect(preview.commit("Final.")).rejects.toThrow("field changed");
     expect(text.mock.calls).toEqual([["update", "First"], ["update", "Second"]]);
