@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shortcutFromKeys, shortcutFromMouse } from "@/settings/hotkeyChord";
+import { isMouseShortcut, shortcutFromKeys, shortcutFromMouse } from "@/settings/hotkeyChord";
 import { hotkeysConflict } from "@/settings/pushToTalk";
 
 describe("hotkeysConflict", () => {
@@ -13,6 +13,14 @@ describe("hotkeysConflict", () => {
     expect(hotkeysConflict(["Alt+S"], [], [], ["Alt+S"])).toBe(true);
     expect(hotkeysConflict(["RightAlt"], [], [], [], ["RightAlt"])).toBe(true);
     expect(hotkeysConflict(["RightAlt"], [], [], [], ["Ctrl+Alt+A"])).toBe(false);
+  });
+});
+
+describe("long-press shortcut eligibility", () => {
+  it("allows mouse buttons but not keyboard keys", () => {
+    expect(isMouseShortcut("MouseRight")).toBe(true);
+    expect(isMouseShortcut("Ctrl+Mouse4")).toBe(true);
+    expect(isMouseShortcut("RightAlt")).toBe(false);
   });
 });
 
