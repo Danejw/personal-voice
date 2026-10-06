@@ -15,7 +15,7 @@
   &nbsp;·&nbsp;
   <code>Android</code>
   &nbsp;·&nbsp;
-  <code>v0.3.8</code>
+  <code>v0.3.14</code>
 </p>
 
 <p align="center">
