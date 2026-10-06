@@ -154,12 +154,13 @@ pub fn set_push_to_talk_shortcut(shortcut: String) -> Result<(), String> {
 #[tauri::command]
 pub fn set_hotkeys(
     dictate: Vec<String>,
+    dictate_long_press: Vec<platform::LongPressHotkey>,
     voice_note: Vec<String>,
     handoff: Vec<String>,
     selection: Vec<String>,
     assistant: Vec<String>,
 ) -> Result<(), String> {
-    platform::set_hotkeys(&dictate, &voice_note, &handoff, &selection, &assistant)
+    platform::set_hotkeys(&dictate, &dictate_long_press, &voice_note, &handoff, &selection, &assistant)
 }
 
 /// Lets the Settings window see the next chord instead of starting dictation with it.
