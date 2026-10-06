@@ -168,7 +168,7 @@ inserts the final text into `dictations`. The insert is not awaited either.
 the existing `ERROR` transition and leaves the transcript visible. Future destinations can be
 added to the router without changing capture, Gemini, or recovery.
 
-Transforms are deliberately downstream of transcription. `TransformStore` syncs only custom profile metadata/instructions through `transform_profiles`; built-in profiles are client constants. `applyTransform` reuses the provider-neutral `TextAction` boundary and the existing authenticated `text-action` Edge Function. The router can run one selected Dictation transform before delivery. Notes, Recent Dictations, and Handoffs use the same transform function through a preview UI, so no feature owns a separate prompt pipeline.
+Transforms are deliberately downstream of transcription. `TransformStore` syncs only custom profile metadata/instructions through `transform_profiles`; built-in profiles are client constants. `applyTransform` reuses the provider-neutral `TextAction` boundary and the existing authenticated `text-action` Edge Function. The router can run one selected Dictation transform before delivery. Notes, Recent Dictations, Handoffs, and captured Selections use the same transform function through a preview UI, so no feature owns a separate prompt pipeline.
 
 Reports: [PV2](PV-Phases/01-PV2-dictation-destinations.md), [PV1](PV-Phases/02-PV1-voice-notes-inbox.md), [PV3](PV-Phases/03-PV3-cross-device-handoff.md), [PV4](PV-Phases/04-PV4-shared-clipboard-send-to-device.md), [PV5](PV-Phases/05-PV5-recent-dictation-history.md), [Remote Dictation](Remote-Dictation-Phases/README.md).
 
