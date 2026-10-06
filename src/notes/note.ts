@@ -1,4 +1,5 @@
 import type { TableRow } from "@/types/database";
+import type { NoteAttachment } from "@/notes/noteAttachment";
 
 export type NoteStatus = "inbox" | "archived";
 export type NoteSourceType = "voice" | "manual" | "assistant";
@@ -11,6 +12,7 @@ export interface Note {
   status: NoteStatus;
   createdAt: string;
   updatedAt: string;
+  attachments: NoteAttachment[];
 }
 
 type NoteRow = Pick<
@@ -34,5 +36,6 @@ export function noteFromRow(row: NoteRow): Note {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    attachments: [],
   };
 }
