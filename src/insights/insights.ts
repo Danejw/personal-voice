@@ -164,13 +164,27 @@ export function usageFacts(rows: readonly DictationRecord[]): InsightUsageFacts 
     }
   }
 
-  const peakDevice = [...deviceCounts.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+  const peakWindowDevices = new Map<string, number>();
+  let peakWindowTotal = 0;
+  for (const row of rows) {
+    const date = new Date(row.createdAt);
+    if (Number.isNaN(date.getTime())) continue;
+    const hour = date.getHours();
+    const inWindow = [0, 1, 2].some((offset) => (peakHourStart + offset) % 24 === hour);
+    if (!inWindow) continue;
+    peakWindowTotal += 1;
+    peakWindowDevices.set(row.sourceDeviceId, (peakWindowDevices.get(row.sourceDeviceId) ?? 0) + 1);
+  }
+  const peakDevice = [...peakWindowDevices.entries()].sort((a, b) => b[1] - a[1])[0]
+    ?? [...deviceCounts.entries()].sort((a, b) => b[1] - a[1])[0]
+    ?? null;
+  const peakDeviceDenominator = peakWindowTotal || rows.length;
   return {
     peakDay: WEEKDAYS[peakDayIndex] ?? null,
     peakHourStart,
     peakHourEnd: (peakHourStart + 3) % 24,
     peakDeviceId: peakDevice?.[0] ?? null,
-    peakDeviceShare: peakDevice ? Math.round((peakDevice[1] / rows.length) * 100) : null,
+    peakDeviceShare: peakDevice ? Math.round((peakDevice[1] / peakDeviceDenominator) * 100) : null,
     averageWords: Math.round(totalWords / rows.length),
     totalWords,
   };
