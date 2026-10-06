@@ -126,7 +126,7 @@ describe("assistant tool schema", () => {
       kind: "confirm",
       name: "delete_voice_note",
       text: "n1",
-      title: "Delete this voice note",
+      title: "Delete this note",
     });
     expect(decideToolCall({ id: "see", name: "capture_screen", args: {} }, plan)).toEqual({
       kind: "capture",
@@ -164,7 +164,7 @@ describe("assistant tool schema", () => {
     });
     expect(decideToolCall({ id: "note", name: "create_voice_note", args: { text: "Assistant tool test." } }, plan)).toMatchObject({
       kind: "confirm",
-      title: "Save this voice note",
+      title: "Save this note",
       text: "Assistant tool test.",
     });
     expect(decideToolCall({ id: "send", name: "send_handoff", args: { text: "On the desktop" } }, plan)).toMatchObject({
