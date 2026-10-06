@@ -239,6 +239,8 @@ updated_at
 
 The legacy `voice_notes` name remains a compatibility view while older installed clients roll forward.
 
+Notes may also have an optional stable scan title and one reusable account-scoped Note group. Automatic organization runs only after an explicit Note is saved. It generates a title only while the title is missing, prefers an existing group, and creates a new group only for a clear cluster of at least three ungrouped notes. Manual title edits and manual group moves are authoritative and are not overwritten by later automatic passes. The Notes page is a responsive visual grid: group cards expose a small preview grid of their note titles before opening, while ungrouped Notes remain visible as standalone cards.
+
 Notes may also have zero or more private file attachments. Attachments accept arbitrary file types, are stored in the private `note-attachments` Storage bucket, and keep only metadata in `note_attachments`. The current client accepts uploads up to 100 MB per file. In edit mode, files can be chosen, pasted from the clipboard when the clipboard exposes a file, or dropped onto the note. Images, video, and audio get inline previews; PDFs, Markdown, and other files remain downloadable/openable attachments. Assistant attachment of a Note still supplies the Note text only; file-content ingestion is a separate capability.
 
 ### handoffs
