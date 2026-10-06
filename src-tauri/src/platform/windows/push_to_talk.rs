@@ -644,6 +644,47 @@ mod tests {
     }
 
     #[test]
+    fn long_press_mouse_waits_for_threshold_then_uses_normal_release() {
+        let mut ptt = PushToTalk::default();
+        let right = Shortcut::parse("MouseRight").unwrap();
+        ptt.set_long_press_hotkeys(vec![LongPressShortcut::new(right, 500).unwrap()])
+            .unwrap();
+
+        assert_eq!(ptt.long_press_delay(VK_RBUTTON, NONE), Some(500));
+        // The physical down is reserved by the hook, not treated as an immediate shortcut.
+        assert_eq!(ptt.on_key(VK_RBUTTON, true, NONE), PASS);
+        assert_eq!(
+            ptt.begin_long_press(VK_RBUTTON, NONE),
+            Some(PttEvent::Press { destination: None })
+        );
+        assert_eq!(
+            ptt.on_key(VK_RBUTTON, false, NONE).event,
+            Some(PttEvent::Release)
+        );
+    }
+
+    #[test]
+    fn long_press_rejects_keyboard_and_conflicts_with_immediate_mouse() {
+        assert!(LongPressShortcut::new(Shortcut::parse("RightAlt").unwrap(), 500).is_err());
+        assert!(LongPressShortcut::new(Shortcut::parse("MouseRight").unwrap(), 100).is_err());
+
+        let mut ptt = PushToTalk::default();
+        ptt.set_hotkeys(
+            vec![Shortcut::parse("MouseRight").unwrap()],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        assert!(ptt
+            .set_long_press_hotkeys(vec![
+                LongPressShortcut::new(Shortcut::parse("MouseRight").unwrap(), 500).unwrap()
+            ])
+            .is_err());
+    }
+
+    #[test]
     fn one_action_accepts_a_mouse_button_and_a_key() {
         let mut ptt = PushToTalk::default();
         ptt.set_hotkeys(
