@@ -289,10 +289,6 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
 
   return (
     <>
-      <p className="hint">
-        Immediate bindings start as soon as you press them. Long-press mouse bindings keep a normal quick click,
-        then start Dictation only after the selected hold time.
-      </p>
       <HotkeyField
         label="Hold to dictate"
         shortcuts={dictate}
