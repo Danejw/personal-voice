@@ -34,11 +34,13 @@ export class LiveFieldPreview {
       this.finished = false;
     }
     if (snapshot.state === "IDLE" || snapshot.state === "ERROR") {
-      if (!this.finished && this.active) {
+      if (!this.finished) {
         this.finished = true;
         this.enqueue(async () => {
-          await this.platform.liveDictationText("cancel", "").catch(() => false);
-          this.active = false;
+          if (this.active) {
+            await this.platform.liveDictationText("cancel", "").catch(() => false);
+            this.active = false;
+          }
         });
       }
       return;
@@ -63,8 +65,10 @@ export class LiveFieldPreview {
 
   /** True if the corrected final was already written into the exact provisional span. */
   async commit(finalText: string): Promise<boolean> {
-    this.finished = true;
+    // Drain all partial updates before the final edit. Marking finished earlier
+    // would silently skip queued hypotheses after a fast key release.
     await this.queue;
+    this.finished = true;
     if (this.changed) throw new Error("The input field changed while dictating. The final text was not inserted again to avoid duplication.");
     if (!this.active) return false;
     const inserted = await this.platform.liveDictationText("commit", finalText).catch(() => false);
