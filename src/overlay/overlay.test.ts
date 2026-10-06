@@ -15,12 +15,13 @@ import {
   parseOverlayAction,
 } from "@/overlay/overlay";
 import type { Handoff } from "@/handoffs/handoff";
-import type { VoiceNote } from "@/notes/voiceNote";
+import type { Note } from "@/notes/note";
 
-const note = (id: string, status: VoiceNote["status"] = "inbox"): VoiceNote => ({
+const note = (id: string, status: Note["status"] = "inbox"): Note => ({
   id,
   text: `Note ${id} with extra words`,
   sourceDeviceId: "d1",
+  sourceType: "voice",
   status,
   createdAt: "2026-09-28T12:00:00.000Z",
   updatedAt: "2026-09-28T12:00:00.000Z",
