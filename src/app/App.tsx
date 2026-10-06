@@ -342,7 +342,7 @@ const destinations = new TranscriptDestinationRouter({
 });
 const DESTINATION_OPTIONS: readonly SelectOption[] = [
   { value: "active-field", label: "Active field" },
-  { value: "voice-note", label: "Voice note" },
+  { value: "voice-note", label: "Note" },
   { value: "remote-dictation", label: "Remote Dictation" },
 ];
 
