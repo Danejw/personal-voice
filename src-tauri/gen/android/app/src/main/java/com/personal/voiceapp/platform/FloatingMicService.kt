@@ -29,8 +29,8 @@ import com.personal.voiceapp.R
 import org.json.JSONObject
 
 /**
- * Microphone foreground service that owns the floating control stack (assistant, Remote
- * Dictation, then dictation) and its quick-actions panel.
+ * Microphone foreground service that owns the floating control stack (Assistant, Remote
+ * Dictation, Notes, then dictation) and its quick-actions panel.
  *
  * Android only lets a microphone foreground service start while the app is visible, so first
  * start (and boot restore) goes through MainActivity. Once running it keeps the bubble over
@@ -51,8 +51,8 @@ class FloatingMicService : Service() {
     private const val NOTIFICATION_ID = 1
     private const val RESTORE_NOTIFICATION_ID = 2
     private const val ACTION_STOP = "com.personal.voiceapp.action.STOP_FLOATING_MIC"
-    private const val BUBBLE_DP = 60
-    private const val GAP_DP = 8
+    private const val BUBBLE_DP = 48
+    private const val GAP_DP = 6
     private const val PANEL_WIDTH_DP = 280
     private const val TIP_HIDE_MS = 2200L
 
@@ -79,6 +79,8 @@ class FloatingMicService : Service() {
   private var remoteTipLayout: WindowManager.LayoutParams? = null
   private val tipHandler = Handler(Looper.getMainLooper())
   private val hideRemoteTipRunnable = Runnable { hideRemoteTip() }
+  private var noteBubble: MicBubbleView? = null
+  private var noteHoldId = 0
   private var micBubble: MicBubbleView? = null
   private var panel: OverlayPanelView? = null
   private var panelLayout: WindowManager.LayoutParams? = null
@@ -127,6 +129,9 @@ class FloatingMicService : Service() {
     remoteBubble?.let {
       if (it.isHolding) emitRemoteHold("stop")
     }
+    noteBubble?.let {
+      if (it.isHolding) emitNoteHold("cancel")
+    }
     hideRemoteTip()
     stack?.let { windowManager.removeView(it) }
     hidePanel()
@@ -134,6 +139,7 @@ class FloatingMicService : Service() {
     stackLayout = null
     assistantBubble = null
     remoteBubble = null
+    noteBubble = null
     micBubble = null
     instance = null
     listener?.onRunningChanged(false)
@@ -154,12 +160,15 @@ class FloatingMicService : Service() {
       JSONObject()
     }
     val dictation = snapshot.optString("dictation", "idle")
-    micBubble?.state = when (dictation) {
+    val dictationState = when (dictation) {
       "listening" -> MicBubbleView.State.LISTENING
       "finalizing" -> MicBubbleView.State.FINALIZING
       "error" -> MicBubbleView.State.ERROR
       else -> MicBubbleView.State.IDLE
     }
+    micBubble?.state = dictationState
+    // Notes has its own one-shot destination; show it active only while held.
+    noteBubble?.state = if (noteBubble?.isHolding == true) dictationState else MicBubbleView.State.IDLE
     assistantInterrupt = snapshot.optBoolean("assistantInterrupt")
     assistantBubble?.state = when (snapshot.optString("assistant", "idle")) {
       "listening" -> AssistantBubbleView.State.LISTENING
@@ -283,6 +292,17 @@ class FloatingMicService : Service() {
     remoteTipLayout = null
   }
 
+  private fun emitNoteHold(phase: String) {
+    if (phase == "start") noteHoldId += 1
+    emitOverlay(
+      JSONObject()
+        .put("type", "dictate-hold")
+        .put("phase", phase)
+        .put("destination", "voice-note")
+        .put("id", noteHoldId),
+    )
+  }
+
   private fun emitRemoteHold(phase: String) {
     val targetId = remoteTargetId
     if (targetId.isNullOrEmpty()) {
@@ -329,7 +349,7 @@ class FloatingMicService : Service() {
     val gap = (GAP_DP * metrics.density).toInt()
     val prefs = getSharedPreferences(FloatingMicPrefs.PREFS, MODE_PRIVATE)
     val overlayType = overlayType()
-    val stackHeight = size * 3 + gap * 2
+    val stackHeight = size * 4 + gap * 3
     val layout = WindowManager.LayoutParams(
       size, stackHeight, overlayType,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
@@ -397,6 +417,21 @@ class FloatingMicService : Service() {
       override fun onDragEnd() = dragCallbacks.onDragEnd()
     })
 
+    val note = MicBubbleView(this, object : MicBubbleView.Callbacks {
+      override fun onTap() {
+        Toast.makeText(this@FloatingMicService, R.string.floating_note_tip, Toast.LENGTH_SHORT).show()
+      }
+      override fun onPress() {
+        hidePanel()
+        emitNoteHold("start")
+      }
+      override fun onRelease() = emitNoteHold("stop")
+      override fun onCancel() = emitNoteHold("cancel")
+      override fun onDragStart() = dragCallbacks.onDragStart()
+      override fun onDragBy(dx: Int, dy: Int) = dragCallbacks.onDragBy(dx, dy)
+      override fun onDragEnd() = dragCallbacks.onDragEnd()
+    }, iconRes = R.drawable.ic_note, descriptionRes = R.string.floating_note_hold)
+
     val mic = MicBubbleView(this, object : MicBubbleView.Callbacks {
       override fun onTap() {
         if (micBubble?.state == MicBubbleView.State.LISTENING) {
@@ -417,6 +452,8 @@ class FloatingMicService : Service() {
     host.addView(gapView())
     host.addView(remote, LinearLayout.LayoutParams(size, size))
     host.addView(gapView())
+    host.addView(note, LinearLayout.LayoutParams(size, size))
+    host.addView(gapView())
     host.addView(mic, LinearLayout.LayoutParams(size, size))
 
     windowManager.addView(host, layout)
@@ -424,6 +461,7 @@ class FloatingMicService : Service() {
     stackLayout = layout
     assistantBubble = assistant
     remoteBubble = remote
+    noteBubble = note
     micBubble = mic
     bindRemoteBubble(snapshot.optString("dictation", "idle"))
   }
