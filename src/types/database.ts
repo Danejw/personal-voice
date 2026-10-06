@@ -383,34 +383,73 @@ export type Database = {
         }
         Relationships: []
       }
-      notes: {
+      note_groups: {
         Row: {
           created_at: string
           id: string
-          source_device_id: string
-          source_type: string
-          status: string
-          text: string
+          name: string
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          source_device_id: string
-          source_type?: string
-          status?: string
-          text: string
+          name: string
           updated_at?: string
           user_id?: string
         }
         Update: {
           created_at?: string
           id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notes: {
+        Row: {
+          created_at: string
+          group_id: string | null
+          group_source: string | null
+          id: string
+          organized_at: string | null
+          source_device_id: string
+          source_type: string
+          status: string
+          text: string
+          title: string | null
+          title_source: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id?: string | null
+          group_source?: string | null
+          id?: string
+          organized_at?: string | null
+          source_device_id: string
+          source_type?: string
+          status?: string
+          text: string
+          title?: string | null
+          title_source?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string | null
+          group_source?: string | null
+          id?: string
+          organized_at?: string | null
           source_device_id?: string
           source_type?: string
           status?: string
           text?: string
+          title?: string | null
+          title_source?: string | null
           updated_at?: string
           user_id?: string
         }
