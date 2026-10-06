@@ -20,14 +20,14 @@ export interface ListedHandoff {
 }
 
 /** Inbox notes, or every note when the caller asked for archived ones too. */
-export function formatVoiceNoteList(notes: readonly ListedNote[], includeArchived: boolean): string {
+export function formatNoteList(notes: readonly ListedNote[], includeArchived: boolean): string {
   const rows = notes.filter((note) => includeArchived || note.status === "inbox");
   if (!rows.length) {
     return includeArchived
-      ? "No voice notes."
-      : "No voice notes in the inbox. Archived notes stay hidden until include_archived is true.";
+      ? "No notes."
+      : "No notes in the inbox. Archived notes stay hidden until include_archived is true.";
   }
-  return joinList("Voice notes", rows.length, rows.map(formatNote));
+  return joinList("Notes", rows.length, rows.map(formatNote));
 }
 
 /** Other device names, then received handoffs. Continuation packages are shown by title only. */
