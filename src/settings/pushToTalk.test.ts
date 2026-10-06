@@ -32,8 +32,13 @@ describe("shortcut recording", () => {
   });
 
   it("records a mouse button with the modifiers that are held", () => {
+    expect(shortcutFromMouse(2, { ctrl: false, shift: false, alt: false, win: false })).toBe("MouseRight");
     expect(shortcutFromMouse(4, { ctrl: false, shift: false, alt: false, win: false })).toBe("Mouse5");
     expect(shortcutFromMouse(3, { ctrl: true, shift: false, alt: false, win: false })).toBe("Ctrl+Mouse4");
     expect(shortcutFromMouse(0, { ctrl: false, shift: false, alt: false, win: false })).toBeNull();
+  });
+
+  it("lets Dictation keep a keyboard hold and add right mouse as another hold", () => {
+    expect(hotkeysConflict(["RightAlt", "MouseRight"], [], [], [], [])).toBe(false);
   });
 });
