@@ -52,7 +52,7 @@ export class LiveFieldPreview {
     const utterance = this.utterance;
     const partial = snapshot.partial;
     this.enqueue(async () => {
-      if (this.unsupported || this.changed || this.finished || utterance !== this.utterance) return;
+      if (this.unsupported || this.changed || this.finished || utterance !== this.utterance || partial !== this.latest) return;
       const supported = await this.platform.liveDictationText("update", partial).catch(() => false);
       if (!supported) {
         if (this.active) this.changed = true;
