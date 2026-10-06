@@ -695,6 +695,16 @@ textarea:focus {
 .term-delete { font: inherit; font-size: 18px; line-height: 1; color: #a2adbc; background: transparent; border: 0; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
 .term-delete:hover:not(:disabled) { color: #f3a7a7; }
 .term-delete:disabled, .toggle:has(input:disabled) { opacity: 0.5; cursor: default; }
+.note-compose { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.note-compose textarea,
+.note-edit textarea {
+  width: 100%; min-height: 64px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.45;
+  color: inherit; background: #111820; border: 0; border-radius: 8px; padding: 8px 10px;
+}
+.note-compose textarea { flex: 1; }
+.note-compose .record { flex: none; }
+.note-edit { display: grid; gap: 8px; }
+.note-edit-actions { display: flex; gap: 6px; }
 .note-group { margin-top: 0; min-height: 0; }
 .note-group h3 { margin: 0 0 4px; flex: none; color: #b2becc; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 .note-group .placeholder { flex: 1; margin: 0; }
