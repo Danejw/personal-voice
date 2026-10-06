@@ -27,7 +27,7 @@ const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   dictation: { label: "Dictations" },
   dictionary: { label: "Dictionary" },
   capture: { label: "Selection" },
-  notes: { label: "Voice Notes" },
+  notes: { label: "Notes" },
   handoffs: { label: "Handoffs" },
   assistant: { label: "Assistant" },
   devices: { label: "Devices & Controls" },
