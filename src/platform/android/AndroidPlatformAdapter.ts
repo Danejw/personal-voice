@@ -36,8 +36,9 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
     return parseTargetApp(await callPlugin("insert_text", { text }));
   }
 
-  liveDictationText(phase: "update" | "commit" | "cancel", text: string) {
-    return callPlugin<boolean>("live_dictation_text", { phase, text });
+  async liveDictationText(phase: "update" | "commit" | "cancel", text: string) {
+    const result = await callPlugin<{ supported: boolean }>("live_dictation_text", { phase, text });
+    return result.supported === true;
   }
 
   async insertReceivedText(text: string) {
