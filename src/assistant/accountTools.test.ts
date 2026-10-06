@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCOUNT_LIST_COUNT, formatHandoffList, formatVoiceNoteList } from "@/assistant/accountTools";
+import { ACCOUNT_LIST_COUNT, formatHandoffList, formatNoteList } from "@/assistant/accountTools";
 
 describe("account tool lists", () => {
   it("lists inbox notes and hides archived notes until asked", () => {
@@ -7,15 +7,15 @@ describe("account tool lists", () => {
       { id: "n1", text: "Buy milk", status: "inbox" as const, createdAt: "2026-09-28T12:00:00.000Z" },
       { id: "n2", text: "Old", status: "archived" as const, createdAt: "2026-09-01T12:00:00.000Z" },
     ];
-    expect(formatVoiceNoteList(notes, false)).toContain("id: n1");
-    expect(formatVoiceNoteList(notes, false)).not.toContain("id: n2");
-    expect(formatVoiceNoteList(notes, true)).toContain("id: n2");
-    expect(formatVoiceNoteList([], false)).toContain("No voice notes in the inbox");
+    expect(formatNoteList(notes, false)).toContain("id: n1");
+    expect(formatNoteList(notes, false)).not.toContain("id: n2");
+    expect(formatNoteList(notes, true)).toContain("id: n2");
+    expect(formatNoteList([], false)).toContain("No notes in the inbox");
   });
 
   it("names send targets and clips a long note", () => {
     const text = "a".repeat(600);
-    const listed = formatVoiceNoteList(
+    const listed = formatNoteList(
       [{ id: "n1", text, status: "inbox", createdAt: "2026-09-28T12:00:00.000Z" }],
       false,
     );
@@ -36,7 +36,7 @@ describe("account tool lists", () => {
       status: "inbox" as const,
       createdAt: "2026-09-28T12:00:00.000Z",
     }));
-    const listed = formatVoiceNoteList(notes, false);
+    const listed = formatNoteList(notes, false);
     expect(listed).toContain("id: n0");
     expect(listed).not.toContain(`id: n${ACCOUNT_LIST_COUNT}`);
     expect(listed).toContain("2 more were not listed.");
