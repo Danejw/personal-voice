@@ -4,7 +4,7 @@ import type { TextAction, TextActionInput } from "@/text/TextAction";
 
 const FUNCTION_NAME = "text-action";
 
-/** Maps the `text-action` Edge Function response to rewritten text or a user-facing error. */
+/** Maps the `text-action` Edge Function response to transformed text or a user-facing error. */
 export function parseTextActionResponse(status: number, body: unknown): string {
   const fields = typeof body === "object" && body !== null ? body as Record<string, unknown> : {};
   if (status < 200 || status >= 300) {
@@ -13,7 +13,7 @@ export function parseTextActionResponse(status: number, body: unknown): string {
       : `Couldn't transform the text (error ${status}). Try again.`;
     throw new Error(message);
   }
-  if (typeof fields.text !== "string" || !fields.text.trim()) throw new Error("The rewrite was empty.");
+  if (typeof fields.text !== "string" || !fields.text.trim()) throw new Error("The transform was empty.");
   return fields.text.trim();
 }
 
@@ -46,7 +46,7 @@ export async function requestTextAction(input: TextActionInput, signal: AbortSig
   return parseTextActionResponse(response.status, await response.json().catch(() => null));
 }
 
-/** Gemini text rewrite behind the provider-neutral `TextAction` boundary. */
+/** Gemini text transform behind the provider-neutral `TextAction` boundary. */
 export const geminiTextAction: TextAction = {
   transform: requestTextAction,
 };
