@@ -754,7 +754,15 @@ textarea:focus {
 .notes-dashboard-grid,
 .note-card-grid {
   list-style: none; margin: 0; padding: 0; display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  /*
+   * Collapse unused tracks so one or two cards expand into the available row.
+   * The minimum track size also scales with one third of the container, which
+   * caps dense layouts at three columns while dropping to two/one when narrow.
+   */
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(300px, calc((100% - 20px) / 3))), 1fr)
+  );
   gap: 10px; align-content: start;
 }
 .notes-dashboard-grid > .action-item,
@@ -788,7 +796,7 @@ textarea:focus {
 }
 .note-group-more { margin: -3px 0 0; color: #8896a6; font-size: 11px; }
 .note-group-expanded { padding-top: 2px; }
-.note-group-expanded .note-card-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.note-group-expanded .note-card-grid { width: 100%; }
 .note-group-rename { width: 100%; display: flex; align-items: center; gap: 6px; }
 .note-group-rename input,
 .note-edit-field input,
