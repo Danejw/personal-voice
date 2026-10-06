@@ -3,12 +3,12 @@ import { syncErrorMessage } from "@/services/personalSyncService";
 import { getSupabase } from "@/services/supabase";
 import { noteFromRow } from "@/notes/note";
 import { NOTE_ATTACHMENT_MAX_BYTES, noteAttachmentFromRow } from "@/notes/noteAttachment";
-import type { Note } from "@/notes/note";
-import type { NoteAttachment, NoteSourceType, NoteStatus } from "@/notes/noteAttachment";
+import type { Note, NoteSourceType, NoteStatus } from "@/notes/note";
+import type { NoteAttachment } from "@/notes/noteAttachment";
 import type { Database } from "@/types/database";
 
 const NOTE_COLUMNS = "id, text, source_device_id, source_type, status, created_at, updated_at";
-const ATTACHMENT_COLUMNS = "id, note_id, file_name, mime_type, size_bytes, storage_path, created_at";
+const ATTACHMENT_COLUMNS = "id, user_id, note_id, file_name, mime_type, size_bytes, storage_path, created_at";
 const ATTACHMENT_BUCKET = "note-attachments";
 const SIGNED_URL_SECONDS = 60 * 60;
 
