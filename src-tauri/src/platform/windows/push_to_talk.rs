@@ -531,6 +531,41 @@ mod tests {
     }
 
     #[test]
+    fn right_mouse_and_right_alt_can_both_hold_to_dictate() {
+        let mut ptt = PushToTalk::default();
+        ptt.set_hotkeys(
+            vec![
+                Shortcut::parse("RightAlt").unwrap(),
+                Shortcut::parse("MouseRight").unwrap(),
+            ],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        )
+        .unwrap();
+
+        let right_down = ptt.on_key(VK_RBUTTON, true, NONE);
+        assert!(right_down.swallow);
+        assert_eq!(
+            right_down.event,
+            Some(PttEvent::Press { destination: None })
+        );
+        let right_up = ptt.on_key(VK_RBUTTON, false, NONE);
+        assert!(right_up.swallow);
+        assert_eq!(right_up.event, Some(PttEvent::Release));
+
+        assert_eq!(
+            ptt.on_key(RIGHT_ALT, true, NONE).event,
+            Some(PttEvent::Press { destination: None })
+        );
+        assert_eq!(
+            ptt.on_key(RIGHT_ALT, false, NONE).event,
+            Some(PttEvent::Release)
+        );
+    }
+
+    #[test]
     fn one_action_accepts_a_mouse_button_and_a_key() {
         let mut ptt = PushToTalk::default();
         ptt.set_hotkeys(
