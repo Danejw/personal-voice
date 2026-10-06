@@ -81,7 +81,7 @@ function fakeServer() {
       note.updatedAt = new Date(Date.UTC(2026, 8, 28, 13, 0, sequence)).toISOString();
       return structuredClone(note);
     },
-    async delete(id, _attachments) {
+    async delete(id) {
       guard();
       notes = notes.filter((note) => note.id !== id);
     },
