@@ -440,6 +440,10 @@ section > p:last-child { margin-bottom: 0; font-size: 12px; }
 .app-shell.is-mobile section.page-panel .page-grow .selection-preview,
 .app-shell.is-mobile section.page-panel > .history-list,
 .app-shell.is-mobile section.page-panel > .terms,
+
+.app-shell.is-mobile .notes-dashboard-grid,
+.app-shell.is-mobile .note-card-grid { grid-template-columns: 1fr; }
+.app-shell.is-mobile .note-group-card.is-expanded { grid-column: auto; }
 .app-shell.is-mobile section.page-panel > .notes,
 .app-shell.is-mobile section.page-panel > .handoffs,
 .app-shell.is-mobile section.page-panel > .selection-preview,
