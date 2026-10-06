@@ -75,6 +75,7 @@ import { remoteDictationApi } from "@/services/remoteDictationService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
 import { notesApi } from "@/services/notesService";
+import { noteOrganizerApi } from "@/services/noteOrganizerService";
 import { snippetsApi } from "@/services/snippetsService";
 import { transformProfilesApi } from "@/services/transformProfilesService";
 import {
@@ -191,6 +192,7 @@ const notesStore = new NotesStore(
   (sourceType) => {
     if (sourceType === "voice") usage.recordLater({ name: "voice_note_created" });
   },
+  noteOrganizerApi,
 );
 const devices = new DeviceStore(
   deviceApi,
