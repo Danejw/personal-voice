@@ -117,6 +117,21 @@ closed
 
 This makes it possible to improve or replace the provider later without rebuilding the platform integration.
 
+## Live active-field feedback
+
+The shared `LiveFieldPreview` observes `DictationController` snapshots directly.
+Only Active field partial transcripts are sent to `PlatformAdapter.liveDictationText`.
+Updates are serialized and outdated hypotheses coalesced. The destination uses
+`commit(finalTranscript)` to replace the temporary span or falls back to the
+existing one-shot insertion when no preview was supported. Focus/content mismatch
+after a successful temporary edit refuses a second paste to avoid corrupting text.
+Cancel and short discarded utterances clear a matching preview.
+
+Windows native edits use a dedicated COM UI Automation worker and are limited
+to an initially empty editable Value-pattern field. Android's accessibility bridge
+uses bounded focused-node validation and `ACTION_SET_TEXT`. Both reject password
+fields and unsupported rich editors; neither touches the clipboard during preview.
+
 ## Transcript destination boundary
 
 A finalized transcript is delivered through `TranscriptDestination`, independently of the
