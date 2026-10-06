@@ -120,7 +120,13 @@ function NoteGroup({
                   </div>
                 ) : (
                   <>
-                    <p className="note-text">{note.text}</p>
+                    <p
+                      className={editable ? "note-text is-editable" : "note-text"}
+                      title={editable ? "Double-click to edit" : undefined}
+                      onDoubleClick={() => { if (editable) onEdit(note); }}
+                    >
+                      {note.text}
+                    </p>
                     <p className="note-meta">
                       <span>{sourceLabel(note)}</span>
                       {" · "}
