@@ -592,6 +592,60 @@ export default function App() {
     saveTransformProfileId(next);
   }
 
+  function insightValue(candidate: InsightCandidate, key: string): string {
+    const value = candidate.payload[key];
+    return typeof value === "string" ? value.trim() : "";
+  }
+
+  async function acceptInsightCandidate(candidate: InsightCandidate): Promise<void> {
+    const proposed: ProposedCandidate = {
+      kind: candidate.kind,
+      title: candidate.title,
+      payload: candidate.payload,
+      evidenceCount: candidate.evidenceCount,
+      confidence: candidate.confidence,
+      reason: candidate.reason,
+    };
+    const alreadyExists = isExistingCandidate(proposed, {
+      dictionary: sync.data.terms,
+      snippets: snippets.snippets,
+      transforms: availableTransforms,
+      memories: assistantMemorySnapshot.memories,
+      seenFingerprints: new Set(),
+    });
+    if (alreadyExists) {
+      await insightsStore.setCandidateStatus(candidate.id, "duplicate");
+      throw new Error("That suggestion already exists, so it was removed from Insights.");
+    }
+
+    switch (candidate.kind) {
+      case "dictionary": {
+        const problem = personalSync.addTerm(insightValue(candidate, "term"));
+        if (problem) throw new Error(problem);
+        await personalSync.settled();
+        const syncProblem = personalSync.getSnapshot().error;
+        if (syncProblem) throw new Error(syncProblem);
+        return;
+      }
+      case "snippet":
+        await snippetStore.create(insightValue(candidate, "trigger"), insightValue(candidate, "content"));
+        return;
+      case "transform":
+        await transformStore.create(insightValue(candidate, "name"), insightValue(candidate, "instruction"));
+        return;
+      case "memory": {
+        const rawKind = insightValue(candidate, "kind");
+        const kind = rawKind === "fact" ? "fact" : "preference";
+        await assistantMemory.remember(kind, insightValue(candidate, "key"), insightValue(candidate, "value"));
+        return;
+      }
+      default: {
+        const unhandled: never = candidate.kind;
+        return unhandled;
+      }
+    }
+  }
+
   useOverlay({
     platform,
     visible: platform.platform !== "windows" || floatingControl,
