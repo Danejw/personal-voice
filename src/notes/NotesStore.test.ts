@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { NotesStore } from "@/notes/NotesStore";
 import type { Note } from "@/notes/note";
+import type { NoteAttachment } from "@/notes/noteAttachment";
 import type { NotesApi } from "@/services/notesService";
 
 interface StoredNote extends Note {
@@ -10,6 +11,7 @@ interface StoredNote extends Note {
 /** Shared in-memory Supabase used by independent Windows and Android stores. */
 function fakeServer() {
   let sequence = 0;
+  let attachmentSequence = 0;
   let notes: StoredNote[] = [];
   const control = { offline: false, failCreate: false };
   const guard = () => {
@@ -34,6 +36,7 @@ function fakeServer() {
         status: "inbox",
         createdAt,
         updatedAt: createdAt,
+        attachments: [],
       };
       notes.push(note);
       return structuredClone(note);
@@ -46,6 +49,30 @@ function fakeServer() {
       note.updatedAt = new Date(Date.UTC(2026, 8, 28, 13, 0, sequence)).toISOString();
       return structuredClone(note);
     },
+    async addAttachment(_userId, noteId, file) {
+      guard();
+      const note = notes.find((entry) => entry.id === noteId);
+      if (!note) throw new Error("Note not found.");
+      attachmentSequence += 1;
+      const attachment: NoteAttachment = {
+        id: `attachment-${attachmentSequence}`,
+        fileName: file.name,
+        mimeType: file.type || null,
+        sizeBytes: file.size,
+        storagePath: `user-1/${noteId}/attachment-${attachmentSequence}/${file.name}`,
+        downloadUrl: `https://example.test/attachment-${attachmentSequence}`,
+        createdAt: new Date(Date.UTC(2026, 8, 28, 14, 0, attachmentSequence)).toISOString(),
+      };
+      note.attachments.push(attachment);
+      return structuredClone(attachment);
+    },
+    async removeAttachment(attachment) {
+      guard();
+      notes = notes.map((note) => ({
+        ...note,
+        attachments: note.attachments.filter((item) => item.id !== attachment.id),
+      }));
+    },
     async setStatus(id, status) {
       guard();
       const note = notes.find((entry) => entry.id === id);
@@ -54,7 +81,7 @@ function fakeServer() {
       note.updatedAt = new Date(Date.UTC(2026, 8, 28, 13, 0, sequence)).toISOString();
       return structuredClone(note);
     },
-    async delete(id) {
+    async delete(id, _attachments) {
       guard();
       notes = notes.filter((note) => note.id !== id);
     },
@@ -96,6 +123,26 @@ describe("NotesStore", () => {
     expect(store.getSnapshot().notes[0]?.status).toBe("inbox");
     await store.remove(id);
     expect(store.getSnapshot().notes).toEqual([]);
+  });
+
+  it("adds and removes arbitrary file attachments", async () => {
+    const server = fakeServer();
+    const store = new NotesStore(server.api, () => "device-1");
+    await store.setUser("user-1");
+    await store.create("Files live here.");
+    const noteId = store.getSnapshot().notes[0]?.id ?? "";
+    const file = new File(["# hello"], "notes.md", { type: "text/markdown" });
+
+    await store.addAttachments(noteId, [file]);
+    const attachment = store.getSnapshot().notes[0]?.attachments[0];
+    expect(attachment).toMatchObject({
+      fileName: "notes.md",
+      mimeType: "text/markdown",
+    });
+
+    if (!attachment) throw new Error("Expected an attachment.");
+    await store.removeAttachment(noteId, attachment);
+    expect(store.getSnapshot().notes[0]?.attachments).toEqual([]);
   });
 
   it("records the creation source without letting usage failure break saving", async () => {
