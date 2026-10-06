@@ -1,7 +1,15 @@
-import { useState, type FormEvent } from "react";
+import {
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type DragEvent,
+  type FormEvent,
+} from "react";
 import { HoverActionItem } from "@/components/HoverActionItem";
 import type { NotesSnapshot, NotesStatus, NotesStore } from "@/notes/NotesStore";
 import type { Note } from "@/notes/note";
+import { attachmentKind, formatAttachmentSize } from "@/notes/noteAttachment";
+import type { NoteAttachment } from "@/notes/noteAttachment";
 
 interface NotesPanelProps {
   store: NotesStore;
@@ -26,6 +34,8 @@ interface NoteGroupProps {
   onCopy(note: Note): void;
   onArchive(note: Note, archived: boolean): void;
   onDelete(note: Note): void;
+  onFiles(note: Note, files: File[]): void;
+  onRemoveAttachment(note: Note, attachment: NoteAttachment): void;
   attachedIds?: readonly string[];
   onAttach?(note: Note): void;
   onDetach?(id: string): void;
@@ -52,6 +62,86 @@ function sourceLabel(note: Note): string {
   }
 }
 
+function filesFrom(list: FileList | null): File[] {
+  return list ? Array.from(list) : [];
+}
+
+function AttachmentPreview({
+  attachment,
+  editing,
+  disabled,
+  onRemove,
+}: {
+  attachment: NoteAttachment;
+  editing: boolean;
+  disabled: boolean;
+  onRemove(): void;
+}) {
+  const kind = attachmentKind(attachment);
+  return (
+    <div className="note-attachment">
+      {kind === "image" && (
+        <a href={attachment.downloadUrl} target="_blank" rel="noreferrer" className="note-attachment-preview">
+          <img src={attachment.downloadUrl} alt={attachment.fileName} loading="lazy" />
+        </a>
+      )}
+      {kind === "video" && (
+        <video className="note-attachment-preview" src={attachment.downloadUrl} controls preload="metadata">
+          <track kind="captions" />
+        </video>
+      )}
+      {kind === "audio" && (
+        <audio className="note-attachment-audio" src={attachment.downloadUrl} controls preload="metadata">
+          <track kind="captions" />
+        </audio>
+      )}
+      <div className="note-attachment-meta">
+        <a href={attachment.downloadUrl} target="_blank" rel="noreferrer" title={attachment.fileName}>
+          {kind === "pdf" ? "PDF · " : ""}{attachment.fileName}
+        </a>
+        <span>{formatAttachmentSize(attachment.sizeBytes)}</span>
+      </div>
+      {editing && (
+        <button
+          type="button"
+          className="secondary note-attachment-remove"
+          disabled={disabled}
+          onClick={onRemove}
+        >
+          Remove
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AttachmentList({
+  note,
+  editing,
+  disabled,
+  onRemove,
+}: {
+  note: Note;
+  editing: boolean;
+  disabled: boolean;
+  onRemove(note: Note, attachment: NoteAttachment): void;
+}) {
+  if (!note.attachments.length) return null;
+  return (
+    <div className="note-attachments">
+      {note.attachments.map((attachment) => (
+        <AttachmentPreview
+          key={attachment.id}
+          attachment={attachment}
+          editing={editing}
+          disabled={disabled}
+          onRemove={() => onRemove(note, attachment)}
+        />
+      ))}
+    </div>
+  );
+}
+
 function NoteGroup({
   empty,
   notes,
@@ -67,6 +157,8 @@ function NoteGroup({
   onCopy,
   onArchive,
   onDelete,
+  onFiles,
+  onRemoveAttachment,
   attachedIds = [],
   onAttach,
   onDetach,
@@ -76,10 +168,32 @@ function NoteGroup({
       {notes.length ? (
         <ul className="notes hide-scrollbar">
           {notes.map((note) => {
-            const pending = busy?.endsWith(note.id) ?? false;
+            const pending = busy?.includes(note.id) ?? false;
             const archived = note.status !== "inbox";
             const attached = attachedIds.includes(note.id);
             const editing = editingId === note.id;
+
+            function addFiles(nextFiles: File[]) {
+              if (!pending && nextFiles.length) onFiles(note, nextFiles);
+            }
+
+            function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+              const pasted = filesFrom(event.clipboardData.files);
+              if (!pasted.length) return;
+              event.preventDefault();
+              addFiles(pasted);
+            }
+
+            function onDrop(event: DragEvent<HTMLDivElement>) {
+              event.preventDefault();
+              addFiles(filesFrom(event.dataTransfer.files));
+            }
+
+            function onChooseFiles(event: ChangeEvent<HTMLInputElement>) {
+              addFiles(filesFrom(event.target.files));
+              event.target.value = "";
+            }
+
             return (
               <HoverActionItem
                 key={note.id}
@@ -101,14 +215,38 @@ function NoteGroup({
                 ]}
               >
                 {editing ? (
-                  <div className="note-edit">
+                  <div
+                    className="note-edit"
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={onDrop}
+                  >
                     <textarea
                       aria-label="Edit note"
                       value={draft}
                       disabled={pending}
                       autoFocus
+                      onPaste={onPaste}
                       onChange={(event) => onDraft(event.target.value)}
                     />
+                    <AttachmentList
+                      note={note}
+                      editing
+                      disabled={pending}
+                      onRemove={onRemoveAttachment}
+                    />
+                    <div className="note-file-drop">
+                      <span>Drop or paste files here</span>
+                      <label className="secondary note-file-picker">
+                        Add files
+                        <input
+                          type="file"
+                          multiple
+                          disabled={pending}
+                          aria-label="Add files to note"
+                          onChange={onChooseFiles}
+                        />
+                      </label>
+                    </div>
                     <div className="note-edit-actions">
                       <button type="button" className="record" disabled={pending || !draft.trim()} onClick={() => onSave(note)}>
                         Save
@@ -116,6 +254,7 @@ function NoteGroup({
                       <button type="button" className="secondary" disabled={pending} onClick={onCancelEdit}>
                         Cancel
                       </button>
+                      {pending && <span className="note-file-status" role="status">Uploading…</span>}
                     </div>
                   </div>
                 ) : (
@@ -127,6 +266,12 @@ function NoteGroup({
                     >
                       {note.text}
                     </p>
+                    <AttachmentList
+                      note={note}
+                      editing={false}
+                      disabled={pending}
+                      onRemove={onRemoveAttachment}
+                    />
                     <p className="note-meta">
                       <span>{sourceLabel(note)}</span>
                       {" · "}
@@ -223,6 +368,20 @@ export function NotesPanel({ store, snapshot, attachedNoteIds = [], onAttachNote
     });
   }
 
+  function addFiles(note: Note, files: File[]) {
+    void run(`files:${note.id}`, async () => {
+      await store.addAttachments(note.id, files);
+      setNotice(files.length === 1 ? "File attached." : `${files.length} files attached.`);
+    });
+  }
+
+  function removeAttachment(note: Note, attachment: NoteAttachment) {
+    void run(`attachment:${note.id}:${attachment.id}`, async () => {
+      await store.removeAttachment(note.id, attachment);
+      setNotice("Attachment removed.");
+    });
+  }
+
   function cancelEdit() {
     setEditingId(null);
     setDraft("");
@@ -253,6 +412,8 @@ export function NotesPanel({ store, snapshot, attachedNoteIds = [], onAttachNote
     onCopy: copy,
     onArchive: archive,
     onDelete: remove,
+    onFiles: addFiles,
+    onRemoveAttachment: removeAttachment,
     attachedIds: attachedNoteIds,
     onAttach: onAttachNote ? attach : undefined,
     onDetach: onDetachNote,
