@@ -44,5 +44,11 @@ describe("usage facts", () => {
     expect(facts.peakDeviceId).toBe("desktop");
     expect(facts.peakDeviceShare).toBe(75);
     expect(facts.totalWords).toBeGreaterThan(0);
+    expect(facts.dayCounts.reduce((sum, count) => sum + count, 0)).toBe(rows.length);
+    expect(facts.hourCounts.reduce((sum, count) => sum + count, 0)).toBe(rows.length);
+    expect(facts.deviceCounts).toEqual([
+      { deviceId: "desktop", count: 9 },
+      { deviceId: "phone", count: 3 },
+    ]);
   });
 });
