@@ -268,6 +268,12 @@ export function useOverlay({
               overrideDestination(null);
             } else {
               await controller.stop();
+              // An accidental too-short hold can be discarded without calling deliver.
+              // In that case the one-shot Note destination must not leak to the next
+              // regular dictation.
+              if (controller.current.state === "IDLE" || controller.current.state === "ERROR") {
+                overrideDestination(null);
+              }
             }
             return;
           }
