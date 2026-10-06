@@ -6,6 +6,8 @@ import { Tooltip } from "@/components/Tooltip";
 import { DeviceTargetField } from "@/handoffs/DeviceTargetField";
 import type { HandoffSnapshot, HandoffStatus, HandoffStore } from "@/handoffs/HandoffStore";
 import type { Handoff } from "@/handoffs/handoff";
+import { TransformBox } from "@/transforms/TransformBox";
+import type { TransformProfile } from "@/transforms/transformProfile";
 
 interface HandoffPanelProps {
   store: HandoffStore;
@@ -15,6 +17,7 @@ interface HandoffPanelProps {
   onAttachHandoff?: (handoff: Handoff, sourceLabel: string) => string | null;
   onDetachHandoff?: () => void;
   onOpenContinuation?: (payload: AssistantContinuation) => string | null;
+  transformProfiles?: readonly TransformProfile[];
 }
 
 function statusLabel(status: HandoffStatus): string {
@@ -66,11 +69,14 @@ export function HandoffPanel({
   onAttachHandoff,
   onDetachHandoff,
   onOpenContinuation,
+  transformProfiles = [],
 }: HandoffPanelProps) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [draftTransformOpen, setDraftTransformOpen] = useState(false);
+  const [transformingId, setTransformingId] = useState<string | null>(null);
   const connected = snapshot.status === "synced";
 
   async function run(key: string, action: () => Promise<void>) {
@@ -91,6 +97,7 @@ export function HandoffPanel({
     void run("send", async () => {
       await store.send(draft, "clipboard");
       setDraft("");
+      setDraftTransformOpen(false);
       setNotice("Sent.");
     });
   }
@@ -151,10 +158,35 @@ export function HandoffPanel({
             value={draft} disabled={!connected || busy !== null} onChange={(event) => setDraft(event.target.value)}
           />
         </Tooltip>
+        {transformProfiles.length > 0 && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={!connected || busy !== null || !draft.trim()}
+            onClick={() => setDraftTransformOpen((open) => !open)}
+          >
+            Transform
+          </button>
+        )}
         <button type="submit" className="secondary" disabled={!connected || busy !== null || !draft.trim()}>
           Send
         </button>
       </form>
+      {draftTransformOpen && draft.trim() && (
+        <TransformBox
+          sourceText={draft}
+          profiles={transformProfiles}
+          disabled={!connected}
+          onClose={() => setDraftTransformOpen(false)}
+          actions={[{
+            label: "Use in draft",
+            run: async (text) => {
+              setDraft(text);
+              setDraftTransformOpen(false);
+            },
+          }]}
+        />
+      )}
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
       {notice && <p role="status">{notice}</p>}
       <div className="page-grow">
@@ -180,6 +212,10 @@ export function HandoffPanel({
                       onClick: () => { if (attached) onDetachHandoff(); else attach(handoff); },
                     }] : []),
                     ...(plain ? [
+                      ...(transformProfiles.length ? [{
+                        kind: "transform" as const,
+                        onClick: () => setTransformingId((current) => current === handoff.id ? null : handoff.id),
+                      }] : []),
                       { kind: "copy" as const, onClick: () => copy(handoff) },
                       { kind: "insert" as const, onClick: () => insert(handoff) },
                     ] : []),
@@ -191,6 +227,21 @@ export function HandoffPanel({
                     {classified.kind === "continuation" ? "Assistant continuation · " : ""}
                     {sourceLabel(handoff)} · <time dateTime={handoff.createdAt}>{new Date(handoff.createdAt).toLocaleString()}</time>
                   </p>
+                  {plain && transformingId === handoff.id && (
+                    <TransformBox
+                      sourceText={handoff.text}
+                      profiles={transformProfiles}
+                      onClose={() => setTransformingId(null)}
+                      actions={[{
+                        label: "Insert",
+                        run: async (text) => {
+                          await insertIntoActiveField(text);
+                          setTransformingId(null);
+                          setNotice("Transformed text inserted.");
+                        },
+                      }]}
+                    />
+                  )}
                   {classified.kind === "continuation" && onOpenContinuation && (
                     <button
                       type="button"
