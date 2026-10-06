@@ -14,7 +14,8 @@ export type AppSection =
   | "assistant"
   | "devices"
   | "settings"
-  | "analytics";
+  | "analytics"
+  | "insights";
 
 export type VoiceSection =
   | "dictation"
@@ -25,7 +26,7 @@ export type VoiceSection =
   | "snippets"
   | "transforms";
 
-type TopSection = "voice" | "assistant" | "devices" | "settings" | "analytics";
+type TopSection = "voice" | "assistant" | "insights" | "devices" | "settings" | "analytics";
 
 const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   dictation: { label: "Dictations" },
@@ -39,6 +40,7 @@ const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   devices: { label: "Devices & Controls" },
   settings: { label: "Settings" },
   analytics: { label: "Analytics" },
+  insights: { label: "Insights" },
 };
 
 const VOICE_CHILDREN: readonly VoiceSection[] = [
@@ -51,10 +53,11 @@ const VOICE_CHILDREN: readonly VoiceSection[] = [
   "transforms",
 ];
 
-const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "devices", "settings", "analytics"];
+const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "insights", "devices", "settings", "analytics"];
 const TOP_LABELS: Record<TopSection, string> = {
   voice: "Voice",
   assistant: "Assistant",
+  insights: "Insights",
   devices: "Devices & Controls",
   settings: "Settings",
   analytics: "Analytics",
@@ -391,6 +394,13 @@ function NavIcon({ section }: { section: TopSection }) {
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6 6.5h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H11l-4 3.2V16.5H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        </svg>
+      );
+    case "insights":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 18V11M10 18V7M15 18v-4M20 18V9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="m5 7 4-3 5 3 5-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "devices":
