@@ -30,6 +30,7 @@ jobs:
         with:
           workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
+      - run: node scripts/prepare-tauri-dev.mjs
       - run: pnpm check
       - run: cargo check --locked --manifest-path src-tauri/Cargo.toml
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
