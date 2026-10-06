@@ -13,6 +13,7 @@ function fakeServer() {
   let sequence = 0;
   let attachmentSequence = 0;
   let notes: StoredNote[] = [];
+  const groups: { id: string; name: string; createdAt: string; updatedAt: string }[] = [];
   const control = { offline: false, failCreate: false };
   const guard = () => {
     if (control.offline) throw new Error("Couldn't reach the sync service. Check your connection.");
@@ -22,6 +23,7 @@ function fakeServer() {
       guard();
       return structuredClone(notes.filter((note) => note.userId === userId));
     },
+    async listGroups() { return structuredClone(groups); },
     async create(userId, text, sourceDeviceId, sourceType) {
       guard();
       if (control.failCreate) throw new Error("Saving the note failed.");
@@ -31,6 +33,11 @@ function fakeServer() {
         id: `note-${sequence}`,
         userId,
         text,
+        title: null,
+        titleSource: null,
+        groupId: null,
+        groupSource: null,
+        organizedAt: null,
         sourceDeviceId,
         sourceType,
         status: "inbox",
@@ -41,6 +48,11 @@ function fakeServer() {
       notes.push(note);
       return structuredClone(note);
     },
+    async createGroup(_userId, name) {
+      const group = { id: `group-${groups.length + 1}`, name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      groups.push(group); return structuredClone(group);
+    },
+    async renameGroup(id, name) { const group = groups.find((g) => g.id === id); if (!group) throw new Error("Group not found."); group.name = name; return structuredClone(group); },
     async updateText(id, text) {
       guard();
       const note = notes.find((entry) => entry.id === id);
@@ -49,6 +61,8 @@ function fakeServer() {
       note.updatedAt = new Date(Date.UTC(2026, 8, 28, 13, 0, sequence)).toISOString();
       return structuredClone(note);
     },
+    async updateDetails(id, text, title, groupId) { const note = notes.find((n) => n.id === id); if (!note) throw new Error("Note not found."); note.text = text; note.title = title; note.titleSource = "manual"; note.groupId = groupId; note.groupSource = groupId ? "manual" : null; note.organizedAt = new Date().toISOString(); return structuredClone(note); },
+    async updatePresentation(id, update) { const note = notes.find((n) => n.id === id); if (!note) throw new Error("Note not found."); if (update.title !== undefined) note.title = update.title; if (update.titleSource !== undefined) note.titleSource = update.titleSource; if (update.groupId !== undefined) note.groupId = update.groupId; if (update.groupSource !== undefined) note.groupSource = update.groupSource; if (update.organizedAt !== undefined) note.organizedAt = update.organizedAt; note.updatedAt = new Date().toISOString(); return structuredClone(note); },
     async addAttachment(_userId, noteId, file) {
       guard();
       const note = notes.find((entry) => entry.id === noteId);
