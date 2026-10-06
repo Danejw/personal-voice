@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { Tooltip } from "@/components/Tooltip";
 import type { ContextItem } from "@/context/ContextItem";
 import type { PlatformName } from "@/platform/PlatformAdapter";
+import { TransformBox } from "@/transforms/TransformBox";
+import type { TransformProfile } from "@/transforms/transformProfile";
 
 interface SelectionPanelProps {
   platform: PlatformName;
@@ -15,11 +17,12 @@ interface SelectionPanelProps {
   onItem?(item: ContextItem | null): void;
   /** Assistant attachment. Clear on the Assistant page clears this preview too. */
   attached?: ContextItem | null;
+  transformProfiles?: readonly TransformProfile[];
 }
 
 const HEADER_ACTIONS_ID = "page-header-actions";
 
-/** Preview of text captured from another app. No transformation is applied. */
+/** Preview of text captured from another app, with optional reusable one-shot transforms. */
 export function SelectionPanel({
   platform,
   disabled,
@@ -28,11 +31,13 @@ export function SelectionPanel({
   onCaptured,
   onItem,
   attached,
+  transformProfiles = [],
 }: SelectionPanelProps) {
   const [item, setItem] = useState<ContextItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [transformOpen, setTransformOpen] = useState(false);
 
   useEffect(() => {
     if (attached === undefined) return;
@@ -58,6 +63,7 @@ export function SelectionPanel({
       const next = await capture();
       onItem?.(next);
       setItem(next);
+      setTransformOpen(false);
       try { onCaptured?.(); } catch { /* usage must not fail capture */ }
     }, "Selection captured.");
   }
@@ -69,6 +75,7 @@ export function SelectionPanel({
 
   function onClear() {
     setItem(null);
+    setTransformOpen(false);
     setProblem(null);
     setNotice(null);
     onItem?.(null);
@@ -86,6 +93,16 @@ export function SelectionPanel({
           {busy ? "Capturing…" : "Capture"}
         </button>
       </Tooltip>
+      {transformProfiles.length > 0 && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={!item || busy}
+          onClick={() => setTransformOpen((open) => !open)}
+        >
+          Transform
+        </button>
+      )}
       <button type="button" className="secondary" disabled={!item || busy} onClick={onCopy}>Copy</button>
       <button type="button" className="secondary" disabled={!item || busy} onClick={onClear}>Clear</button>
     </>
@@ -105,6 +122,24 @@ export function SelectionPanel({
             {item.sourceApp ? `${item.sourceApp} · ` : ""}
             <time dateTime={item.capturedAt}>{new Date(item.capturedAt).toLocaleString()}</time>
           </p>
+          {transformOpen && (
+            <TransformBox
+              sourceText={item.text}
+              profiles={transformProfiles}
+              disabled={disabled}
+              onClose={() => setTransformOpen(false)}
+              actions={[{
+                label: "Use transformed text",
+                run: async (text) => {
+                  const next = { ...item, text };
+                  setItem(next);
+                  onItem?.(next);
+                  setTransformOpen(false);
+                  setNotice("Transformed text is now the captured selection.");
+                },
+              }]}
+            />
+          )}
         </div>
       ) : (
         <p className="placeholder">No selection captured</p>
