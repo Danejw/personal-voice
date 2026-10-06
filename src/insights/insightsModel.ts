@@ -91,7 +91,7 @@ export function parseGeminiJson(body: unknown): unknown {
     return item.thought === true ? "" : cleanString(item.text, MAX_INSIGHTS_INPUT_CHARS);
   }).join("").trim();
   if (!text) throw new Error("The Insights analysis was empty.");
-  const fenced = text.replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\s*\`\`\`$/i, "");
+  const fenced = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   return JSON.parse(fenced);
 }
 
