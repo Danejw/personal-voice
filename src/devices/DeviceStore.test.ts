@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import { DeviceStore } from "@/devices/DeviceStore";
 import { HandoffStore } from "@/handoffs/HandoffStore";
 import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
-import { VoiceNotesStore } from "@/notes/VoiceNotesStore";
-import type { VoiceNote } from "@/notes/voiceNote";
+import { NotesStore } from "@/notes/NotesStore";
+import type { Note } from "@/notes/note";
 import type { DeviceApi } from "@/services/deviceService";
 import type { HandoffApi } from "@/services/handoffService";
-import type { VoiceNotesApi } from "@/services/voiceNotesService";
+import type { NotesApi } from "@/services/notesService";
 
 interface StoredHandoff extends Handoff {
   userId: string;
 }
 
-interface StoredNote extends VoiceNote {
+interface StoredNote extends Note {
   userId: string;
 }
 
@@ -41,11 +41,11 @@ function fakeAccount() {
       devices.splice(index, 1);
     },
   };
-  const notesApi: VoiceNotesApi = {
+  const notesApi: NotesApi = {
     async list(userId) {
       return structuredClone(notes.filter((note) => note.userId === userId));
     },
-    async create(userId, text, sourceDeviceId) {
+    async create(userId, text, sourceDeviceId, sourceType) {
       noteSequence += 1;
       const createdAt = new Date(Date.UTC(2026, 8, 28, 12, 0, noteSequence)).toISOString();
       const note: StoredNote = {
@@ -53,16 +53,30 @@ function fakeAccount() {
         userId,
         text,
         sourceDeviceId,
+        sourceType,
         status: "inbox",
         createdAt,
         updatedAt: createdAt,
+        attachments: [],
       };
       notes.push(note);
       return structuredClone(note);
     },
+    async updateText(id, text) {
+      const note = notes.find((entry) => entry.id === id);
+      if (!note) throw new Error("Note not found.");
+      note.text = text;
+      return structuredClone(note);
+    },
+    async addAttachment() {
+      throw new Error("Attachments are not used by this test.");
+    },
+    async removeAttachment() {
+      throw new Error("Attachments are not used by this test.");
+    },
     async setStatus(id, status) {
       const note = notes.find((entry) => entry.id === id);
-      if (!note) throw new Error("Voice note not found.");
+      if (!note) throw new Error("Note not found.");
       note.status = status;
       return structuredClone(note);
     },
@@ -135,7 +149,7 @@ describe("DeviceStore", () => {
   it("removing another device leaves notes and handoffs that still name it", async () => {
     const account = fakeAccount();
     const devices = new DeviceStore(account.deviceApi, () => "windows");
-    const notes = new VoiceNotesStore(account.notesApi, () => "android");
+    const notes = new NotesStore(account.notesApi, () => "android");
     const handoffs = new HandoffStore(account.handoffApi, () => "windows");
     await Promise.all([devices.setUser("user-1"), notes.setUser("user-1"), handoffs.setUser("user-1")]);
 
