@@ -43,6 +43,11 @@ import { useRemoteDictation } from "@/remote-dictation/useRemoteDictation";
 import { DictationHistoryPanel } from "@/history/DictationHistoryPanel";
 import { DictationHistoryStore, DICTATION_HISTORY_LIMIT } from "@/history/DictationHistoryStore";
 import { useDictationHistory } from "@/history/useDictationHistory";
+import { InsightsPanel, InsightsToolbar } from "@/insights/InsightsPanel";
+import { InsightsStore } from "@/insights/InsightsStore";
+import { useInsights } from "@/insights/useInsights";
+import type { InsightCandidate } from "@/insights/insights";
+import { isExistingCandidate, type ProposedCandidate } from "@/insights/candidateDedupe";
 import { NotesPanel, NotesToolbar } from "@/notes/NotesPanel";
 import { Onboarding } from "@/onboarding/Onboarding";
 import { dismissOnboarding, isDeviceReady, onboardingDismissed } from "@/onboarding/setupReady";
@@ -75,6 +80,8 @@ import { remoteDictationApi } from "@/services/remoteDictationService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
 import { notesApi } from "@/services/notesService";
+import { insightsApi } from "@/services/insightsService";
+import { insightsAnalyzer } from "@/services/insightsAnalysisService";
 import { snippetsApi } from "@/services/snippetsService";
 import { transformProfilesApi } from "@/services/transformProfilesService";
 import {
@@ -185,6 +192,7 @@ const usage = new UsageStore(localStorage, platform.platform, () => new Date(), 
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
 const snippetStore = new SnippetStore(snippetsApi, localStorage);
 const transformStore = new TransformStore(transformProfilesApi);
+const insightsStore = new InsightsStore(insightsApi, insightsAnalyzer);
 const notesStore = new NotesStore(
   notesApi,
   (userId) => localDeviceId(localStorage, userId, createId),
@@ -517,6 +525,7 @@ export default function App() {
   const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
   const [dictationTransformId, setDictationTransformId] = useState<string | null>(() => loadTransformProfileId());
   const [section, setSection] = useState<AppSection>("dictation");
+  const insightsSnapshot = useInsights(insightsStore, auth.userId, section === "insights");
   useHandoffAlerts(
     handoffs,
     auth.userId,
@@ -899,6 +908,7 @@ export default function App() {
           {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
           {section === "snippets" && <SnippetToolbar store={snippetStore} snapshot={snippets} />}
           {section === "transforms" && <TransformToolbar store={transformStore} snapshot={transforms} />}
+          {section === "insights" && <InsightsToolbar store={insightsStore} snapshot={insightsSnapshot} />}
           {section === "assistant" && (
             <AssistantHeader
               controller={assistant}
