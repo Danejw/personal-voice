@@ -29,6 +29,8 @@ export interface InsightsSnapshot {
   runs: InsightRun[];
   candidates: InsightCandidate[];
   readiness: InsightReadiness;
+  /** Current deterministic facts are a fallback for runs created before visual distributions were persisted. */
+  currentUsageFacts: ReturnType<typeof usageFacts>;
   progress: string | null;
   error: string | null;
 }
@@ -55,6 +57,7 @@ const EMPTY: InsightsSnapshot = {
   runs: [],
   candidates: [],
   readiness: EMPTY_READINESS,
+  currentUsageFacts: usageFacts([]),
   progress: null,
   error: null,
 };
@@ -241,6 +244,7 @@ export class InsightsStore {
       runs,
       candidates,
       readiness,
+      currentUsageFacts: usageFacts(this.dictations),
       progress: null,
       error: null,
     });
