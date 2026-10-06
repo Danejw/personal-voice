@@ -120,7 +120,7 @@ export class NotesStore {
   }
 
   /** Manual edit owns the title/group so later AI passes cannot fight the user's choice. */
-  async updateDetails(id: string, text: string, title: string, groupId: string | null): Promise<void> {
+  async updateDetails(id: string, text: string, title: string, groupId: string | null, groupEdited: boolean): Promise<void> {
     this.requireConnected();
     const body = text.trim();
     const cleanTitle = title.trim();
@@ -131,7 +131,7 @@ export class NotesStore {
     }
     const generation = this.generation;
     try {
-      const updated = await this.api.updateDetails(id, body, cleanTitle, groupId);
+      const updated = await this.api.updateDetails(id, body, cleanTitle, groupId, groupEdited);
       this.replaceNote(generation, id, updated);
     } catch (reason) {
       this.reportMutationFailure(generation, reason);
@@ -297,7 +297,7 @@ export class NotesStore {
 
     const pendingIds = new Set(pending.map((note) => note.id));
     const context = this.snapshot.notes.filter(
-      (note) => !pendingIds.has(note.id) && note.status === "inbox" && note.groupId === null,
+      (note) => !pendingIds.has(note.id) && note.status === "inbox" && note.groupId === null && note.groupSource !== "manual",
     );
     const candidates = [...pending, ...context].slice(0, 40);
     if (!candidates.length) return;
