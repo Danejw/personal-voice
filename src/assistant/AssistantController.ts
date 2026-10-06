@@ -240,7 +240,7 @@ export class AssistantController {
     },
   ) {}
 
-  /** Wires clipboard, insert, voice notes, and handoff. Safe to call once at startup. */
+  /** Wires clipboard, insert, notes, and handoff. Safe to call once at startup. */
   setActions(actions: AssistantActions): void {
     this.actions = actions;
   }
@@ -494,7 +494,7 @@ export class AssistantController {
   }
 
   /**
-   * Remembers one voice note until Remove, End, or sign-out.
+   * Remembers one note until Remove, End, or sign-out.
    * Does not archive, edit, or delete the saved note.
    */
   attachNote(note: AttachedNote): string | null {
@@ -1468,16 +1468,16 @@ export class AssistantController {
         return "Inserted the text into the focused app.";
       case "create_voice_note":
         await this.actions.createVoiceNote(pending.text);
-        return "Saved the voice note.";
+        return "Saved the note.";
       case "archive_voice_note":
         await this.actions.archiveVoiceNote(pending.text, true);
-        return "Archived the voice note.";
+        return "Archived the note.";
       case "restore_voice_note":
         await this.actions.archiveVoiceNote(pending.text, false);
-        return "Restored the voice note.";
+        return "Restored the note.";
       case "delete_voice_note":
         await this.actions.deleteVoiceNote(pending.text);
-        return "Deleted the voice note.";
+        return "Deleted the note.";
       case "dismiss_handoff":
         await this.actions.dismissHandoff(pending.text);
         return "Dismissed the handoff.";
