@@ -1007,6 +1007,7 @@ export default function App() {
               attachedNoteIds={assistantSnapshot.notes.map((note) => note.id)}
               onAttachNote={(note) => assistant.attachNote({ id: note.id, text: note.text, createdAt: note.createdAt })}
               onDetachNote={(id) => assistant.detachNote(id)}
+              transformProfiles={availableTransforms}
             />
           </section>
         </div>
@@ -1107,6 +1108,7 @@ export default function App() {
                 sourceLabel,
               })}
               onDetachHandoff={() => assistant.detachHandoff()}
+              transformProfiles={availableTransforms}
               onOpenContinuation={(payload) => {
                 if (payload.conversationId) {
                   assistantLibrary.open(payload.conversationId);
