@@ -25,6 +25,7 @@ const note = (id: string, status: Note["status"] = "inbox"): Note => ({
   status,
   createdAt: "2026-09-28T12:00:00.000Z",
   updatedAt: "2026-09-28T12:00:00.000Z",
+  attachments: [],
 });
 
 describe("overlayDictationFrom", () => {
