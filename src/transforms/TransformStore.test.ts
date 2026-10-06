@@ -18,7 +18,8 @@ function fakeApi(seed: TransformProfile[] = []): TransformProfilesApi {
   const rows = [...seed];
   return {
     async list() { return rows.map((row) => ({ ...row })); },
-    async create(_userId, name, instruction) {
+    async create(userId, name, instruction) {
+      void userId;
       const next = { ...profile(`custom-${rows.length + 1}`, name), instruction };
       rows.push(next);
       return { ...next };
