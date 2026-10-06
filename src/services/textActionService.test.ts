@@ -7,9 +7,9 @@ describe("parseTextActionResponse", () => {
   });
 
   it("uses the server message for non-200 responses", () => {
-    expect(() => parseTextActionResponse(401, { error: "Sign in again to rewrite a selection." }))
+    expect(() => parseTextActionResponse(401, { error: "Sign in again to transform text." }))
       .toThrow("Sign in again to rewrite a selection.");
-    expect(() => parseTextActionResponse(502, null)).toThrow("Couldn't rewrite the selection (error 502). Try again.");
+    expect(() => parseTextActionResponse(502, null)).toThrow("Couldn't transform the text (error 502). Try again.");
   });
 
   it("treats an empty rewrite as a failure", () => {
