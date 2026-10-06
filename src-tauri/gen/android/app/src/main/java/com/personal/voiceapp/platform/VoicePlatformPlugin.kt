@@ -35,6 +35,12 @@ class InsertTextArgs {
 }
 
 @InvokeArg
+class LiveDictationArgs {
+  lateinit var phase: String
+  var text: String = ""
+}
+
+@InvokeArg
 class IndicatorArgs {
   /** `idle`, `listening`, `finalizing`, or `error`. */
   lateinit var kind: String
@@ -589,6 +595,19 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
 
   private fun micGranted(): Boolean =
     ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+  @Command
+  fun liveDictationText(invoke: Invoke) {
+    val args = invoke.parseArgs(LiveDictationArgs::class.java)
+    main.post {
+      if (isAppVisible()) {
+        invoke.resolve(JSObject().put("supported", false))
+        return@post
+      }
+      val success = VoiceAccessibilityService.liveText(args.phase, args.text)
+      invoke.resolve(JSObject().put("supported", success))
+    }
+  }
 
   @Command
   fun insertText(invoke: Invoke) {
