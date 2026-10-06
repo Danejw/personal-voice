@@ -47,7 +47,7 @@ Hold global hotkey
 → insert text into focused application
 ```
 
-The default hotkey can initially be something like Right Alt, but it must not be hard-coded into the architecture. Each Windows action can record several bindings. A binding is one key or mouse button, optionally with Ctrl, Shift, Alt, or Win, so the same action can use both a mouse button and a keyboard shortcut. Additional bindings may hold-to-talk into a voice note or a handoff.
+The default hotkey can initially be something like Right Alt, but it must not be hard-coded into the architecture. Each Windows action can record several bindings. A binding is one key or mouse button, optionally with Ctrl, Shift, Alt, or Win, so the same action can use both a mouse button and a keyboard shortcut. Additional bindings may hold-to-talk into a voice note or a handoff. Dictation also supports delayed mouse bindings: a quick click preserves the mouse button's normal behavior, while holding past the configured threshold (300/500/750/1000 ms, default 500 ms) starts the same Dictation pipeline and releasing finalizes it.
 
 ### Android
 
