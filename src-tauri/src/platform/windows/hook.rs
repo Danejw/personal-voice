@@ -165,7 +165,8 @@ fn dispatch_key(vk: u32, down: bool) -> Option<LRESULT> {
 
 fn long_press_delay(vk: u32, modifiers: Modifiers) -> Option<u64> {
     let hook = HOOK.get()?;
-    hook.state.lock().ok()?.long_press_delay(vk, modifiers)
+    let state = hook.state.lock().ok()?;
+    state.long_press_delay(vk, modifiers)
 }
 
 /// Starts a non-blocking hold timer. The low-level hook returns immediately.
@@ -189,7 +190,7 @@ fn begin_pending_long_press(vk: u32, modifiers: Modifiers, hold_ms: u64) -> bool
             return;
         }
         let event = match hook.state.lock() {
-            Ok(mut state) => state.begin_long_press(vk, modifiers),
+            Ok(mut state) => state.begin_long_press(vk, current.modifiers),
             Err(_) => None,
         };
         if let Some(event) = event {
