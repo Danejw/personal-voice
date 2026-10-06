@@ -70,6 +70,7 @@ mod unsupported {
     pub fn set_dictation_active(_active: bool) {}
     #[cfg_attr(mobile, allow(dead_code))]
     pub fn set_paused(_paused: bool) {}
+    pub fn live_dictation_text(_phase: &str, _text: &str) -> bool { false }
     pub fn insert_text(_text: &str) -> Result<Option<super::TargetApp>, String> {
         Err(UNSUPPORTED.into())
     }
