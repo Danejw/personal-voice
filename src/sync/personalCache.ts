@@ -17,7 +17,9 @@ function record(value: unknown): Record<string, unknown> {
 function parseTerm(value: unknown): DictionaryTerm | null {
   const fields = record(value);
   return typeof fields.id === "string" && typeof fields.term === "string" && typeof fields.enabled === "boolean"
-    ? { id: fields.id, term: fields.term, enabled: fields.enabled }
+    ? { id: fields.id, term: fields.term, enabled: fields.enabled,
+        ...(typeof fields.createdAt === "string" ? { createdAt: fields.createdAt } : {}),
+      }
     : null;
 }
 
