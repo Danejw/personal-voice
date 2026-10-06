@@ -98,7 +98,7 @@ export class InsightsStore {
 
   constructor(private api: InsightsApi, private analyzer: InsightsAnalyzer) {}
 
-  subscribe = (listener: () => void): (() => void> => {
+  subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
