@@ -53,6 +53,14 @@ export interface PlatformAdapter {
   createCamera(): CameraCapture;
   /** Inserts into whatever field is focused when this is called. Returns that app when it can be named. */
   insertText(text: string): Promise<TargetApp | null>;
+  /**
+   * Best-effort temporary transcript in the currently focused plain-text field.
+   * The platform owns the edit span and never changes rich editors it cannot verify.
+   * `update` replaces the provisional text, `commit` replaces it with the corrected
+   * final text, and `cancel` removes it. Returns false when inline preview is
+   * unavailable or no longer safe; normal one-shot insertion remains the fallback.
+   */
+  liveDictationText(phase: "update" | "commit" | "cancel", text: string): Promise<boolean>;
   /** Hides Settings, restores the previous app, then inserts a received handoff. */
   insertReceivedText(text: string): Promise<TargetApp | null>;
   /** Hides Settings, reads the highlighted text in the previous app, then returns here. */
