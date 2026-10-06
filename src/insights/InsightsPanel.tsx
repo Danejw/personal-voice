@@ -384,7 +384,7 @@ export function InsightsPanel({
                   empty="More synced history is needed for a weekday distribution."
                 />
                 <div className="analytics-split-stack">
-                  <DeviceSplitBar devices={deviceDistribution} />
+                  <DeviceSplitBar devices={deviceDistribution} headingId="insights-device-heading" />
                   <HorizontalShareBars
                     headingId="insights-apps-heading"
                     title="Applications"
