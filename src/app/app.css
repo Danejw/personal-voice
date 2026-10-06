@@ -711,6 +711,7 @@ textarea:focus {
 .notes { list-style: none; margin: 0; padding: 0; max-height: 480px; overflow-y: auto; display: grid; gap: 6px; align-content: start; }
 .notes li { padding: 8px 10px; border-radius: 8px; background: #111820; }
 .note-text { margin: 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-text.is-editable { cursor: text; }
 .note-meta { margin: 2px 0 0; color: #a2adbc; font-size: 11px; }
 .action-item { position: relative; display: block; }
 .item-actions {
