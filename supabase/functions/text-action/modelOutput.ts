@@ -4,13 +4,13 @@ export const TEXT_ACTION_MODEL = "gemini-3.5-flash-lite";
 /** Selection and instruction are capped before they leave the device. */
 export const MAX_TEXT_ACTION_CHARS = 20_000;
 
-const SYSTEM_INSTRUCTION = "Rewrite the selected text so it follows the instruction. Return only the transformed text, with no preamble or explanation.";
+const SYSTEM_INSTRUCTION = "Transform the input text so it follows the instruction. Return only the transformed text, with no preamble or explanation.";
 
 /** Why this pair cannot be sent, or `null` when it can. */
 export function textActionInputProblem(selection: string, instruction: string): string | null {
-  if (!selection.trim()) return "Capture a selection first.";
+  if (!selection.trim()) return "Add text to transform first.";
   if (!instruction.trim()) return "Say what to do with the selection.";
-  if (selection.length > MAX_TEXT_ACTION_CHARS) return `The selection is too long (at most ${MAX_TEXT_ACTION_CHARS} characters).`;
+  if (selection.length > MAX_TEXT_ACTION_CHARS) return `The text is too long (at most ${MAX_TEXT_ACTION_CHARS} characters).`;
   if (instruction.length > MAX_TEXT_ACTION_CHARS) return `The instruction is too long (at most ${MAX_TEXT_ACTION_CHARS} characters).`;
   return null;
 }
