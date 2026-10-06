@@ -69,6 +69,12 @@ describe("device settings", () => {
     expect(loadDestination(storage, "windows")).toBe("voice-note");
   });
 
+  it("keeps multiple Dictation bindings on the same device", () => {
+    const storage = memoryStorage();
+    saveStoredPushToTalk(["RightAlt", "MouseRight"], storage, "windows");
+    expect(loadStoredPushToTalk(storage, "windows")).toEqual(["RightAlt", "MouseRight"]);
+  });
+
   it("keeps extra hotkeys on this device", () => {
     const storage = memoryStorage();
     saveStoredVoiceNoteHotkey(["Mouse4", "F9"], storage, "windows");
