@@ -1,4 +1,4 @@
-// Rewrites captured text with Gemini 3.5 Flash-Lite. The API key stays on the server.
+// Transforms text with Gemini 3.5 Flash-Lite. The API key stays on the server.
 // Ephemeral tokens are Live-only, so this cannot reuse gemini-token.
 // Secrets: GEMINI_API_KEY. SUPABASE_URL is provided by the runtime.
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@6.2.12";
@@ -49,10 +49,10 @@ function requestFields(body: unknown): { selection: string; instruction: string 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return reply(405, { error: "Method not allowed." });
-  if (!await isSignedIn(req)) return reply(401, { error: "Sign in again to rewrite a selection." });
+  if (!await isSignedIn(req)) return reply(401, { error: "Sign in again to transform text." });
 
   const apiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!apiKey) return reply(500, { error: "The rewrite service is not configured." });
+  if (!apiKey) return reply(500, { error: "The transform service is not configured." });
 
   const fields = requestFields(await req.json().catch(() => null));
   if (!fields) return reply(400, { error: "Send the selection and the instruction." });
@@ -73,13 +73,13 @@ Deno.serve(async (req) => {
   }
   if (!response.ok) {
     console.error(`text-action: Gemini returned ${response.status}`);
-    return reply(502, { error: "Gemini refused the rewrite." });
+    return reply(502, { error: "Gemini refused the transform." });
   }
   try {
     const text = parseModelOutput(await response.json());
     return reply(200, { text });
   } catch {
     console.error("text-action: Gemini returned no text");
-    return reply(502, { error: "The rewrite was empty." });
+    return reply(502, { error: "The transform was empty." });
   }
 });
