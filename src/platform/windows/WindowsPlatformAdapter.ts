@@ -100,6 +100,7 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
   setHotkeys(bindings: HotkeyBindings) {
     return invoke<void>("set_hotkeys", {
       dictate: [...bindings.dictate],
+      dictateLongPress: bindings.dictateLongPress.map((binding) => ({ ...binding })),
       voiceNote: [...bindings.voiceNote],
       handoff: [...bindings.handoff],
       selection: [...bindings.selection],
