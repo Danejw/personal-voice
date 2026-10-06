@@ -75,6 +75,7 @@ import { remoteDictationApi } from "@/services/remoteDictationService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
 import { notesApi } from "@/services/notesService";
+import { transformProfilesApi } from "@/services/transformProfilesService";
 import {
   bindDeviceSettings,
   loadAssistantAutoRun,
@@ -83,12 +84,14 @@ import {
   loadDestination,
   loadRemoteDictation,
   loadShowIndicator,
+  loadTransformProfileId,
   saveAssistantAutoRun,
   saveAssistantProfile,
   saveAutoUpdate,
   saveDestination,
   saveRemoteDictation,
   saveShowIndicator,
+  saveTransformProfileId,
 } from "@/settings/deviceSettings";
 import { DictionaryPanel, DictionaryToolbar } from "@/sync/DictionaryPanel";
 import { PersonalSyncStore } from "@/sync/PersonalSyncStore";
@@ -99,6 +102,11 @@ import { createId } from "@/sync/createId";
 import { transcriptionPreferences } from "@/sync/personalData";
 import type { DictionaryTerm } from "@/sync/personalData";
 import { usePersonalSync } from "@/sync/usePersonalSync";
+import { TransformPanel, TransformToolbar } from "@/transforms/TransformPanel";
+import { TransformStore } from "@/transforms/TransformStore";
+import { useTransforms } from "@/transforms/useTransforms";
+import { applyTransform } from "@/transforms/applyTransform";
+import { transformById, transformOptions } from "@/transforms/transformProfile";
 import { AnalyticsPanel } from "@/usage/AnalyticsPanel";
 import { localDayKey, mergeUsageDays, termUsage } from "@/usage/analytics";
 import { UsagePanel } from "@/usage/UsagePanel";
@@ -170,6 +178,7 @@ assistantMemory.setRemoteLearn(() => requestMemoryLearn());
 assistant.setProducer(() => assistantLibrary.holdingLease());
 const usage = new UsageStore(localStorage, platform.platform, () => new Date(), usageApi);
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
+const transformStore = new TransformStore(transformProfilesApi);
 const notesStore = new NotesStore(
   notesApi,
   (userId) => localDeviceId(localStorage, userId, createId),
@@ -332,6 +341,11 @@ assistant.setActions({
   },
 });
 
+async function transformFinalDictation(text: string): Promise<string> {
+  const profile = transformById(transformStore.getSnapshot().profiles, loadTransformProfileId());
+  return profile ? applyTransform(text, profile) : text;
+}
+
 const destinations = new TranscriptDestinationRouter({
   "active-field": { deliver: async (transcript) => {
     if (!await liveFieldPreview.commit(transcript)) await pasteIntoField(transcript);
@@ -343,7 +357,7 @@ const destinations = new TranscriptDestinationRouter({
   if (result.outcome === "success") {
     usage.recordLater({ name: "destination_used", destination: result.destination });
   }
-});
+}, transformFinalDictation);
 const DESTINATION_OPTIONS: readonly SelectOption[] = [
   { value: "active-field", label: "Active field" },
   { value: "voice-note", label: "Note" },
@@ -482,11 +496,13 @@ export default function App() {
   const auth = useAuth();
   const sync = usePersonalSync(personalSync, auth.userId);
   const notes = useNotes(notesStore, auth.userId);
+  const transforms = useTransforms(transformStore, auth.userId);
   const deviceSnapshot = useDevices(devices, auth.userId);
   const handoffSnapshot = useHandoffs(handoffs, auth.userId);
   const historySnapshot = useDictationHistory(history, auth.userId, sync.data.settings.cloudDictationHistory);
   const usageSnapshot = useUsage(usage);
   const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
+  const [dictationTransformId, setDictationTransformId] = useState<string | null>(() => loadTransformProfileId());
   const [section, setSection] = useState<AppSection>("dictation");
   useHandoffAlerts(
     handoffs,
@@ -532,6 +548,12 @@ export default function App() {
   const updates = useUpdates(platform, { autoUpdate, busy: !idle });
   const assistantLive = assistantSnapshot.status === "CONNECTING" || assistantSnapshot.status === "READY" || assistantSnapshot.status === "RESPONDING";
   const dictationLive = state === "CONNECTING" || state === "LISTENING";
+  const availableTransforms = transformOptions(transforms.profiles);
+  const selectedDictationTransform = transformById(transforms.profiles, dictationTransformId);
+  const dictationTransformOptions: readonly SelectOption[] = [
+    { value: "", label: "None" },
+    ...availableTransforms.map((profile) => ({ value: profile.id, label: profile.name })),
+  ];
   const status = !auth.ready ? "Starting…" : !signedIn ? "Sign in to start dictating" : paused ? "Paused from the tray" : statusFor(state, destination);
 
   function chooseDestination(value: string) {
@@ -539,6 +561,13 @@ export default function App() {
     destinations.select(value);
     setDestination(value);
     saveDestination(value);
+  }
+
+  function chooseDictationTransform(value: string) {
+    if (value && !transformById(transforms.profiles, value)) return;
+    const next = value || null;
+    setDictationTransformId(next);
+    saveTransformProfileId(next);
   }
 
   useOverlay({
@@ -630,6 +659,7 @@ export default function App() {
     const next = loadDestination();
     destinations.select(next);
     setDestination(next);
+    setDictationTransformId(loadTransformProfileId());
     setFloatingControl(loadShowIndicator());
     setProfileEnabled(loadAssistantProfile());
     const auto = loadAssistantAutoRun();
@@ -637,6 +667,13 @@ export default function App() {
     assistant.setAutoRun(auto);
     setAutoUpdate(loadAutoUpdate());
   }, [settingsDeviceId]);
+
+  useEffect(() => {
+    if (transforms.status !== "synced" || !dictationTransformId) return;
+    if (transformById(transforms.profiles, dictationTransformId)) return;
+    setDictationTransformId(null);
+    saveTransformProfileId(null);
+  }, [transforms.status, transforms.profiles, dictationTransformId]);
 
   useEffect(() => {
     if (!auth.email) {
@@ -847,6 +884,7 @@ export default function App() {
           {section === "dictionary" && <DictionaryToolbar store={personalSync} sync={sync} />}
           {section === "notes" && <NotesToolbar store={notesStore} snapshot={notes} />}
           {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
+          {section === "transforms" && <TransformToolbar store={transformStore} snapshot={transforms} />}
           {section === "assistant" && (
             <AssistantHeader
               controller={assistant}
@@ -893,6 +931,14 @@ export default function App() {
                 label="Send to" value={destination} options={DESTINATION_OPTIONS}
                 disabled={!idle} layout={mobileNav ? "stack" : "row"} onChange={chooseDestination}
               />
+              <SelectField
+                label="Transform"
+                value={selectedDictationTransform?.id ?? ""}
+                options={dictationTransformOptions}
+                disabled={!idle || transforms.status !== "synced"}
+                layout={mobileNav ? "stack" : "row"}
+                onChange={chooseDictationTransform}
+              />
               <button type="button" className="record" disabled={!control.enabled || (state === "IDLE" && (!signedIn || assistantLive))} onClick={onControl}>
                 {control.label}
               </button>
@@ -916,6 +962,8 @@ export default function App() {
               snapshot={historySnapshot}
               cloudSync={sync.data.settings.cloudDictationHistory}
               insertIntoActiveField={(text) => pasteReceived(text)}
+              transformProfiles={availableTransforms}
+              saveAsNote={(text) => notesStore.create(text, "manual")}
               onInserted={() => usage.recordLater({ name: "history_inserted" })}
             />
           </section>
@@ -957,6 +1005,12 @@ export default function App() {
               onAttachNote={(note) => assistant.attachNote({ id: note.id, text: note.text, createdAt: note.createdAt })}
               onDetachNote={(id) => assistant.detachNote(id)}
             />
+          </section>
+        </div>
+
+        <div className="panel-stack" hidden={section !== "transforms"}>
+          <section aria-labelledby="page-title" className="page-panel">
+            <TransformPanel store={transformStore} snapshot={transforms} />
           </section>
         </div>
 
