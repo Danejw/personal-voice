@@ -45,7 +45,7 @@ alter table public.notes
     or (title is not null and title_source is not null)
   ),
   add constraint notes_group_source_pair check (
-    (group_id is null and group_source is null)
+    (group_id is null and (group_source is null or group_source = 'manual'))
     or (group_id is not null and group_source is not null)
   );
 
