@@ -1278,6 +1278,29 @@ export default function App() {
           </section>
         </div>
 
+        <div className="panel-stack is-scroll" hidden={section !== "insights"}>
+          <section aria-labelledby="page-title" className="page-panel">
+            <InsightsPanel
+              store={insightsStore}
+              snapshot={insightsSnapshot}
+              knowledge={{
+                dictionary: sync.data.terms,
+                snippets: snippets.snippets,
+                transforms: availableTransforms,
+                memories: assistantMemorySnapshot.memories,
+              }}
+              cloudHistoryEnabled={sync.data.settings.cloudDictationHistory}
+              onEnableCloudHistory={() => {
+                personalSync.updateSettings({ cloudDictationHistory: true });
+              }}
+              devices={deviceSnapshot.devices}
+              usage={usageSnapshot}
+              currentDeviceId={settingsDeviceId ?? null}
+              onAccept={acceptInsightCandidate}
+            />
+          </section>
+        </div>
+
         <div className="analytics" hidden={section !== "analytics"}>
           <AnalyticsPanel
             active={section === "analytics"}
