@@ -987,6 +987,7 @@ export default function App() {
               capture={() => platform.captureSelection()}
               onCaptured={() => usage.recordLater({ name: "selection_captured" })}
               attached={assistantSnapshot.selection}
+              transformProfiles={availableTransforms}
               onItem={(item) => {
                 if (!item) {
                   assistant.detachSelection();
