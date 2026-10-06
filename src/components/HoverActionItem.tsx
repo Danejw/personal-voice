@@ -105,6 +105,12 @@ function ActionIcon({ kind }: { kind: TrayActionKind }) {
           <path d="M5 16h14v4H5z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
         </svg>
       );
+    case "transform":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m5 19 9-9M12 6l1-3 1 3 3 1-3 1-1 3-1-3-3-1 3-1zM17 14l.7-2 .7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
     case "archive":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
