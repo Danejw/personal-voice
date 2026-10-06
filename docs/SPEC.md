@@ -299,6 +299,27 @@ The user should not lose dictated speech merely because a WebSocket fails at fin
 
 A short-lived local utterance buffer may be retained until the utterance succeeds or is abandoned.
 
+## Live dictation feedback
+
+While the Active field destination is recording, Gemini's `partialTranscript` hypotheses
+are shown progressively in supported focused text fields. Native implementations remember
+and verify only their own temporary edit. A later hypothesis replaces that temporary
+text; on finalization the corrected final transcript replaces it once, not a second paste.
+Cancelling removes the temporary text if the field still matches. If a field cannot
+provide a safe provisional edit, the regular finalized insertion is used instead.
+
+Windows uses UI Automation's editable Value pattern for **initially empty** ordinary
+text fields only. It verifies focused element identity, unchanged provisional value,
+and non-password/read-write status before every edit. Existing content, rich editors,
+and fields without this pattern keep the final-only path. No simulated backspaces or
+clipboard edits are used for preview. Android uses Accessibility `ACTION_SET_TEXT`
+only on an unchanged native editable or a recognized plain HTML text field, tracking the
+focused node and original range. Neither platform ever previews into a password field.
+
+Only `active-field` gets provisional text. Notes and Remote Dictation keep their
+final-only save/delivery behavior. No interim hypotheses are saved to history, synced
+to Supabase, or sent to other devices.
+
 ## Text insertion
 
 ### Windows
