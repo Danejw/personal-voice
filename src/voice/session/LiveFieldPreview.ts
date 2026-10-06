@@ -19,9 +19,11 @@ export class LiveFieldPreview {
 
   observe(snapshot: DictationSnapshot, destination: TranscriptDestinationId): void {
     if (snapshot.utterance !== this.utterance) {
-      // A previous cancelled utterance may still have a native update in flight.
-      // Keep the operation queue so its cleanup completes before this utterance.
-      if (this.active && !this.finished) {
+      // Capture cleanup before resetting per-utterance state. The queued action must
+      // not consult this.active later, because a new utterance may already have reset it.
+      const cancelPrevious = this.active && !this.finished;
+      if (cancelPrevious) {
+        this.active = false;
         this.enqueue(async () => {
           await this.platform.liveDictationText("cancel", "").catch(() => false);
         });
@@ -36,12 +38,15 @@ export class LiveFieldPreview {
     if (snapshot.state === "IDLE" || snapshot.state === "ERROR") {
       if (!this.finished) {
         this.finished = true;
-        this.enqueue(async () => {
-          if (this.active) {
+        // Snapshot whether a provisional span exists now. A following utterance may
+        // reset this.active before this serialized cleanup reaches the native layer.
+        const shouldCancel = this.active;
+        if (shouldCancel) {
+          this.active = false;
+          this.enqueue(async () => {
             await this.platform.liveDictationText("cancel", "").catch(() => false);
-            this.active = false;
-          }
-        });
+          });
+        }
       }
       return;
     }
