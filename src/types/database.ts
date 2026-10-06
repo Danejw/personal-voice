@@ -325,11 +325,12 @@ export type Database = {
         }
         Relationships: []
       }
-      voice_notes: {
+      notes: {
         Row: {
           created_at: string
           id: string
           source_device_id: string
+          source_type: string
           status: string
           text: string
           updated_at: string
@@ -339,6 +340,7 @@ export type Database = {
           created_at?: string
           id?: string
           source_device_id: string
+          source_type?: string
           status?: string
           text: string
           updated_at?: string
@@ -348,6 +350,7 @@ export type Database = {
           created_at?: string
           id?: string
           source_device_id?: string
+          source_type?: string
           status?: string
           text?: string
           updated_at?: string
