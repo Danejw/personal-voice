@@ -6,7 +6,7 @@ describe("textActionInputProblem", () => {
   it("rejects an empty selection or instruction and oversized text", () => {
     expect(textActionInputProblem("  ", "shorter")).toBe("Add text to transform first.");
     expect(textActionInputProblem("hello", "  ")).toBe("Say what to do with the selection.");
-    expect(textActionInputProblem("x".repeat(MAX_TEXT_ACTION_CHARS + 1), "shorter")).toMatch(/selection is too long/);
+    expect(textActionInputProblem("x".repeat(MAX_TEXT_ACTION_CHARS + 1), "shorter")).toMatch(/text is too long/);
     expect(textActionInputProblem("hello", "x".repeat(MAX_TEXT_ACTION_CHARS + 1))).toMatch(/instruction is too long/);
     expect(textActionInputProblem("hello", "make this shorter")).toBeNull();
   });
