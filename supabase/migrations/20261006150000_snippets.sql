@@ -10,7 +10,7 @@ create table public.snippets (
     lower(
       btrim(
         regexp_replace(
-          regexp_replace(btrim(trigger), '\\s+', ' ', 'g'),
+          regexp_replace(btrim(trigger), '[[:space:]]+', ' ', 'g'),
           '[.?!,;:]+$',
           '',
           'g'
