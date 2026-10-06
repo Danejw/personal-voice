@@ -20,6 +20,11 @@ import type { Note } from "@/notes/note";
 const note = (id: string, status: Note["status"] = "inbox"): Note => ({
   id,
   text: `Note ${id} with extra words`,
+  title: null,
+  titleSource: null,
+  groupId: null,
+  groupSource: null,
+  organizedAt: null,
   sourceDeviceId: "d1",
   sourceType: "voice",
   status,
