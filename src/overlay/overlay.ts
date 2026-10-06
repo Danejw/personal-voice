@@ -1,7 +1,7 @@
 import type { AssistantStatus } from "@/assistant/state";
 import { handoffDisplayText } from "@/assistant/continuation";
 import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
-import type { VoiceNote } from "@/notes/voiceNote";
+import type { Note } from "@/notes/note";
 import { migrateDestinationId, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 import type { VoiceState } from "@/voice/session/state";
 
@@ -198,7 +198,7 @@ export function buildOverlaySnapshot(input: {
   destination: TranscriptDestinationId;
   signedIn: boolean;
   paused: boolean;
-  notes: VoiceNote[];
+  notes: Note[];
   handoffs: Handoff[];
   devices: OwnedDevice[];
   capture: string | null;
@@ -258,7 +258,7 @@ export function clipOverlayText(text: string, limit = OVERLAY_TEXT_LIMIT): strin
   return trimmed.length <= limit ? trimmed : `${trimmed.slice(0, limit - 1)}…`;
 }
 
-export function overlayNotesFrom(notes: VoiceNote[]): OverlayItem[] {
+export function overlayNotesFrom(notes: Note[]): OverlayItem[] {
   return notes
     .filter((note) => note.status === "inbox")
     .slice(0, OVERLAY_ITEM_LIMIT)
