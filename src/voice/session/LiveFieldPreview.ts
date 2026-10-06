@@ -19,8 +19,14 @@ export class LiveFieldPreview {
 
   observe(snapshot: DictationSnapshot, destination: TranscriptDestinationId): void {
     if (snapshot.utterance !== this.utterance) {
+      // A previous cancelled utterance may still have a native update in flight.
+      // Keep the operation queue so its cleanup completes before this utterance.
+      if (this.active && !this.finished) {
+        this.enqueue(async () => {
+          await this.platform.liveDictationText("cancel", "").catch(() => false);
+        });
+      }
       this.utterance = snapshot.utterance;
-      this.queue = Promise.resolve();
       this.active = false;
       this.unsupported = false;
       this.changed = false;
