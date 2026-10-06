@@ -19,6 +19,7 @@
         "minWidth": 800,
         "minHeight": 560,
         "visible": false,
+        "dragDropEnabled": false,
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows"
       },
       {
@@ -41,8 +42,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost wss://generativelanguage.googleapis.com https://dlovrtlkniolcovfgvvj.supabase.co https://api.github.com",
-      "devCsp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420 ws://localhost:1421 wss://generativelanguage.googleapis.com https://dlovrtlkniolcovfgvvj.supabase.co https://api.github.com"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://*.supabase.co; media-src 'self' https://*.supabase.co; connect-src ipc: http://ipc.localhost wss://generativelanguage.googleapis.com https://dlovrtlkniolcovfgvvj.supabase.co https://api.github.com",
+      "devCsp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://*.supabase.co; media-src 'self' https://*.supabase.co; connect-src ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420 ws://localhost:1421 wss://generativelanguage.googleapis.com https://dlovrtlkniolcovfgvvj.supabase.co https://api.github.com"
     }
   },
   "plugins": {
