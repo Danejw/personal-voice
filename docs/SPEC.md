@@ -125,7 +125,7 @@ Use Supabase for:
 - device records
 - shared settings
 - personal dictionary
-- explicitly saved voice notes and sent device handoffs
+- explicitly saved notes and sent device handoffs
 - secure short-lived Gemini credential/token issuance
 
 Do not send live microphone audio through Supabase.
@@ -173,19 +173,22 @@ language
 updated_at
 ```
 
-### voice_notes
+### notes
 
-Explicitly saved when Voice note is the selected dictation destination:
+Explicitly saved account notes. Dictation, manual entry, and Assistant saves share the same note domain:
 
 ```text
 id
 user_id
 text
 source_device_id
+source_type (voice | manual | assistant)
 status
 created_at
 updated_at
 ```
+
+The legacy `voice_notes` name remains a compatibility view while older installed clients roll forward.
 
 ### handoffs
 
@@ -261,7 +264,7 @@ Keep schema additions conservative.
 - audio goes from the client to the transcription provider
 - backend does not receive live audio
 - audio is not permanently retained by the app
-- voice notes sync only when the user explicitly chooses the Voice note destination
+- voice-created notes sync only when the user explicitly chooses the Voice note destination; manually created notes sync when the user saves them
 - handoffs sync only when the user explicitly sends text to the Handoffs inbox
 - Remote Dictation sends only a finalized transcript to one selected device and expires quickly
 - never monitor or continuously synchronize the OS clipboard
