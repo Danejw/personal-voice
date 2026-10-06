@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Tooltip } from "@/components/Tooltip";
 
 /** Actions the shared hover tray knows how to draw. */
-export type TrayActionKind = "copy" | "edit" | "insert" | "archive" | "unarchive" | "delete" | "dismiss" | "attach";
+export type TrayActionKind = "copy" | "edit" | "insert" | "transform" | "archive" | "unarchive" | "delete" | "dismiss" | "attach";
 
 export interface TrayAction {
   kind: TrayActionKind;
@@ -53,6 +53,7 @@ function isDanger(kind: TrayActionKind): boolean {
     case "copy":
     case "edit":
     case "insert":
+    case "transform":
     case "archive":
     case "unarchive":
     case "attach":
@@ -69,6 +70,7 @@ function labelFor(kind: TrayActionKind): string {
     case "copy": return "Copy";
     case "edit": return "Edit";
     case "insert": return "Insert";
+    case "transform": return "Transform";
     case "archive": return "Archive";
     case "unarchive": return "Unarchive";
     case "delete": return "Delete";
