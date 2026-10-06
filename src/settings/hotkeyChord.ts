@@ -165,6 +165,11 @@ export interface PointerModifiers {
   win: boolean;
 }
 
+export interface LongPressBinding {
+  shortcut: string;
+  holdMs: number;
+}
+
 /** One key or mouse button from a finished keydown chord. `null` when the chord is not a binding. */
 export function shortcutFromKeys(keys: readonly CapturedKey[]): string | null {
   const modifiers: string[] = [];
@@ -209,6 +214,14 @@ export function shortcutFromMouse(button: number, modifiers: PointerModifiers): 
   if (modifiers.alt) held.push("Alt");
   if (modifiers.win) held.push("Win");
   return joinShortcut(held, token);
+}
+
+/** Only mouse-button shortcuts can preserve their normal quick-click behavior today. */
+export function isMouseShortcut(shortcut: string): boolean {
+  const canonical = canonicalShortcut(shortcut);
+  if (!canonical) return false;
+  const key = canonical.split("+").at(-1);
+  return key === "MouseRight" || key === "MouseMiddle" || key === "Mouse4" || key === "Mouse5";
 }
 
 /** Canonical form, or `null` when Rust would reject the shortcut. */

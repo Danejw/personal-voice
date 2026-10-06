@@ -11,6 +11,7 @@ import {
   loadStoredAssistantHotkey,
   loadStoredHandoffHotkey,
   loadStoredPushToTalk,
+  loadStoredPushToTalkLongPress,
   loadStoredRemoteDictationHotkey,
   loadStoredVoiceNoteHotkey,
   saveAssistantAutoRun,
@@ -22,6 +23,7 @@ import {
   saveStoredAssistantHotkey,
   saveStoredHandoffHotkey,
   saveStoredPushToTalk,
+  saveStoredPushToTalkLongPress,
   saveStoredVoiceNoteHotkey,
 } from "@/settings/deviceSettings";
 
@@ -67,6 +69,26 @@ describe("device settings", () => {
     expect(loadShowIndicator(storage, "android")).toBe(true);
     expect(loadMicrophone(storage, "windows")).toBe("headset");
     expect(loadDestination(storage, "windows")).toBe("voice-note");
+  });
+
+  it("keeps multiple Dictation bindings on the same device", () => {
+    const storage = memoryStorage();
+    saveStoredPushToTalk(["RightAlt", "MouseRight"], storage, "windows");
+    expect(loadStoredPushToTalk(storage, "windows")).toEqual(["RightAlt", "MouseRight"]);
+  });
+
+  it("keeps delayed Dictation mouse bindings and hold times on this device", () => {
+    const storage = memoryStorage();
+    saveStoredPushToTalkLongPress(
+      [{ shortcut: "MouseRight", holdMs: 500 }, { shortcut: "Mouse4", holdMs: 750 }],
+      storage,
+      "windows",
+    );
+    expect(loadStoredPushToTalkLongPress(storage, "windows")).toEqual([
+      { shortcut: "MouseRight", holdMs: 500 },
+      { shortcut: "Mouse4", holdMs: 750 },
+    ]);
+    expect(loadStoredPushToTalkLongPress(storage, "android")).toEqual([]);
   });
 
   it("keeps extra hotkeys on this device", () => {

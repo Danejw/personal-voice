@@ -659,6 +659,10 @@ textarea:focus {
 .hotkey-remove:hover:not(:disabled) { color: #f3a7a7; }
 .hotkey-remove:disabled { opacity: 0.35; cursor: default; }
 .hotkey-add { flex: none; }
+.hotkey-long-press select {
+  font: inherit; font-size: 11px; color: #e9edf4; background: #19232e;
+  border: 0; border-radius: 6px; padding: 3px 6px; cursor: pointer;
+}
 .record { font: inherit; font-size: 13px; font-weight: 600; color: #111820; background: #88d8c1; border: 0; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
 .record:hover:not(:disabled) { background: #a3e4d2; }
 .record:disabled { opacity: 0.5; cursor: default; }

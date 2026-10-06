@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shortcutFromKeys, shortcutFromMouse } from "@/settings/hotkeyChord";
+import { isMouseShortcut, shortcutFromKeys, shortcutFromMouse } from "@/settings/hotkeyChord";
 import { hotkeysConflict } from "@/settings/pushToTalk";
 
 describe("hotkeysConflict", () => {
@@ -13,6 +13,14 @@ describe("hotkeysConflict", () => {
     expect(hotkeysConflict(["Alt+S"], [], [], ["Alt+S"])).toBe(true);
     expect(hotkeysConflict(["RightAlt"], [], [], [], ["RightAlt"])).toBe(true);
     expect(hotkeysConflict(["RightAlt"], [], [], [], ["Ctrl+Alt+A"])).toBe(false);
+  });
+});
+
+describe("long-press shortcut eligibility", () => {
+  it("allows mouse buttons but not keyboard keys", () => {
+    expect(isMouseShortcut("MouseRight")).toBe(true);
+    expect(isMouseShortcut("Ctrl+Mouse4")).toBe(true);
+    expect(isMouseShortcut("RightAlt")).toBe(false);
   });
 });
 
@@ -32,8 +40,13 @@ describe("shortcut recording", () => {
   });
 
   it("records a mouse button with the modifiers that are held", () => {
+    expect(shortcutFromMouse(2, { ctrl: false, shift: false, alt: false, win: false })).toBe("MouseRight");
     expect(shortcutFromMouse(4, { ctrl: false, shift: false, alt: false, win: false })).toBe("Mouse5");
     expect(shortcutFromMouse(3, { ctrl: true, shift: false, alt: false, win: false })).toBe("Ctrl+Mouse4");
     expect(shortcutFromMouse(0, { ctrl: false, shift: false, alt: false, win: false })).toBeNull();
+  });
+
+  it("lets Dictation keep a keyboard hold and add right mouse as another hold", () => {
+    expect(hotkeysConflict(["RightAlt", "MouseRight"], [], [], [], [])).toBe(false);
   });
 });

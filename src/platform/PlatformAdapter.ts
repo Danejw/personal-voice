@@ -4,11 +4,14 @@ import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import type { AudioCapture, CaptureOptions } from "@/voice/audio/AudioCapture";
 import type { TargetApp } from "@/platform/targetApp";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
+import type { LongPressBinding } from "@/settings/hotkeyChord";
 
 export type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
 
 export interface HotkeyBindings {
   dictate: readonly string[];
+  /** Delayed mouse holds that preserve a normal quick click. */
+  dictateLongPress: readonly LongPressBinding[];
   voiceNote: readonly string[];
   handoff: readonly string[];
   selection: readonly string[];

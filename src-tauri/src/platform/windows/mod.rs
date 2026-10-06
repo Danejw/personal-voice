@@ -28,7 +28,7 @@ pub use live_text::live_dictation_text;
 pub use snapshot::capture_snapshot;
 pub use windows_info::describe_windows;
 
-use push_to_talk::{DestOverride, PttEvent, Shortcut};
+use push_to_talk::{DestOverride, LongPressShortcut, PttEvent, Shortcut};
 
 #[derive(Clone, Serialize)]
 struct PushToTalkPayload {
@@ -80,6 +80,7 @@ pub fn set_push_to_talk_shortcut(shortcut: &str) -> Result<(), String> {
 
 pub fn set_hotkeys(
     dictate: &[String],
+    dictate_long_press: &[crate::platform::LongPressHotkey],
     voice_note: &[String],
     handoff: &[String],
     selection: &[String],
@@ -88,8 +89,13 @@ pub fn set_hotkeys(
     fn parse_list(values: &[String]) -> Result<Vec<Shortcut>, String> {
         values.iter().map(|value| Shortcut::parse(value)).collect()
     }
+    let long_press = dictate_long_press
+        .iter()
+        .map(|binding| LongPressShortcut::new(Shortcut::parse(&binding.shortcut)?, binding.hold_ms))
+        .collect::<Result<Vec<_>, String>>()?;
     hook::set_hotkeys(
         parse_list(dictate)?,
+        long_press,
         parse_list(voice_note)?,
         parse_list(handoff)?,
         parse_list(selection)?,

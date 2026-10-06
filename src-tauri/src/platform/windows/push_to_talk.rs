@@ -23,6 +23,10 @@ pub struct Shortcut {
 }
 
 impl Shortcut {
+    pub fn is_mouse(self) -> bool {
+        matches!(self.vk, VK_RBUTTON | VK_MBUTTON | VK_XBUTTON1 | VK_XBUTTON2)
+    }
+
     /// Parses `"RightAlt"`, `"Ctrl+Shift+Space"`, `"F9"`, etc. Names are case-insensitive.
     pub fn parse(text: &str) -> Result<Self, String> {
         let parts: Vec<&str> = text.split('+').map(str::trim).collect();
@@ -52,6 +56,24 @@ impl Shortcut {
 impl Default for Shortcut {
     fn default() -> Self {
         Self::parse("RightAlt").expect("default shortcut parses")
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LongPressShortcut {
+    pub shortcut: Shortcut,
+    pub hold_ms: u64,
+}
+
+impl LongPressShortcut {
+    pub fn new(shortcut: Shortcut, hold_ms: u64) -> Result<Self, String> {
+        if !shortcut.is_mouse() {
+            return Err("Long press currently supports mouse buttons only.".into());
+        }
+        if !(200..=2_000).contains(&hold_ms) {
+            return Err("Long-press hold time must be between 200 and 2000 ms.".into());
+        }
+        Ok(Self { shortcut, hold_ms })
     }
 }
 
@@ -181,6 +203,7 @@ const SWALLOW: Outcome = Outcome {
 /// Tracks held shortcuts so auto-repeat never starts a second utterance.
 pub struct PushToTalk {
     pub dictate: Vec<Shortcut>,
+    pub dictate_long_press: Vec<LongPressShortcut>,
     pub voice_note: Vec<Shortcut>,
     pub handoff: Vec<Shortcut>,
     pub selection: Vec<Shortcut>,
@@ -198,6 +221,7 @@ impl Default for PushToTalk {
     fn default() -> Self {
         Self {
             dictate: vec![Shortcut::default()],
+            dictate_long_press: Vec::new(),
             voice_note: Vec::new(),
             handoff: Vec::new(),
             selection: Vec::new(),
@@ -214,6 +238,7 @@ impl Default for PushToTalk {
 impl PushToTalk {
     pub fn set_shortcut(&mut self, shortcut: Shortcut) {
         self.dictate = vec![shortcut];
+        self.dictate_long_press.retain(|binding| binding.shortcut != shortcut);
         self.held = None;
     }
 
@@ -225,17 +250,64 @@ impl PushToTalk {
         selection: Vec<Shortcut>,
         assistant: Vec<Shortcut>,
     ) -> Result<(), String> {
+        self.set_all_hotkeys(
+            dictate,
+            self.dictate_long_press.clone(),
+            voice_note,
+            handoff,
+            selection,
+            assistant,
+        )
+    }
+
+    pub fn set_long_press_hotkeys(&mut self, bindings: Vec<LongPressShortcut>) -> Result<(), String> {
+        self.set_all_hotkeys(
+            self.dictate.clone(),
+            bindings,
+            self.voice_note.clone(),
+            self.handoff.clone(),
+            self.selection.clone(),
+            self.assistant.clone(),
+        )
+    }
+
+    pub fn set_all_hotkeys(
+        &mut self,
+        dictate: Vec<Shortcut>,
+        dictate_long_press: Vec<LongPressShortcut>,
+        voice_note: Vec<Shortcut>,
+        handoff: Vec<Shortcut>,
+        selection: Vec<Shortcut>,
+        assistant: Vec<Shortcut>,
+    ) -> Result<(), String> {
         if dictate.is_empty() {
             return Err("Hold to dictate needs a key or mouse button.".into());
         }
-        ensure_unique(&[&dictate, &voice_note, &handoff, &selection, &assistant])?;
+        ensure_unique(&[&dictate, &voice_note, &handoff, &selection, &assistant], &dictate_long_press)?;
         self.dictate = dictate;
+        self.dictate_long_press = dictate_long_press;
         self.voice_note = voice_note;
         self.handoff = handoff;
         self.selection = selection;
         self.assistant = assistant;
         self.held = None;
         Ok(())
+    }
+
+    pub fn long_press_delay(&self, vk: u32, modifiers: Modifiers) -> Option<u64> {
+        if self.paused || self.capturing || self.held.is_some() {
+            return None;
+        }
+        self.dictate_long_press
+            .iter()
+            .find(|binding| matches_shortcut(&binding.shortcut, vk, modifiers))
+            .map(|binding| binding.hold_ms)
+    }
+
+    pub fn begin_long_press(&mut self, vk: u32, modifiers: Modifiers) -> Option<PttEvent> {
+        self.long_press_delay(vk, modifiers)?;
+        self.held = Some((vk, HeldAction::Talk));
+        Some(PttEvent::Press { destination: None })
     }
 
     pub fn set_paused(&mut self, paused: bool) {
@@ -352,15 +424,21 @@ fn matches_shortcut(shortcut: &Shortcut, vk: u32, modifiers: Modifiers) -> bool 
     shortcut.vk == vk && shortcut.modifiers == modifiers
 }
 
-fn ensure_unique(lists: &[&[Shortcut]]) -> Result<(), String> {
-    let mut seen: Vec<&Shortcut> = Vec::new();
+fn ensure_unique(lists: &[&[Shortcut]], long_press: &[LongPressShortcut]) -> Result<(), String> {
+    let mut seen: Vec<Shortcut> = Vec::new();
     for list in lists {
         for shortcut in *list {
-            if seen.iter().any(|other| *other == shortcut) {
-                return Err("Each action needs its own key or mouse button.".into());
+            if seen.contains(shortcut) {
+                return Err("Each binding needs its own key or mouse button.".into());
             }
-            seen.push(shortcut);
+            seen.push(*shortcut);
         }
+    }
+    for binding in long_press {
+        if seen.contains(&binding.shortcut) {
+            return Err("Each binding needs its own key or mouse button.".into());
+        }
+        seen.push(binding.shortcut);
     }
     Ok(())
 }
@@ -528,6 +606,82 @@ mod tests {
         let f9 = Shortcut::parse("F9").unwrap();
         assert!(ptt.set_hotkeys(vec![f9], vec![f9], vec![], vec![], vec![]).is_err());
         assert!(ptt.set_hotkeys(vec![], vec![], vec![], vec![], vec![]).is_err());
+    }
+
+    #[test]
+    fn right_mouse_and_right_alt_can_both_hold_to_dictate() {
+        let mut ptt = PushToTalk::default();
+        ptt.set_hotkeys(
+            vec![
+                Shortcut::parse("RightAlt").unwrap(),
+                Shortcut::parse("MouseRight").unwrap(),
+            ],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        )
+        .unwrap();
+
+        let right_down = ptt.on_key(VK_RBUTTON, true, NONE);
+        assert!(right_down.swallow);
+        assert_eq!(
+            right_down.event,
+            Some(PttEvent::Press { destination: None })
+        );
+        let right_up = ptt.on_key(VK_RBUTTON, false, NONE);
+        assert!(right_up.swallow);
+        assert_eq!(right_up.event, Some(PttEvent::Release));
+
+        assert_eq!(
+            ptt.on_key(RIGHT_ALT, true, NONE).event,
+            Some(PttEvent::Press { destination: None })
+        );
+        assert_eq!(
+            ptt.on_key(RIGHT_ALT, false, NONE).event,
+            Some(PttEvent::Release)
+        );
+    }
+
+    #[test]
+    fn long_press_mouse_waits_for_threshold_then_uses_normal_release() {
+        let mut ptt = PushToTalk::default();
+        let right = Shortcut::parse("MouseRight").unwrap();
+        ptt.set_long_press_hotkeys(vec![LongPressShortcut::new(right, 500).unwrap()])
+            .unwrap();
+
+        assert_eq!(ptt.long_press_delay(VK_RBUTTON, NONE), Some(500));
+        // The physical down is reserved by the hook, not treated as an immediate shortcut.
+        assert_eq!(ptt.on_key(VK_RBUTTON, true, NONE), PASS);
+        assert_eq!(
+            ptt.begin_long_press(VK_RBUTTON, NONE),
+            Some(PttEvent::Press { destination: None })
+        );
+        assert_eq!(
+            ptt.on_key(VK_RBUTTON, false, NONE).event,
+            Some(PttEvent::Release)
+        );
+    }
+
+    #[test]
+    fn long_press_rejects_keyboard_and_conflicts_with_immediate_mouse() {
+        assert!(LongPressShortcut::new(Shortcut::parse("RightAlt").unwrap(), 500).is_err());
+        assert!(LongPressShortcut::new(Shortcut::parse("MouseRight").unwrap(), 100).is_err());
+
+        let mut ptt = PushToTalk::default();
+        ptt.set_hotkeys(
+            vec![Shortcut::parse("MouseRight").unwrap()],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        )
+        .unwrap();
+        assert!(ptt
+            .set_long_press_hotkeys(vec![
+                LongPressShortcut::new(Shortcut::parse("MouseRight").unwrap(), 500).unwrap()
+            ])
+            .is_err());
     }
 
     #[test]
