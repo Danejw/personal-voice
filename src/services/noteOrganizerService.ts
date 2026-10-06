@@ -38,7 +38,7 @@ export function parseNoteOrganizationResponse(body: unknown): NoteOrganizationPl
   const existingGroupAssignments: ExistingGroupAssignment[] = Array.isArray(root.existingGroupAssignments)
     ? root.existingGroupAssignments.flatMap((entry) => {
         const row = recordOf(entry);
-        return typeof row?.noteId === "string" && typeof row.groupId === "string"
+        return typeof row?.noteId === "string" && typeof row?.groupId === "string"
           ? [{ noteId: row.noteId, groupId: row.groupId }]
           : [];
       })
