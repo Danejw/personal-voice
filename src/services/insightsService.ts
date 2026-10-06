@@ -45,6 +45,25 @@ function catchphrases(value: Json): CatchphraseInsight[] {
   }).filter((item) => item.text && item.count > 0);
 }
 
+function counts(value: unknown, length: number): number[] {
+  if (!Array.isArray(value)) return Array.from({ length }, () => 0);
+  return Array.from({ length }, (_, index) => {
+    const raw = value[index];
+    return typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 0;
+  });
+}
+
+function deviceCounts(value: unknown): InsightUsageFacts["deviceCounts"] {
+  if (!Array.isArray(value)) return [];
+  return value.map((raw) => {
+    const item = typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+    return {
+      deviceId: typeof item.deviceId === "string" ? item.deviceId : "",
+      count: typeof item.count === "number" && Number.isFinite(item.count) && item.count >= 0 ? Math.floor(item.count) : 0,
+    };
+  }).filter((item) => item.deviceId && item.count > 0);
+}
+
 function facts(value: Json): InsightUsageFacts {
   const item = record(value);
   return {
@@ -55,6 +74,9 @@ function facts(value: Json): InsightUsageFacts {
     peakDeviceShare: typeof item.peakDeviceShare === "number" ? item.peakDeviceShare : null,
     averageWords: typeof item.averageWords === "number" ? item.averageWords : 0,
     totalWords: typeof item.totalWords === "number" ? item.totalWords : 0,
+    dayCounts: counts(item.dayCounts, 7),
+    hourCounts: counts(item.hourCounts, 24),
+    deviceCounts: deviceCounts(item.deviceCounts),
   };
 }
 
