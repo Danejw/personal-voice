@@ -12,11 +12,14 @@ const LEGACY_HANDOFF_HOTKEY_KEY = "settings.handoffHotkey";
 const LEGACY_SELECTION_HOTKEY_KEY = "settings.selectionHotkey";
 const LEGACY_ASSISTANT_HOTKEY_KEY = "settings.assistantHotkey";
 const LEGACY_DESTINATION_KEY = "settings.destination";
+const LEGACY_TRANSFORM_KEY = "settings.transformProfileId";
 
 let boundDeviceId: string | null = null;
 
 export interface DevicePreferences {
   destination: TranscriptDestinationId;
+  /** Transform applied to finalized Dictation text before its destination. null means no transform. */
+  transformProfileId: string | null;
   microphone: string | null;
   showIndicator: boolean;
   /** Recorded immediate dictate bindings. A legacy install stored one shortcut string. */
@@ -110,6 +113,7 @@ function fromLegacy(storage: KeyValueStorage): DevicePreferences {
   const destination = migrateDestinationId(storage.getItem(LEGACY_DESTINATION_KEY)) ?? "active-field";
   return {
     destination,
+    transformProfileId: storage.getItem(LEGACY_TRANSFORM_KEY) || null,
     microphone,
     showIndicator: storage.getItem(LEGACY_INDICATOR_KEY) !== "false",
     pushToTalk: shortcutList(storage.getItem(LEGACY_PUSH_TO_TALK_KEY), []),
@@ -138,6 +142,9 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
       : shortcutList(fields.handoffHotkey, fallback.remoteDictationHotkey);
     return {
       destination,
+      transformProfileId: fields.transformProfileId === undefined
+        ? fallback.transformProfileId
+        : deviceIdOrNull(fields.transformProfileId),
       microphone: typeof fields.microphone === "string" && fields.microphone
         ? fields.microphone
         : fields.microphone === null || fields.microphone === ""
@@ -184,6 +191,7 @@ function write(storage: KeyValueStorage, deviceId: string | null, patch: Partial
   storage.setItem(LEGACY_MICROPHONE_KEY, next.microphone ?? "");
   storage.setItem(LEGACY_INDICATOR_KEY, String(next.showIndicator));
   storage.setItem(LEGACY_DESTINATION_KEY, next.destination);
+  storage.setItem(LEGACY_TRANSFORM_KEY, next.transformProfileId ?? "");
   storage.setItem(LEGACY_PUSH_TO_TALK_KEY, JSON.stringify(next.pushToTalk));
   storage.setItem(LEGACY_PUSH_TO_TALK_LONG_PRESS_KEY, JSON.stringify(next.pushToTalkLongPress));
   storage.setItem(LEGACY_VOICE_NOTE_HOTKEY_KEY, JSON.stringify(next.voiceNoteHotkey));
@@ -212,6 +220,14 @@ export function loadDestination(storage: KeyValueStorage = localStorage, deviceI
 
 export function saveDestination(destination: TranscriptDestinationId, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
   write(storage, scope(deviceId), { destination });
+}
+
+export function loadTransformProfileId(storage: KeyValueStorage = localStorage, deviceId?: string | null): string | null {
+  return read(storage, scope(deviceId)).transformProfileId;
+}
+
+export function saveTransformProfileId(transformProfileId: string | null, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { transformProfileId });
 }
 
 /** `null` means the system default microphone. */
