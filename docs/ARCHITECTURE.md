@@ -130,6 +130,7 @@ DictationController
 TranscriptDestinationRouter
 ├─ active-field → PlatformAdapter.insertText()
 ├─ voice-note → NotesStore(source=voice) → Supabase
+│                                └─ note_attachments → private Supabase Storage
 └─ remote-dictation → RemoteDictationDestination → remote_dictation_requests → target insertReceivedText()
 ```
 
