@@ -242,6 +242,7 @@ impl PushToTalk {
         self.held = None;
     }
 
+    #[cfg(test)]
     pub fn set_hotkeys(
         &mut self,
         dictate: Vec<Shortcut>,
@@ -260,6 +261,7 @@ impl PushToTalk {
         )
     }
 
+    #[cfg(test)]
     pub fn set_long_press_hotkeys(&mut self, bindings: Vec<LongPressShortcut>) -> Result<(), String> {
         self.set_all_hotkeys(
             self.dictate.clone(),
