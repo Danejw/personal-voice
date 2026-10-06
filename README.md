@@ -41,7 +41,7 @@ Press → Speak → Release → Clean text appears at the cursor
 | Platform | Default control |
 | --- | --- |
 | **Windows** | Hold a global hotkey (or the floating mic) |
-| **Android** | Hold the floating microphone |
+| **Android** | Hold the floating microphone to dictate, or hold the Note bubble to save directly to Notes |
 
 Text can go into the focused field, a voice note, or another device's active cursor via Remote Dictation.
 
