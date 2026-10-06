@@ -342,8 +342,11 @@ assistant.setActions({
 });
 
 async function transformFinalDictation(text: string): Promise<string> {
-  const profile = transformById(transformStore.getSnapshot().profiles, loadTransformProfileId());
-  return profile ? applyTransform(text, profile) : text;
+  const selectedId = loadTransformProfileId();
+  if (!selectedId) return text;
+  const profile = transformById(transformStore.getSnapshot().profiles, selectedId);
+  if (!profile) throw new Error("The selected transform is unavailable. Open Transforms and choose another.");
+  return applyTransform(text, profile);
 }
 
 const destinations = new TranscriptDestinationRouter({
