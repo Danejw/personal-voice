@@ -16,6 +16,11 @@ export interface CatchphraseInsight {
   count: number;
 }
 
+export interface InsightDeviceCount {
+  deviceId: string;
+  count: number;
+}
+
 export interface InsightUsageFacts {
   peakDay: string | null;
   peakHourStart: number | null;
@@ -24,6 +29,11 @@ export interface InsightUsageFacts {
   peakDeviceShare: number | null;
   averageWords: number;
   totalWords: number;
+  /** Sunday through Saturday. Persisted so the Insights dashboard survives raw-history compaction. */
+  dayCounts: number[];
+  /** Local hours 0 through 23. */
+  hourCounts: number[];
+  deviceCounts: InsightDeviceCount[];
 }
 
 export interface InsightRun {
@@ -131,6 +141,9 @@ export function usageFacts(rows: readonly DictationRecord[]): InsightUsageFacts 
       peakDeviceShare: null,
       averageWords: 0,
       totalWords: 0,
+      dayCounts: Array.from({ length: 7 }, () => 0),
+      hourCounts: Array.from({ length: 24 }, () => 0),
+      deviceCounts: [],
     };
   }
 
@@ -187,6 +200,11 @@ export function usageFacts(rows: readonly DictationRecord[]): InsightUsageFacts 
     peakDeviceShare: peakDevice ? Math.round((peakDevice[1] / peakDeviceDenominator) * 100) : null,
     averageWords: Math.round(totalWords / rows.length),
     totalWords,
+    dayCounts,
+    hourCounts,
+    deviceCounts: [...deviceCounts.entries()]
+      .map(([deviceId, count]) => ({ deviceId, count }))
+      .sort((a, b) => b.count - a.count || a.deviceId.localeCompare(b.deviceId)),
   };
 }
 
