@@ -58,7 +58,14 @@ function facts(value: Json): InsightUsageFacts {
   };
 }
 
-function runFromRow(row: Database["public"]["Tables"]["insight_runs"]["Row"]): InsightRun {
+type InsightRunRow = Pick<Database["public"]["Tables"]["insight_runs"]["Row"],
+  "id" | "source_from_created_at" | "source_through_created_at" | "dictation_count" | "word_count" | "active_days"
+  | "voice_profile" | "catchphrases" | "usage_facts" | "created_at" | "compacted_at" | "compacted_count">;
+type InsightCandidateRow = Pick<Database["public"]["Tables"]["insight_candidates"]["Row"],
+  "id" | "run_id" | "kind" | "fingerprint" | "title" | "payload" | "evidence_count"
+  | "confidence" | "reason" | "status" | "created_at" | "updated_at">;
+
+function runFromRow(row: InsightRunRow): InsightRun {
   return {
     id: row.id,
     sourceFromCreatedAt: row.source_from_created_at,
@@ -75,7 +82,7 @@ function runFromRow(row: Database["public"]["Tables"]["insight_runs"]["Row"]): I
   };
 }
 
-function candidateFromRow(row: Database["public"]["Tables"]["insight_candidates"]["Row"]): InsightCandidate {
+function candidateFromRow(row: InsightCandidateRow): InsightCandidate {
   const payload = record(row.payload);
   return {
     id: row.id,
