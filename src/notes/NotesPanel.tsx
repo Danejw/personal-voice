@@ -66,6 +66,15 @@ function filesFrom(list: FileList | null): File[] {
   return list ? Array.from(list) : [];
 }
 
+function filesFromClipboard(data: DataTransfer): File[] {
+  const direct = filesFrom(data.files);
+  if (direct.length) return direct;
+  return Array.from(data.items)
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
+}
+
 function AttachmentPreview({
   attachment,
   editing,
@@ -86,12 +95,10 @@ function AttachmentPreview({
         </a>
       )}
       {kind === "video" && (
-        <video className="note-attachment-preview" src={attachment.downloadUrl} controls preload="metadata">
-        </video>
+        <video className="note-attachment-preview" src={attachment.downloadUrl} controls preload="metadata" />
       )}
       {kind === "audio" && (
-        <audio className="note-attachment-audio" src={attachment.downloadUrl} controls preload="metadata">
-        </audio>
+        <audio className="note-attachment-audio" src={attachment.downloadUrl} controls preload="metadata" />
       )}
       <div className="note-attachment-meta">
         <a href={attachment.downloadUrl} target="_blank" rel="noreferrer" title={attachment.fileName}>
@@ -176,7 +183,7 @@ function NoteGroup({
             }
 
             function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
-              const pasted = filesFrom(event.clipboardData.files);
+              const pasted = filesFromClipboard(event.clipboardData);
               if (!pasted.length) return;
               event.preventDefault();
               addFiles(pasted);
