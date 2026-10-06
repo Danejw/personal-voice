@@ -18,7 +18,7 @@ function state(
 
 describe("LiveFieldPreview", () => {
   it("updates only the active field and replaces partial with final exactly once", async () => {
-    const text = vi.fn(async (_phase: string, _value: string) => true);
+    const text = vi.fn(async () => true);
     const preview = new LiveFieldPreview({ liveDictationText: text });
     preview.observe(state(1, "CONNECTING"), "active-field");
     preview.observe(state(1, "LISTENING", "Hello wor"), "active-field");
