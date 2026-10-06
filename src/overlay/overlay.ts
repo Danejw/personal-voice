@@ -58,7 +58,7 @@ export type OverlayHoldDestination = "voice-note";
 
 export type OverlayAction =
   | { type: "dictate-toggle" }
-  | { type: "dictate-hold"; phase: "start" | "stop"; destination: OverlayHoldDestination; id: number }
+  | { type: "dictate-hold"; phase: "start" | "stop" | "cancel"; destination: OverlayHoldDestination; id: number }
   | { type: "cycle-remote-target" }
   | { type: "remote-dictate-hold"; phase: "start" | "stop"; targetId: string; id: number }
   | { type: "set-destination"; destination: TranscriptDestinationId }
@@ -302,7 +302,7 @@ export function parseOverlayAction(payload: unknown): OverlayAction | null {
     case "cycle-remote-target":
       return { type: record.type };
     case "dictate-hold":
-      return (record.phase === "start" || record.phase === "stop")
+      return (record.phase === "start" || record.phase === "stop" || record.phase === "cancel")
         && record.destination === "voice-note"
         && typeof record.id === "number"
         ? { type: "dictate-hold", phase: record.phase, destination: record.destination, id: record.id }
