@@ -227,6 +227,12 @@ export class InsightsStore {
     if (!userId) throw new Error("Sign in to compact dictations.");
     this.publish({ ...this.snapshot, status: "compacting", error: null, progress: "Compacting analyzed dictations…" });
     try {
+      const run = this.snapshot.runs.find((item) => item.id === runId);
+      if (run && !hasVisualDistributions(run)) {
+        const sourceRows = this.dictations.filter((row) =>
+          row.createdAt >= run.sourceFromCreatedAt && row.createdAt <= run.sourceThroughCreatedAt);
+        if (sourceRows.length) await this.api.updateRunUsageFacts(run.id, usageFacts(sourceRows));
+      }
       const removed = await this.api.compact(userId, runId, INSIGHTS_KEEP_RECENT);
       await this.reload();
       return removed;
@@ -254,6 +260,12 @@ export class InsightsStore {
     this.snapshot = next;
     for (const listener of this.listeners) listener();
   }
+}
+
+function hasVisualDistributions(run: InsightRun): boolean {
+  return run.usageFacts.dayCounts.some((count) => count > 0)
+    || run.usageFacts.hourCounts.some((count) => count > 0)
+    || run.usageFacts.deviceCounts.length > 0;
 }
 
 function messageOf(value: unknown): string {
