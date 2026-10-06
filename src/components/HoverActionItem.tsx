@@ -66,12 +66,6 @@ function isDanger(kind: TrayActionKind): boolean {
 
 function labelFor(kind: TrayActionKind): string {
   switch (kind) {
-    case "edit":
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="m6 17 1-4 8-8 4 4-8 8-5 1zM14 6l4 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
     case "copy": return "Copy";
     case "edit": return "Edit";
     case "insert": return "Insert";
@@ -89,6 +83,12 @@ function labelFor(kind: TrayActionKind): string {
 
 function ActionIcon({ kind }: { kind: TrayActionKind }) {
   switch (kind) {
+    case "edit":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 17 1-4 8-8 4 4-8 8-5 1zM14 6l4 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
     case "copy":
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
