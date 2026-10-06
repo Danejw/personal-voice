@@ -48,12 +48,12 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "create_voice_note",
-      description: "Save text as a voice note on the user's account. Call this when the user asks to save a note. Do not ask them to click. Do not say voice notes are unavailable.",
+      description: "Save text as a note on the user's account. Call this when the user asks to save a note. Do not ask them to click. Do not say notes are unavailable.",
       parameters: { type: "object", properties: { text: TEXT }, required: ["text"] },
     },
     {
       name: "list_voice_notes",
-      description: "Read the user's voice notes. Call this when the user asks what their notes say. Inbox only unless include_archived is true. Answer from this result. Use an id from this list for archive, restore, or delete.",
+      description: "Read the user's notes. Call this when the user asks what their notes say. Inbox only unless include_archived is true. Answer from this result. Use an id from this list for archive, restore, or delete.",
       parameters: {
         type: "object",
         properties: {
@@ -63,17 +63,17 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "archive_voice_note",
-      description: "Archive one voice note. Call list_voice_notes first and pass that note's id. Call it when the user asks. Do not ask them to click. Do not say this is unavailable.",
+      description: "Archive one note. Call list_voice_notes first and pass that note's id. Call it when the user asks. Do not ask them to click. Do not say this is unavailable.",
       parameters: { type: "object", properties: { id: { type: "string", description: "The note id from list_voice_notes." } }, required: ["id"] },
     },
     {
       name: "restore_voice_note",
-      description: "Move one archived voice note back to the inbox. Call list_voice_notes with include_archived first and pass that note's id. Call it when the user asks. Do not ask them to click.",
+      description: "Move one archived note back to the inbox. Call list_voice_notes with include_archived first and pass that note's id. Call it when the user asks. Do not ask them to click.",
       parameters: { type: "object", properties: { id: { type: "string", description: "The note id from list_voice_notes." } }, required: ["id"] },
     },
     {
       name: "delete_voice_note",
-      description: "Delete one voice note permanently. Call list_voice_notes first and pass that note's id. Call it when the user asks. Do not ask them to click. Do not delete unless the user asked.",
+      description: "Delete one note permanently. Call list_voice_notes first and pass that note's id. Call it when the user asks. Do not ask them to click. Do not delete unless the user asked.",
       parameters: { type: "object", properties: { id: { type: "string", description: "The note id from list_voice_notes." } }, required: ["id"] },
     },
     {
@@ -396,7 +396,7 @@ export function decideToolCall(
     return confirm(call.id, "insert_text", text.text, "Insert this text into the focused app", null, null);
   }
   if (call.name === "create_voice_note") {
-    return confirm(call.id, "create_voice_note", text.text, "Save this voice note", null, null);
+    return confirm(call.id, "create_voice_note", text.text, "Save this note", null, null);
   }
   const device = readDevice(args);
   if ("error" in device) return { kind: "reject", id: call.id, name: call.name, message: device.error };
@@ -411,9 +411,9 @@ export function decideToolCall(
 
 function confirmTitle(name: "archive_voice_note" | "restore_voice_note" | "delete_voice_note" | "dismiss_handoff"): string {
   switch (name) {
-    case "archive_voice_note": return "Archive this voice note";
-    case "restore_voice_note": return "Restore this voice note";
-    case "delete_voice_note": return "Delete this voice note";
+    case "archive_voice_note": return "Archive this note";
+    case "restore_voice_note": return "Restore this note";
+    case "delete_voice_note": return "Delete this note";
     case "dismiss_handoff": return "Dismiss this handoff";
   }
 }
