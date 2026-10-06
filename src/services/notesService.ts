@@ -2,20 +2,36 @@ import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { syncErrorMessage } from "@/services/personalSyncService";
 import { getSupabase } from "@/services/supabase";
 import { noteFromRow } from "@/notes/note";
+import { noteGroupFromRow } from "@/notes/noteGroup";
 import { NOTE_ATTACHMENT_MAX_BYTES, noteAttachmentFromRow } from "@/notes/noteAttachment";
-import type { Note, NoteSourceType, NoteStatus } from "@/notes/note";
+import type { Note, NoteOrganizationSource, NoteSourceType, NoteStatus } from "@/notes/note";
+import type { NoteGroup } from "@/notes/noteGroup";
 import type { NoteAttachment } from "@/notes/noteAttachment";
 import type { Database } from "@/types/database";
 
-const NOTE_COLUMNS = "id, text, source_device_id, source_type, status, created_at, updated_at";
+const NOTE_COLUMNS = "id, text, title, title_source, group_id, group_source, organized_at, source_device_id, source_type, status, created_at, updated_at";
+const GROUP_COLUMNS = "id, name, created_at, updated_at";
 const ATTACHMENT_COLUMNS = "id, user_id, note_id, file_name, mime_type, size_bytes, storage_path, created_at";
 const ATTACHMENT_BUCKET = "note-attachments";
 const SIGNED_URL_SECONDS = 60 * 60;
 
+export interface NotePresentationUpdate {
+  title?: string | null;
+  titleSource?: NoteOrganizationSource | null;
+  groupId?: string | null;
+  groupSource?: NoteOrganizationSource | null;
+  organizedAt?: string | null;
+}
+
 export interface NotesApi {
   list(userId: string): Promise<Note[]>;
+  listGroups(userId: string): Promise<NoteGroup[]>;
   create(userId: string, text: string, sourceDeviceId: string, sourceType: NoteSourceType): Promise<Note>;
+  createGroup(userId: string, name: string): Promise<NoteGroup>;
+  renameGroup(id: string, name: string): Promise<NoteGroup>;
   updateText(id: string, text: string): Promise<Note>;
+  updateDetails(id: string, text: string, title: string, groupId: string | null): Promise<Note>;
+  updatePresentation(id: string, update: NotePresentationUpdate): Promise<Note>;
   addAttachment(userId: string, noteId: string, file: File): Promise<NoteAttachment>;
   removeAttachment(attachment: NoteAttachment): Promise<void>;
   setStatus(id: string, status: NoteStatus): Promise<Note>;
@@ -89,6 +105,16 @@ export const notesApi: NotesApi = {
     return notes.map((note) => ({ ...note, attachments: byNote.get(note.id) ?? [] }));
   },
 
+  async listGroups(userId) {
+    const { data, error } = await requireClient()
+      .from("note_groups")
+      .select(GROUP_COLUMNS)
+      .eq("user_id", userId)
+      .order("name", { ascending: true });
+    check(error);
+    return (data ?? []).map(noteGroupFromRow);
+  },
+
   async create(userId, text, sourceDeviceId, sourceType) {
     const { data, error } = await requireClient()
       .from("notes")
@@ -100,6 +126,33 @@ export const notesApi: NotesApi = {
     return noteFromRow(data);
   },
 
+  async createGroup(userId, name) {
+    const clean = name.trim();
+    if (!clean) throw new Error("A note group needs a name.");
+    const { data, error } = await requireClient()
+      .from("note_groups")
+      .insert({ user_id: userId, name: clean })
+      .select(GROUP_COLUMNS)
+      .single();
+    check(error);
+    if (!data) throw new Error("The notes service did not return the new group.");
+    return noteGroupFromRow(data);
+  },
+
+  async renameGroup(id, name) {
+    const clean = name.trim();
+    if (!clean) throw new Error("A note group needs a name.");
+    const { data, error } = await requireClient()
+      .from("note_groups")
+      .update({ name: clean })
+      .eq("id", id)
+      .select(GROUP_COLUMNS)
+      .single();
+    check(error);
+    if (!data) throw new Error("The notes service did not return the renamed group.");
+    return noteGroupFromRow(data);
+  },
+
   async updateText(id, text) {
     const { data, error } = await requireClient()
       .from("notes")
@@ -109,6 +162,47 @@ export const notesApi: NotesApi = {
       .single();
     check(error);
     if (!data) throw new Error("The notes service did not return the edited note.");
+    return noteFromRow(data);
+  },
+
+  async updateDetails(id, text, title, groupId) {
+    const cleanText = text.trim();
+    const cleanTitle = title.trim();
+    if (!cleanText) throw new Error("A note cannot be empty.");
+    if (!cleanTitle) throw new Error("A note title cannot be empty.");
+    const { data, error } = await requireClient()
+      .from("notes")
+      .update({
+        text: cleanText,
+        title: cleanTitle,
+        title_source: "manual",
+        group_id: groupId,
+        group_source: groupId ? "manual" : null,
+        organized_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select(NOTE_COLUMNS)
+      .single();
+    check(error);
+    if (!data) throw new Error("The notes service did not return the edited note.");
+    return noteFromRow(data);
+  },
+
+  async updatePresentation(id, update) {
+    const row: Database["public"]["Tables"]["notes"]["Update"] = {};
+    if (update.title !== undefined) row.title = update.title;
+    if (update.titleSource !== undefined) row.title_source = update.titleSource;
+    if (update.groupId !== undefined) row.group_id = update.groupId;
+    if (update.groupSource !== undefined) row.group_source = update.groupSource;
+    if (update.organizedAt !== undefined) row.organized_at = update.organizedAt;
+    const { data, error } = await requireClient()
+      .from("notes")
+      .update(row)
+      .eq("id", id)
+      .select(NOTE_COLUMNS)
+      .single();
+    check(error);
+    if (!data) throw new Error("The notes service did not return the organized note.");
     return noteFromRow(data);
   },
 
