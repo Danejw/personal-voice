@@ -113,6 +113,7 @@ import { GeminiProvider, geminiConfigFrom } from "@/voice/provider/gemini/Gemini
 import { GeminiTokenSource } from "@/voice/provider/gemini/GeminiTokenSource";
 import { MicrophoneLease } from "@/voice/audio/microphoneLease";
 import type { VoiceState } from "@/voice/session/state";
+import { LiveFieldPreview } from "@/voice/session/LiveFieldPreview";
 import { TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
@@ -134,6 +135,7 @@ function dictionaryTermUsage(
 }
 
 const platform = createPlatformAdapter();
+const liveFieldPreview = new LiveFieldPreview(platform);
 const tokens = new GeminiTokenSource(fetchGeminiToken);
 const assistantTokens = new GeminiTokenSource(() => fetchGeminiToken("assistant"));
 const microphone = new MicrophoneLease();
@@ -331,7 +333,9 @@ assistant.setActions({
 });
 
 const destinations = new TranscriptDestinationRouter({
-  "active-field": { deliver: (transcript) => pasteIntoField(transcript) },
+  "active-field": { deliver: async (transcript) => {
+    if (!await liveFieldPreview.commit(transcript)) await pasteIntoField(transcript);
+  } },
   "voice-note": { deliver: (transcript) => notesStore.create(transcript, "voice") },
   "remote-dictation": remoteDictationDestination,
 }, "active-field", (result) => {
@@ -519,7 +523,7 @@ export default function App() {
     }
     const target = remoteDictation.lockSelectedTarget();
     remoteDictationDestination.lockTarget(target);
-  });
+  }, liveFieldPreview);
   const { state, partial, transcript, error } = snapshot;
   const control = controlFor(state, destination);
   const page = sectionMeta(section);
