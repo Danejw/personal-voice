@@ -115,6 +115,18 @@ Desired behavior includes, where supported:
 
 The original meaning must remain intact.
 
+## Text transforms
+
+Transforms are explicit post-transcription rewrites, not part of the speech recognizer. The default Dictation path remains one-pass Gemini 3.5 Transcribe Live. When the user selects a transform, the finalized transcript is sent through the existing authenticated `text-action` boundary before the chosen destination receives it.
+
+Built-in profiles:
+- Polish
+- Prompt Engineer
+
+Users may create account-synced custom profiles with a name and instruction. The same transform profiles are reusable from Dictation, Notes, Recent Dictations, and Handoffs. One-shot transforms preview the result before a destructive action; Notes can replace the original or save the transformed result as a new note.
+
+The selected automatic Dictation transform is a per-device preference. `None` is the default. If a selected transform is unavailable or fails, the destination is not given untransformed text silently; the original finalized transcript remains available through the existing Dictation error/history path.
+
 ## Backend responsibilities
 
 The backend should remain tiny.
@@ -172,6 +184,20 @@ smart_transcription
 language
 updated_at
 ```
+
+### transform_profiles
+
+Custom reusable text transform instructions. Built-in profiles remain client-defined and immutable.
+
+```text
+id
+user_id
+name
+instruction
+created_at
+updated_at
+```
+
 
 ### notes
 
@@ -248,6 +274,7 @@ Keyed by the existing per-account device ID, never written to `settings`:
 
 ```text
 destination
+transformProfileId (optional selected automatic Dictation transform)
 microphone
 showIndicator
 pushToTalk
