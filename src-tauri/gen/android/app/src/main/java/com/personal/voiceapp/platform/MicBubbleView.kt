@@ -10,6 +10,8 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import com.personal.voiceapp.R
 import kotlin.math.hypot
@@ -21,7 +23,12 @@ import kotlin.math.min
  * cancels that utterance so nothing is inserted.
  */
 @SuppressLint("ViewConstructor")
-class MicBubbleView(context: Context, private val callbacks: Callbacks) : View(context) {
+class MicBubbleView(
+  context: Context,
+  private val callbacks: Callbacks,
+  @DrawableRes iconRes: Int = R.drawable.ic_mic,
+  @StringRes descriptionRes: Int = R.string.floating_mic_hold,
+) : View(context) {
   interface Callbacks {
     fun onTap()
     fun onPress()
@@ -52,7 +59,7 @@ class MicBubbleView(context: Context, private val callbacks: Callbacks) : View(c
   private val holdHandler = Handler(Looper.getMainLooper())
   private val dragThreshold = ViewConfiguration.get(context).scaledTouchSlop * 3f
   private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-  private val icon = ContextCompat.getDrawable(context, R.drawable.ic_mic)!!.mutate().apply {
+  private val icon = ContextCompat.getDrawable(context, iconRes)!!.mutate().apply {
     setTint(0xFF111820.toInt())
   }
   private var downX = 0f
@@ -68,7 +75,7 @@ class MicBubbleView(context: Context, private val callbacks: Callbacks) : View(c
   }
 
   init {
-    contentDescription = context.getString(R.string.floating_mic_hold)
+    contentDescription = context.getString(descriptionRes)
   }
 
   override fun onDraw(canvas: Canvas) {
