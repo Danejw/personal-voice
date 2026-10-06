@@ -30,7 +30,7 @@ export interface NotesApi {
   createGroup(userId: string, name: string): Promise<NoteGroup>;
   renameGroup(id: string, name: string): Promise<NoteGroup>;
   updateText(id: string, text: string): Promise<Note>;
-  updateDetails(id: string, text: string, title: string, groupId: string | null): Promise<Note>;
+  updateDetails(id: string, text: string, title: string, groupId: string | null, groupEdited: boolean): Promise<Note>;
   updatePresentation(id: string, update: NotePresentationUpdate): Promise<Note>;
   addAttachment(userId: string, noteId: string, file: File): Promise<NoteAttachment>;
   removeAttachment(attachment: NoteAttachment): Promise<void>;
@@ -165,21 +165,24 @@ export const notesApi: NotesApi = {
     return noteFromRow(data);
   },
 
-  async updateDetails(id, text, title, groupId) {
+  async updateDetails(id, text, title, groupId, groupEdited) {
     const cleanText = text.trim();
     const cleanTitle = title.trim();
     if (!cleanText) throw new Error("A note cannot be empty.");
     if (!cleanTitle) throw new Error("A note title cannot be empty.");
+    const update: Database["public"]["Tables"]["notes"]["Update"] = {
+      text: cleanText,
+      title: cleanTitle,
+      title_source: "manual",
+    };
+    if (groupEdited) {
+      update.group_id = groupId;
+      update.group_source = "manual";
+      update.organized_at = new Date().toISOString();
+    }
     const { data, error } = await requireClient()
       .from("notes")
-      .update({
-        text: cleanText,
-        title: cleanTitle,
-        title_source: "manual",
-        group_id: groupId,
-        group_source: groupId ? "manual" : null,
-        organized_at: new Date().toISOString(),
-      })
+      .update(update)
       .eq("id", id)
       .select(NOTE_COLUMNS)
       .single();
