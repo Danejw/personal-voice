@@ -73,6 +73,7 @@ class VoiceAccessibilityService : AccessibilityService() {
     val windowId: Int,
     val packageName: String,
     val viewId: String?,
+    val node: AccessibilityNodeInfo,
     val before: String,
     val after: String,
     var provisional: String,
@@ -90,17 +91,18 @@ class VoiceAccessibilityService : AccessibilityService() {
     }
     if (phase != "update" && phase != "commit") return false
     val node = focusedField() ?: return false
-    if (node.isPassword || !isNativeTextField(node)) return false
+    if (node.isPassword || !isSafeLiveField(node)) return false
     if (node.actionList.none { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT }) return false
     val active = preview ?: run {
-      val current = node.text?.toString().orEmpty()
-      val start = node.textSelectionStart
-      val end = node.textSelectionEnd
+      val current = previewFieldText(node)
+      val start = node.textSelectionStart.takeIf { it >= 0 } ?: if (current.isEmpty()) 0 else -1
+      val end = node.textSelectionEnd.takeIf { it >= 0 } ?: if (current.isEmpty()) 0 else -1
       if (start < 0 || end < 0 || start > current.length || end > current.length) return false
       Preview(
         node.windowId,
         node.packageName?.toString().orEmpty(),
         node.viewIdResourceName,
+        node,
         current.substring(0, minOf(start, end)),
         current.substring(maxOf(start, end)),
         "",
@@ -117,10 +119,11 @@ class VoiceAccessibilityService : AccessibilityService() {
     node.windowId == state.windowId &&
       node.packageName?.toString().orEmpty() == state.packageName &&
       node.viewIdResourceName == state.viewId &&
-      !node.isPassword && isNativeTextField(node)
+      node == state.node &&
+      !node.isPassword && isSafeLiveField(node)
 
   private fun replacePreview(node: AccessibilityNodeInfo, state: Preview, replacement: String, expected: String): Boolean {
-    if (node.text?.toString().orEmpty() != expected) return false
+    if (previewFieldText(node) != expected) return false
     val result = state.before + replacement + state.after
     val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, result) }
     if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return false
@@ -225,6 +228,18 @@ class VoiceAccessibilityService : AccessibilityService() {
       for (index in 0 until node.childCount) node.getChild(index)?.let(queue::addLast)
     }
     return null
+  }
+
+  private fun previewFieldText(node: AccessibilityNodeInfo): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.isShowingHintText) ""
+    else node.text?.toString().orEmpty()
+
+  /** Web HTML text inputs may expose an editable role; never rewrite rich editors. */
+  private fun isSafeLiveField(node: AccessibilityNodeInfo): Boolean {
+    if (isNativeTextField(node)) return true
+    if (!node.isEditable) return false
+    val role = node.extras.getString("AccessibilityNodeInfo.chromeRole").orEmpty()
+    return role == "textField" || role == "textArea" || role == "searchBox"
   }
 
   private fun isNativeTextField(node: AccessibilityNodeInfo): Boolean {
