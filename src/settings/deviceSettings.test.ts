@@ -8,6 +8,7 @@ import {
   loadRemoteComputerActions,
   loadRemoteDictation,
   loadShowIndicator,
+  loadTransformProfileId,
   loadStoredAssistantHotkey,
   loadStoredHandoffHotkey,
   loadStoredPushToTalk,
@@ -20,6 +21,7 @@ import {
   saveMicrophone,
   saveRemoteDictation,
   saveShowIndicator,
+  saveTransformProfileId,
   saveStoredAssistantHotkey,
   saveStoredHandoffHotkey,
   saveStoredPushToTalk,
@@ -121,6 +123,15 @@ describe("device settings", () => {
     saveStoredAssistantHotkey(["Ctrl+Alt+A"], storage, "windows");
     expect(loadStoredAssistantHotkey(storage, "windows")).toEqual(["Ctrl+Alt+A"]);
     expect(loadStoredAssistantHotkey(storage, "android")).toEqual([]);
+  });
+
+  it("keeps the selected Dictation transform on this device", () => {
+    const storage = memoryStorage();
+    saveTransformProfileId("builtin:prompt-engineer", storage, "windows");
+    expect(loadTransformProfileId(storage, "windows")).toBe("builtin:prompt-engineer");
+    expect(loadTransformProfileId(storage, "android")).toBeNull();
+    saveTransformProfileId(null, storage, "windows");
+    expect(loadTransformProfileId(storage, "windows")).toBeNull();
   });
 
   it("persists this device's dictation destination without touching another device", () => {
