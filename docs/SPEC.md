@@ -190,6 +190,8 @@ updated_at
 
 The legacy `voice_notes` name remains a compatibility view while older installed clients roll forward.
 
+Notes may also have zero or more private file attachments. Attachments accept arbitrary file types, are stored in the private `note-attachments` Storage bucket, and keep only metadata in `note_attachments`. The current client accepts uploads up to 100 MB per file. In edit mode, files can be chosen, pasted from the clipboard when the clipboard exposes a file, or dropped onto the note. Images, video, and audio get inline previews; PDFs, Markdown, and other files remain downloadable/openable attachments. Assistant attachment of a Note still supplies the Note text only; file-content ingestion is a separate capability.
+
 ### handoffs
 
 Intentionally sent pasted text, typed text, or continuation packages:
