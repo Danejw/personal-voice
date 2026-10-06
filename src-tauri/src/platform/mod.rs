@@ -2,7 +2,7 @@
 //! (`android.rs`) that the frontend calls directly, so the Windows commands below report
 //! "unsupported" on other targets.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// The application that received a paste. `id` is a file or package name, never a window title.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -28,6 +28,13 @@ pub struct SnapshotFrame {
 pub struct WindowReport {
     pub active: Option<String>,
     pub windows: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LongPressHotkey {
+    pub shortcut: String,
+    pub hold_ms: u64,
 }
 
 #[cfg(target_os = "android")]
@@ -57,6 +64,7 @@ mod unsupported {
     }
     pub fn set_hotkeys(
         _dictate: &[String],
+        _dictate_long_press: &[super::LongPressHotkey],
         _voice_note: &[String],
         _handoff: &[String],
         _selection: &[String],
