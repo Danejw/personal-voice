@@ -20,6 +20,7 @@ Implemented in this order (prompt number, then product id):
 | 09 | PV6 Selection capture | [09-PV6-selection-capture.md](./09-PV6-selection-capture.md) |
 | 12 | PV17 Lightweight usage intelligence | [12-PV17-lightweight-usage-intelligence.md](./12-PV17-lightweight-usage-intelligence.md) |
 | 31 | Personal analytics dashboard | [31-PV31-user-facing-analytics.md](./31-PV31-user-facing-analytics.md) |
+| 32 | Smart Notes organization | [32-smart-notes-organization.md](./32-smart-notes-organization.md) |
 
 ## Intentionally skipped
 

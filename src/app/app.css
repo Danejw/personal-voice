@@ -446,6 +446,9 @@ section > p:last-child { margin-bottom: 0; font-size: 12px; }
 .app-shell.is-mobile .history-list {
   flex: none; max-height: none; overflow: visible;
 }
+.app-shell.is-mobile .notes-dashboard-grid,
+.app-shell.is-mobile .note-card-grid { grid-template-columns: 1fr; }
+.app-shell.is-mobile .note-group-card.is-expanded { grid-column: auto; }
 .app-shell.is-mobile .page-header {
   flex-wrap: wrap; align-items: flex-start;
 }
@@ -744,6 +747,69 @@ textarea:focus {
 .note-text { margin: 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .note-text.is-editable { cursor: text; }
 .note-meta { margin: 2px 0 0; color: #a2adbc; font-size: 11px; }
+.note-title { margin: 0 34px 5px 0; color: #f3f6fa; font-size: 14px; line-height: 1.25; font-weight: 650; overflow-wrap: anywhere; }
+.note-title.is-editable { cursor: text; }
+.note-preview-text { color: #c9d2dc; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.notes-dashboard { min-height: 0; overflow-y: auto; padding-right: 2px; }
+.notes-dashboard-grid,
+.note-card-grid {
+  list-style: none; margin: 0; padding: 0; display: grid;
+  /*
+   * Collapse unused tracks so one or two cards expand into the available row.
+   * The minimum track size also scales with one third of the container, which
+   * caps dense layouts at three columns while dropping to two/one when narrow.
+   */
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(300px, calc((100% - 20px) / 3))), 1fr)
+  );
+  gap: 10px; align-content: start;
+}
+.notes-dashboard-grid > .action-item,
+.note-card-grid > .action-item {
+  min-width: 0; padding: 11px 12px; border-radius: 12px; background: #111820;
+  align-self: start;
+}
+.note-group-card {
+  min-width: 0; padding: 12px; border-radius: 14px; background: #0f171f;
+  display: grid; gap: 10px; align-self: start;
+}
+.note-group-card.is-expanded { grid-column: 1 / -1; }
+.note-group-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.note-group-heading { min-width: 0; }
+.note-group-heading h3 { margin: 0; color: #f3f6fa; font-size: 15px; line-height: 1.25; overflow-wrap: anywhere; }
+.note-group-heading span { display: block; margin-top: 2px; color: #8896a6; font-size: 11px; }
+.note-group-card-actions { display: flex; gap: 5px; flex: none; }
+.note-group-card-actions .secondary,
+.note-group-rename .secondary { padding: 4px 7px; font-size: 11px; }
+.note-group-mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.note-mini-card {
+  min-width: 0; min-height: 48px; padding: 7px 8px; border: 0; border-radius: 9px;
+  background: #18232e; color: #dce4ec; display: flex; align-items: flex-start; gap: 7px;
+  text-align: left; font: inherit; font-size: 11px; line-height: 1.25; cursor: pointer;
+}
+.note-mini-card:hover { background: #1d2a36; }
+.note-mini-card > span:last-child { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.note-mini-mark {
+  width: 22px; height: 22px; border-radius: 7px; background: #0c141b; color: #88d8c1;
+  display: grid; place-items: center; flex: none; font-size: 9px; font-weight: 700;
+}
+.note-group-more { margin: -3px 0 0; color: #8896a6; font-size: 11px; }
+.note-group-expanded { padding-top: 2px; }
+.note-group-expanded .note-card-grid { width: 100%; }
+.note-group-rename { width: 100%; display: flex; align-items: center; gap: 6px; }
+.note-group-rename input,
+.note-edit-field input,
+.note-edit-field select {
+  min-width: 0; color: inherit; background: #111820; border: 0; border-radius: 8px;
+  padding: 7px 9px; font: inherit; font-size: 13px;
+}
+.note-group-rename input { flex: 1; }
+.note-edit-field { display: grid; gap: 4px; color: #a2adbc; font-size: 11px; }
+.note-edit-field input,
+.note-edit-field select { width: 100%; color: #e9edf4; }
+.archived-note-grid { margin-top: 8px; }
+
 .action-item { position: relative; display: block; }
 .item-actions {
   position: absolute; top: 6px; right: 6px; display: flex; gap: 2px;

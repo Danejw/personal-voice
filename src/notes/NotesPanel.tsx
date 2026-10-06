@@ -8,6 +8,7 @@ import {
 import { HoverActionItem } from "@/components/HoverActionItem";
 import type { NotesSnapshot, NotesStatus, NotesStore } from "@/notes/NotesStore";
 import type { Note } from "@/notes/note";
+import type { NoteGroup } from "@/notes/noteGroup";
 import { attachmentKind, formatAttachmentSize } from "@/notes/noteAttachment";
 import type { NoteAttachment } from "@/notes/noteAttachment";
 import { TransformBox } from "@/transforms/TransformBox";
@@ -22,15 +23,18 @@ interface NotesPanelProps {
   transformProfiles?: readonly TransformProfile[];
 }
 
-interface NoteGroupProps {
-  empty: string;
-  notes: Note[];
+interface NoteCardProps {
+  note: Note;
+  groups: readonly NoteGroup[];
   busy: string | null;
   editable: boolean;
   editingId: string | null;
   draft: string;
-  className?: string;
+  draftTitle: string;
+  draftGroupId: string;
   onDraft(value: string): void;
+  onDraftTitle(value: string): void;
+  onDraftGroupId(value: string): void;
   onSave(note: Note): void;
   onCancelEdit(): void;
   onEdit(note: Note): void;
@@ -68,6 +72,26 @@ function sourceLabel(note: Note): string {
     case "manual": return "Manual";
     case "assistant": return "Assistant";
   }
+}
+
+function sourceMark(note: Note): string {
+  switch (note.sourceType) {
+    case "voice": return "V";
+    case "manual": return "M";
+    case "assistant": return "AI";
+  }
+}
+
+function displayTitle(note: Note): string {
+  if (note.title?.trim()) return note.title.trim();
+  const compact = note.text.replace(/\s+/g, " ").trim();
+  if (!compact) return "Untitled note";
+  return compact.length <= 72 ? compact : `${compact.slice(0, 69).trimEnd()}…`;
+}
+
+function previewText(note: Note): string {
+  const compact = note.text.replace(/\s+/g, " ").trim();
+  return compact.length <= 180 ? compact : `${compact.slice(0, 177).trimEnd()}…`;
 }
 
 function filesFrom(list: FileList | null): File[] {
@@ -155,183 +179,275 @@ function AttachmentList({
   );
 }
 
-function NoteGroup({
-  empty,
-  notes,
-  busy,
-  editable,
-  editingId,
-  draft,
-  className,
-  onDraft,
-  onSave,
-  onCancelEdit,
-  onEdit,
-  onCopy,
-  onArchive,
-  onDelete,
-  onFiles,
-  onRemoveAttachment,
-  attachedIds = [],
-  onAttach,
-  onDetach,
-  transformProfiles,
-  transformingId,
-  onToggleTransform,
-  onTransformReplace,
-  onTransformSave,
-}: NoteGroupProps) {
+function NoteCard(props: NoteCardProps) {
+  const {
+    note,
+    groups,
+    busy,
+    editable,
+    editingId,
+    draft,
+    draftTitle,
+    draftGroupId,
+    onDraft,
+    onDraftTitle,
+    onDraftGroupId,
+    onSave,
+    onCancelEdit,
+    onEdit,
+    onCopy,
+    onArchive,
+    onDelete,
+    onFiles,
+    onRemoveAttachment,
+    attachedIds = [],
+    onAttach,
+    onDetach,
+    transformProfiles,
+    transformingId,
+    onToggleTransform,
+    onTransformReplace,
+    onTransformSave,
+  } = props;
+  const pending = busy?.includes(note.id) ?? false;
+  const archived = note.status !== "inbox";
+  const attached = attachedIds.includes(note.id);
+  const editing = editingId === note.id;
+  const groupName = note.groupId ? groups.find((group) => group.id === note.groupId)?.name : null;
+
+  function addFiles(nextFiles: File[]) {
+    if (!pending && nextFiles.length) onFiles(note, nextFiles);
+  }
+
+  function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const pasted = filesFromClipboard(event.clipboardData);
+    if (!pasted.length) return;
+    event.preventDefault();
+    addFiles(pasted);
+  }
+
+  function onDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    addFiles(filesFrom(event.dataTransfer.files));
+  }
+
+  function onChooseFiles(event: ChangeEvent<HTMLInputElement>) {
+    addFiles(filesFrom(event.target.files));
+    event.target.value = "";
+  }
+
   return (
-    <div className={className ? `note-group ${className}` : "note-group"}>
-      {notes.length ? (
-        <ul className="notes hide-scrollbar">
-          {notes.map((note) => {
-            const pending = busy?.includes(note.id) ?? false;
-            const archived = note.status !== "inbox";
-            const attached = attachedIds.includes(note.id);
-            const editing = editingId === note.id;
-
-            function addFiles(nextFiles: File[]) {
-              if (!pending && nextFiles.length) onFiles(note, nextFiles);
-            }
-
-            function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
-              const pasted = filesFromClipboard(event.clipboardData);
-              if (!pasted.length) return;
-              event.preventDefault();
-              addFiles(pasted);
-            }
-
-            function onDrop(event: DragEvent<HTMLDivElement>) {
-              event.preventDefault();
-              addFiles(filesFrom(event.dataTransfer.files));
-            }
-
-            function onChooseFiles(event: ChangeEvent<HTMLInputElement>) {
-              addFiles(filesFrom(event.target.files));
-              event.target.value = "";
-            }
-
-            return (
-              <HoverActionItem
-                key={note.id}
-                busy={pending}
-                actions={editing ? [] : [
-                  ...(onAttach && onDetach ? [{
-                    kind: "attach" as const,
-                    label: attached ? "Remove from Assistant" : "Attach to Assistant",
-                    onClick: () => { if (attached) onDetach(note.id); else onAttach(note); },
-                  }] : []),
-                  { kind: "edit" as const, disabled: !editable, onClick: () => onEdit(note) },
-                  ...(transformProfiles.length ? [{ kind: "transform" as const, onClick: () => onToggleTransform(note) }] : []),
-                  { kind: "copy" as const, onClick: () => onCopy(note) },
-                  {
-                    kind: archived ? "unarchive" : "archive",
-                    disabled: !editable,
-                    onClick: () => onArchive(note, note.status === "inbox"),
-                  },
-                  { kind: "delete", disabled: !editable, onClick: () => onDelete(note) },
-                ]}
-              >
-                {editing ? (
-                  <div
-                    className="note-edit"
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={onDrop}
-                  >
-                    <textarea
-                      aria-label="Edit note"
-                      value={draft}
-                      disabled={pending}
-                      autoFocus
-                      onPaste={onPaste}
-                      onChange={(event) => onDraft(event.target.value)}
-                    />
-                    <AttachmentList
-                      note={note}
-                      editing
-                      disabled={pending}
-                      onRemove={onRemoveAttachment}
-                    />
-                    <div className="note-file-drop">
-                      <span>Drop or paste files here</span>
-                      <label className="secondary note-file-picker">
-                        Add files
-                        <input
-                          type="file"
-                          multiple
-                          disabled={pending}
-                          aria-label="Add files to note"
-                          onChange={onChooseFiles}
-                        />
-                      </label>
-                    </div>
-                    <div className="note-edit-actions">
-                      <button type="button" className="record" disabled={pending || !draft.trim()} onClick={() => onSave(note)}>
-                        Save
-                      </button>
-                      <button type="button" className="secondary" disabled={pending} onClick={onCancelEdit}>
-                        Cancel
-                      </button>
-                      {pending && <span className="note-file-status" role="status">Uploading…</span>}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <p
-                      className={editable ? "note-text is-editable" : "note-text"}
-                      title={editable ? "Double-click to edit" : undefined}
-                      onDoubleClick={() => { if (editable) onEdit(note); }}
-                    >
-                      {note.text}
-                    </p>
-                    <AttachmentList
-                      note={note}
-                      editing={false}
-                      disabled={pending}
-                      onRemove={onRemoveAttachment}
-                    />
-                    <p className="note-meta">
-                      <span>{sourceLabel(note)}</span>
-                      {" · "}
-                      <time dateTime={note.createdAt}>{new Date(note.createdAt).toLocaleString()}</time>
-                    </p>
-                    {transformingId === note.id && (
-                      <TransformBox
-                        sourceText={note.text}
-                        profiles={transformProfiles}
-                        disabled={!editable}
-                        onClose={() => onToggleTransform(note)}
-                        actions={[
-                          {
-                            label: "Replace note",
-                            run: (text) => onTransformReplace(note, text),
-                          },
-                          {
-                            label: "Save as new note",
-                            run: onTransformSave,
-                          },
-                        ]}
-                      />
-                    )}
-                  </>
-                )}
-              </HoverActionItem>
-            );
-          })}
-        </ul>
+    <HoverActionItem
+      busy={pending}
+      actions={editing ? [] : [
+        ...(onAttach && onDetach ? [{
+          kind: "attach" as const,
+          label: attached ? "Remove from Assistant" : "Attach to Assistant",
+          onClick: () => { if (attached) onDetach(note.id); else onAttach(note); },
+        }] : []),
+        { kind: "edit" as const, disabled: !editable, onClick: () => onEdit(note) },
+        ...(transformProfiles.length ? [{ kind: "transform" as const, onClick: () => onToggleTransform(note) }] : []),
+        { kind: "copy" as const, onClick: () => onCopy(note) },
+        {
+          kind: archived ? "unarchive" : "archive",
+          disabled: !editable,
+          onClick: () => onArchive(note, note.status === "inbox"),
+        },
+        { kind: "delete", disabled: !editable, onClick: () => onDelete(note) },
+      ]}
+    >
+      {editing ? (
+        <div
+          className="note-edit"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={onDrop}
+        >
+          <label className="note-edit-field">
+            <span>Title</span>
+            <input
+              aria-label="Note title"
+              value={draftTitle}
+              maxLength={120}
+              disabled={pending}
+              autoFocus
+              onChange={(event) => onDraftTitle(event.target.value)}
+            />
+          </label>
+          <label className="note-edit-field">
+            <span>Group</span>
+            <select
+              aria-label="Note group"
+              value={draftGroupId}
+              disabled={pending}
+              onChange={(event) => onDraftGroupId(event.target.value)}
+            >
+              <option value="">Ungrouped</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>{group.name}</option>
+              ))}
+            </select>
+          </label>
+          <textarea
+            aria-label="Edit note"
+            value={draft}
+            disabled={pending}
+            onPaste={onPaste}
+            onChange={(event) => onDraft(event.target.value)}
+          />
+          <AttachmentList note={note} editing disabled={pending} onRemove={onRemoveAttachment} />
+          <div className="note-file-drop">
+            <span>Drop or paste files here</span>
+            <label className="secondary note-file-picker">
+              Add files
+              <input
+                type="file"
+                multiple
+                disabled={pending}
+                aria-label="Add files to note"
+                onChange={onChooseFiles}
+              />
+            </label>
+          </div>
+          <div className="note-edit-actions">
+            <button
+              type="button"
+              className="record"
+              disabled={pending || !draft.trim() || !draftTitle.trim()}
+              onClick={() => onSave(note)}
+            >
+              Save
+            </button>
+            <button type="button" className="secondary" disabled={pending} onClick={onCancelEdit}>
+              Cancel
+            </button>
+            {pending && <span className="note-file-status" role="status">Saving…</span>}
+          </div>
+        </div>
       ) : (
-        <p className="placeholder">{empty}</p>
+        <>
+          <h3
+            className={editable ? "note-title is-editable" : "note-title"}
+            title={editable ? "Double-click to edit" : undefined}
+            onDoubleClick={() => { if (editable) onEdit(note); }}
+          >
+            {displayTitle(note)}
+          </h3>
+          <p className="note-text note-preview-text">{previewText(note)}</p>
+          <AttachmentList note={note} editing={false} disabled={pending} onRemove={onRemoveAttachment} />
+          <p className="note-meta">
+            <span>{sourceLabel(note)}</span>
+            {groupName && <><span> · </span><span>{groupName}</span></>}
+            <span> · </span>
+            <time dateTime={note.createdAt}>{new Date(note.createdAt).toLocaleString()}</time>
+          </p>
+          {transformingId === note.id && (
+            <TransformBox
+              sourceText={note.text}
+              profiles={transformProfiles}
+              disabled={!editable}
+              onClose={() => onToggleTransform(note)}
+              actions={[
+                { label: "Replace note", run: (text) => onTransformReplace(note, text) },
+                { label: "Save as new note", run: onTransformSave },
+              ]}
+            />
+          )}
+        </>
       )}
-    </div>
+    </HoverActionItem>
   );
 }
 
-/** Sync status + Refresh for the shared page header. */
+function NoteCardGrid(props: Omit<NoteCardProps, "note"> & { notes: readonly Note[]; className?: string }) {
+  const { notes, className, ...cardProps } = props;
+  return (
+    <ul className={className ? `note-card-grid ${className}` : "note-card-grid"}>
+      {notes.map((note) => <NoteCard key={note.id} note={note} {...cardProps} />)}
+    </ul>
+  );
+}
+
+function GroupCard({
+  group,
+  notes,
+  expanded,
+  renaming,
+  renameDraft,
+  editable,
+  busy,
+  onToggle,
+  onBeginRename,
+  onRenameDraft,
+  onSaveRename,
+  onCancelRename,
+  cardProps,
+}: {
+  group: NoteGroup;
+  notes: readonly Note[];
+  expanded: boolean;
+  renaming: boolean;
+  renameDraft: string;
+  editable: boolean;
+  busy: boolean;
+  onToggle(): void;
+  onBeginRename(): void;
+  onRenameDraft(value: string): void;
+  onSaveRename(): void;
+  onCancelRename(): void;
+  cardProps: Omit<NoteCardProps, "note">;
+}) {
+  return (
+    <li className={expanded ? "note-group-card is-expanded" : "note-group-card"}>
+      <div className="note-group-card-head">
+        {renaming ? (
+          <div className="note-group-rename">
+            <input
+              aria-label="Group name"
+              value={renameDraft}
+              maxLength={120}
+              disabled={busy}
+              autoFocus
+              onChange={(event) => onRenameDraft(event.target.value)}
+            />
+            <button type="button" className="secondary" disabled={busy || !renameDraft.trim()} onClick={onSaveRename}>Save</button>
+            <button type="button" className="secondary" disabled={busy} onClick={onCancelRename}>Cancel</button>
+          </div>
+        ) : (
+          <>
+            <div className="note-group-heading">
+              <h3>{group.name}</h3>
+              <span>{notes.length} {notes.length === 1 ? "note" : "notes"}</span>
+            </div>
+            <div className="note-group-card-actions">
+              <button type="button" className="secondary" disabled={!editable || busy} onClick={onBeginRename}>Rename</button>
+              <button type="button" className="secondary" onClick={onToggle}>{expanded ? "Close" : "Open"}</button>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="note-group-mini-grid" aria-label={`${group.name} note preview`}>
+        {notes.slice(0, 6).map((note) => (
+          <button key={note.id} type="button" className="note-mini-card" onClick={onToggle}>
+            <span className="note-mini-mark" aria-hidden="true">{sourceMark(note)}</span>
+            <span>{displayTitle(note)}</span>
+          </button>
+        ))}
+      </div>
+      {notes.length > 6 && <p className="note-group-more">+{notes.length - 6} more</p>}
+      {expanded && (
+        <div className="note-group-expanded">
+          <NoteCardGrid notes={notes} {...cardProps} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** Sync and enrichment status for the shared page header. */
 export function NotesToolbar({ store, snapshot }: NotesPanelProps) {
   return (
     <div className="page-header-actions">
-      <p role="status">{statusLabel(snapshot.status)}</p>
+      <p role="status">{snapshot.organizing ? "Organizing…" : statusLabel(snapshot.status)}</p>
       {snapshot.status !== "signed-out" && (
         <button
           type="button"
@@ -346,7 +462,7 @@ export function NotesToolbar({ store, snapshot }: NotesPanelProps) {
   );
 }
 
-/** Synced account notes. Dictation is one creation path, not a separate note type. */
+/** Visual account Notes workspace: stable titles, reusable groups, and ungrouped cards. */
 export function NotesPanel({
   store,
   snapshot,
@@ -361,10 +477,22 @@ export function NotesPanel({
   const [newNote, setNewNote] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftGroupId, setDraftGroupId] = useState("");
   const [transformingId, setTransformingId] = useState<string | null>(null);
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [groupDraft, setGroupDraft] = useState("");
   const editable = snapshot.status === "synced";
+
   const inbox = snapshot.notes.filter((note) => note.status === "inbox");
   const archived = snapshot.notes.filter((note) => note.status === "archived");
+  const ungrouped = inbox.filter((note) => note.groupId === null);
+  const groupNotes = new Map(snapshot.groups.map((group) => [
+    group.id,
+    inbox.filter((note) => note.groupId === group.id),
+  ]));
+  const visibleGroups = snapshot.groups.filter((group) => (groupNotes.get(group.id)?.length ?? 0) > 0);
 
   async function run(key: string, action: () => Promise<void>) {
     setBusy(key);
@@ -386,7 +514,7 @@ export function NotesPanel({
     void run("create", async () => {
       await store.create(text, "manual");
       setNewNote("");
-      setNotice("Note saved.");
+      setNotice("Note saved. Its title and group will organize automatically.");
     });
   }
 
@@ -401,15 +529,25 @@ export function NotesPanel({
     setTransformingId(null);
     setEditingId(note.id);
     setDraft(note.text);
+    setDraftTitle(displayTitle(note));
+    setDraftGroupId(note.groupId ?? "");
     setProblem(null);
     setNotice(null);
   }
 
   function save(note: Note) {
     void run(`edit:${note.id}`, async () => {
-      await store.updateText(note.id, draft);
+      await store.updateDetails(
+        note.id,
+        draft,
+        draftTitle,
+        draftGroupId || null,
+        draftGroupId !== (note.groupId ?? ""),
+      );
       setEditingId(null);
       setDraft("");
+      setDraftTitle("");
+      setDraftGroupId("");
       setNotice("Note updated.");
     });
   }
@@ -431,6 +569,8 @@ export function NotesPanel({
   function cancelEdit() {
     setEditingId(null);
     setDraft("");
+    setDraftTitle("");
+    setDraftGroupId("");
   }
 
   function archive(note: Note, archivedStatus: boolean) {
@@ -457,7 +597,7 @@ export function NotesPanel({
   async function replaceFromTransform(note: Note, text: string) {
     await store.updateText(note.id, text);
     setTransformingId(null);
-    setNotice("Note replaced with transformed text.");
+    setNotice("Note replaced with transformed text. Its title and group stayed unchanged.");
   }
 
   async function saveFromTransform(text: string) {
@@ -466,12 +606,33 @@ export function NotesPanel({
     setNotice("Transformed text saved as a new note.");
   }
 
-  const groupProps = {
+  function beginRenameGroup(group: NoteGroup) {
+    setEditingGroupId(group.id);
+    setGroupDraft(group.name);
+    setProblem(null);
+    setNotice(null);
+  }
+
+  function saveGroupName(group: NoteGroup) {
+    void run(`group:${group.id}`, async () => {
+      await store.renameGroup(group.id, groupDraft);
+      setEditingGroupId(null);
+      setGroupDraft("");
+      setNotice("Group renamed.");
+    });
+  }
+
+  const cardProps: Omit<NoteCardProps, "note"> = {
+    groups: snapshot.groups,
     busy,
     editable,
     editingId,
     draft,
+    draftTitle,
+    draftGroupId,
     onDraft: setDraft,
+    onDraftTitle: setDraftTitle,
+    onDraftGroupId: setDraftGroupId,
     onSave: save,
     onCancelEdit: cancelEdit,
     onEdit: edit,
@@ -504,21 +665,46 @@ export function NotesPanel({
           Save note
         </button>
       </form>
+
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
+      {snapshot.organizationError && (
+        <p className="hint" role="status">Automatic organization will retry later. {snapshot.organizationError}</p>
+      )}
       {notice && <p role="status">{notice}</p>}
-      <NoteGroup
-        {...groupProps}
-        className="page-grow"
-        empty="No notes"
-        notes={inbox}
-      />
+
+      <div className="notes-dashboard page-grow">
+        {inbox.length ? (
+          <ul className="notes-dashboard-grid">
+            {visibleGroups.map((group) => (
+              <GroupCard
+                key={group.id}
+                group={group}
+                notes={groupNotes.get(group.id) ?? []}
+                expanded={expandedGroupId === group.id}
+                renaming={editingGroupId === group.id}
+                renameDraft={groupDraft}
+                editable={editable}
+                busy={busy === `group:${group.id}`}
+                onToggle={() => setExpandedGroupId((current) => current === group.id ? null : group.id)}
+                onBeginRename={() => beginRenameGroup(group)}
+                onRenameDraft={setGroupDraft}
+                onSaveRename={() => saveGroupName(group)}
+                onCancelRename={() => { setEditingGroupId(null); setGroupDraft(""); }}
+                cardProps={cardProps}
+              />
+            ))}
+            {ungrouped.map((note) => <NoteCard key={note.id} note={note} {...cardProps} />)}
+          </ul>
+        ) : (
+          <p className="placeholder">No notes</p>
+        )}
+      </div>
+
       <details className="fold">
         <summary>Archived ({archived.length})</summary>
-        <NoteGroup
-          {...groupProps}
-          empty="No archived notes"
-          notes={archived}
-        />
+        {archived.length
+          ? <NoteCardGrid notes={archived} className="archived-note-grid" {...cardProps} />
+          : <p className="placeholder">No archived notes</p>}
       </details>
     </>
   );
