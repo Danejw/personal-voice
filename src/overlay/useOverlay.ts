@@ -5,7 +5,7 @@ import { buildOverlaySnapshot, clipOverlayText, overlayAssistantFrom, overlayAss
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 import type { AssistantController } from "@/assistant/AssistantController";
 import type { AssistantSnapshot } from "@/assistant/state";
-import type { VoiceNote } from "@/notes/voiceNote";
+import type { Note } from "@/notes/note";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import type { VoiceProvider } from "@/voice/provider/VoiceProvider";
 import type { DictationController, DictationSnapshot } from "@/voice/session/DictationController";
@@ -24,7 +24,7 @@ export interface OverlayBindings {
   paused: boolean;
   signedIn: boolean;
   destination: TranscriptDestinationId;
-  notes: VoiceNote[];
+  notes: Note[];
   handoffs: Handoff[];
   devices: OwnedDevice[];
   controller: DictationController;
