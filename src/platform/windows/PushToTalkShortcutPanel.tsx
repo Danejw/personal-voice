@@ -3,22 +3,28 @@ import { Tooltip } from "@/components/Tooltip";
 import type { HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
 import {
   type CapturedKey,
+  type LongPressBinding,
   type PointerModifiers,
   hotkeyListLabel,
+  isMouseShortcut,
   shortcutFromKeys,
   shortcutFromMouse,
 } from "@/settings/hotkeyChord";
 import {
+  DEFAULT_LONG_PRESS_MS,
+  LONG_PRESS_MS_OPTIONS,
   MAX_BINDINGS_PER_ACTION,
   hotkeysConflict,
   loadAssistantHotkey,
   loadHandoffHotkey,
   loadPushToTalk,
+  loadPushToTalkLongPress,
   loadSelectionHotkey,
   loadVoiceNoteHotkey,
   saveAssistantHotkey,
   saveHandoffHotkey,
   savePushToTalk,
+  savePushToTalkLongPress,
   saveSelectionHotkey,
   saveVoiceNoteHotkey,
 } from "@/settings/pushToTalk";
@@ -28,31 +34,43 @@ interface PushToTalkShortcutPanelProps {
 }
 
 type HotkeyAction = "dictate" | "voiceNote" | "handoff" | "selection" | "assistant";
+type RecordingAction = HotkeyAction | "dictateLongPress";
 
 const INVALID_CHORD = "Use one key or mouse button. Hold Ctrl, Shift, Alt, or Win for a combination.";
+const LONG_PRESS_MOUSE_ONLY = "Long press currently supports right, middle, or side mouse buttons.";
 
 /** Windows hold-to-talk and capture keys. Stored on this PC; they are not synced to Android. */
 export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelProps) {
   const [dictate, setDictate] = useState(loadPushToTalk);
+  const [dictateLongPress, setDictateLongPress] = useState(loadPushToTalkLongPress);
   const [voiceNote, setVoiceNote] = useState(loadVoiceNoteHotkey);
   const [handoff, setHandoff] = useState(loadHandoffHotkey);
   const [selection, setSelection] = useState(loadSelectionHotkey);
   const [assistant, setAssistant] = useState(loadAssistantHotkey);
-  const [recording, setRecording] = useState<HotkeyAction | null>(null);
-  const [arming, setArming] = useState<HotkeyAction | null>(null);
+  const [recording, setRecording] = useState<RecordingAction | null>(null);
+  const [arming, setArming] = useState<RecordingAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const longPressShortcuts = dictateLongPress.map((binding) => binding.shortcut);
   const lists = { dictate, voiceNote, handoff, selection, assistant };
-  const conflict = hotkeysConflict(dictate, voiceNote, handoff, selection, assistant);
+  const conflict = hotkeysConflict(dictate, longPressShortcuts, voiceNote, handoff, selection, assistant);
   const captureRequest = useRef(0);
 
   useEffect(() => {
     if (conflict || dictate.length === 0) return;
-    const bindings: HotkeyBindings = { dictate, voiceNote, handoff, selection, assistant };
+    const bindings: HotkeyBindings = {
+      dictate,
+      dictateLongPress,
+      voiceNote,
+      handoff,
+      selection,
+      assistant,
+    };
     let cancelled = false;
     platform.setHotkeys(bindings).then(
       () => {
         if (cancelled) return;
         savePushToTalk(dictate);
+        savePushToTalkLongPress(dictateLongPress);
         saveVoiceNoteHotkey(voiceNote);
         saveHandoffHotkey(handoff);
         saveSelectionHotkey(selection);
@@ -66,7 +84,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
     return () => {
       cancelled = true;
     };
-  }, [platform, dictate, voiceNote, handoff, selection, assistant, conflict]);
+  }, [platform, dictate, dictateLongPress, voiceNote, handoff, selection, assistant, conflict]);
 
   useEffect(() => () => {
     captureRequest.current += 1;
@@ -173,18 +191,49 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
     }
   }
 
-  function addShortcut(action: HotkeyAction, shortcut: string) {
-    const current = bindingsFor(action);
-    const next = current.includes(shortcut) ? current : [...current, shortcut];
+  function addShortcut(action: RecordingAction, shortcut: string) {
     setRecording(null);
     void platform.setHotkeyCapture(false);
+
+    if (action === "dictateLongPress") {
+      if (!isMouseShortcut(shortcut)) {
+        setError(LONG_PRESS_MOUSE_ONLY);
+        return;
+      }
+      if (dictateLongPress.some((binding) => binding.shortcut === shortcut)) {
+        setError(null);
+        return;
+      }
+      if (dictateLongPress.length >= MAX_BINDINGS_PER_ACTION) {
+        setError("Long press already has 8 bindings. Remove one first.");
+        return;
+      }
+      const next = [...dictateLongPress, { shortcut, holdMs: DEFAULT_LONG_PRESS_MS }];
+      if (hotkeysConflict(dictate, next.map((binding) => binding.shortcut), voiceNote, handoff, selection, assistant)) {
+        setError("That key or mouse button is already used by another binding.");
+        return;
+      }
+      setDictateLongPress(next);
+      setError(null);
+      return;
+    }
+
+    const current = bindingsFor(action);
+    const next = current.includes(shortcut) ? current : [...current, shortcut];
     if (next.length > MAX_BINDINGS_PER_ACTION) {
       setError("This action already has 8 bindings. Remove one first.");
       return;
     }
     const candidate = { ...lists, [action]: next };
-    if (hotkeysConflict(candidate.dictate, candidate.voiceNote, candidate.handoff, candidate.selection, candidate.assistant)) {
-      setError("That key is already used by another action.");
+    if (hotkeysConflict(
+      candidate.dictate,
+      longPressShortcuts,
+      candidate.voiceNote,
+      candidate.handoff,
+      candidate.selection,
+      candidate.assistant,
+    )) {
+      setError("That key or mouse button is already used by another binding.");
       return;
     }
     apply(action, next);
@@ -195,7 +244,17 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
     apply(action, bindingsFor(action).filter((item) => item !== shortcut));
   }
 
-  function startRecording(action: HotkeyAction) {
+  function removeLongPress(shortcut: string) {
+    setDictateLongPress((bindings) => bindings.filter((binding) => binding.shortcut !== shortcut));
+  }
+
+  function updateLongPress(shortcut: string, holdMs: number) {
+    setDictateLongPress((bindings) => bindings.map((binding) =>
+      binding.shortcut === shortcut ? { ...binding, holdMs } : binding
+    ));
+  }
+
+  function startRecording(action: RecordingAction) {
     if (recording || arming) return;
     const request = captureRequest.current + 1;
     captureRequest.current = request;
@@ -225,14 +284,14 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
   const recordError = dictate.length === 0
     ? "Hold to dictate needs a key or mouse button."
     : conflict
-      ? "Each action needs its own key or mouse button."
+      ? "Each binding needs its own key or mouse button."
       : error;
 
   return (
     <>
       <p className="hint">
-        Add up to {MAX_BINDINGS_PER_ACTION} bindings per action. Keyboard keys and mouse buttons can trigger the same action.
-        A bound mouse button is reserved by Personal Voice while that binding is enabled.
+        Immediate bindings start as soon as you press them. Long-press mouse bindings keep a normal quick click,
+        then start Dictation only after the selected hold time.
       </p>
       <HotkeyField
         label="Hold to dictate"
@@ -243,6 +302,15 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
         onRecord={() => startRecording("dictate")}
         onCancel={cancelRecording}
         onRemove={(shortcut) => removeShortcut("dictate", shortcut)}
+      />
+      <LongPressField
+        bindings={dictateLongPress}
+        listening={recording === "dictateLongPress"}
+        disabled={arming !== null || dictateLongPress.length >= MAX_BINDINGS_PER_ACTION || (recording !== null && recording !== "dictateLongPress")}
+        onRecord={() => startRecording("dictateLongPress")}
+        onCancel={cancelRecording}
+        onRemove={removeLongPress}
+        onDelay={updateLongPress}
       />
       <HotkeyField
         label="Hold for a note"
@@ -344,6 +412,73 @@ function HotkeyField({
             </ul>
           )}
           <Tooltip content="Key, mouse button, or Ctrl/Shift/Alt/Win combination. Esc cancels.">
+            <button
+              type="button" className="secondary hotkey-add" disabled={disabled}
+              onClick={onRecord}
+            >
+              Record
+            </button>
+          </Tooltip>
+        </>
+      )}
+    </div>
+  );
+}
+
+function LongPressField({
+  bindings,
+  listening,
+  disabled,
+  onRecord,
+  onCancel,
+  onRemove,
+  onDelay,
+}: {
+  bindings: readonly LongPressBinding[];
+  listening: boolean;
+  disabled: boolean;
+  onRecord(): void;
+  onCancel(): void;
+  onRemove(shortcut: string): void;
+  onDelay(shortcut: string, holdMs: number): void;
+}) {
+  return (
+    <div className="hotkey-row">
+      <span className="hotkey-label">Long press to dictate</span>
+      {listening ? (
+        <div className="hotkey-listening" role="status">
+          <span>Press a mouse button. Quick clicks will stay normal. Esc cancels.</span>
+          <button type="button" className="secondary" onClick={onCancel}>Cancel</button>
+        </div>
+      ) : (
+        <>
+          {bindings.length > 0 && (
+            <ul className="hotkey-bindings">
+              {bindings.map((binding) => (
+                <li key={binding.shortcut} className="hotkey-long-press">
+                  <span>{hotkeyListLabel([binding.shortcut])}</span>
+                  <select
+                    aria-label={`Hold time for ${hotkeyListLabel([binding.shortcut])}`}
+                    value={binding.holdMs}
+                    onChange={(event) => onDelay(binding.shortcut, Number(event.target.value))}
+                  >
+                    {LONG_PRESS_MS_OPTIONS.map((milliseconds) => (
+                      <option key={milliseconds} value={milliseconds}>{milliseconds} ms</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="hotkey-remove"
+                    aria-label={`Remove long press ${hotkeyListLabel([binding.shortcut])}`}
+                    onClick={() => onRemove(binding.shortcut)}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Tooltip content="Quick click stays normal. Holding past the threshold starts Dictation; release finalizes it.">
             <button
               type="button" className="secondary hotkey-add" disabled={disabled}
               onClick={onRecord}
