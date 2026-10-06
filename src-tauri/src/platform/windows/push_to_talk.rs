@@ -250,25 +250,46 @@ impl PushToTalk {
         selection: Vec<Shortcut>,
         assistant: Vec<Shortcut>,
     ) -> Result<(), String> {
+        self.set_all_hotkeys(
+            dictate,
+            self.dictate_long_press.clone(),
+            voice_note,
+            handoff,
+            selection,
+            assistant,
+        )
+    }
+
+    pub fn set_long_press_hotkeys(&mut self, bindings: Vec<LongPressShortcut>) -> Result<(), String> {
+        self.set_all_hotkeys(
+            self.dictate.clone(),
+            bindings,
+            self.voice_note.clone(),
+            self.handoff.clone(),
+            self.selection.clone(),
+            self.assistant.clone(),
+        )
+    }
+
+    pub fn set_all_hotkeys(
+        &mut self,
+        dictate: Vec<Shortcut>,
+        dictate_long_press: Vec<LongPressShortcut>,
+        voice_note: Vec<Shortcut>,
+        handoff: Vec<Shortcut>,
+        selection: Vec<Shortcut>,
+        assistant: Vec<Shortcut>,
+    ) -> Result<(), String> {
         if dictate.is_empty() {
             return Err("Hold to dictate needs a key or mouse button.".into());
         }
-        ensure_unique(&[&dictate, &voice_note, &handoff, &selection, &assistant], &self.dictate_long_press)?;
+        ensure_unique(&[&dictate, &voice_note, &handoff, &selection, &assistant], &dictate_long_press)?;
         self.dictate = dictate;
+        self.dictate_long_press = dictate_long_press;
         self.voice_note = voice_note;
         self.handoff = handoff;
         self.selection = selection;
         self.assistant = assistant;
-        self.held = None;
-        Ok(())
-    }
-
-    pub fn set_long_press_hotkeys(&mut self, bindings: Vec<LongPressShortcut>) -> Result<(), String> {
-        ensure_unique(
-            &[&self.dictate, &self.voice_note, &self.handoff, &self.selection, &self.assistant],
-            &bindings,
-        )?;
-        self.dictate_long_press = bindings;
         self.held = None;
         Ok(())
     }
