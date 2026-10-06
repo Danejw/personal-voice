@@ -3,6 +3,7 @@ mod computer;
 mod handoff_alert;
 mod hook;
 mod insert;
+mod live_text;
 mod push_to_talk;
 mod snapshot;
 mod windows_info;
@@ -23,6 +24,7 @@ pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_sho
 pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
 pub use hook::{set_active as set_dictation_active, set_paused};
 pub use insert::{capture_selection, finish_pending_restore, insert_text};
+pub use live_text::live_dictation_text;
 pub use snapshot::capture_snapshot;
 pub use windows_info::describe_windows;
 

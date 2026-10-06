@@ -519,7 +519,7 @@ describe("AssistantController", () => {
     await settle();
     expect(used.listVoiceNotes).toHaveBeenCalledWith(false);
     expect(session.responses.at(-1)).toMatchObject({
-      toolResponse: { functionResponses: [{ id: "notes", response: { result: "Voice notes (1):\n1. id: n1\nBuy milk" } }] },
+      toolResponse: { functionResponses: [{ id: "notes", response: { result: "Notes (1):\n1. id: n1\nBuy milk" } }] },
     });
     session.emit({ type: "toolCalls", calls: [{ id: "sel", name: "capture_selection", args: {} }] });
     await settle();
@@ -530,7 +530,7 @@ describe("AssistantController", () => {
     });
   });
 
-  it("deletes a voice note in auto mode without a confirm card", async () => {
+  it("deletes a note in auto mode without a confirm card", async () => {
     const { created } = controller();
     const used = toolActions();
     created.setActions(used);
@@ -543,7 +543,7 @@ describe("AssistantController", () => {
     expect(created.getSnapshot().pendingAction).toBeNull();
   });
 
-  it("waits to delete a voice note until the user confirms", async () => {
+  it("waits to delete a note until the user confirms", async () => {
     const { created } = controller();
     const used = toolActions();
     created.setAutoRun(false);
@@ -553,13 +553,13 @@ describe("AssistantController", () => {
     session.emit({ type: "toolCalls", calls: [{ id: "del", name: "delete_voice_note", args: { id: "n1" } }] });
     await settle();
     expect(used.deleteVoiceNote).not.toHaveBeenCalled();
-    expect(created.getSnapshot().pendingAction?.title).toBe("Delete this voice note");
+    expect(created.getSnapshot().pendingAction?.title).toBe("Delete this note");
     expect(created.getSnapshot().pendingAction?.preview).toBe("Preview n1");
     created.confirmPending();
     await settle();
     expect(used.deleteVoiceNote).toHaveBeenCalledWith("n1");
     expect(session.responses.at(-1)).toMatchObject({
-      toolResponse: { functionResponses: [{ id: "del", response: { result: "Deleted the voice note." } }] },
+      toolResponse: { functionResponses: [{ id: "del", response: { result: "Deleted the note." } }] },
     });
   });
 
@@ -613,7 +613,7 @@ describe("AssistantController", () => {
       },
     });
 
-    used.createVoiceNote.mockRejectedValue(new Error("Saving the voice note failed."));
+    used.createVoiceNote.mockRejectedValue(new Error("Saving the note failed."));
     session.emit({
       type: "toolCalls",
       calls: [{ id: "note-1", name: "create_voice_note", args: { text: "Assistant tool test." } }],
@@ -622,13 +622,13 @@ describe("AssistantController", () => {
     created.confirmPending();
     await settle();
     expect(used.createVoiceNote).toHaveBeenCalledWith("Assistant tool test.");
-    expect(JSON.stringify(session.responses.at(-1))).not.toContain("Saved the voice note.");
+    expect(JSON.stringify(session.responses.at(-1))).not.toContain("Saved the note.");
     expect(session.responses.at(-1)).toEqual({
       toolResponse: {
         functionResponses: [{
           id: "note-1",
           name: "create_voice_note",
-          response: { error: "Saving the voice note failed." },
+          response: { error: "Saving the note failed." },
         }],
       },
     });
@@ -1213,7 +1213,7 @@ function toolActions() {
       sourceApp: "Notes",
       capturedAt: "2026-09-28T12:00:00.000Z",
     })),
-    listVoiceNotes: vi.fn(async () => "Voice notes (1):\n1. id: n1\nBuy milk"),
+    listVoiceNotes: vi.fn(async () => "Notes (1):\n1. id: n1\nBuy milk"),
     listHandoffs: vi.fn(async () => "Devices you can send to: Phone.\nNo received handoffs."),
     describeItem: vi.fn((_kind: "note" | "handoff", id: string) => `Preview ${id}`),
     archiveVoiceNote: vi.fn(async () => {}),

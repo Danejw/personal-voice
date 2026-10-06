@@ -125,7 +125,7 @@ Use Supabase for:
 - device records
 - shared settings
 - personal dictionary
-- explicitly saved voice notes and sent device handoffs
+- explicitly saved notes and sent device handoffs
 - secure short-lived Gemini credential/token issuance
 
 Do not send live microphone audio through Supabase.
@@ -173,19 +173,24 @@ language
 updated_at
 ```
 
-### voice_notes
+### notes
 
-Explicitly saved when Voice note is the selected dictation destination:
+Explicitly saved account notes. Dictation, manual entry, and Assistant saves share the same note domain:
 
 ```text
 id
 user_id
 text
 source_device_id
+source_type (voice | manual | assistant)
 status
 created_at
 updated_at
 ```
+
+The legacy `voice_notes` name remains a compatibility view while older installed clients roll forward.
+
+Notes may also have zero or more private file attachments. Attachments accept arbitrary file types, are stored in the private `note-attachments` Storage bucket, and keep only metadata in `note_attachments`. The current client accepts uploads up to 100 MB per file. In edit mode, files can be chosen, pasted from the clipboard when the clipboard exposes a file, or dropped onto the note. Images, video, and audio get inline previews; PDFs, Markdown, and other files remain downloadable/openable attachments. Assistant attachment of a Note still supplies the Note text only; file-content ingestion is a separate capability.
 
 ### handoffs
 
@@ -261,7 +266,7 @@ Keep schema additions conservative.
 - audio goes from the client to the transcription provider
 - backend does not receive live audio
 - audio is not permanently retained by the app
-- voice notes sync only when the user explicitly chooses the Voice note destination
+- voice-created notes sync only when the user explicitly chooses the Voice note destination; manually created notes sync when the user saves them
 - handoffs sync only when the user explicitly sends text to the Handoffs inbox
 - Remote Dictation sends only a finalized transcript to one selected device and expires quickly
 - never monitor or continuously synchronize the OS clipboard
@@ -293,6 +298,27 @@ The app should handle:
 The user should not lose dictated speech merely because a WebSocket fails at finalization.
 
 A short-lived local utterance buffer may be retained until the utterance succeeds or is abandoned.
+
+## Live dictation feedback
+
+While the Active field destination is recording, Gemini's `partialTranscript` hypotheses
+are shown progressively in supported focused text fields. Native implementations remember
+and verify only their own temporary edit. A later hypothesis replaces that temporary
+text; on finalization the corrected final transcript replaces it once, not a second paste.
+Cancelling removes the temporary text if the field still matches. If a field cannot
+provide a safe provisional edit, the regular finalized insertion is used instead.
+
+Windows uses UI Automation's editable Value pattern for **initially empty** ordinary
+text fields only. It verifies focused element identity, unchanged provisional value,
+and non-password/read-write status before every edit. Existing content, rich editors,
+and fields without this pattern keep the final-only path. No simulated backspaces or
+clipboard edits are used for preview. Android uses Accessibility `ACTION_SET_TEXT`
+only on an unchanged native editable or a recognized plain HTML text field, tracking the
+focused node and original range. Neither platform ever previews into a password field.
+
+Only `active-field` gets provisional text. Notes and Remote Dictation keep their
+final-only save/delivery behavior. No interim hypotheses are saved to history, synced
+to Supabase, or sent to other devices.
 
 ## Text insertion
 

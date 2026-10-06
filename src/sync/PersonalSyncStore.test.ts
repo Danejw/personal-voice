@@ -107,8 +107,8 @@ describe("PersonalSyncStore", () => {
     expect(restarted.getSnapshot().data).toEqual({
       settings: { ...DEFAULT_SETTINGS, smartTranscription: false, language: "fr-FR", usageIntelligence: false, cloudDictationHistory: true },
       terms: [
-        { id: "id-3", term: "model_pricing_skus", enabled: true },
-        { id: "id-2", term: "Seed Dance", enabled: false },
+        { id: "id-3", term: "model_pricing_skus", enabled: true, createdAt: expect.any(String) },
+        { id: "id-2", term: "Seed Dance", enabled: false, createdAt: expect.any(String) },
       ],
     });
   });

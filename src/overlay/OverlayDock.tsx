@@ -344,11 +344,11 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           <MicIcon />
         </button>
       </Tooltip>
-      <Tooltip content="Hold for a voice note" side={tipSide} delayMs={280}>
+      <Tooltip content="Hold for a note" side={tipSide} delayMs={280}>
         <button
           type="button"
           className={`overlay-btn ${tone(snapshot.dictation, held === "voice-note", false)}`}
-          aria-label="Hold for a voice note"
+          aria-label="Hold for a note"
           disabled={blocked || (snapshot.dictation === "listening" && held !== "voice-note")}
           onPointerDown={(event) => onHoldDown("voice-note", event)}
           onPointerUp={() => onHoldUp("voice-note")}

@@ -40,6 +40,10 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
     return parseTargetApp(await invoke("insert_text", { text }));
   }
 
+  liveDictationText(phase: "update" | "commit" | "cancel", text: string) {
+    return invoke<boolean>("live_dictation_text", { phase, text });
+  }
+
   async insertReceivedText(text: string) {
     return parseTargetApp(await invoke("insert_handoff_text", { text }));
   }

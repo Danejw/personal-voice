@@ -1,8 +1,8 @@
 import { useEffect, useSyncExternalStore } from "react";
-import type { VoiceNotesSnapshot, VoiceNotesStore } from "@/notes/VoiceNotesStore";
+import type { NotesSnapshot, NotesStore } from "@/notes/NotesStore";
 
 /** Follows the signed-in account and refreshes cross-device changes when the app is revisited. */
-export function useVoiceNotes(store: VoiceNotesStore, userId: string | null): VoiceNotesSnapshot {
+export function useNotes(store: NotesStore, userId: string | null): NotesSnapshot {
   useEffect(() => {
     void store.setUser(userId);
   }, [store, userId]);

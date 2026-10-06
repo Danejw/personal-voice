@@ -16,6 +16,14 @@ pub async fn insert_text(text: String) -> Result<Option<platform::TargetApp>, St
         .map_err(|e| e.to_string())?
 }
 
+/// Replaces only a verified provisional span in a supported Windows edit control.
+#[tauri::command]
+pub async fn live_dictation_text(phase: String, text: String) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || platform::live_dictation_text(&phase, &text))
+        .await
+        .map_err(|error| error.to_string())
+}
+
 /// Hides Settings so Windows restores the previously focused app before pasting the handoff.
 #[tauri::command]
 pub async fn insert_handoff_text(app: AppHandle, text: String) -> Result<Option<platform::TargetApp>, String> {

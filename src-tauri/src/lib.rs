@@ -89,6 +89,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::insert_text,
+            commands::live_dictation_text,
             commands::insert_handoff_text,
             commands::show_handoff_alert,
             commands::capture_selection,

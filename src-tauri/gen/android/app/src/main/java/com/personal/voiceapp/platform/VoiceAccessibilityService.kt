@@ -36,6 +36,9 @@ class VoiceAccessibilityService : AccessibilityService() {
 
     val isConnected: Boolean get() = instance != null
 
+    /** Provisional updates are only allowed for an unchanged native EditText. */
+    fun liveText(phase: String, text: String): Boolean = instance?.liveTextInFocusedField(phase, text) ?: false
+
     /** Main thread only. Falls back to the clipboard whenever typing directly isn't possible. */
     fun insert(context: Context, text: String): InsertResult {
       val service = instance
@@ -66,17 +69,86 @@ class VoiceAccessibilityService : AccessibilityService() {
     }
   }
 
+  private data class Preview(
+    val windowId: Int,
+    val packageName: String,
+    val viewId: String?,
+    val node: AccessibilityNodeInfo,
+    val before: String,
+    val after: String,
+    var provisional: String,
+  )
+
+  private var preview: Preview? = null
+
+  private fun liveTextInFocusedField(phase: String, text: String): Boolean {
+    if (phase == "cancel") {
+      val active = preview ?: return false
+      preview = null
+      val node = focusedField() ?: return false
+      if (!samePreviewField(node, active)) return false
+      return replacePreview(node, active, "", active.before + active.provisional + active.after)
+    }
+    if (phase != "update" && phase != "commit") return false
+    val node = focusedField() ?: return false
+    if (node.isPassword || !isSafeLiveField(node)) return false
+    if (node.actionList.none { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT }) return false
+    val active = preview ?: run {
+      val current = previewFieldText(node)
+      val start = node.textSelectionStart.takeIf { it >= 0 } ?: if (current.isEmpty()) 0 else -1
+      val end = node.textSelectionEnd.takeIf { it >= 0 } ?: if (current.isEmpty()) 0 else -1
+      if (start < 0 || end < 0 || start > current.length || end > current.length) return false
+      Preview(
+        node.windowId,
+        node.packageName?.toString().orEmpty(),
+        node.viewIdResourceName,
+        node,
+        current.substring(0, minOf(start, end)),
+        current.substring(maxOf(start, end)),
+        "",
+      ).also { preview = it }
+    }
+    if (!samePreviewField(node, active)) { preview = null; return false }
+    val expected = active.before + active.provisional + active.after
+    if (!replacePreview(node, active, text, expected)) { preview = null; return false }
+    if (phase == "commit") preview = null else active.provisional = text
+    return true
+  }
+
+  private fun samePreviewField(node: AccessibilityNodeInfo, state: Preview): Boolean =
+    node.windowId == state.windowId &&
+      node.packageName?.toString().orEmpty() == state.packageName &&
+      node.viewIdResourceName == state.viewId &&
+      node == state.node &&
+      !node.isPassword && isSafeLiveField(node)
+
+  private fun replacePreview(node: AccessibilityNodeInfo, state: Preview, replacement: String, expected: String): Boolean {
+    if (previewFieldText(node) != expected) return false
+    val result = state.before + replacement + state.after
+    val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, result) }
+    if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return false
+    val cursor = state.before.length + replacement.length
+    val position = Bundle().apply {
+      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, cursor)
+      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, cursor)
+    }
+    node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, position)
+    return true
+  }
+
   override fun onServiceConnected() {
     super.onServiceConnected()
     instance = this
   }
 
   override fun onUnbind(intent: Intent?): Boolean {
+    preview = null
     instance = null
     return super.onUnbind(intent)
   }
 
   override fun onDestroy() {
+    preview = null
     instance = null
     super.onDestroy()
   }
@@ -156,6 +228,18 @@ class VoiceAccessibilityService : AccessibilityService() {
       for (index in 0 until node.childCount) node.getChild(index)?.let(queue::addLast)
     }
     return null
+  }
+
+  private fun previewFieldText(node: AccessibilityNodeInfo): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && node.isShowingHintText) ""
+    else node.text?.toString().orEmpty()
+
+  /** Web HTML text inputs may expose an editable role; never rewrite rich editors. */
+  private fun isSafeLiveField(node: AccessibilityNodeInfo): Boolean {
+    if (isNativeTextField(node)) return true
+    if (!node.isEditable) return false
+    val role = node.extras.getString("AccessibilityNodeInfo.chromeRole").orEmpty()
+    return role == "textField" || role == "textArea" || role == "searchBox"
   }
 
   private fun isNativeTextField(node: AccessibilityNodeInfo): Boolean {

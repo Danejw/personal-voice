@@ -325,11 +325,12 @@ export type Database = {
         }
         Relationships: []
       }
-      voice_notes: {
+      notes: {
         Row: {
           created_at: string
           id: string
           source_device_id: string
+          source_type: string
           status: string
           text: string
           updated_at: string
@@ -339,6 +340,7 @@ export type Database = {
           created_at?: string
           id?: string
           source_device_id: string
+          source_type?: string
           status?: string
           text: string
           updated_at?: string
@@ -348,9 +350,43 @@ export type Database = {
           created_at?: string
           id?: string
           source_device_id?: string
+          source_type?: string
           status?: string
           text?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      note_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          id: string
+          mime_type: string | null
+          note_id: string
+          size_bytes: number
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          id: string
+          mime_type?: string | null
+          note_id: string
+          size_bytes: number
+          storage_path: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          id?: string
+          mime_type?: string | null
+          note_id?: string
+          size_bytes?: number
+          storage_path?: string
           user_id?: string
         }
         Relationships: []

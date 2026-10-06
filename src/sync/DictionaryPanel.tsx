@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import type { PersonalSyncStore, SyncSnapshot, SyncStatus as Status } from "@/sync/PersonalSyncStore";
 import { readOnlyReason } from "@/sync/SyncStatus";
-import { MAX_ENABLED_TERMS, MAX_TERM_LENGTH, enabledCount } from "@/sync/personalData";
+import { MAX_ENABLED_TERMS, MAX_TERM_LENGTH, enabledCount, newestTermsFirst } from "@/sync/personalData";
 
 interface DictionaryPanelProps {
   store: PersonalSyncStore;
@@ -79,7 +79,7 @@ export function DictionaryPanel({ store, sync, termUsage = {} }: DictionaryPanel
       {problem && <p className="error" role="alert">{problem}</p>}
       {terms.length > 0 ? (
         <ul className="terms hide-scrollbar">
-          {terms.map((entry) => (
+          {newestTermsFirst(terms).map((entry) => (
             <li key={entry.id} className={entry.enabled ? undefined : "term-off"}>
               <label>
                 <input

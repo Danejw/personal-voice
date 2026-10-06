@@ -36,6 +36,11 @@ export class TranscriptDestinationRouter implements TranscriptDestination {
     return this.selectedId;
   }
 
+  /** Active for this utterance, including a push-to-talk one-shot override. */
+  get effective(): TranscriptDestinationId {
+    return this.overrideId ?? this.selectedId;
+  }
+
   select(destination: TranscriptDestinationId): void {
     this.selectedId = destination;
   }

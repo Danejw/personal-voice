@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readPersonalCache, writePersonalCache } from "@/sync/personalCache";
 import type { KeyValueStorage } from "@/sync/personalCache";
 import {
-  DEFAULT_SETTINGS, MAX_ENABLED_TERMS, isLanguageCode, newTermProblem, normalizeTerm, transcriptionPreferences,
+  DEFAULT_SETTINGS, MAX_ENABLED_TERMS, isLanguageCode, newTermProblem, newestTermsFirst, normalizeTerm, transcriptionPreferences,
 } from "@/sync/personalData";
 import { syncErrorMessage } from "@/services/personalSyncService";
 import { geminiConfigFrom, setupMessage } from "@/voice/provider/gemini/GeminiProvider";
@@ -20,6 +20,16 @@ describe("dictionary rules", () => {
 
   it("treats terms that differ only by case as duplicates", () => {
     expect(newTermProblem("UFIQ", [{ id: "1", term: "ufiq", enabled: false }])).toBe("That term is already in your dictionary.");
+  });
+
+  it("shows newest dictionary terms first without mutating their original order", () => {
+    const terms = [
+      { id: "old", term: "Zebra", enabled: true, createdAt: "2026-01-10T10:00:00Z" },
+      { id: "new", term: "Alpha", enabled: true, createdAt: "2026-02-10T10:00:00Z" },
+      { id: "middle", term: "Beta", enabled: true, createdAt: "2026-01-20T10:00:00Z" },
+    ];
+    expect(newestTermsFirst(terms).map((entry) => entry.term)).toEqual(["Alpha", "Beta", "Zebra"]);
+    expect(terms.map((entry) => entry.term)).toEqual(["Zebra", "Alpha", "Beta"]);
   });
 
   it("caps the vocabulary sent to the provider at the curated limit", () => {
@@ -58,6 +68,13 @@ describe("personal cache", () => {
     writePersonalCache(storage, "u1", data);
     expect(readPersonalCache(storage, "u1")).toEqual(data);
     expect(readPersonalCache(storage, "u2")).toBeNull();
+  });
+
+  it("retains creation timestamps in the offline dictionary cache", () => {
+    const storage = memoryStorage();
+    const term = { id: "new", term: "New word", enabled: true, createdAt: "2026-10-06T08:00:00Z" };
+    writePersonalCache(storage, "u1", { settings: DEFAULT_SETTINGS, terms: [term] });
+    expect(readPersonalCache(storage, "u1")?.terms).toEqual([term]);
   });
 
   it("ignores corrupt or unknown-version entries", () => {

@@ -8,6 +8,7 @@ import type { UsageStore } from "@/usage/UsageStore";
 import type { VoiceProvider } from "@/voice/provider/VoiceProvider";
 import { DictationController, initialDictationSnapshot } from "@/voice/session/DictationController";
 import type { DictationSnapshot } from "@/voice/session/DictationController";
+import type { LiveFieldPreview } from "@/voice/session/LiveFieldPreview";
 import { isCancellable } from "@/voice/session/indicator";
 import { formatTimings } from "@/voice/session/timings";
 import type { TranscriptDestinationId, TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
@@ -35,6 +36,7 @@ export function useDictation(
   lease?: MicrophoneLease,
   /** Runs before capture starts so destinations can lock utterance-scoped state. */
   prepareUtterance?: (destination: TranscriptDestinationId) => void,
+  livePreview?: LiveFieldPreview,
 ) {
   const [snapshot, setSnapshot] = useState<DictationSnapshot>(initialDictationSnapshot);
   const [paused, setPaused] = useState(false);
@@ -43,7 +45,10 @@ export function useDictation(
   const [controller] = useState(
     () => new DictationController(
       () => lease ? gateDictationCapture(platform.createCapture(), lease) : platform.createCapture(),
-      setSnapshot,
+      (next) => {
+        livePreview?.observe(next, destinations.effective);
+        setSnapshot(next);
+      },
       destinations,
       {
       onTimings: (timings, transcript) => {

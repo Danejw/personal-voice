@@ -89,14 +89,16 @@ export const personalSyncApi: PersonalSyncApi = {
     const client = requireClient();
     const [settings, dictionary] = await Promise.all([
       client.from("settings").select("smart_transcription, language, usage_intelligence, usage_epoch, cloud_dictation_history, assistant_memory_learning").eq("user_id", userId).maybeSingle(),
-      client.from("dictionary").select("id, term, enabled").eq("user_id", userId).order("term"),
+      client.from("dictionary").select("id, term, enabled, created_at").eq("user_id", userId).order("created_at", { ascending: false }),
     ]);
     check(settings.error);
     check(dictionary.error);
     return {
       // No row yet means the user has never changed a setting.
       settings: settingsFromRow(settings.data),
-      terms: dictionary.data ?? [],
+      terms: (dictionary.data ?? []).map((row) => ({
+        id: row.id, term: row.term, enabled: row.enabled, createdAt: row.created_at,
+      })),
     };
   },
 
@@ -106,7 +108,7 @@ export const personalSyncApi: PersonalSyncApi = {
   },
 
   async insertTerm(userId, term) {
-    const { error } = await requireClient().from("dictionary").insert({ user_id: userId, ...term });
+    const { error } = await requireClient().from("dictionary").insert({ user_id: userId, id: term.id, term: term.term, enabled: term.enabled });
     check(error);
   },
 

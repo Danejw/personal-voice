@@ -117,6 +117,21 @@ closed
 
 This makes it possible to improve or replace the provider later without rebuilding the platform integration.
 
+## Live active-field feedback
+
+The shared `LiveFieldPreview` observes `DictationController` snapshots directly.
+Only Active field partial transcripts are sent to `PlatformAdapter.liveDictationText`.
+Updates are serialized and outdated hypotheses coalesced. The destination uses
+`commit(finalTranscript)` to replace the temporary span or falls back to the
+existing one-shot insertion when no preview was supported. Focus/content mismatch
+after a successful temporary edit refuses a second paste to avoid corrupting text.
+Cancel and short discarded utterances clear a matching preview.
+
+Windows native edits use a dedicated COM UI Automation worker and are limited
+to an initially empty editable Value-pattern field. Android's accessibility bridge
+uses bounded focused-node validation and `ACTION_SET_TEXT`. Both reject password
+fields and unsupported rich editors; neither touches the clipboard during preview.
+
 ## Transcript destination boundary
 
 A finalized transcript is delivered through `TranscriptDestination`, independently of the
@@ -129,12 +144,13 @@ DictationController
 ↓
 TranscriptDestinationRouter
 ├─ active-field → PlatformAdapter.insertText()
-├─ voice-note → VoiceNotesStore → Supabase
+├─ voice-note → NotesStore(source=voice) → Supabase
+│                                └─ note_attachments → private Supabase Storage
 └─ remote-dictation → RemoteDictationDestination → remote_dictation_requests → target insertReceivedText()
 ```
 
 PV2 introduced the boundary with `active-field` as its only destination. PV1 adds `voice-note`,
-which saves the finalized transcript as an inbox note only after Supabase confirms the insert.
+which saves the finalized transcript as an inbox Note with source_type=voice only after Supabase confirms the insert.
 PV3 originally added `send-to-device` through the persistent `handoffs` inbox. Remote Dictation
 replaces that dictation destination with `remote-dictation`: one locked target, exact final text
 only, Realtime-first delivery, atomic claim, and a ~6s expiry. Legacy saved `send-to-device`

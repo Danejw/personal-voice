@@ -25,6 +25,8 @@ export interface DictionaryTerm {
   id: string;
   term: string;
   enabled: boolean;
+  /** When this term was added; older cached copies may not include it. */
+  createdAt?: string;
 }
 
 export interface PersonalData {
@@ -96,6 +98,16 @@ export function newTermProblem(term: string, terms: DictionaryTerm[]): string | 
 
 export function sortTerms(terms: DictionaryTerm[]): DictionaryTerm[] {
   return [...terms].sort((a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: "base" }));
+}
+
+/** Display order only: newest entries first, without changing transcription vocabulary order. */
+export function newestTermsFirst(terms: DictionaryTerm[]): DictionaryTerm[] {
+  const created = (entry: DictionaryTerm) => {
+    const value = Date.parse(entry.createdAt ?? "");
+    return Number.isFinite(value) ? value : 0;
+  };
+  return [...terms].sort((a, b) => created(b) - created(a)
+    || a.term.localeCompare(b.term, undefined, { sensitivity: "base" }));
 }
 
 /** What the next transcription session is configured with. */

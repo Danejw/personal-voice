@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatHandoffList, formatVoiceNoteList } from "@/assistant/accountTools";
+import { formatHandoffList, formatNoteList } from "@/assistant/accountTools";
 import { buildContinuation, handoffDisplayText } from "@/assistant/continuation";
 import { selectionPreview } from "@/assistant/selectionContext";
 import { snapshotFromNative } from "@/assistant/snapshot";
@@ -43,12 +43,12 @@ import { useRemoteDictation } from "@/remote-dictation/useRemoteDictation";
 import { DictationHistoryPanel } from "@/history/DictationHistoryPanel";
 import { DictationHistoryStore, DICTATION_HISTORY_LIMIT } from "@/history/DictationHistoryStore";
 import { useDictationHistory } from "@/history/useDictationHistory";
-import { VoiceNotesPanel, VoiceNotesToolbar } from "@/notes/VoiceNotesPanel";
+import { NotesPanel, NotesToolbar } from "@/notes/NotesPanel";
 import { Onboarding } from "@/onboarding/Onboarding";
 import { dismissOnboarding, isDeviceReady, onboardingDismissed } from "@/onboarding/setupReady";
 import { useDeviceSetup } from "@/onboarding/useDeviceSetup";
-import { VoiceNotesStore } from "@/notes/VoiceNotesStore";
-import { useVoiceNotes } from "@/notes/useVoiceNotes";
+import { NotesStore } from "@/notes/NotesStore";
+import { useNotes } from "@/notes/useNotes";
 import { useOverlay } from "@/overlay/useOverlay";
 import { overlayAssistantFrom, overlayAssistantIntent } from "@/overlay/overlay";
 import { createPlatformAdapter, type AppPlatform } from "@/platform";
@@ -74,7 +74,7 @@ import { handoffApi } from "@/services/handoffService";
 import { remoteDictationApi } from "@/services/remoteDictationService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
-import { voiceNotesApi } from "@/services/voiceNotesService";
+import { notesApi } from "@/services/notesService";
 import {
   bindDeviceSettings,
   loadAssistantAutoRun,
@@ -113,6 +113,7 @@ import { GeminiProvider, geminiConfigFrom } from "@/voice/provider/gemini/Gemini
 import { GeminiTokenSource } from "@/voice/provider/gemini/GeminiTokenSource";
 import { MicrophoneLease } from "@/voice/audio/microphoneLease";
 import type { VoiceState } from "@/voice/session/state";
+import { LiveFieldPreview } from "@/voice/session/LiveFieldPreview";
 import { TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
@@ -134,6 +135,7 @@ function dictionaryTermUsage(
 }
 
 const platform = createPlatformAdapter();
+const liveFieldPreview = new LiveFieldPreview(platform);
 const tokens = new GeminiTokenSource(fetchGeminiToken);
 const assistantTokens = new GeminiTokenSource(() => fetchGeminiToken("assistant"));
 const microphone = new MicrophoneLease();
@@ -168,10 +170,12 @@ assistantMemory.setRemoteLearn(() => requestMemoryLearn());
 assistant.setProducer(() => assistantLibrary.holdingLease());
 const usage = new UsageStore(localStorage, platform.platform, () => new Date(), usageApi);
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
-const voiceNotes = new VoiceNotesStore(
-  voiceNotesApi,
+const notesStore = new NotesStore(
+  notesApi,
   (userId) => localDeviceId(localStorage, userId, createId),
-  () => usage.recordLater({ name: "voice_note_created" }),
+  (sourceType) => {
+    if (sourceType === "voice") usage.recordLater({ name: "voice_note_created" });
+  },
 );
 const devices = new DeviceStore(
   deviceApi,
@@ -252,7 +256,7 @@ function pasteReceived(text: string): Promise<void> {
 assistant.setActions({
   copyText: (text) => navigator.clipboard.writeText(text),
   insertText: (text) => pasteIntoField(text),
-  createVoiceNote: (text) => voiceNotes.create(text),
+  createVoiceNote: (text) => notesStore.create(text, "assistant"),
   planHandoff: (deviceName) => {
     const snap = handoffs.getSnapshot();
     const only = snap.devices[0];
@@ -272,11 +276,11 @@ assistant.setActions({
   sendHandoff: (text, deviceId) => handoffs.send(text, "dictation", deviceId),
   captureSelection: () => platform.captureSelection(),
   listVoiceNotes: async (includeArchived) => {
-    const snap = voiceNotes.getSnapshot();
-    if (snap.status === "signed-out") throw new Error("Sign in to read voice notes.");
-    if (snap.status !== "synced" && snap.notes.length === 0) throw new Error("Voice notes are unavailable until sync reconnects.");
-    const body = formatVoiceNoteList(snap.notes, includeArchived);
-    return snap.status === "synced" ? body : `Voice notes may be out of date.\n${body}`;
+    const snap = notesStore.getSnapshot();
+    if (snap.status === "signed-out") throw new Error("Sign in to read notes.");
+    if (snap.status !== "synced" && snap.notes.length === 0) throw new Error("Notes are unavailable until sync reconnects.");
+    const body = formatNoteList(snap.notes, includeArchived);
+    return snap.status === "synced" ? body : `Notes may be out of date.\n${body}`;
   },
   listHandoffs: async () => {
     const snap = handoffs.getSnapshot();
@@ -297,16 +301,16 @@ assistant.setActions({
   },
   describeItem: (kind, id) => {
     if (kind === "note") {
-      const note = voiceNotes.getSnapshot().notes.find((item) => item.id === id);
-      if (!note) throw new Error("No voice note has that id. Call list_voice_notes.");
+      const note = notesStore.getSnapshot().notes.find((item) => item.id === id);
+      if (!note) throw new Error("No note has that id. Call list_voice_notes.");
       return selectionPreview(note.text);
     }
     const handoff = handoffs.getSnapshot().received.find((item) => item.id === id);
     if (!handoff) throw new Error("No received handoff has that id. Call list_handoffs.");
     return selectionPreview(handoffDisplayText(handoff.text));
   },
-  archiveVoiceNote: (id, archived) => voiceNotes.setArchived(id, archived),
-  deleteVoiceNote: (id) => voiceNotes.remove(id),
+  archiveVoiceNote: (id, archived) => notesStore.setArchived(id, archived),
+  deleteVoiceNote: (id) => notesStore.remove(id),
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
   rememberMemory: (input) => assistantMemory.remember(input.kind, input.key, input.value),
@@ -329,8 +333,10 @@ assistant.setActions({
 });
 
 const destinations = new TranscriptDestinationRouter({
-  "active-field": { deliver: (transcript) => pasteIntoField(transcript) },
-  "voice-note": { deliver: (transcript) => voiceNotes.create(transcript) },
+  "active-field": { deliver: async (transcript) => {
+    if (!await liveFieldPreview.commit(transcript)) await pasteIntoField(transcript);
+  } },
+  "voice-note": { deliver: (transcript) => notesStore.create(transcript, "voice") },
   "remote-dictation": remoteDictationDestination,
 }, "active-field", (result) => {
   history.recordLater(result);
@@ -340,7 +346,7 @@ const destinations = new TranscriptDestinationRouter({
 });
 const DESTINATION_OPTIONS: readonly SelectOption[] = [
   { value: "active-field", label: "Active field" },
-  { value: "voice-note", label: "Voice note" },
+  { value: "voice-note", label: "Note" },
   { value: "remote-dictation", label: "Remote Dictation" },
 ];
 
@@ -475,7 +481,7 @@ function DeviceControls({
 export default function App() {
   const auth = useAuth();
   const sync = usePersonalSync(personalSync, auth.userId);
-  const notes = useVoiceNotes(voiceNotes, auth.userId);
+  const notes = useNotes(notesStore, auth.userId);
   const deviceSnapshot = useDevices(devices, auth.userId);
   const handoffSnapshot = useHandoffs(handoffs, auth.userId);
   const historySnapshot = useDictationHistory(history, auth.userId, sync.data.settings.cloudDictationHistory);
@@ -517,7 +523,7 @@ export default function App() {
     }
     const target = remoteDictation.lockSelectedTarget();
     remoteDictationDestination.lockTarget(target);
-  });
+  }, liveFieldPreview);
   const { state, partial, transcript, error } = snapshot;
   const control = controlFor(state, destination);
   const page = sectionMeta(section);
@@ -839,7 +845,7 @@ export default function App() {
             </div>
           )}
           {section === "dictionary" && <DictionaryToolbar store={personalSync} sync={sync} />}
-          {section === "notes" && <VoiceNotesToolbar store={voiceNotes} snapshot={notes} />}
+          {section === "notes" && <NotesToolbar store={notesStore} snapshot={notes} />}
           {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
           {section === "assistant" && (
             <AssistantHeader
@@ -944,8 +950,8 @@ export default function App() {
 
         <div className="panel-stack" hidden={section !== "notes"}>
           <section aria-labelledby="page-title" className="page-panel">
-            <VoiceNotesPanel
-              store={voiceNotes}
+            <NotesPanel
+              store={notesStore}
               snapshot={notes}
               attachedNoteIds={assistantSnapshot.notes.map((note) => note.id)}
               onAttachNote={(note) => assistant.attachNote({ id: note.id, text: note.text, createdAt: note.createdAt })}
