@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { HoverActionItem } from "@/components/HoverActionItem";
 import { Tooltip } from "@/components/Tooltip";
+import { TransformBox } from "@/transforms/TransformBox";
+import type { TransformProfile } from "@/transforms/transformProfile";
 import type {
   DictationHistoryEntry,
   DictationHistorySnapshot,
@@ -11,6 +13,8 @@ interface DictationHistoryPanelProps {
   snapshot: DictationHistorySnapshot;
   cloudSync: boolean;
   insertIntoActiveField(text: string): Promise<void>;
+  transformProfiles?: readonly TransformProfile[];
+  saveAsNote?(text: string): Promise<void>;
   onInserted?(): void;
 }
 
@@ -31,11 +35,14 @@ export function DictationHistoryPanel({
   snapshot,
   cloudSync,
   insertIntoActiveField,
+  transformProfiles = [],
+  saveAsNote,
   onInserted,
 }: DictationHistoryPanelProps) {
   const [busy, setBusy] = useState<number | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [transforming, setTransforming] = useState<number | null>(null);
 
   async function run(index: number, action: () => Promise<void>, success: string) {
     setBusy(index);
@@ -76,6 +83,7 @@ export function DictationHistoryPanel({
               key={`${entry.timestamp}:${index}`}
               busy={busy === index}
               actions={[
+                ...(transformProfiles.length ? [{ kind: "transform" as const, onClick: () => setTransforming(transforming === index ? null : index) }] : []),
                 { kind: "copy", onClick: () => copy(entry, index) },
                 { kind: "insert", onClick: () => insert(entry, index) },
               ]}
@@ -85,6 +93,30 @@ export function DictationHistoryPanel({
                 {destinationLabel(entry.destination)} · {entry.outcome === "success" ? "Delivered" : "Failed"} ·{" "}
                 <time dateTime={entry.timestamp}>{new Date(entry.timestamp).toLocaleString()}</time>
               </p>
+              {transforming === index && (
+                <TransformBox
+                  sourceText={entry.text}
+                  profiles={transformProfiles}
+                  onClose={() => setTransforming(null)}
+                  actions={[
+                    {
+                      label: "Insert",
+                      run: async (text) => {
+                        await insertIntoActiveField(text);
+                        onInserted?.();
+                        setTransforming(null);
+                      },
+                    },
+                    ...(saveAsNote ? [{
+                      label: "Save as note",
+                      run: async (text: string) => {
+                        await saveAsNote(text);
+                        setTransforming(null);
+                      },
+                    }] : []),
+                  ]}
+                />
+              )}
             </HoverActionItem>
           ))}
         </ul>
