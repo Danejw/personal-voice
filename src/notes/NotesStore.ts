@@ -1,5 +1,6 @@
 import type { NotesApi } from "@/services/notesService";
 import type { Note, NoteSourceType, NoteStatus } from "@/notes/note";
+import type { NoteAttachment } from "@/notes/noteAttachment";
 
 export type NotesStatus = "signed-out" | "loading" | "synced" | "offline";
 
@@ -49,7 +50,7 @@ export class NotesStore {
     await this.load(userId, this.generation);
   }
 
-  /** Reloads notes created or changed on another device. */
+  /** Reloads notes and attachment metadata changed on another device. */
   async reload(): Promise<void> {
     const userId = this.userId;
     if (!userId) return;
@@ -88,9 +89,53 @@ export class NotesStore {
     try {
       const updated = await this.api.updateText(id, body);
       if (generation === this.generation) {
+        const current = this.snapshot.notes.find((note) => note.id === id);
         this.publish({
           status: "synced",
-          notes: this.snapshot.notes.map((note) => note.id === id ? updated : note),
+          notes: this.snapshot.notes.map((note) => note.id === id
+            ? { ...updated, attachments: current?.attachments ?? [] }
+            : note),
+          error: null,
+        });
+      }
+    } catch (reason) {
+      this.reportMutationFailure(generation, reason);
+      throw reason;
+    }
+  }
+
+  async addAttachments(noteId: string, files: readonly File[]): Promise<void> {
+    const userId = this.requireConnected();
+    const generation = this.generation;
+    for (const file of files) {
+      try {
+        const attachment = await this.api.addAttachment(userId, noteId, file);
+        if (generation !== this.generation) return;
+        this.publish({
+          status: "synced",
+          notes: this.snapshot.notes.map((note) => note.id === noteId
+            ? { ...note, attachments: [...note.attachments, attachment] }
+            : note),
+          error: null,
+        });
+      } catch (reason) {
+        this.reportMutationFailure(generation, reason);
+        throw reason;
+      }
+    }
+  }
+
+  async removeAttachment(noteId: string, attachment: NoteAttachment): Promise<void> {
+    this.requireConnected();
+    const generation = this.generation;
+    try {
+      await this.api.removeAttachment(attachment);
+      if (generation === this.generation) {
+        this.publish({
+          status: "synced",
+          notes: this.snapshot.notes.map((note) => note.id === noteId
+            ? { ...note, attachments: note.attachments.filter((item) => item.id !== attachment.id) }
+            : note),
           error: null,
         });
       }
@@ -107,9 +152,12 @@ export class NotesStore {
     try {
       const updated = await this.api.setStatus(id, status);
       if (generation === this.generation) {
+        const current = this.snapshot.notes.find((note) => note.id === id);
         this.publish({
           status: "synced",
-          notes: this.snapshot.notes.map((note) => note.id === id ? updated : note),
+          notes: this.snapshot.notes.map((note) => note.id === id
+            ? { ...updated, attachments: current?.attachments ?? [] }
+            : note),
           error: null,
         });
       }
@@ -122,12 +170,13 @@ export class NotesStore {
   async remove(id: string): Promise<void> {
     this.requireConnected();
     const generation = this.generation;
+    const note = this.snapshot.notes.find((entry) => entry.id === id);
     try {
-      await this.api.delete(id);
+      await this.api.delete(id, note?.attachments ?? []);
       if (generation === this.generation) {
         this.publish({
           status: "synced",
-          notes: this.snapshot.notes.filter((note) => note.id !== id),
+          notes: this.snapshot.notes.filter((entry) => entry.id !== id),
           error: null,
         });
       }
