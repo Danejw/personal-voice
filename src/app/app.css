@@ -704,7 +704,34 @@ textarea:focus {
 .note-compose textarea { flex: 1; }
 .note-compose .record { flex: none; }
 .note-edit { display: grid; gap: 8px; }
-.note-edit-actions { display: flex; gap: 6px; }
+.note-edit-actions { display: flex; align-items: center; gap: 6px; }
+.note-file-status { color: #a2adbc; font-size: 12px; }
+.note-file-drop {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 42px; padding: 8px 10px; border-radius: 8px; background: #0d141b;
+  color: #a2adbc; font-size: 12px;
+}
+.note-file-picker { position: relative; overflow: hidden; flex: none; }
+.note-file-picker input {
+  position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;
+}
+.note-attachments {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-top: 8px;
+}
+.note-attachment {
+  min-width: 0; padding: 8px; border-radius: 8px; background: #0d141b; display: grid; gap: 6px;
+}
+.note-attachment-preview { display: block; width: 100%; max-height: 220px; border-radius: 7px; background: #080d12; object-fit: contain; }
+.note-attachment-preview img { display: block; width: 100%; max-height: 220px; border-radius: 7px; object-fit: contain; }
+.note-attachment-audio { width: 100%; min-width: 0; }
+.note-attachment-meta { min-width: 0; display: grid; gap: 2px; }
+.note-attachment-meta a {
+  color: #e9edf4; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none;
+}
+.note-attachment-meta a:hover { color: #88d8c1; }
+.note-attachment-meta span { color: #a2adbc; font-size: 11px; }
+.note-attachment-remove { justify-self: start; }
+
 .note-group { margin-top: 0; min-height: 0; }
 .note-group h3 { margin: 0 0 4px; flex: none; color: #b2becc; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 .note-group .placeholder { flex: 1; margin: 0; }
