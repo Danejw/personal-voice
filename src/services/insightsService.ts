@@ -140,6 +140,7 @@ export interface InsightsApi {
   listCandidates(userId: string): Promise<InsightCandidate[]>;
   saveRun(userId: string, input: SaveInsightRun): Promise<InsightRun>;
   setCandidateStatus(id: string, status: InsightCandidateStatus): Promise<void>;
+  updateRunUsageFacts(id: string, usageFacts: InsightUsageFacts): Promise<void>;
   compact(userId: string, runId: string, keepNewest: number): Promise<number>;
 }
 
@@ -233,6 +234,14 @@ export const insightsApi: InsightsApi = {
     const { error } = await requireClient()
       .from("insight_candidates")
       .update({ status })
+      .eq("id", id);
+    check(error);
+  },
+
+  async updateRunUsageFacts(id, usageFacts) {
+    const { error } = await requireClient()
+      .from("insight_runs")
+      .update({ usage_facts: usageFacts as unknown as Json })
       .eq("id", id);
     check(error);
   },
