@@ -537,7 +537,13 @@ export function NotesPanel({
 
   function save(note: Note) {
     void run(`edit:${note.id}`, async () => {
-      await store.updateDetails(note.id, draft, draftTitle, draftGroupId || null);
+      await store.updateDetails(
+        note.id,
+        draft,
+        draftTitle,
+        draftGroupId || null,
+        draftGroupId !== (note.groupId ?? ""),
+      );
       setEditingId(null);
       setDraft("");
       setDraftTitle("");
