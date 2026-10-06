@@ -104,7 +104,7 @@ export class PersonalSyncStore {
     const term = normalizeTerm(raw);
     const problem = newTermProblem(term, this.snapshot.data.terms);
     if (problem) return problem;
-    const entry = { id: this.createId(), term, enabled: true };
+    const entry = { id: this.createId(), term, enabled: true, createdAt: new Date().toISOString() };
     return this.enqueue({
       apply: (data) => ({ ...data, terms: sortTerms([...data.terms.filter((item) => item.id !== entry.id), entry]) }),
       write: (api, userId) => api.insertTerm(userId, entry),
