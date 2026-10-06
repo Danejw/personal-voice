@@ -23,6 +23,10 @@ pub struct Shortcut {
 }
 
 impl Shortcut {
+    pub fn is_mouse(self) -> bool {
+        matches!(self.vk, VK_RBUTTON | VK_MBUTTON | VK_XBUTTON1 | VK_XBUTTON2)
+    }
+
     /// Parses `"RightAlt"`, `"Ctrl+Shift+Space"`, `"F9"`, etc. Names are case-insensitive.
     pub fn parse(text: &str) -> Result<Self, String> {
         let parts: Vec<&str> = text.split('+').map(str::trim).collect();
@@ -52,6 +56,24 @@ impl Shortcut {
 impl Default for Shortcut {
     fn default() -> Self {
         Self::parse("RightAlt").expect("default shortcut parses")
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LongPressShortcut {
+    pub shortcut: Shortcut,
+    pub hold_ms: u64,
+}
+
+impl LongPressShortcut {
+    pub fn new(shortcut: Shortcut, hold_ms: u64) -> Result<Self, String> {
+        if !shortcut.is_mouse() {
+            return Err("Long press currently supports mouse buttons only.".into());
+        }
+        if !(200..=2_000).contains(&hold_ms) {
+            return Err("Long-press hold time must be between 200 and 2000 ms.".into());
+        }
+        Ok(Self { shortcut, hold_ms })
     }
 }
 
@@ -181,6 +203,7 @@ const SWALLOW: Outcome = Outcome {
 /// Tracks held shortcuts so auto-repeat never starts a second utterance.
 pub struct PushToTalk {
     pub dictate: Vec<Shortcut>,
+    pub dictate_long_press: Vec<LongPressShortcut>,
     pub voice_note: Vec<Shortcut>,
     pub handoff: Vec<Shortcut>,
     pub selection: Vec<Shortcut>,
@@ -198,6 +221,7 @@ impl Default for PushToTalk {
     fn default() -> Self {
         Self {
             dictate: vec![Shortcut::default()],
+            dictate_long_press: Vec::new(),
             voice_note: Vec::new(),
             handoff: Vec::new(),
             selection: Vec::new(),
@@ -214,6 +238,7 @@ impl Default for PushToTalk {
 impl PushToTalk {
     pub fn set_shortcut(&mut self, shortcut: Shortcut) {
         self.dictate = vec![shortcut];
+        self.dictate_long_press.retain(|binding| binding.shortcut != shortcut);
         self.held = None;
     }
 
@@ -228,7 +253,7 @@ impl PushToTalk {
         if dictate.is_empty() {
             return Err("Hold to dictate needs a key or mouse button.".into());
         }
-        ensure_unique(&[&dictate, &voice_note, &handoff, &selection, &assistant])?;
+        ensure_unique(&[&dictate, &voice_note, &handoff, &selection, &assistant], &self.dictate_long_press)?;
         self.dictate = dictate;
         self.voice_note = voice_note;
         self.handoff = handoff;
@@ -236,6 +261,32 @@ impl PushToTalk {
         self.assistant = assistant;
         self.held = None;
         Ok(())
+    }
+
+    pub fn set_long_press_hotkeys(&mut self, bindings: Vec<LongPressShortcut>) -> Result<(), String> {
+        ensure_unique(
+            &[&self.dictate, &self.voice_note, &self.handoff, &self.selection, &self.assistant],
+            &bindings,
+        )?;
+        self.dictate_long_press = bindings;
+        self.held = None;
+        Ok(())
+    }
+
+    pub fn long_press_delay(&self, vk: u32, modifiers: Modifiers) -> Option<u64> {
+        if self.paused || self.capturing || self.held.is_some() {
+            return None;
+        }
+        self.dictate_long_press
+            .iter()
+            .find(|binding| matches_shortcut(&binding.shortcut, vk, modifiers))
+            .map(|binding| binding.hold_ms)
+    }
+
+    pub fn begin_long_press(&mut self, vk: u32, modifiers: Modifiers) -> Option<PttEvent> {
+        self.long_press_delay(vk, modifiers)?;
+        self.held = Some((vk, HeldAction::Talk));
+        Some(PttEvent::Press { destination: None })
     }
 
     pub fn set_paused(&mut self, paused: bool) {
@@ -352,15 +403,21 @@ fn matches_shortcut(shortcut: &Shortcut, vk: u32, modifiers: Modifiers) -> bool 
     shortcut.vk == vk && shortcut.modifiers == modifiers
 }
 
-fn ensure_unique(lists: &[&[Shortcut]]) -> Result<(), String> {
-    let mut seen: Vec<&Shortcut> = Vec::new();
+fn ensure_unique(lists: &[&[Shortcut]], long_press: &[LongPressShortcut]) -> Result<(), String> {
+    let mut seen: Vec<Shortcut> = Vec::new();
     for list in lists {
         for shortcut in *list {
-            if seen.iter().any(|other| *other == shortcut) {
-                return Err("Each action needs its own key or mouse button.".into());
+            if seen.contains(shortcut) {
+                return Err("Each binding needs its own key or mouse button.".into());
             }
-            seen.push(shortcut);
+            seen.push(*shortcut);
         }
+    }
+    for binding in long_press {
+        if seen.contains(&binding.shortcut) {
+            return Err("Each binding needs its own key or mouse button.".into());
+        }
+        seen.push(binding.shortcut);
     }
     Ok(())
 }
