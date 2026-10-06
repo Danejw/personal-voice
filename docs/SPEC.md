@@ -123,7 +123,7 @@ Built-in profiles:
 - Polish
 - Prompt Engineer
 
-Users may create account-synced custom profiles with a name and instruction. The same transform profiles are reusable from Dictation, Notes, Recent Dictations, and Handoffs. One-shot transforms preview the result before a destructive action; Notes can replace the original or save the transformed result as a new note.
+Users may create account-synced custom profiles with a name and instruction. The same transform profiles are reusable from Dictation, Notes, Recent Dictations, Handoffs, and captured Selections. One-shot transforms preview the result before a destructive action; Notes can replace the original or save the transformed result as a new note.
 
 The selected automatic Dictation transform is a per-device preference. `None` is the default. If a selected transform is unavailable or fails, the destination is not given untransformed text silently; the original finalized transcript remains available through the existing Dictation error/history path.
 
