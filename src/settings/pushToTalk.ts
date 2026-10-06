@@ -1,13 +1,15 @@
-import { canonicalShortcut, hotkeyLabel } from "@/settings/hotkeyChord";
+import { canonicalShortcut, hotkeyLabel, isMouseShortcut, type LongPressBinding } from "@/settings/hotkeyChord";
 import {
   loadStoredAssistantHotkey,
   loadStoredHandoffHotkey,
   loadStoredPushToTalk,
+  loadStoredPushToTalkLongPress,
   loadStoredSelectionHotkey,
   loadStoredVoiceNoteHotkey,
   saveStoredAssistantHotkey,
   saveStoredHandoffHotkey,
   saveStoredPushToTalk,
+  saveStoredPushToTalkLongPress,
   saveStoredSelectionHotkey,
   saveStoredVoiceNoteHotkey,
 } from "@/settings/deviceSettings";
@@ -15,6 +17,8 @@ import {
 export { hotkeyLabel } from "@/settings/hotkeyChord";
 
 export const DEFAULT_PUSH_TO_TALK = "RightAlt";
+export const DEFAULT_LONG_PRESS_MS = 500;
+export const LONG_PRESS_MS_OPTIONS = [300, 500, 750, 1000] as const;
 
 /** Enough for a mouse button and a few keyboard chords on one action. */
 export const MAX_BINDINGS_PER_ACTION = 8;
@@ -33,6 +37,23 @@ export function loadPushToTalk(): string[] {
 
 export function savePushToTalk(shortcuts: readonly string[]): void {
   saveStoredPushToTalk([...shortcuts]);
+}
+
+export function loadPushToTalkLongPress(): LongPressBinding[] {
+  const seen = new Set<string>();
+  return loadStoredPushToTalkLongPress().flatMap((binding) => {
+    const shortcut = canonicalShortcut(binding.shortcut);
+    if (!shortcut || !isMouseShortcut(shortcut) || seen.has(shortcut)) return [];
+    const holdMs = LONG_PRESS_MS_OPTIONS.includes(binding.holdMs as typeof LONG_PRESS_MS_OPTIONS[number])
+      ? binding.holdMs
+      : DEFAULT_LONG_PRESS_MS;
+    seen.add(shortcut);
+    return [{ shortcut, holdMs }];
+  });
+}
+
+export function savePushToTalkLongPress(bindings: readonly LongPressBinding[]): void {
+  saveStoredPushToTalkLongPress(bindings);
 }
 
 export function loadVoiceNoteHotkey(): string[] {
