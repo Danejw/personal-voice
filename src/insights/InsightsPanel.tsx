@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import type { InsightCandidate, InsightsStatus } from "@/insights/insights";
+import type { InsightCandidate } from "@/insights/insights";
 import { formatHour, INSIGHTS_KEEP_RECENT } from "@/insights/insights";
 import type {
   InsightsKnowledgeInput,
   InsightsSnapshot,
+  InsightsStatus,
   InsightsStore,
 } from "@/insights/InsightsStore";
 import { mergeUsageDays, sumCounters, targetAppUsage } from "@/usage/analytics";
