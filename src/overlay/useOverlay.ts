@@ -185,7 +185,8 @@ export function useOverlay({
     quietly(platform.syncOverlay(snapshot));
   }, [platform, snapshot]);
 
-  const releasedHolds = useRef(new Set<number>());
+  const releasedHolds = useRef(new Set<string>());
+  const activeNoteHold = useRef<number | null>(null);
 
   const flash = useCallback((message: string) => {
     setNotice(message);
@@ -257,33 +258,44 @@ export function useOverlay({
           }
         }
         case "dictate-hold": {
-          if (action.phase === "stop") {
-            releasedHolds.current.add(action.id);
-            await controller.stop();
+          const token = `note:${action.id}`;
+          if (action.phase !== "start") {
+            releasedHolds.current.add(token);
+            if (activeNoteHold.current !== action.id) return;
+            activeNoteHold.current = null;
+            if (action.phase === "cancel") {
+              await controller.cancel();
+              overrideDestination(null);
+            } else {
+              await controller.stop();
+            }
             return;
           }
-          if (releasedHolds.current.has(action.id)) return;
+          if (releasedHolds.current.delete(token)) return;
           if (snapshotRef.current.paused || !snapshotRef.current.signedIn) return;
           if (canDictateRef.current && !canDictateRef.current()) return;
           if (overlayDictateIntent(snapshotRef.current.dictation) !== "start") return;
+          activeNoteHold.current = action.id;
           overrideDestination(action.destination);
           armRef.current?.();
           controller.reset();
           await controller.start(providerRef.current());
-          if (releasedHolds.current.has(action.id)) await controller.stop();
+          // A fast release/cancel can arrive while capture starts; the earlier handler
+          // finishes or cancels it, so do not start another transcription here.
           return;
         }
         case "cycle-remote-target":
           cycleRef.current();
           return;
         case "remote-dictate-hold": {
+          const token = `remote:${action.id}`;
           if (action.phase === "stop") {
-            releasedHolds.current.add(action.id);
+            releasedHolds.current.add(token);
             await controller.stop();
             remoteEndedRef.current();
             return;
           }
-          if (releasedHolds.current.has(action.id)) return;
+          if (releasedHolds.current.delete(token)) return;
           if (snapshotRef.current.paused || !snapshotRef.current.signedIn) return;
           if (canDictateRef.current && !canDictateRef.current()) return;
           if (overlayDictateIntent(snapshotRef.current.dictation) !== "start") return;
@@ -297,7 +309,7 @@ export function useOverlay({
           armRef.current?.();
           controller.reset();
           await controller.start(providerRef.current());
-          if (releasedHolds.current.has(action.id)) {
+          if (releasedHolds.current.has(token)) {
             await controller.stop();
             remoteEndedRef.current();
           }
