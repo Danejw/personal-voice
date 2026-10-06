@@ -129,12 +129,12 @@ DictationController
 ↓
 TranscriptDestinationRouter
 ├─ active-field → PlatformAdapter.insertText()
-├─ voice-note → VoiceNotesStore → Supabase
+├─ voice-note → NotesStore(source=voice) → Supabase
 └─ remote-dictation → RemoteDictationDestination → remote_dictation_requests → target insertReceivedText()
 ```
 
 PV2 introduced the boundary with `active-field` as its only destination. PV1 adds `voice-note`,
-which saves the finalized transcript as an inbox note only after Supabase confirms the insert.
+which saves the finalized transcript as an inbox Note with source_type=voice only after Supabase confirms the insert.
 PV3 originally added `send-to-device` through the persistent `handoffs` inbox. Remote Dictation
 replaces that dictation destination with `remote-dictation`: one locked target, exact final text
 only, Realtime-first delivery, atomic claim, and a ~6s expiry. Legacy saved `send-to-device`
