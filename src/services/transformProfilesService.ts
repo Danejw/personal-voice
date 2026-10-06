@@ -5,6 +5,11 @@ import type { TransformProfile } from "@/transforms/transformProfile";
 
 const COLUMNS = "id, name, instruction, created_at, updated_at";
 
+type TransformProfileRow = Pick<
+  Database["public"]["Tables"]["transform_profiles"]["Row"],
+  "id" | "name" | "instruction" | "created_at" | "updated_at"
+>;
+
 export interface TransformProfilesApi {
   list(userId: string): Promise<TransformProfile[]>;
   create(userId: string, name: string, instruction: string): Promise<TransformProfile>;
@@ -26,7 +31,7 @@ function check(error: PostgrestError | null): void {
   throw new Error(error.code ? `Transform sync failed (${error.code}).` : "Couldn't reach transform sync.");
 }
 
-function fromRow(row: Database["public"]["Tables"]["transform_profiles"]["Row"]): TransformProfile {
+function fromRow(row: TransformProfileRow): TransformProfile {
   return {
     id: row.id,
     name: row.name,
