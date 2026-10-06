@@ -230,6 +230,10 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
 
   return (
     <>
+      <p className="hint">
+        Add up to {MAX_BINDINGS_PER_ACTION} bindings per action. Keyboard keys and mouse buttons can trigger the same action.
+        A bound mouse button is reserved by Personal Voice while that binding is enabled.
+      </p>
       <HotkeyField
         label="Hold to dictate"
         shortcuts={dictate}
