@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import process from "node:process";
 
 if (process.platform !== "win32") process.exit(0);
 
@@ -25,6 +26,6 @@ try {
   const status = typeof error === "object" && error !== null && "status" in error
     ? Number(error.status)
     : 1;
-  console.error("Could not stop the stale Personal Voice debug process.");
+  process.stderr.write("Could not stop the stale Personal Voice debug process.\n");
   process.exit(Number.isFinite(status) && status > 0 ? status : 1);
 }
