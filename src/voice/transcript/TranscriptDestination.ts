@@ -29,6 +29,8 @@ export class TranscriptDestinationRouter implements TranscriptDestination {
   private destinations: Readonly<Record<TranscriptDestinationId, TranscriptDestination>>,
   private selectedId: TranscriptDestinationId = "active-field",
   private onResult?: (result: TranscriptDeliveryResult) => void,
+  /** Optional post-transcription rewrite. It runs before the chosen destination receives text. */
+  private transform?: (text: string, destination: TranscriptDestinationId) => Promise<string>,
   private overrideId: TranscriptDestinationId | null = null,
 ) {}
 
@@ -54,9 +56,11 @@ export class TranscriptDestinationRouter implements TranscriptDestination {
     const destination = this.overrideId ?? this.selectedId;
     this.overrideId = null;
     try {
-      await this.destinations[destination].deliver(transcript);
-      this.report({ text: transcript, destination, outcome: "success" });
+      const deliveredText = this.transform ? await this.transform(transcript, destination) : transcript;
+      await this.destinations[destination].deliver(deliveredText);
+      this.report({ text: deliveredText, destination, outcome: "success" });
     } catch (reason) {
+      // Preserve the finalized transcript in recovery history when a transform or destination fails.
       this.report({ text: transcript, destination, outcome: "failure" });
       throw reason;
     }

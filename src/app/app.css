@@ -1030,3 +1030,106 @@ html.indicator-view #root {
 .onboarding-text:hover:not(:disabled) { color: #e9edf4; }
 .onboarding-text:focus-visible { outline: 2px solid #88d8c1; outline-offset: 2px; }
 .onboarding-text:disabled { opacity: 0.5; cursor: default; }
+
+
+/* Reusable text transforms */
+.transform-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.transform-form textarea {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  background: #111820;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+.transform-form-actions,
+.transform-box-buttons,
+.transform-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.transform-groups {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+.transform-group {
+  display: grid;
+  gap: 6px;
+}
+.transform-group > h3 {
+  margin: 0;
+  color: #b2becc;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.transform-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.transform-card,
+.transform-list > .action-item {
+  background: #111820;
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+.transform-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.transform-instruction {
+  margin: 3px 0 0;
+  color: #a2adbc;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.transform-box {
+  margin-top: 8px;
+  padding: 9px;
+  display: grid;
+  gap: 8px;
+  background: #0d141b;
+  border-radius: 10px;
+}
+.transform-box-controls {
+  display: grid;
+  gap: 7px;
+}
+.transform-result {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  background: #111820;
+  border-radius: 8px;
+}
+.transform-result > p {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.app-shell.is-mobile .transform-form-actions,
+.app-shell.is-mobile .transform-box-buttons,
+.app-shell.is-mobile .transform-result-actions {
+  align-items: stretch;
+}

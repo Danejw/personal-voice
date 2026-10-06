@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Tooltip } from "@/components/Tooltip";
 
 /** Actions the shared hover tray knows how to draw. */
-export type TrayActionKind = "copy" | "edit" | "insert" | "archive" | "unarchive" | "delete" | "dismiss" | "attach";
+export type TrayActionKind = "copy" | "edit" | "insert" | "transform" | "archive" | "unarchive" | "delete" | "dismiss" | "attach";
 
 export interface TrayAction {
   kind: TrayActionKind;
@@ -53,6 +53,7 @@ function isDanger(kind: TrayActionKind): boolean {
     case "copy":
     case "edit":
     case "insert":
+    case "transform":
     case "archive":
     case "unarchive":
     case "attach":
@@ -69,6 +70,7 @@ function labelFor(kind: TrayActionKind): string {
     case "copy": return "Copy";
     case "edit": return "Edit";
     case "insert": return "Insert";
+    case "transform": return "Transform";
     case "archive": return "Archive";
     case "unarchive": return "Unarchive";
     case "delete": return "Delete";
@@ -101,6 +103,12 @@ function ActionIcon({ kind }: { kind: TrayActionKind }) {
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 4v9M8 9l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M5 16h14v4H5z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+        </svg>
+      );
+    case "transform":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m5 19 9-9M12 6l1-3 1 3 3 1-3 1-1 3-1-3-3-1 3-1zM17 14l.7-2 .7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "archive":

@@ -4,18 +4,18 @@ import { parseModelOutput, textActionInputProblem, textActionRequestBody, MAX_TE
 
 describe("textActionInputProblem", () => {
   it("rejects an empty selection or instruction and oversized text", () => {
-    expect(textActionInputProblem("  ", "shorter")).toBe("Capture a selection first.");
-    expect(textActionInputProblem("hello", "  ")).toBe("Say what to do with the selection.");
-    expect(textActionInputProblem("x".repeat(MAX_TEXT_ACTION_CHARS + 1), "shorter")).toMatch(/selection is too long/);
+    expect(textActionInputProblem("  ", "shorter")).toBe("Add text to transform first.");
+    expect(textActionInputProblem("hello", "  ")).toBe("Add transform instructions.");
+    expect(textActionInputProblem("x".repeat(MAX_TEXT_ACTION_CHARS + 1), "shorter")).toMatch(/text is too long/);
     expect(textActionInputProblem("hello", "x".repeat(MAX_TEXT_ACTION_CHARS + 1))).toMatch(/instruction is too long/);
     expect(textActionInputProblem("hello", "make this shorter")).toBeNull();
   });
 });
 
 describe("textActionRequestBody", () => {
-  it("sends the instruction and selection as user text and does not name a model", () => {
+  it("sends the instruction and input text and does not name a model", () => {
     const body = textActionRequestBody("  Hello world  ", "  make this shorter  ");
-    expect(body.contents[0]?.parts[0]?.text).toBe("Instruction:\nmake this shorter\n\nSelected text:\n  Hello world  ");
+    expect(body.contents[0]?.parts[0]?.text).toBe("Instruction:\nmake this shorter\n\nInput text:\n  Hello world  ");
     expect(JSON.stringify(body)).not.toContain("gemini");
   });
 });
@@ -35,10 +35,10 @@ describe("parseModelOutput", () => {
     })).toBe("Shorter.");
   });
 
-  it("treats a missing candidate or blank text as an empty rewrite", () => {
-    expect(() => parseModelOutput(null)).toThrow("The rewrite was empty.");
-    expect(() => parseModelOutput({})).toThrow("The rewrite was empty.");
-    expect(() => parseModelOutput({ candidates: [] })).toThrow("The rewrite was empty.");
-    expect(() => parseModelOutput({ candidates: [{ content: { parts: [{ text: "  " }] } }] })).toThrow("The rewrite was empty.");
+  it("treats a missing candidate or blank text as an empty transform", () => {
+    expect(() => parseModelOutput(null)).toThrow("The transform was empty.");
+    expect(() => parseModelOutput({})).toThrow("The transform was empty.");
+    expect(() => parseModelOutput({ candidates: [] })).toThrow("The transform was empty.");
+    expect(() => parseModelOutput({ candidates: [{ content: { parts: [{ text: "  " }] } }] })).toThrow("The transform was empty.");
   });
 });

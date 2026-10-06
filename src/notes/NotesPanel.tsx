@@ -10,6 +10,8 @@ import type { NotesSnapshot, NotesStatus, NotesStore } from "@/notes/NotesStore"
 import type { Note } from "@/notes/note";
 import { attachmentKind, formatAttachmentSize } from "@/notes/noteAttachment";
 import type { NoteAttachment } from "@/notes/noteAttachment";
+import { TransformBox } from "@/transforms/TransformBox";
+import type { TransformProfile } from "@/transforms/transformProfile";
 
 interface NotesPanelProps {
   store: NotesStore;
@@ -17,6 +19,7 @@ interface NotesPanelProps {
   attachedNoteIds?: readonly string[];
   onAttachNote?: (note: Note) => string | null;
   onDetachNote?: (id: string) => void;
+  transformProfiles?: readonly TransformProfile[];
 }
 
 interface NoteGroupProps {
@@ -39,6 +42,11 @@ interface NoteGroupProps {
   attachedIds?: readonly string[];
   onAttach?(note: Note): void;
   onDetach?(id: string): void;
+  transformProfiles: readonly TransformProfile[];
+  transformingId: string | null;
+  onToggleTransform(note: Note): void;
+  onTransformReplace(note: Note, text: string): Promise<void>;
+  onTransformSave(text: string): Promise<void>;
 }
 
 function statusLabel(status: NotesStatus): string {
@@ -167,6 +175,11 @@ function NoteGroup({
   attachedIds = [],
   onAttach,
   onDetach,
+  transformProfiles,
+  transformingId,
+  onToggleTransform,
+  onTransformReplace,
+  onTransformSave,
 }: NoteGroupProps) {
   return (
     <div className={className ? `note-group ${className}` : "note-group"}>
@@ -210,6 +223,7 @@ function NoteGroup({
                     onClick: () => { if (attached) onDetach(note.id); else onAttach(note); },
                   }] : []),
                   { kind: "edit" as const, disabled: !editable, onClick: () => onEdit(note) },
+                  ...(transformProfiles.length ? [{ kind: "transform" as const, onClick: () => onToggleTransform(note) }] : []),
                   { kind: "copy" as const, onClick: () => onCopy(note) },
                   {
                     kind: archived ? "unarchive" : "archive",
@@ -282,6 +296,24 @@ function NoteGroup({
                       {" · "}
                       <time dateTime={note.createdAt}>{new Date(note.createdAt).toLocaleString()}</time>
                     </p>
+                    {transformingId === note.id && (
+                      <TransformBox
+                        sourceText={note.text}
+                        profiles={transformProfiles}
+                        disabled={!editable}
+                        onClose={() => onToggleTransform(note)}
+                        actions={[
+                          {
+                            label: "Replace note",
+                            run: (text) => onTransformReplace(note, text),
+                          },
+                          {
+                            label: "Save as new note",
+                            run: onTransformSave,
+                          },
+                        ]}
+                      />
+                    )}
                   </>
                 )}
               </HoverActionItem>
@@ -315,13 +347,21 @@ export function NotesToolbar({ store, snapshot }: NotesPanelProps) {
 }
 
 /** Synced account notes. Dictation is one creation path, not a separate note type. */
-export function NotesPanel({ store, snapshot, attachedNoteIds = [], onAttachNote, onDetachNote }: NotesPanelProps) {
+export function NotesPanel({
+  store,
+  snapshot,
+  attachedNoteIds = [],
+  onAttachNote,
+  onDetachNote,
+  transformProfiles = [],
+}: NotesPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [transformingId, setTransformingId] = useState<string | null>(null);
   const editable = snapshot.status === "synced";
   const inbox = snapshot.notes.filter((note) => note.status === "inbox");
   const archived = snapshot.notes.filter((note) => note.status === "archived");
@@ -358,6 +398,7 @@ export function NotesPanel({ store, snapshot, attachedNoteIds = [], onAttachNote
   }
 
   function edit(note: Note) {
+    setTransformingId(null);
     setEditingId(note.id);
     setDraft(note.text);
     setProblem(null);
@@ -398,11 +439,31 @@ export function NotesPanel({ store, snapshot, attachedNoteIds = [], onAttachNote
 
   function remove(note: Note) {
     if (editingId === note.id) cancelEdit();
+    if (transformingId === note.id) setTransformingId(null);
     void run(`delete:${note.id}`, () => store.remove(note.id));
   }
 
   function attach(note: Note) {
     setProblem(onAttachNote?.(note) ?? null);
+  }
+
+  function toggleTransform(note: Note) {
+    setEditingId(null);
+    setTransformingId((current) => current === note.id ? null : note.id);
+    setProblem(null);
+    setNotice(null);
+  }
+
+  async function replaceFromTransform(note: Note, text: string) {
+    await store.updateText(note.id, text);
+    setTransformingId(null);
+    setNotice("Note replaced with transformed text.");
+  }
+
+  async function saveFromTransform(text: string) {
+    await store.create(text, "manual");
+    setTransformingId(null);
+    setNotice("Transformed text saved as a new note.");
   }
 
   const groupProps = {
@@ -422,6 +483,11 @@ export function NotesPanel({ store, snapshot, attachedNoteIds = [], onAttachNote
     attachedIds: attachedNoteIds,
     onAttach: onAttachNote ? attach : undefined,
     onDetach: onDetachNote,
+    transformProfiles,
+    transformingId,
+    onToggleTransform: toggleTransform,
+    onTransformReplace: replaceFromTransform,
+    onTransformSave: saveFromTransform,
   };
 
   return (

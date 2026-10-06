@@ -44,6 +44,47 @@ describe("TranscriptDestinationRouter", () => {
     expect(activeField.deliver).toHaveBeenCalledWith("field");
   });
 
+  it("transforms finalized text before destination delivery", async () => {
+    const activeField: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
+    const unused: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
+    const onResult = vi.fn();
+    const transform = vi.fn(async (text: string) => `PROMPT: ${text}`);
+    const router = new TranscriptDestinationRouter({
+      "active-field": activeField,
+      "voice-note": unused,
+      "remote-dictation": unused,
+    }, "active-field", onResult, transform);
+
+    await router.deliver("rough idea");
+    expect(transform).toHaveBeenCalledWith("rough idea", "active-field");
+    expect(activeField.deliver).toHaveBeenCalledWith("PROMPT: rough idea");
+    expect(onResult).toHaveBeenCalledWith({
+      text: "PROMPT: rough idea",
+      destination: "active-field",
+      outcome: "success",
+    });
+  });
+
+  it("does not deliver untransformed text when a selected transform fails", async () => {
+    const activeField: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
+    const unused: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
+    const onResult = vi.fn();
+    const transformError = new Error("transform failed");
+    const router = new TranscriptDestinationRouter({
+      "active-field": activeField,
+      "voice-note": unused,
+      "remote-dictation": unused,
+    }, "active-field", onResult, async () => { throw transformError; });
+
+    await expect(router.deliver("keep me")).rejects.toBe(transformError);
+    expect(activeField.deliver).not.toHaveBeenCalled();
+    expect(onResult).toHaveBeenCalledWith({
+      text: "keep me",
+      destination: "active-field",
+      outcome: "failure",
+    });
+  });
+
   it("reports failure without swallowing the destination error", async () => {
     const failure = new Error("insert failed");
     const activeField: TranscriptDestination = { deliver: vi.fn().mockRejectedValue(failure) };

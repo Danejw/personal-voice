@@ -9,6 +9,7 @@ export type AppSection =
   | "capture"
   | "notes"
   | "handoffs"
+  | "transforms"
   | "assistant"
   | "devices"
   | "settings"
@@ -19,7 +20,8 @@ export type VoiceSection =
   | "dictionary"
   | "capture"
   | "notes"
-  | "handoffs";
+  | "handoffs"
+  | "transforms";
 
 type TopSection = "voice" | "assistant" | "devices" | "settings" | "analytics";
 
@@ -29,6 +31,7 @@ const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   capture: { label: "Selection" },
   notes: { label: "Notes" },
   handoffs: { label: "Handoffs" },
+  transforms: { label: "Transforms" },
   assistant: { label: "Assistant" },
   devices: { label: "Devices & Controls" },
   settings: { label: "Settings" },
@@ -41,6 +44,7 @@ const VOICE_CHILDREN: readonly VoiceSection[] = [
   "capture",
   "notes",
   "handoffs",
+  "transforms",
 ];
 
 const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "devices", "settings", "analytics"];
