@@ -11,13 +11,9 @@ const escapedPath = debugExe.replaceAll("'", "''");
 
 const command = [
   `$target = '${escapedPath}'`,
-  "$matches = Get-Process -Name 'personal-voice-app' -ErrorAction SilentlyContinue |",
-  "  Where-Object { $_.Path -and [System.StringComparer]::OrdinalIgnoreCase.Equals($_.Path, $target) }",
-  "foreach ($process in $matches) {",
-  "  Write-Host \"Stopping stale Personal Voice dev process $($process.Id)\"",
-  "  Stop-Process -Id $process.Id -Force -ErrorAction Stop",
-  "}",
-].join("\n");
+  `$matches = @(Get-CimInstance Win32_Process -Filter "Name='personal-voice-app.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and [System.StringComparer]::OrdinalIgnoreCase.Equals($_.ExecutablePath, $target) })`,
+  `foreach ($process in $matches) { Write-Host "Stopping stale Personal Voice dev process $($process.ProcessId)"; Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop }`,
+].join("; ");
 
 try {
   execFileSync(
