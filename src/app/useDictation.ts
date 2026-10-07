@@ -7,7 +7,7 @@ import { usageEventsFromDictation } from "@/usage/usageEvents";
 import type { UsageStore } from "@/usage/UsageStore";
 import type { VoiceProvider } from "@/voice/provider/VoiceProvider";
 import { DictationController, initialDictationSnapshot } from "@/voice/session/DictationController";
-import type { DictationSnapshot } from "@/voice/session/DictationController";
+import type { DictationSettledEvent, DictationSnapshot } from "@/voice/session/DictationController";
 import type { LiveFieldPreview } from "@/voice/session/LiveFieldPreview";
 import { isCancellable } from "@/voice/session/indicator";
 import { formatTimings } from "@/voice/session/timings";
@@ -37,11 +37,15 @@ export function useDictation(
   /** Runs before capture starts so destinations can lock utterance-scoped state. */
   prepareUtterance?: (destination: TranscriptDestinationId) => void,
   livePreview?: LiveFieldPreview,
+  /** Runs after delivery, cancellation, or failure—not when recording is merely released. */
+  onUtteranceSettled?: (event: DictationSettledEvent) => void,
 ) {
   const [snapshot, setSnapshot] = useState<DictationSnapshot>(initialDictationSnapshot);
   const [paused, setPaused] = useState(false);
   const contextRef = useRef(getUsageContext);
+  const settledRef = useRef(onUtteranceSettled);
   contextRef.current = getUsageContext;
+  settledRef.current = onUtteranceSettled;
   const [controller] = useState(
     () => new DictationController(
       () => lease ? gateDictationCapture(platform.createCapture(), lease) : platform.createCapture(),
@@ -63,6 +67,7 @@ export function useDictation(
         });
         if (timings.recovered) usage.recordLater({ name: "recovery_used" });
       },
+      onSettled: (event) => settledRef.current?.(event),
     }),
   );
   const previousRef = useRef(snapshot);
