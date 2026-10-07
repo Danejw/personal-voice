@@ -92,6 +92,11 @@ class EnabledArgs {
   var enabled: Boolean = true
 }
 
+@InvokeArg
+class DictationCueArgs {
+  var kind: String = "ready"
+}
+
 /**
  * Android side of the shared `PlatformAdapter`: the floating mic, its foreground service,
  * setup helpers, and focused-field insertion. Dictation itself (capture, Gemini, settings,
@@ -236,6 +241,20 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   fun setPreferHeadsetMic(invoke: Invoke) {
     val enabled = invoke.parseArgs(EnabledArgs::class.java).enabled
     FloatingMicPrefs.setPreferHeadsetMic(activity, enabled)
+    invoke.resolve()
+  }
+
+  @Command
+  fun playDictationCue(invoke: Invoke) {
+    val kind = when (invoke.parseArgs(DictationCueArgs::class.java).kind) {
+      "ready" -> DictationCueKind.READY
+      "done" -> DictationCueKind.DONE
+      else -> {
+        invoke.reject("Unknown Dictation cue.")
+        return
+      }
+    }
+    DictationCuePlayer.play(kind)
     invoke.resolve()
   }
 
