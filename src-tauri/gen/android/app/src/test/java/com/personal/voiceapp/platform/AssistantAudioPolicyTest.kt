@@ -16,6 +16,7 @@ class AssistantAudioPolicyTest {
     assertEquals(AudioSourceChoice.VOICE_RECOGNITION, config.source)
     assertFalse(config.communicationRoute)
     assertFalse(config.requestEffects)
+    assertTrue(config.preferHeadsetInput)
   }
 
   @Test
@@ -25,6 +26,7 @@ class AssistantAudioPolicyTest {
     assertEquals(AudioSourceChoice.VOICE_COMMUNICATION, config.source)
     assertTrue(config.communicationRoute)
     assertTrue(config.requestEffects)
+    assertFalse(config.preferHeadsetInput)
   }
 
   @Test
@@ -81,7 +83,7 @@ class AssistantAudioSessionTest {
     assertTrue(status.fullDuplex)
     assertTrue(status.nativePlayback)
     assertTrue(status.noiseSuppression)
-    assertEquals(listOf("open:VOICE_COMMUNICATION", "start"), harness.capture.calls)
+    assertEquals(listOf("open:VOICE_COMMUNICATION:headset=false", "start"), harness.capture.calls)
     assertEquals(1, harness.route.applied)
     assertEquals(1, harness.effects.attached)
     assertEquals(1, harness.playback.opened)
@@ -95,7 +97,7 @@ class AssistantAudioSessionTest {
     assertFalse(status.fullDuplex)
     assertFalse(status.nativePlayback)
     assertFalse(status.noiseSuppression)
-    assertEquals(listOf("open:VOICE_RECOGNITION", "start"), harness.capture.calls)
+    assertEquals(listOf("open:VOICE_RECOGNITION:headset=true", "start"), harness.capture.calls)
     assertEquals(0, harness.route.applied)
     assertEquals(0, harness.effects.attached)
     assertEquals(0, harness.playback.opened)
@@ -230,8 +232,8 @@ class AssistantAudioSessionTest {
   private class FakeCapture : CaptureHandle {
     val calls = mutableListOf<String>()
     var failStart = false
-    override fun open(source: AudioSourceChoice): Int {
-      calls.add("open:${source.name}")
+    override fun open(source: AudioSourceChoice, preferHeadsetInput: Boolean): Int {
+      calls.add("open:" + source.name + ":headset=" + preferHeadsetInput)
       return 7
     }
     override fun start() {
