@@ -20,6 +20,9 @@ const androidStatus = (partial: Partial<AndroidSetupStatus> = {}): AndroidSetupS
   floatingMic: false,
   startOnBoot: true,
   wantFloatingMic: false,
+  earbudHoldToDictate: true,
+  preferHeadsetMic: true,
+  headsetMicAvailable: false,
   batteryUnrestricted: false,
   ...partial,
 });
