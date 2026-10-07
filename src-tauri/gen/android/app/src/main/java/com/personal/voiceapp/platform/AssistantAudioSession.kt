@@ -9,7 +9,7 @@ interface RouteHandle {
 
 interface CaptureHandle {
   /** Creates the recorder and returns its audio session id. Does not start reading. */
-  fun open(source: AudioSourceChoice): Int
+  fun open(source: AudioSourceChoice, preferHeadsetInput: Boolean): Int
   fun start()
   fun stop()
 }
@@ -53,7 +53,7 @@ class AssistantAudioSession(
         val device = preferredCommunicationDevice(devices()) ?: CommDeviceKind.BUILTIN_SPEAKER
         routeApplied = route.apply(device)
       }
-      val sessionId = capture.open(config.source)
+      val sessionId = capture.open(config.source, config.preferHeadsetInput)
       var echo = EffectProbe(false, false, false)
       var noise = EffectProbe(false, false, false)
       if (config.requestEffects) {
