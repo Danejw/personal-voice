@@ -87,6 +87,11 @@ class StartOnBootArgs {
   var enabled: Boolean = true
 }
 
+@InvokeArg
+class EnabledArgs {
+  var enabled: Boolean = true
+}
+
 /**
  * Android side of the shared `PlatformAdapter`: the floating mic, its foreground service,
  * setup helpers, and focused-field insertion. Dictation itself (capture, Gemini, settings,
@@ -110,9 +115,14 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private var cameraSession: AndroidCameraSession? = null
   private var pendingCamera: (() -> Unit)? = null
   private val captureBridge = object : CaptureHandle {
-    override fun open(source: AudioSourceChoice): Int {
+    override fun open(source: AudioSourceChoice, preferHeadsetInput: Boolean): Int {
       val mic = capture ?: error("Microphone capture is not ready.")
-      return mic.open(androidAudioSource(source))
+      val headset = if (preferHeadsetInput && FloatingMicPrefs.preferHeadsetMic(activity)) {
+        preferredHeadsetInput(activity)
+      } else {
+        null
+      }
+      return mic.open(androidAudioSource(source), headset)
     }
     override fun start() {
       capture?.start() ?: error("Microphone capture is not ready.")
@@ -167,6 +177,9 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
         .put("floatingMic", FloatingMicService.isRunning)
         .put("startOnBoot", FloatingMicPrefs.startOnBoot(activity))
         .put("wantFloatingMic", FloatingMicPrefs.wantFloatingMic(activity))
+        .put("earbudHoldToDictate", FloatingMicPrefs.earbudHoldToDictate(activity))
+        .put("preferHeadsetMic", FloatingMicPrefs.preferHeadsetMic(activity))
+        .put("headsetMicAvailable", hasHeadsetInput(activity))
         .put("batteryUnrestricted", batteryUnrestricted()),
     )
   }
@@ -208,6 +221,21 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   fun setStartOnBoot(invoke: Invoke) {
     val enabled = invoke.parseArgs(StartOnBootArgs::class.java).enabled
     FloatingMicPrefs.setStartOnBoot(activity, enabled)
+    invoke.resolve()
+  }
+
+  @Command
+  fun setEarbudHoldToDictate(invoke: Invoke) {
+    val enabled = invoke.parseArgs(EnabledArgs::class.java).enabled
+    FloatingMicPrefs.setEarbudHoldToDictate(activity, enabled)
+    main.post { FloatingMicService.instance?.refreshEarbudControls() }
+    invoke.resolve()
+  }
+
+  @Command
+  fun setPreferHeadsetMic(invoke: Invoke) {
+    val enabled = invoke.parseArgs(EnabledArgs::class.java).enabled
+    FloatingMicPrefs.setPreferHeadsetMic(activity, enabled)
     invoke.resolve()
   }
 
