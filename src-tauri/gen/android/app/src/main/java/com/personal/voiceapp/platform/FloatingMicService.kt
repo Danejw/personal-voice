@@ -267,7 +267,7 @@ class FloatingMicService : Service() {
   }
 
   private fun isDictationEarbudKey(keyCode: Int): Boolean =
-    keyCode == KeyEvent.KEYCODE_HEADSESTHOOK ||
+    keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
       keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
       keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
       keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE
