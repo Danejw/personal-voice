@@ -94,7 +94,7 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
     return callPlugin("show_settings");
   }
 
-  /** There is no hardware shortcut on Android; the floating mic is the trigger. */
+  /** Desktop hotkey bindings do not apply; Android native controls include the floating mic and earbud hold. */
   setHotkeys() {
     return Promise.resolve();
   }
@@ -103,7 +103,7 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
     return Promise.resolve();
   }
 
-  /** Cancelling is a drag on the floating mic, so there is no key to route. */
+  /** Android native controls own their press/release lifecycle, so shared hotkey activation is a no-op. */
   setDictationActive() {
     return Promise.resolve();
   }
