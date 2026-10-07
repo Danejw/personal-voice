@@ -53,7 +53,6 @@ export interface OverlayBindings {
   onCycleRemoteTarget(): void;
   /** Locks the utterance target and returns it. Throws when unavailable. */
   onLockRemoteTarget(targetId: string): { id: string; name: string };
-  onRemoteDictationEnded(): void;
 }
 
 async function copyText(text: string): Promise<void> {
@@ -100,7 +99,6 @@ export function useOverlay({
   remoteTipEpoch,
   onCycleRemoteTarget,
   onLockRemoteTarget,
-  onRemoteDictationEnded,
 }: OverlayBindings): OverlaySnapshot {
   const [capture, setCapture] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -109,13 +107,11 @@ export function useOverlay({
   const canDictateRef = useRef(canDictate);
   const cycleRef = useRef(onCycleRemoteTarget);
   const lockRef = useRef(onLockRemoteTarget);
-  const remoteEndedRef = useRef(onRemoteDictationEnded);
   useEffect(() => { providerRef.current = getProvider; }, [getProvider]);
   armRef.current = onArmDictation;
   canDictateRef.current = canDictate;
   cycleRef.current = onCycleRemoteTarget;
   lockRef.current = onLockRemoteTarget;
-  remoteEndedRef.current = onRemoteDictationEnded;
 
   const snapshot = useMemo(() => buildOverlaySnapshot({
     visible,
@@ -297,8 +293,9 @@ export function useOverlay({
           const token = `remote:${action.id}`;
           if (action.phase === "stop") {
             releasedHolds.current.add(token);
+            // Releasing only ends capture. The remote target must survive FINALIZING
+            // until the dictation controller actually delivers, cancels, or fails.
             await controller.stop();
-            remoteEndedRef.current();
             return;
           }
           if (releasedHolds.current.delete(token)) return;
@@ -317,7 +314,6 @@ export function useOverlay({
           await controller.start(providerRef.current());
           if (releasedHolds.current.has(token)) {
             await controller.stop();
-            remoteEndedRef.current();
           }
           return;
         }
