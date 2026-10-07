@@ -78,7 +78,7 @@ jobs:
           Copy-Item "$bundle/Personal Voice_$($env:VERSION)_x64-setup.exe.sig" "out/$name.sig"
           $manifest = [ordered]@{
             version = $env:VERSION
-            notes = (gh release view $env:TAG --json body --jq .body)
+            notes = ((gh release view $env:TAG --json body --jq .body) -join "`n")
             pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             platforms = @{
               "windows-x86_64" = @{
