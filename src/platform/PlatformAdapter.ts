@@ -38,6 +38,7 @@ export interface AvailableUpdate {
 
 /** Matches the `devices.platform` check constraint. */
 export type PlatformName = "windows" | "android";
+export type DictationCue = "ready" | "done";
 
 /**
  * OS-specific behavior. Native implementations live in Rust (Windows) and the
@@ -91,6 +92,8 @@ export interface PlatformAdapter {
   setHotkeyCapture(active: boolean): Promise<void>;
   /** While active, the platform routes Escape to `cancel`. */
   setDictationActive(active: boolean): Promise<void>;
+  /** Best-effort local UI feedback. It must never affect Dictation success/failure. */
+  playDictationCue(kind: DictationCue): Promise<void>;
   onPushToTalk(handler: (event: PushToTalkEvent) => void): Promise<() => void>;
   onPausedChange(handler: (paused: boolean) => void): Promise<() => void>;
   /** Tray asked to show the always-on-top control. Android has no tray. */
