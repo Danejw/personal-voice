@@ -1,6 +1,7 @@
 package com.personal.voiceapp.platform
 
 import android.annotation.SuppressLint
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
 
@@ -29,13 +30,18 @@ class NativeMicCapture(
    * before [start]. The caller must hold `RECORD_AUDIO`.
    */
   @SuppressLint("MissingPermission")
-  fun open(source: Int): Int {
+  fun open(source: Int, preferredInput: AudioDeviceInfo? = null): Int {
     val minBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL, ENCODING)
     if (minBuffer <= 0) throw IllegalStateException("This phone can't record 16 kHz audio.")
     val next = AudioRecord(source, SAMPLE_RATE, CHANNEL, ENCODING, maxOf(minBuffer, CHUNK_BYTES * 4))
     if (next.state != AudioRecord.STATE_INITIALIZED) {
       next.release()
       throw IllegalStateException(BUSY)
+    }
+    // This is a preference, not a hard dependency. If the headset vanishes or Android
+    // rejects the route, capture continues on the system-selected microphone.
+    if (preferredInput != null) {
+      try { next.setPreferredDevice(preferredInput) } catch (_: Exception) {}
     }
     record = next
     return next.audioSessionId
