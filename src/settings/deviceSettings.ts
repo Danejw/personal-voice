@@ -5,6 +5,7 @@ import { migrateDestinationId, type TranscriptDestinationId } from "@/voice/tran
 /** Settings that describe this install. Never written to the account `settings` row. */
 const LEGACY_MICROPHONE_KEY = "settings.microphone";
 const LEGACY_INDICATOR_KEY = "settings.showIndicator";
+const LEGACY_DICTATION_SOUNDS_KEY = "settings.dictationSounds";
 const LEGACY_PUSH_TO_TALK_KEY = "settings.pushToTalk";
 const LEGACY_PUSH_TO_TALK_LONG_PRESS_KEY = "settings.pushToTalkLongPress";
 const LEGACY_VOICE_NOTE_HOTKEY_KEY = "settings.voiceNoteHotkey";
@@ -22,6 +23,8 @@ export interface DevicePreferences {
   transformProfileId: string | null;
   microphone: string | null;
   showIndicator: boolean;
+  /** Ready/done Dictation UI sounds on this device. Defaults on. */
+  dictationSounds: boolean;
   /** Recorded immediate dictate bindings. A legacy install stored one shortcut string. */
   pushToTalk: string[];
   /** Mouse buttons that become Dictation only after their hold threshold. */
@@ -116,6 +119,7 @@ function fromLegacy(storage: KeyValueStorage): DevicePreferences {
     transformProfileId: storage.getItem(LEGACY_TRANSFORM_KEY) || null,
     microphone,
     showIndicator: storage.getItem(LEGACY_INDICATOR_KEY) !== "false",
+    dictationSounds: storage.getItem(LEGACY_DICTATION_SOUNDS_KEY) !== "false",
     pushToTalk: shortcutList(storage.getItem(LEGACY_PUSH_TO_TALK_KEY), []),
     pushToTalkLongPress: longPressList(storage.getItem(LEGACY_PUSH_TO_TALK_LONG_PRESS_KEY), []),
     voiceNoteHotkey: shortcutList(storage.getItem(LEGACY_VOICE_NOTE_HOTKEY_KEY), []),
@@ -151,6 +155,7 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
           ? null
           : fallback.microphone,
       showIndicator: typeof fields.showIndicator === "boolean" ? fields.showIndicator : fallback.showIndicator,
+      dictationSounds: fields.dictationSounds !== false,
       pushToTalk: shortcutList(fields.pushToTalk, fallback.pushToTalk),
       pushToTalkLongPress: longPressList(fields.pushToTalkLongPress, fallback.pushToTalkLongPress),
       voiceNoteHotkey: shortcutList(fields.voiceNoteHotkey, fallback.voiceNoteHotkey),
@@ -190,6 +195,7 @@ function write(storage: KeyValueStorage, deviceId: string | null, patch: Partial
   }
   storage.setItem(LEGACY_MICROPHONE_KEY, next.microphone ?? "");
   storage.setItem(LEGACY_INDICATOR_KEY, String(next.showIndicator));
+  storage.setItem(LEGACY_DICTATION_SOUNDS_KEY, String(next.dictationSounds));
   storage.setItem(LEGACY_DESTINATION_KEY, next.destination);
   storage.setItem(LEGACY_TRANSFORM_KEY, next.transformProfileId ?? "");
   storage.setItem(LEGACY_PUSH_TO_TALK_KEY, JSON.stringify(next.pushToTalk));
@@ -246,6 +252,15 @@ export function loadShowIndicator(storage: KeyValueStorage = localStorage, devic
 
 export function saveShowIndicator(show: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
   write(storage, scope(deviceId), { showIndicator: show });
+}
+
+/** Ready and done UI cues. Defaults ON when the preference is absent. */
+export function loadDictationSounds(storage: KeyValueStorage = localStorage, deviceId?: string | null): boolean {
+  return read(storage, scope(deviceId)).dictationSounds;
+}
+
+export function saveDictationSounds(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { dictationSounds: enabled });
 }
 
 export function loadStoredPushToTalk(storage: KeyValueStorage = localStorage, deviceId?: string | null): string[] {
