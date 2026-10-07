@@ -43,6 +43,11 @@ import { useRemoteDictation } from "@/remote-dictation/useRemoteDictation";
 import { DictationHistoryPanel } from "@/history/DictationHistoryPanel";
 import { DictationHistoryStore, DICTATION_HISTORY_LIMIT } from "@/history/DictationHistoryStore";
 import { useDictationHistory } from "@/history/useDictationHistory";
+import { InsightsPanel, InsightsToolbar } from "@/insights/InsightsPanel";
+import { InsightsStore } from "@/insights/InsightsStore";
+import { useInsights } from "@/insights/useInsights";
+import type { InsightCandidate } from "@/insights/insights";
+import { isExistingCandidate, type ProposedCandidate } from "@/insights/candidateDedupe";
 import { NotesPanel, NotesToolbar } from "@/notes/NotesPanel";
 import { Onboarding } from "@/onboarding/Onboarding";
 import { dismissOnboarding, isDeviceReady, onboardingDismissed } from "@/onboarding/setupReady";
@@ -75,6 +80,8 @@ import { remoteDictationApi } from "@/services/remoteDictationService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
 import { notesApi } from "@/services/notesService";
+import { insightsApi } from "@/services/insightsService";
+import { insightsAnalyzer } from "@/services/insightsAnalysisService";
 import { noteOrganizerApi } from "@/services/noteOrganizerService";
 import { snippetsApi } from "@/services/snippetsService";
 import { transformProfilesApi } from "@/services/transformProfilesService";
@@ -186,6 +193,7 @@ const usage = new UsageStore(localStorage, platform.platform, () => new Date(), 
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
 const snippetStore = new SnippetStore(snippetsApi, localStorage);
 const transformStore = new TransformStore(transformProfilesApi);
+const insightsStore = new InsightsStore(insightsApi, insightsAnalyzer);
 const notesStore = new NotesStore(
   notesApi,
   (userId) => localDeviceId(localStorage, userId, createId),
@@ -519,6 +527,7 @@ export default function App() {
   const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
   const [dictationTransformId, setDictationTransformId] = useState<string | null>(() => loadTransformProfileId());
   const [section, setSection] = useState<AppSection>("dictation");
+  const insightsSnapshot = useInsights(insightsStore, auth.userId, section === "insights");
   useHandoffAlerts(
     handoffs,
     auth.userId,
@@ -583,6 +592,60 @@ export default function App() {
     const next = value || null;
     setDictationTransformId(next);
     saveTransformProfileId(next);
+  }
+
+  function insightValue(candidate: InsightCandidate, key: string): string {
+    const value = candidate.payload[key];
+    return typeof value === "string" ? value.trim() : "";
+  }
+
+  async function acceptInsightCandidate(candidate: InsightCandidate): Promise<void> {
+    const proposed: ProposedCandidate = {
+      kind: candidate.kind,
+      title: candidate.title,
+      payload: candidate.payload,
+      evidenceCount: candidate.evidenceCount,
+      confidence: candidate.confidence,
+      reason: candidate.reason,
+    };
+    const alreadyExists = isExistingCandidate(proposed, {
+      dictionary: sync.data.terms,
+      snippets: snippets.snippets,
+      transforms: availableTransforms,
+      memories: assistantMemorySnapshot.memories,
+      seenFingerprints: new Set(),
+    });
+    if (alreadyExists) {
+      await insightsStore.setCandidateStatus(candidate.id, "duplicate");
+      throw new Error("That suggestion already exists, so it was removed from Insights.");
+    }
+
+    switch (candidate.kind) {
+      case "dictionary": {
+        const problem = personalSync.addTerm(insightValue(candidate, "term"));
+        if (problem) throw new Error(problem);
+        await personalSync.settled();
+        const syncProblem = personalSync.getSnapshot().error;
+        if (syncProblem) throw new Error(syncProblem);
+        return;
+      }
+      case "snippet":
+        await snippetStore.create(insightValue(candidate, "trigger"), insightValue(candidate, "content"));
+        return;
+      case "transform":
+        await transformStore.create(insightValue(candidate, "name"), insightValue(candidate, "instruction"));
+        return;
+      case "memory": {
+        const rawKind = insightValue(candidate, "kind");
+        const kind = rawKind === "fact" ? "fact" : "preference";
+        await assistantMemory.remember(kind, insightValue(candidate, "key"), insightValue(candidate, "value"));
+        return;
+      }
+      default: {
+        const unhandled: never = candidate.kind;
+        return unhandled;
+      }
+    }
   }
 
   useOverlay({
@@ -901,6 +964,7 @@ export default function App() {
           {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
           {section === "snippets" && <SnippetToolbar store={snippetStore} snapshot={snippets} />}
           {section === "transforms" && <TransformToolbar store={transformStore} snapshot={transforms} />}
+          {section === "insights" && <InsightsToolbar store={insightsStore} snapshot={insightsSnapshot} />}
           {section === "assistant" && (
             <AssistantHeader
               controller={assistant}
@@ -1213,6 +1277,29 @@ export default function App() {
               }}
             />
             <UpdatePanel updates={updates} busy={!idle} />
+          </section>
+        </div>
+
+        <div className="panel-stack is-scroll" hidden={section !== "insights"}>
+          <section aria-labelledby="page-title" className="page-panel">
+            <InsightsPanel
+              store={insightsStore}
+              snapshot={insightsSnapshot}
+              knowledge={{
+                dictionary: sync.data.terms,
+                snippets: snippets.snippets,
+                transforms: availableTransforms,
+                memories: assistantMemorySnapshot.memories,
+              }}
+              cloudHistoryEnabled={sync.data.settings.cloudDictationHistory}
+              onEnableCloudHistory={() => {
+                personalSync.updateSettings({ cloudDictationHistory: true });
+              }}
+              devices={deviceSnapshot.devices}
+              usage={usageSnapshot}
+              currentDeviceId={settingsDeviceId ?? null}
+              onAccept={acceptInsightCandidate}
+            />
           </section>
         </div>
 
