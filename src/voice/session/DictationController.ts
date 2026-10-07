@@ -50,6 +50,10 @@ export interface DictationSettledEvent {
 export interface DictationOptions extends Partial<DictationLimits> {
   /** Called once per delivered utterance with its stage durations. */
   onTimings?: (timings: UtteranceTimings, transcript: string) => void;
+  /** Called once when the microphone is actually capturing and the user can speak. */
+  onRecordingReady?: () => void;
+  /** Called after a normal stop once the microphone has actually stopped capturing. */
+  onRecordingStopped?: () => void;
   /** Called once when the utterance truly reaches a terminal outcome, never merely on button release. */
   onSettled?: (event: DictationSettledEvent) => void;
   now?: () => number;
@@ -98,6 +102,8 @@ export class DictationController {
   private utt?: Utterance;
   private limits: DictationLimits;
   private onTimings?: (timings: UtteranceTimings, transcript: string) => void;
+  private onRecordingReady?: () => void;
+  private onRecordingStopped?: () => void;
   private onSettled?: (event: DictationSettledEvent) => void;
   private settledUtterance = 0;
   private now: () => number;
@@ -106,10 +112,19 @@ export class DictationController {
     private createCapture: () => AudioCapture,
     private onChange: (snapshot: DictationSnapshot) => void,
     private destination: TranscriptDestination,
-    { onTimings, onSettled, now = () => performance.now(), ...limits }: DictationOptions = {},
+    {
+      onTimings,
+      onRecordingReady,
+      onRecordingStopped,
+      onSettled,
+      now = () => performance.now(),
+      ...limits
+    }: DictationOptions = {},
   ) {
     this.limits = { ...defaultDictationLimits, ...limits };
     this.onTimings = onTimings;
+    this.onRecordingReady = onRecordingReady;
+    this.onRecordingStopped = onRecordingStopped;
     this.onSettled = onSettled;
     this.now = now;
   }
@@ -156,6 +171,11 @@ export class DictationController {
     }
     const state = this.state();
     if (current !== this.utt || (state !== "CONNECTING" && state !== "LISTENING")) return;
+    try {
+      this.onRecordingReady?.();
+    } catch {
+      // UI feedback must never block a recording that is already live.
+    }
     current.timer = setTimeout(() => { if (current === this.utt) void this.stop(); }, this.limits.maxUtteranceMs);
   }
 
@@ -175,6 +195,11 @@ export class DictationController {
       return;
     }
     if (utt !== this.utt || this.state() !== "FINALIZING") return;
+    try {
+      this.onRecordingStopped?.();
+    } catch {
+      // UI feedback must never change a successfully stopped recording.
+    }
     if (utt.bytes < this.limits.minAudioBytes) {
       this.dispatch({ type: "cancel" }, { partial: "" });
       await this.release();

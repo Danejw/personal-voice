@@ -7,11 +7,12 @@ import { parseOverlayAction } from "@/overlay/overlay";
 import { BrowserAudioCapture } from "@/platform/BrowserAudioCapture";
 import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import { WebCameraCapture } from "@/platform/camera/WebCameraCapture";
-import type { AvailableUpdate, CaptureSelectionOptions, HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
+import type { AvailableUpdate, CaptureSelectionOptions, DictationCue, HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
 import { parsePushToTalk, windowsShortcutTrigger } from "@/platform/pushToTalkEvent";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
 import { parseTargetApp } from "@/platform/targetApp";
 import { loadMicrophone } from "@/settings/deviceSettings";
+import { playWebDictationCue } from "@/platform/windows/dictationCue";
 
 /** Thin IPC bridge to `src-tauri/src/commands` and `src-tauri/src/platform/windows`. */
 export class WindowsPlatformAdapter implements PlatformAdapter {
@@ -114,6 +115,10 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
 
   setDictationActive(active: boolean) {
     return invoke<void>("set_dictation_active", { active });
+  }
+
+  playDictationCue(kind: DictationCue) {
+    return playWebDictationCue(kind);
   }
 
   onPushToTalk(handler: (event: PushToTalkEvent) => void) {

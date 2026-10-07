@@ -90,6 +90,7 @@ import {
   loadAssistantAutoRun,
   loadAssistantProfile,
   loadAutoUpdate,
+  loadDictationSounds,
   loadDestination,
   loadRemoteDictation,
   loadShowIndicator,
@@ -97,6 +98,7 @@ import {
   saveAssistantAutoRun,
   saveAssistantProfile,
   saveAutoUpdate,
+  saveDictationSounds,
   saveDestination,
   saveRemoteDictation,
   saveShowIndicator,
@@ -549,6 +551,7 @@ export default function App() {
   const [profileEnabled, setProfileEnabled] = useState(true);
   const [autoRun, setAutoRun] = useState(true);
   const [autoUpdate, setAutoUpdate] = useState(() => loadAutoUpdate());
+  const [dictationSounds, setDictationSounds] = useState(() => loadDictationSounds());
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
     const data = personalSync.getSnapshot().data;
     return {
@@ -568,7 +571,7 @@ export default function App() {
     // and clear it only after delivery, cancellation, or failure has settled.
     remoteDictation.setActive(false);
     remoteDictationDestination.clearLock();
-  });
+  }, dictationSounds);
   const { state, partial, transcript, error } = snapshot;
   const control = controlFor(state, destination);
   const page = sectionMeta(section);
@@ -745,6 +748,7 @@ export default function App() {
     setAutoRun(auto);
     assistant.setAutoRun(auto);
     setAutoUpdate(loadAutoUpdate());
+    setDictationSounds(loadDictationSounds());
   }, [settingsDeviceId]);
 
   useEffect(() => {
@@ -1239,6 +1243,15 @@ export default function App() {
           <section aria-labelledby="transcription-heading">
             <h2 id="transcription-heading">Transcription</h2>
             <TranscriptionSettingsPanel store={personalSync} sync={sync} />
+            <Toggle
+              label="Dictation sounds"
+              description="Plays a subtle ready cue when this device starts listening and a slightly different cue when recording stops."
+              checked={dictationSounds}
+              onChange={(enabled) => {
+                saveDictationSounds(enabled);
+                setDictationSounds(enabled);
+              }}
+            />
           </section>
           <section aria-labelledby="usage-heading">
             <h2 id="usage-heading">Usage intelligence</h2>

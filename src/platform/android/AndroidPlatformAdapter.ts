@@ -6,7 +6,7 @@ import { NativeAudioCapture } from "@/platform/android/NativeAudioCapture";
 import { callPlugin, listenPlugin } from "@/platform/android/voicePlatformPlugin";
 import { AndroidCameraCapture } from "@/platform/android/AndroidCameraCapture";
 import type { CameraCapture } from "@/platform/camera/CameraCapture";
-import type { AvailableUpdate, CaptureSelectionOptions, PlatformAdapter } from "@/platform/PlatformAdapter";
+import type { AvailableUpdate, CaptureSelectionOptions, DictationCue, PlatformAdapter } from "@/platform/PlatformAdapter";
 import type { CaptureOptions } from "@/voice/audio/AudioCapture";
 import { parseTargetApp } from "@/platform/targetApp";
 import { parsePushToTalk } from "@/platform/pushToTalkEvent";
@@ -106,6 +106,10 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
   /** Android native controls own their press/release lifecycle, so shared hotkey activation is a no-op. */
   setDictationActive() {
     return Promise.resolve();
+  }
+
+  playDictationCue(kind: DictationCue) {
+    return callPlugin("play_dictation_cue", { kind });
   }
 
   onPushToTalk(handler: (event: PushToTalkEvent) => void) {

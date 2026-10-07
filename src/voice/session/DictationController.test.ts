@@ -91,6 +91,23 @@ function setup(options: { limits?: DictationOptions; recoverable?: boolean } = {
 }
 
 describe("DictationController", () => {
+  it("signals ready only after capture starts and done only after capture stops", async () => {
+    const events: string[] = [];
+    const { controller, listen } = setup({
+      limits: {
+        onRecordingReady: () => events.push("ready"),
+        onRecordingStopped: () => events.push("done"),
+      },
+    });
+
+    expect(events).toEqual([]);
+    await listen();
+    expect(events).toEqual(["ready"]);
+
+    await controller.stop();
+    expect(events).toEqual(["ready", "done"]);
+  });
+
   it("runs Record → partial → Stop → one final transcript → IDLE", async () => {
     const { capture, controller, current, listen, snapshots, inserted, recoveries } = setup();
     await listen();
