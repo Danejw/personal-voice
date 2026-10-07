@@ -11,6 +11,8 @@ object FloatingMicPrefs {
   const val PREFS = "floating_mic"
   private const val WANT_FLOATING_MIC = "want_floating_mic"
   private const val START_ON_BOOT = "start_on_boot"
+  private const val EARBUD_HOLD_TO_DICTATE = "earbud_hold_to_dictate"
+  private const val PREFER_HEADSET_MIC = "prefer_headset_mic"
 
   fun wantFloatingMic(context: Context): Boolean =
     prefs(context).getBoolean(WANT_FLOATING_MIC, false)
@@ -25,6 +27,22 @@ object FloatingMicPrefs {
 
   fun setStartOnBoot(context: Context, enabled: Boolean) {
     prefs(context).edit().putBoolean(START_ON_BOOT, enabled).apply()
+  }
+
+  /** Personal Voice owns supported headset media buttons while the floating service is running. */
+  fun earbudHoldToDictate(context: Context): Boolean =
+    prefs(context).getBoolean(EARBUD_HOLD_TO_DICTATE, true)
+
+  fun setEarbudHoldToDictate(context: Context, enabled: Boolean) {
+    prefs(context).edit().putBoolean(EARBUD_HOLD_TO_DICTATE, enabled).apply()
+  }
+
+  /** Prefer a connected headset microphone for Dictation, with automatic phone-mic fallback. */
+  fun preferHeadsetMic(context: Context): Boolean =
+    prefs(context).getBoolean(PREFER_HEADSET_MIC, true)
+
+  fun setPreferHeadsetMic(context: Context, enabled: Boolean) {
+    prefs(context).edit().putBoolean(PREFER_HEADSET_MIC, enabled).apply()
   }
 
   private fun prefs(context: Context) =
