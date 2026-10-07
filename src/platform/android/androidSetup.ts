@@ -14,6 +14,12 @@ export interface AndroidSetupStatus {
   startOnBoot: boolean;
   /** User turned the floating mic on and has not turned it off. */
   wantFloatingMic: boolean;
+  /** Hold a supported headset media button to run Dictation. */
+  earbudHoldToDictate: boolean;
+  /** Ask AudioRecord to use a connected headset microphone for Dictation. */
+  preferHeadsetMic: boolean;
+  /** Android currently exposes a microphone-class headset input. */
+  headsetMicAvailable: boolean;
   /** Android is not battery-optimizing this app. Recommended for always-on. */
   batteryUnrestricted: boolean;
 }
@@ -31,6 +37,10 @@ export function parseSetupStatus(value: unknown): AndroidSetupStatus {
     // Default on in Kotlin; treat missing as on so the toggle matches first paint.
     startOnBoot: fields.startOnBoot !== false,
     wantFloatingMic: fields.wantFloatingMic === true,
+    // Both personal-device conveniences default on in Kotlin.
+    earbudHoldToDictate: fields.earbudHoldToDictate !== false,
+    preferHeadsetMic: fields.preferHeadsetMic !== false,
+    headsetMicAvailable: fields.headsetMicAvailable === true,
     batteryUnrestricted: fields.batteryUnrestricted === true,
   };
 }
@@ -52,6 +62,8 @@ export const androidSetup = {
   openAppSettings: () => callPlugin("open_app_settings"),
   openBatterySettings: () => callPlugin("open_battery_settings"),
   setStartOnBoot: (enabled: boolean) => callPlugin("set_start_on_boot", { enabled }),
+  setEarbudHoldToDictate: (enabled: boolean) => callPlugin("set_earbud_hold_to_dictate", { enabled }),
+  setPreferHeadsetMic: (enabled: boolean) => callPlugin("set_prefer_headset_mic", { enabled }),
   startFloatingMic: () => callPlugin("start_floating_mic"),
   stopFloatingMic: () => callPlugin("stop_floating_mic"),
   /** Fires when the service starts or stops, including from the notification's Turn off action. */
