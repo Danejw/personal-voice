@@ -8,6 +8,9 @@ import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -15,6 +18,7 @@ import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
@@ -55,6 +59,8 @@ class FloatingMicService : Service() {
     private const val GAP_DP = 6
     private const val PANEL_WIDTH_DP = 280
     private const val TIP_HIDE_MS = 2200L
+    private const val EARBUD_HOLD_MS = 400L
+    private const val EARBUD_REPLAY_SETTLE_MS = 120L
 
     /** Set by the plugin while the app's WebView is alive. */
     @Volatile var listener: Listener? = null
@@ -79,6 +85,17 @@ class FloatingMicService : Service() {
   private var remoteTipLayout: WindowManager.LayoutParams? = null
   private val tipHandler = Handler(Looper.getMainLooper())
   private val hideRemoteTipRunnable = Runnable { hideRemoteTip() }
+  private val earbudHandler = Handler(Looper.getMainLooper())
+  private var earbudSession: MediaSession? = null
+  private var earbudPendingKey: Int? = null
+  private var earbudHolding = false
+  private val beginEarbudHold = Runnable {
+    val key = earbudPendingKey ?: return@Runnable
+    if (earbudHolding || !FloatingMicPrefs.earbudHoldToDictate(this)) return@Runnable
+    earbudHolding = true
+    Log.d(TAG, "Earbud hold started for key $key")
+    emit("press")
+  }
   private var noteBubble: MicBubbleView? = null
   private var noteHoldId = 0
   private var micBubble: MicBubbleView? = null
@@ -110,6 +127,7 @@ class FloatingMicService : Service() {
       instance = this
       listener?.onRunningChanged(true)
     }
+    refreshEarbudControls()
     return START_STICKY
   }
 
@@ -123,6 +141,8 @@ class FloatingMicService : Service() {
   }
 
   override fun onDestroy() {
+    cancelEarbudHold()
+    releaseEarbudSession()
     micBubble?.let {
       if (it.isHolding) emit("cancel")
     }
@@ -145,6 +165,122 @@ class FloatingMicService : Service() {
     listener?.onRunningChanged(false)
     super.onDestroy()
   }
+
+  /** Re-reads the local preference after Settings toggles earbud controls. Main thread only. */
+  fun refreshEarbudControls() {
+    if (FloatingMicPrefs.earbudHoldToDictate(this)) ensureEarbudSession() else {
+      cancelEarbudHold()
+      releaseEarbudSession()
+    }
+  }
+
+  private fun ensureEarbudSession() {
+    if (earbudSession != null) return
+    val session = MediaSession(this, "PersonalVoiceEarbudDictation")
+    session.setCallback(object : MediaSession.Callback() {
+      override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
+        val event = mediaKeyEvent(mediaButtonIntent) ?: return false
+        if (!isDictationEarbudKey(event.keyCode)) return false
+        return handleEarbudKey(event)
+      }
+    }, earbudHandler)
+    session.setPlaybackState(
+      PlaybackState.Builder()
+        .setActions(
+          PlaybackState.ACTION_PLAY_PAUSE or
+            PlaybackState.ACTION_PLAY or
+            PlaybackState.ACTION_PAUSE,
+        )
+        // An active "playing" session receives the hardware media button reliably. No media is
+        // actually played; a short tap temporarily deactivates this session and is replayed.
+        .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f)
+        .build(),
+    )
+    @Suppress("DEPRECATION")
+    session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS)
+    session.isActive = true
+    earbudSession = session
+  }
+
+  private fun handleEarbudKey(event: KeyEvent): Boolean {
+    when (event.action) {
+      KeyEvent.ACTION_DOWN -> {
+        if (event.repeatCount > 0) return true
+        if (earbudPendingKey != null) return true
+        earbudPendingKey = event.keyCode
+        earbudHolding = false
+        earbudHandler.postDelayed(beginEarbudHold, EARBUD_HOLD_MS)
+        return true
+      }
+      KeyEvent.ACTION_UP -> {
+        if (earbudPendingKey != event.keyCode) return true
+        earbudHandler.removeCallbacks(beginEarbudHold)
+        earbudPendingKey = null
+        if (earbudHolding) {
+          earbudHolding = false
+          emit("release")
+        } else {
+          replayQuickMediaClick(event.keyCode)
+        }
+        return true
+      }
+      else -> return true
+    }
+  }
+
+  private fun cancelEarbudHold() {
+    earbudHandler.removeCallbacks(beginEarbudHold)
+    earbudPendingKey = null
+    if (earbudHolding) {
+      earbudHolding = false
+      emit("cancel")
+    }
+  }
+
+  /**
+   * Preserve the normal play/pause behavior for a short tap. Personal Voice briefly drops
+   * media-session priority, dispatches the original click, then reclaims the session.
+   */
+  private fun replayQuickMediaClick(keyCode: Int) {
+    val session = earbudSession ?: return
+    session.isActive = false
+    val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+    try {
+      audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+      audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+    } catch (error: RuntimeException) {
+      Log.w(TAG, "Could not replay the earbud media click", error)
+    }
+    earbudHandler.postDelayed({
+      if (earbudSession === session && FloatingMicPrefs.earbudHoldToDictate(this)) {
+        session.isActive = true
+      }
+    }, EARBUD_REPLAY_SETTLE_MS)
+  }
+
+  private fun releaseEarbudSession() {
+    val session = earbudSession ?: return
+    earbudSession = null
+    try { session.isActive = false } catch (_: Exception) {}
+    try { session.setCallback(null) } catch (_: Exception) {}
+    try { session.release() } catch (_: Exception) {}
+  }
+
+  private fun mediaKeyEvent(intent: Intent): KeyEvent? {
+    if (intent.action != Intent.ACTION_MEDIA_BUTTON) return null
+    return if (Build.VERSION.SDK_INT >= 33) {
+      intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+    } else {
+      @Suppress("DEPRECATION")
+      intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+    }
+  }
+
+  private fun isDictationEarbudKey(keyCode: Int): Boolean =
+    keyCode == KeyEvent.KEYCODE_HEADSESTHOOK ||
+      keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+      keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
+      keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE
 
   /** Main thread only. */
   fun showState(state: MicBubbleView.State) {
