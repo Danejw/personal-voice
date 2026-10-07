@@ -4,6 +4,7 @@ import {
   loadAssistantAutoRun,
   loadAutoUpdate,
   loadDestination,
+  loadDictationSounds,
   loadMicrophone,
   loadRemoteComputerActions,
   loadRemoteDictation,
@@ -18,6 +19,7 @@ import {
   saveAssistantAutoRun,
   saveAutoUpdate,
   saveDestination,
+  saveDictationSounds,
   saveMicrophone,
   saveRemoteDictation,
   saveShowIndicator,
@@ -56,6 +58,19 @@ describe("device settings", () => {
     expect(loadShowIndicator(storage)).toBe(false);
     saveShowIndicator(true, storage);
     expect(loadShowIndicator(storage)).toBe(true);
+  });
+
+  it("plays Dictation sounds by default and keeps the choice per device", () => {
+    const storage = memoryStorage();
+    expect(loadDictationSounds(storage, "windows")).toBe(true);
+    expect(loadDictationSounds(storage, "android")).toBe(true);
+
+    saveDictationSounds(false, storage, "windows");
+    expect(loadDictationSounds(storage, "windows")).toBe(false);
+    expect(loadDictationSounds(storage, "android")).toBe(true);
+
+    saveDictationSounds(true, storage, "windows");
+    expect(loadDictationSounds(storage, "windows")).toBe(true);
   });
 
   it("keeps Windows and Android preferences on separate device ids", () => {
