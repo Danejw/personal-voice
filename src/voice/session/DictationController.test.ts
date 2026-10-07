@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { RemoteDictationDestination } from "@/remote-dictation/RemoteDictationDestination";
 import type { AudioCapture } from "@/voice/audio/AudioCapture";
 import type { TranscriptionEvent, TranscriptionSession, VoiceProvider } from "@/voice/provider/VoiceProvider";
 import { DictationController, NO_SPEECH } from "@/voice/session/DictationController";
@@ -110,6 +111,87 @@ describe("DictationController", () => {
     expect(snapshots.map((s) => s.state)).toContain("INSERTING");
     expect(inserted).toEqual(["Hello."]);
     expect(recoveries).toHaveLength(0);
+  });
+
+  it("keeps a remote target locked after release until the finalized transcript is delivered", async () => {
+    const capture = new FakeCapture();
+    const sent: { text: string; target: { id: string; name: string } }[] = [];
+    const remote = new RemoteDictationDestination({
+      send: async (text, target) => { sent.push({ text, target }); },
+    });
+    remote.lockTarget({ id: "laptop-device", name: "Laptop" });
+    const settled: string[] = [];
+    let session: FakeSession | undefined;
+    const provider: VoiceProvider = {
+      createSession: (emit) => (session = new FakeSession(emit)),
+    };
+    const controller = new DictationController(
+      () => capture,
+      () => undefined,
+      remote,
+      {
+        minAudioBytes: 0,
+        onSettled: ({ outcome }) => {
+          settled.push(outcome);
+          remote.clearLock();
+        },
+      },
+    );
+
+    const started = controller.start(provider);
+    await flush();
+    session?.resolveConnect?.();
+    await started;
+    await flush();
+
+    await controller.stop();
+    expect(controller.current.state).toBe("FINALIZING");
+    expect(remote.lockedTarget).toEqual({ id: "laptop-device", name: "Laptop" });
+    expect(settled).toEqual([]);
+
+    session?.emit({ type: "finalTranscript", text: "Send this remotely." });
+    await flush();
+
+    expect(sent).toEqual([{
+      text: "Send this remotely.",
+      target: { id: "laptop-device", name: "Laptop" },
+    }]);
+    expect(settled).toEqual(["delivered"]);
+    expect(remote.lockedTarget).toBeNull();
+  });
+
+  it("settles a discarded remote hold so its target lock can be cleaned up", async () => {
+    const capture = new FakeCapture();
+    const remote = new RemoteDictationDestination({ send: async () => undefined });
+    remote.lockTarget({ id: "laptop-device", name: "Laptop" });
+    const settled: string[] = [];
+    let session: FakeSession | undefined;
+    const provider: VoiceProvider = {
+      createSession: (emit) => (session = new FakeSession(emit)),
+    };
+    const controller = new DictationController(
+      () => capture,
+      () => undefined,
+      remote,
+      {
+        minAudioBytes: 4,
+        onSettled: ({ outcome }) => {
+          settled.push(outcome);
+          remote.clearLock();
+        },
+      },
+    );
+
+    const started = controller.start(provider);
+    await flush();
+    session?.resolveConnect?.();
+    await started;
+    await flush();
+    await controller.stop();
+
+    expect(controller.current.state).toBe("IDLE");
+    expect(settled).toEqual(["cancelled"]);
+    expect(remote.lockedTarget).toBeNull();
   });
 
   it("inserts once even when the provider repeats the final", async () => {
