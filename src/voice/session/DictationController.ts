@@ -40,9 +40,18 @@ export const defaultDictationLimits: DictationLimits = {
   recoveryTimeoutMs: 30_000,
 };
 
+export type DictationSettledOutcome = "delivered" | "cancelled" | "failed";
+
+export interface DictationSettledEvent {
+  utterance: number;
+  outcome: DictationSettledOutcome;
+}
+
 export interface DictationOptions extends Partial<DictationLimits> {
   /** Called once per delivered utterance with its stage durations. */
   onTimings?: (timings: UtteranceTimings, transcript: string) => void;
+  /** Called once when the utterance truly reaches a terminal outcome, never merely on button release. */
+  onSettled?: (event: DictationSettledEvent) => void;
   now?: () => number;
 }
 
@@ -89,16 +98,19 @@ export class DictationController {
   private utt?: Utterance;
   private limits: DictationLimits;
   private onTimings?: (timings: UtteranceTimings, transcript: string) => void;
+  private onSettled?: (event: DictationSettledEvent) => void;
+  private settledUtterance = 0;
   private now: () => number;
 
   constructor(
     private createCapture: () => AudioCapture,
     private onChange: (snapshot: DictationSnapshot) => void,
     private destination: TranscriptDestination,
-    { onTimings, now = () => performance.now(), ...limits }: DictationOptions = {},
+    { onTimings, onSettled, now = () => performance.now(), ...limits }: DictationOptions = {},
   ) {
     this.limits = { ...defaultDictationLimits, ...limits };
     this.onTimings = onTimings;
+    this.onSettled = onSettled;
     this.now = now;
   }
 
@@ -166,6 +178,7 @@ export class DictationController {
     if (utt.bytes < this.limits.minAudioBytes) {
       this.dispatch({ type: "cancel" }, { partial: "" });
       await this.release();
+      this.settle("cancelled");
       return;
     }
     this.finalize(utt);
@@ -177,6 +190,7 @@ export class DictationController {
     if (state !== "CONNECTING" && state !== "LISTENING" && state !== "FINALIZING") return;
     this.dispatch({ type: "cancel" }, { partial: "" });
     await this.release();
+    this.settle("cancelled");
   }
 
   /** Leaves ERROR so the user can record again. */
@@ -334,6 +348,7 @@ export class DictationController {
     try {
       await this.destination.deliver(text);
       this.dispatch({ type: "delivered" });
+      this.settle("delivered");
       const timings = timingsFrom(marks, this.now(), recovered);
       if (timings) this.onTimings?.(timings, text);
     } catch (error) {
@@ -345,6 +360,18 @@ export class DictationController {
     if (this.snapshot.state === "IDLE" || this.snapshot.state === "ERROR") return;
     this.dispatch({ type: "fail" }, { partial: "", error: messageOf(error) });
     await this.release();
+    this.settle("failed");
+  }
+
+  private settle(outcome: DictationSettledOutcome) {
+    const utterance = this.snapshot.utterance;
+    if (utterance <= 0 || utterance === this.settledUtterance) return;
+    this.settledUtterance = utterance;
+    try {
+      this.onSettled?.({ utterance, outcome });
+    } catch {
+      // Cleanup/observers must never change the dictation outcome.
+    }
   }
 
   private async release() {
