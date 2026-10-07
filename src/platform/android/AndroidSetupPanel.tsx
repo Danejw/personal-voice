@@ -86,6 +86,20 @@ export function AndroidSetupPanel() {
     });
   }
 
+  function onEarbudHoldToDictate(enabled: boolean) {
+    void run(async () => {
+      await androidSetup.setEarbudHoldToDictate(enabled);
+      setStatus((current) => current ? { ...current, earbudHoldToDictate: enabled } : current);
+    });
+  }
+
+  function onPreferHeadsetMic(enabled: boolean) {
+    void run(async () => {
+      await androidSetup.setPreferHeadsetMic(enabled);
+      setStatus((current) => current ? { ...current, preferHeadsetMic: enabled } : current);
+    });
+  }
+
   if (!status) return <p className="placeholder">Checking permissions…</p>;
 
   return (
@@ -125,6 +139,22 @@ export function AndroidSetupPanel() {
           Helps the floating mic stay on. On Samsung, also set this app to Never sleeping if prompted.
         </SetupStep>
       </ol>
+      <Toggle
+        label="Earbud hold-to-dictate"
+        description="Hold the headset play/pause button for about 400 ms to dictate; release to finalize. A quick tap is passed back to normal media controls."
+        checked={status.earbudHoldToDictate}
+        disabled={busy}
+        onChange={onEarbudHoldToDictate}
+      />
+      <Toggle
+        label="Prefer headset microphone"
+        description={status.headsetMicAvailable
+          ? "A headset microphone is connected. Dictation will prefer it and fall back to the phone mic if routing changes."
+          : "When a Bluetooth, wired, or USB headset microphone connects, Dictation will prefer it and otherwise use the phone mic."}
+        checked={status.preferHeadsetMic}
+        disabled={busy}
+        onChange={onPreferHeadsetMic}
+      />
       <Toggle
         label="Start with phone"
         description="After reboot, briefly opens Personal Voice, turns the floating mic back on, then returns to your home screen."
