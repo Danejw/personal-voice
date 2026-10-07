@@ -171,7 +171,11 @@ export class DictationController {
     }
     const state = this.state();
     if (current !== this.utt || (state !== "CONNECTING" && state !== "LISTENING")) return;
-    try { this.onRecordingReady?.(); } catch {}
+    try {
+      this.onRecordingReady?.();
+    } catch {
+      // UI feedback must never block a recording that is already live.
+    }
     current.timer = setTimeout(() => { if (current === this.utt) void this.stop(); }, this.limits.maxUtteranceMs);
   }
 
@@ -191,7 +195,11 @@ export class DictationController {
       return;
     }
     if (utt !== this.utt || this.state() !== "FINALIZING") return;
-    try { this.onRecordingStopped?.(); } catch {}
+    try {
+      this.onRecordingStopped?.();
+    } catch {
+      // UI feedback must never change a successfully stopped recording.
+    }
     if (utt.bytes < this.limits.minAudioBytes) {
       this.dispatch({ type: "cancel" }, { partial: "" });
       await this.release();
