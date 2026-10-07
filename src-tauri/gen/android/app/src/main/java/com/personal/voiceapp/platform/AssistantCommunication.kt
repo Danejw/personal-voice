@@ -28,6 +28,33 @@ fun voiceCommunicationAttributes(): AudioAttributes =
     .build()
 
 /**
+ * Best microphone-class input for ordinary Dictation. This does not switch the process into
+ * communication/call mode; AudioRecord receives it as a preferred input and falls back normally
+ * if Android cannot keep that route.
+ */
+fun preferredHeadsetInput(context: Context): AudioDeviceInfo? {
+  val audio = context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+  val inputs = try {
+    audio.getDevices(AudioManager.GET_DEVICES_INPUTS).toList()
+  } catch (_: Exception) {
+    emptyList()
+  }
+  val preferredKinds = listOf(
+    CommDeviceKind.BLE_HEADSET,
+    CommDeviceKind.BLUETOOTH_SCO,
+    CommDeviceKind.WIRED_HEADSET,
+    CommDeviceKind.USB_HEADSET,
+  )
+  for (kind in preferredKinds) {
+    val match = inputs.firstOrNull { kindOf(it.type) == kind }
+    if (match != null) return match
+  }
+  return null
+}
+
+fun hasHeadsetInput(context: Context): Boolean = preferredHeadsetInput(context) != null
+
+/**
  * Loaded only on API 26 and newer. `AudioFocusRequest` is not on API 24–25, so the
  * communication route keeps that type out of its own fields and methods.
  */
@@ -467,7 +494,7 @@ class AssistantPcmTrack(
   }
 }
 
-private fun kindOf(type: Int): CommDeviceKind {
+fun kindOf(type: Int): CommDeviceKind {
   if (Build.VERSION.SDK_INT >= 31 && type == AudioDeviceInfo.TYPE_BLE_HEADSET) return CommDeviceKind.BLE_HEADSET
   if (Build.VERSION.SDK_INT >= 26 && type == AudioDeviceInfo.TYPE_USB_HEADSET) return CommDeviceKind.USB_HEADSET
   return when (type) {
