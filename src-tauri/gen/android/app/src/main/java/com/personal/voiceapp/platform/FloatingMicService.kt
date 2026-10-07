@@ -87,12 +87,10 @@ class FloatingMicService : Service() {
   private val hideRemoteTipRunnable = Runnable { hideRemoteTip() }
   private val earbudHandler = Handler(Looper.getMainLooper())
   private var earbudSession: MediaSession? = null
-  private var earbudPendingKey: Int? = null
-  private var earbudHolding = false
+  private val earbudGesture = EarbudHoldState()
   private val beginEarbudHold = Runnable {
-    val key = earbudPendingKey ?: return@Runnable
-    if (earbudHolding || !FloatingMicPrefs.earbudHoldToDictate(this)) return@Runnable
-    earbudHolding = true
+    val key = earbudGesture.pendingKey ?: return@Runnable
+    if (!FloatingMicPrefs.earbudHoldToDictate(this) || !earbudGesture.beginHold()) return@Runnable
     Log.d(TAG, "Earbud hold started for key $key")
     emit("press")
   }
@@ -206,21 +204,17 @@ class FloatingMicService : Service() {
     when (event.action) {
       KeyEvent.ACTION_DOWN -> {
         if (event.repeatCount > 0) return true
-        if (earbudPendingKey != null) return true
-        earbudPendingKey = event.keyCode
-        earbudHolding = false
-        earbudHandler.postDelayed(beginEarbudHold, EARBUD_HOLD_MS)
+        if (earbudGesture.down(event.keyCode)) {
+          earbudHandler.postDelayed(beginEarbudHold, EARBUD_HOLD_MS)
+        }
         return true
       }
       KeyEvent.ACTION_UP -> {
-        if (earbudPendingKey != event.keyCode) return true
         earbudHandler.removeCallbacks(beginEarbudHold)
-        earbudPendingKey = null
-        if (earbudHolding) {
-          earbudHolding = false
-          emit("release")
-        } else {
-          replayQuickMediaClick(event.keyCode)
+        when (earbudGesture.up(event.keyCode)) {
+          EarbudRelease.RELEASE_HOLD -> emit("release")
+          EarbudRelease.QUICK_TAP -> replayQuickMediaClick(event.keyCode)
+          EarbudRelease.IGNORE -> {}
         }
         return true
       }
@@ -230,11 +224,7 @@ class FloatingMicService : Service() {
 
   private fun cancelEarbudHold() {
     earbudHandler.removeCallbacks(beginEarbudHold)
-    earbudPendingKey = null
-    if (earbudHolding) {
-      earbudHolding = false
-      emit("cancel")
-    }
+    if (earbudGesture.cancel()) emit("cancel")
   }
 
   /**
