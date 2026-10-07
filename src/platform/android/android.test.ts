@@ -24,13 +24,20 @@ describe("Android setup status", () => {
       floatingMic: false,
       startOnBoot: true,
       wantFloatingMic: false,
+      earbudHoldToDictate: true,
+      preferHeadsetMic: true,
+      headsetMicAvailable: false,
       batteryUnrestricted: false,
     });
   });
 
-  it("defaults startOnBoot to on when the plugin omits it", () => {
-    expect(parseSetupStatus({ microphone: true, overlay: true }).startOnBoot).toBe(true);
-    expect(parseSetupStatus({ startOnBoot: false }).startOnBoot).toBe(false);
+  it("defaults personal Android conveniences on when the plugin omits them", () => {
+    const status = parseSetupStatus({ microphone: true, overlay: true });
+    expect(status.startOnBoot).toBe(true);
+    expect(status.earbudHoldToDictate).toBe(true);
+    expect(status.preferHeadsetMic).toBe(true);
+    expect(parseSetupStatus({ startOnBoot: false, earbudHoldToDictate: false, preferHeadsetMic: false }))
+      .toMatchObject({ startOnBoot: false, earbudHoldToDictate: false, preferHeadsetMic: false });
   });
 
   it("parses always-on and battery fields", () => {
@@ -39,11 +46,17 @@ describe("Android setup status", () => {
       overlay: true,
       startOnBoot: true,
       wantFloatingMic: true,
+      earbudHoldToDictate: false,
+      preferHeadsetMic: false,
+      headsetMicAvailable: true,
       batteryUnrestricted: true,
       floatingMic: true,
     })).toMatchObject({
       startOnBoot: true,
       wantFloatingMic: true,
+      earbudHoldToDictate: false,
+      preferHeadsetMic: false,
+      headsetMicAvailable: true,
       batteryUnrestricted: true,
       floatingMic: true,
     });
@@ -58,6 +71,9 @@ describe("Android setup status", () => {
       floatingMic: false,
       startOnBoot: true,
       wantFloatingMic: false,
+      earbudHoldToDictate: true,
+      preferHeadsetMic: true,
+      headsetMicAvailable: false,
       batteryUnrestricted: false,
     };
     expect(canStartFloatingMic(ready)).toBe(true);
