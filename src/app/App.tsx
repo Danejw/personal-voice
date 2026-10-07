@@ -563,7 +563,12 @@ export default function App() {
     }
     const target = remoteDictation.lockSelectedTarget();
     remoteDictationDestination.lockTarget(target);
-  }, liveFieldPreview);
+  }, liveFieldPreview, () => {
+    // Release only stops recording. Keep the utterance target through FINALIZING
+    // and clear it only after delivery, cancellation, or failure has settled.
+    remoteDictation.setActive(false);
+    remoteDictationDestination.clearLock();
+  });
   const { state, partial, transcript, error } = snapshot;
   const control = controlFor(state, destination);
   const page = sectionMeta(section);
@@ -683,10 +688,6 @@ export default function App() {
       const target = remoteDictation.lockTarget(targetId);
       remoteDictationDestination.lockTarget(target);
       return target;
-    },
-    onRemoteDictationEnded: () => {
-      remoteDictation.setActive(false);
-      remoteDictationDestination.clearLock();
     },
   });
 
