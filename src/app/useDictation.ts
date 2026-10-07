@@ -39,13 +39,17 @@ export function useDictation(
   livePreview?: LiveFieldPreview,
   /** Runs after delivery, cancellation, or failure—not when recording is merely released. */
   onUtteranceSettled?: (event: DictationSettledEvent) => void,
+  /** Per-device ready/done UI sounds. */
+  dictationSounds = true,
 ) {
   const [snapshot, setSnapshot] = useState<DictationSnapshot>(initialDictationSnapshot);
   const [paused, setPaused] = useState(false);
   const contextRef = useRef(getUsageContext);
   const settledRef = useRef(onUtteranceSettled);
+  const soundsRef = useRef(dictationSounds);
   contextRef.current = getUsageContext;
   settledRef.current = onUtteranceSettled;
+  soundsRef.current = dictationSounds;
   const [controller] = useState(
     () => new DictationController(
       () => lease ? gateDictationCapture(platform.createCapture(), lease) : platform.createCapture(),
@@ -55,6 +59,12 @@ export function useDictation(
       },
       destinations,
       {
+      onRecordingReady: () => {
+        if (soundsRef.current) quietly(platform.playDictationCue("ready"));
+      },
+      onRecordingStopped: () => {
+        if (soundsRef.current) quietly(platform.playDictationCue("done"));
+      },
       onTimings: (timings, transcript) => {
         if (import.meta.env.DEV) console.info(`[latency] ${formatTimings(timings)}`);
         const context = contextRef.current();
