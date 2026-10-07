@@ -28,6 +28,8 @@ data class CaptureConfig(
   val source: AudioSourceChoice,
   val communicationRoute: Boolean,
   val requestEffects: Boolean,
+  /** Dictation may ask AudioRecord to prefer a connected headset input without entering call mode. */
+  val preferHeadsetInput: Boolean,
 )
 
 data class EffectProbe(
@@ -55,11 +57,13 @@ fun captureConfig(purpose: CapturePurpose): CaptureConfig = when (purpose) {
     source = AudioSourceChoice.VOICE_RECOGNITION,
     communicationRoute = false,
     requestEffects = false,
+    preferHeadsetInput = true,
   )
   CapturePurpose.ASSISTANT -> CaptureConfig(
     source = AudioSourceChoice.VOICE_COMMUNICATION,
     communicationRoute = true,
     requestEffects = true,
+    preferHeadsetInput = false,
   )
 }
 
