@@ -56,3 +56,30 @@ fn clip_title(title: &str) -> String {
     let clipped: String = chars.by_ref().take(TITLE_CHARS.saturating_sub(1)).collect();
     if chars.next().is_some() { format!("{clipped}…") } else { title.to_string() }
 }
+
+/** Bring an exact-title user-visible window to foreground, never an arbitrary HWND. */
+pub fn activate_window(exact_title: &str) -> Result<String, String> {
+    use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+    if exact_title.is_empty() || exact_title.len() > 120 {
+        return Err("Provide a window title returned by describe_windows.".into());
+    }
+    struct Search<'a> { target: &'a str, found: Vec<HWND> }
+    unsafe extern "system" fn find_window(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let state = unsafe { &mut *(lparam.0 as *mut Search<'static>) };
+        if unsafe { IsWindowVisible(hwnd) }.as_bool() && !unsafe { IsIconic(hwnd) }.as_bool() &&
+            title_of(hwnd).as_deref() == Some(state.target) {
+            state.found.push(hwnd);
+        }
+        true.into()
+    }
+    let mut state = Search { target: exact_title, found: Vec::new() };
+    unsafe { EnumWindows(Some(find_window), LPARAM((&mut state as *mut Search<'_>) as isize)) }
+        .map_err(|e| e.to_string())?;
+    if state.found.len() != 1 {
+        return Err(if state.found.is_empty() { "Window not found." } else { "Ambiguous window title." }.into());
+    }
+    if !unsafe { SetForegroundWindow(state.found[0]) }.as_bool() {
+        return Err("Windows prevented changing the foreground window.".into());
+    }
+    Ok(format!("Focused window '{exact_title}'."))
+}
