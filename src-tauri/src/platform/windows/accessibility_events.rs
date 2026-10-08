@@ -6,8 +6,10 @@ use std::thread::{self,JoinHandle};
 use std::time::{Duration,Instant};
 use tauri::{AppHandle,Emitter,Manager,PhysicalPosition,PhysicalSize};
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::Accessibility::{SetWinEventHook,UnhookWinEvent,HWINEVENTHOOK,
-    WINEVENT_OUTOFCONTEXT,WINEVENT_SKIPOWNPROCESS};
+use windows::Win32::UI::Accessibility::{SetWinEventHook,UnhookWinEvent,HWINEVENTHOOK};
+// WinEvent flags are defined in winuser.h but not projected by windows 0.62.2.
+const WIN_EVENT_OUTOFCONTEXT: u32 = 0x0000;
+const WIN_EVENT_SKIP_OWN_PROCESS: u32 = 0x0002;
 use windows::Win32::UI::WindowsAndMessaging::{PeekMessageW,TranslateMessage,DispatchMessageW,MSG,PM_REMOVE};
 use super::windows_info::foreground_window_title;
 
@@ -41,7 +43,7 @@ pub fn start(app:AppHandle)->Result<String,String>{
     RUNNING.store(true,Ordering::SeqCst);
     let handle=thread::spawn(move||{
         let hook=unsafe{SetWinEventHook(0x0003,0x800E,None,Some(event_callback),0,0,
-            WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS)};
+            WIN_EVENT_OUTOFCONTEXT|WIN_EVENT_SKIP_OWN_PROCESS)};
         if hook.0.is_null(){
             RUNNING.store(false,Ordering::SeqCst);
             let _=ready_tx.send(false);
