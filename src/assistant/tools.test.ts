@@ -39,6 +39,7 @@ describe("assistant tool schema", () => {
       "capture_camera_photo",
       "start_camera_context",
       "stop_camera_context",
+      "inspect_pointer_context",
       "inspect_active_app",
       "send_remote_dictation",
       "edit_voice_note",
@@ -77,6 +78,13 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("replace_selection");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
+  });
+
+  it("routes mouse pointer inspection read-only, rejecting missing tool ids", () => {
+    expect(decideToolCall({ id: "pointer-1", name: "inspect_pointer_context", args: {} }, plan))
+      .toEqual({ kind: "pointer", id: "pointer-1", name: "inspect_pointer_context" });
+    expect(decideToolCall({ id: null, name: "inspect_pointer_context", args: {} }, plan).kind)
+      .toBe("ignore");
   });
 
   it("validates read-only, account-scoped prior conversation tool calls", () => {
