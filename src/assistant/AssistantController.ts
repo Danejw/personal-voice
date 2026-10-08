@@ -1530,6 +1530,9 @@ export class AssistantController {
       case "insert_text":
         await this.actions.insertText(pending.text);
         return "Inserted the text into the focused app.";
+      case "focus_accessible_control":
+        if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
+        return invoke<string>("focus_accessible_control", { expectedName: pending.text });
       case "invoke_accessible_control":
         if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
         return invoke<string>("invoke_accessible_control", { expectedName: pending.text });
