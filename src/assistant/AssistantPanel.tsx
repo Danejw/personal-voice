@@ -215,6 +215,11 @@ export function AssistantPanel({
           <p className="note-meta">Local preview only until you choose Attach to Assistant. Attached text may be sent to Gemini and saved in Assistant conversations.</p>
         </div>
       )}
+      {navigator.userAgent.includes("Windows") && (
+        <button type="button" className="secondary" onClick={() => {
+          void invoke("hide_computer_visual").catch(() => undefined);
+        }}>Hide visual target</button>
+      )}
       <div className="assistant-selection">
         <button
           type="button"
