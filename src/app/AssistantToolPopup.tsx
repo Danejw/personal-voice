@@ -27,8 +27,8 @@ export default function AssistantToolPopup() {
     {approval&&<div style={{fontSize:12,opacity:.83,maxHeight:34,overflow:"hidden",marginBottom:8}}>{approval.preview}</div>}
     {askComputer&&!approval&&<div style={{fontSize:12,opacity:.83,maxHeight:34,overflow:"hidden",marginBottom:8}}>{askComputer}</div>}
     {approval||askComputer?<div style={{display:"flex",gap:8}}>
-      <button type="button" onClick={()=>void emitTo("main","assistant-popup-answer",{id:approval?.id??null,allow:true,kind:approval?"tool":"computer"})} style={{padding:"7px 14px",background:"#75aaff",border:0,borderRadius:8,color:"#06172c",fontWeight:600}}>Allow once</button>
-      <button type="button" onClick={()=>void emitTo("main","assistant-popup-answer",{id:approval?.id??null,allow:false,kind:approval?"tool":"computer"})} style={{padding:"7px 14px",background:"#353a46",border:0,borderRadius:8,color:"white"}}>Deny</button>
+      <button type="button" onClick={()=>void emitTo("main","assistant-popup-answer",{id:approval?.id??null,computerPrompt:askComputer??null,allow:true,kind:approval?"tool":"computer"})} style={{padding:"7px 14px",background:"#75aaff",border:0,borderRadius:8,color:"#06172c",fontWeight:600}}>Allow once</button>
+      <button type="button" onClick={()=>void emitTo("main","assistant-popup-answer",{id:approval?.id??null,computerPrompt:askComputer??null,allow:false,kind:approval?"tool":"computer"})} style={{padding:"7px 14px",background:"#353a46",border:0,borderRadius:8,color:"white"}}>Deny</button>
     </div>:<div style={{fontSize:12,opacity:.7}}>Actions and status are also visible in the Assistant page.</div>}
   </div>;
 }
