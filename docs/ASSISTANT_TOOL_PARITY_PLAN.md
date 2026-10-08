@@ -31,3 +31,12 @@ Device/settings administration, dictation preferences, keyboard shortcut configu
 - Test release when assistant ends and recovery from network interruption.
 
 All changes remain scoped to this draft PR; full UI parity is a broader set of phases, not a claim of completion.
+
+## PR #15 implementation update
+
+- Local Gemini tool execution no longer checks the shared conversation producer lease before executing. The lease still fences saved transcript writes and active session ownership, so switching live voice sessions may still require Continue here.
+- Added confirmed tool flows to edit existing notes, create transforms, add dictionary terms, and send remote dictation text to an explicitly named online target.
+- Added read-only tools for existing Insights candidates and recent Usage Analytics data.
+- The existing dictation and focused-app text insertion, handoff, selection, screenshot, and supervised computer-use paths remain available. Cursor-specific input targeting and voice-starting dictation are not newly implemented.
+- Gemini has no general settings mutation tools. Supervised computer use can still interact with other applications, so future action scoping should explicitly prevent settings changes if strict prohibition is required.
+- Retest session takeover/lost lease and device identification; removing the redundant execution guard is not a substitute for fixing any real session disconnect.
