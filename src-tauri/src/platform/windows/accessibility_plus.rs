@@ -7,6 +7,7 @@ use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitiali
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTreeWalker,
     IUIAutomationTogglePattern, IUIAutomationRangeValuePattern, IUIAutomationScrollItemPattern,
+    IUIAutomationScrollPattern, ScrollAmount, UIA_ScrollPatternId,
     IUIAutomationSelectionItemPattern, IUIAutomationExpandCollapsePattern, IUIAutomationInvokePattern,
     IUIAutomationValuePattern, IUIAutomationTextPattern, IUIAutomationGridPattern,
     IUIAutomationVirtualizedItemPattern, IUIAutomationWindowPattern, IUIAutomationTransformPattern,
@@ -85,6 +86,7 @@ fn metadata(element: &IUIAutomationElement, path: String, parent: Option<String>
     let focused = unsafe {element.CurrentHasKeyboardFocus()}.map(|x|x.as_bool()).unwrap_or(false);
     let ids = [
         ("invoke",UIA_InvokePatternId),("toggle",UIA_TogglePatternId),
+        ("scroll",UIA_ScrollPatternId),
         ("range",UIA_RangeValuePatternId),("scroll-item",UIA_ScrollItemPatternId),
         ("select-item",UIA_SelectionItemPatternId),("expand",UIA_ExpandCollapsePatternId),
         ("value",UIA_ValuePatternId),("text",UIA_TextPatternId),
@@ -178,7 +180,7 @@ pub fn action(loc: Locator, command:&str, text:Option<&str>, number:Option<f64>)
       ||loc.name.chars().count()>STRING_LIMIT||loc.automation_id.chars().count()>STRING_LIMIT {
       return Err("Invalid accessibility locator".into());
     }
-    let allowed=["focus","invoke","toggle","select","add-selection","remove-selection",
+    let allowed=["highlight","focus","scroll-up","scroll-down","scroll-left","scroll-right","invoke","toggle","select","add-selection","remove-selection",
         "expand","collapse","scroll-into-view","realize","set-value","set-range",
         "minimize","maximize","restore","move","resize"];
     if !allowed.contains(&command){return Err("Unsupported operation".into());}
@@ -198,6 +200,7 @@ pub fn action(loc: Locator, command:&str, text:Option<&str>, number:Option<f64>)
             .map_err(|_|"The app does not support this accessibility control".to_string());
         let mut observed=None;
         match command {
+            "highlight"=>{},
             "focus"=>unsafe{element.SetFocus()}.map_err(|e|e.to_string())?,
             "invoke"=>{
                 let p=supported(UIA_InvokePatternId)?.cast::<IUIAutomationInvokePattern>().map_err(|e|e.to_string())?;
@@ -219,6 +222,12 @@ pub fn action(loc: Locator, command:&str, text:Option<&str>, number:Option<f64>)
             "expand"|"collapse"=>{
                 let p=supported(UIA_ExpandCollapsePatternId)?.cast::<IUIAutomationExpandCollapsePattern>().map_err(|e|e.to_string())?;
                 if command=="expand" {unsafe{p.Expand()}} else {unsafe{p.Collapse()}}.map_err(|e|e.to_string())?;
+            }
+            "scroll-up"|"scroll-down"|"scroll-left"|"scroll-right"=>{
+                let p=supported(UIA_ScrollPatternId)?.cast::<IUIAutomationScrollPattern>().map_err(|e|e.to_string())?;
+                let x=match command {"scroll-left"=>ScrollAmount(1),"scroll-right"=>ScrollAmount(4),_=>ScrollAmount(2)};
+                let y=match command {"scroll-up"=>ScrollAmount(1),"scroll-down"=>ScrollAmount(4),_=>ScrollAmount(2)};
+                unsafe{p.Scroll(x,y)}.map_err(|e|e.to_string())?;
             }
             "scroll-into-view"=>{
                 let p=supported(UIA_ScrollItemPatternId)?.cast::<IUIAutomationScrollItemPattern>().map_err(|e|e.to_string())?;
