@@ -21,6 +21,15 @@ fn visual_target(app: &AppHandle, bounds: platform::UiBounds, label: &str, phase
 
 #[cfg(windows)]
 #[tauri::command]
+pub fn show_computer_visual(app: AppHandle, label: String, phase: String) {
+    if let Some(bounds) = platform::foreground_bounds() {
+        visual_target(&app, bounds, &label.chars().take(90).collect::<String>(),
+            if phase == "complete" { "complete" } else if phase == "error" { "error" } else { "action" });
+    }
+}
+
+#[cfg(windows)]
+#[tauri::command]
 pub fn hide_computer_visual(app: AppHandle) {
     if let Some(window) = app.get_webview_window("computer-visual") {
         let _ = window.hide();
