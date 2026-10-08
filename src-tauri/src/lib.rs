@@ -113,6 +113,8 @@ pub fn run() {
             commands::hide_computer_visual,
             #[cfg(windows)]
             commands::show_computer_visual,
+            #[cfg(windows)]
+            commands::paste_camera_photo_image,
             commands::open_allowlisted_app,
             commands::press_allowlisted_shortcut,
             commands::computer_capture,
