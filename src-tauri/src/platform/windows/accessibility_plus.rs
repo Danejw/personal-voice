@@ -10,6 +10,7 @@ use windows::Win32::UI::Accessibility::{
     IUIAutomationScrollPattern, ScrollAmount, UIA_ScrollPatternId,
     IUIAutomationSelectionItemPattern, IUIAutomationExpandCollapsePattern, IUIAutomationInvokePattern,
     IUIAutomationValuePattern, IUIAutomationTextPattern, IUIAutomationGridPattern,
+    IUIAutomationGridItemPattern,
     IUIAutomationVirtualizedItemPattern, IUIAutomationWindowPattern, IUIAutomationTransformPattern,
     UIA_TogglePatternId, UIA_RangeValuePatternId, UIA_ScrollItemPatternId,
     UIA_SelectionItemPatternId, UIA_ExpandCollapsePatternId, UIA_InvokePatternId,
@@ -43,10 +44,21 @@ pub struct ControlNode {
     pub value: Option<String>,
     pub selection: Option<String>,
     pub grid: Option<GridInfo>,
+    pub grid_item: Option<GridItemInfo>,
+    pub range: Option<RangeInfo>,
+    pub toggle_state: Option<i32>,
+    pub help_text: String,
+    pub aria_role: String,
 }
 #[derive(Serialize)]
 #[serde(rename_all="camelCase")]
 pub struct GridInfo { pub rows: i32, pub columns: i32 }
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct GridItemInfo { pub row:i32, pub column:i32, pub row_span:i32, pub column_span:i32 }
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct RangeInfo { pub value:f64, pub minimum:f64, pub maximum:f64 }
 #[derive(Serialize)]
 #[serde(rename_all="camelCase")]
 pub struct TreeReport { pub window_title: String, pub nodes: Vec<ControlNode>, pub truncated: bool }
@@ -80,6 +92,8 @@ fn metadata(element: &IUIAutomationElement, path: String, parent: Option<String>
     let automation_id = get(unsafe {element.CurrentAutomationId()}.ok().map(|x| x.to_string()));
     let class_name = get(unsafe {element.CurrentClassName()}.ok().map(|x| x.to_string()));
     let framework = get(unsafe {element.CurrentFrameworkId()}.ok().map(|x| x.to_string()));
+    let help_text = get(unsafe {element.CurrentHelpText()}.ok().map(|x|x.to_string()));
+    let aria_role = get(unsafe {element.CurrentAriaRole()}.ok().map(|x|x.to_string()));
     let control_type = unsafe {element.CurrentControlType()}.map(|x|x.0).unwrap_or_default();
     let enabled = unsafe {element.CurrentIsEnabled()}.map(|x|x.as_bool()).unwrap_or(false);
     let offscreen = unsafe {element.CurrentIsOffscreen()}.map(|x|x.as_bool()).unwrap_or(true);
@@ -101,6 +115,10 @@ fn metadata(element: &IUIAutomationElement, path: String, parent: Option<String>
         pattern::<IUIAutomationValuePattern>(element,UIA_ValuePatternId)
           .and_then(|p|unsafe{p.CurrentValue()}.ok())
           .map(|v|clip(&v.to_string(),1200))
+          .or_else(||pattern::<IUIAutomationTextPattern>(element,UIA_TextPatternId)
+            .and_then(|p|unsafe{p.DocumentRange()}.ok())
+            .and_then(|r|unsafe{r.GetText(1200)}.ok())
+            .map(|t|t.to_string()))
     };
     let selection = if is_password {None} else {
         pattern::<IUIAutomationTextPattern>(element,UIA_TextPatternId)
@@ -111,8 +129,24 @@ fn metadata(element: &IUIAutomationElement, path: String, parent: Option<String>
     };
     let grid = pattern::<IUIAutomationGridPattern>(element, UIA_GridPatternId)
       .and_then(|p| Some(GridInfo {rows:unsafe{p.CurrentRowCount()}.ok()?, columns:unsafe{p.CurrentColumnCount()}.ok()?}));
+    let grid_item = pattern::<IUIAutomationGridItemPattern>(element,UIA_GridItemPatternId)
+      .and_then(|p|Some(GridItemInfo{
+        row:unsafe{p.CurrentRow()}.ok()?,
+        column:unsafe{p.CurrentColumn()}.ok()?,
+        row_span:unsafe{p.CurrentRowSpan()}.ok()?,
+        column_span:unsafe{p.CurrentColumnSpan()}.ok()?,
+      }));
+    let range = pattern::<IUIAutomationRangeValuePattern>(element,UIA_RangeValuePatternId)
+      .and_then(|p|Some(RangeInfo{
+        value:unsafe{p.CurrentValue()}.ok()?,
+        minimum:unsafe{p.CurrentMinimum()}.ok()?,
+        maximum:unsafe{p.CurrentMaximum()}.ok()?,
+      }));
+    let toggle_state = pattern::<IUIAutomationTogglePattern>(element,UIA_TogglePatternId)
+      .and_then(|p|unsafe{p.CurrentToggleState()}.ok()).map(|s|s.0);
     ControlNode {path,parent,name,automation_id,control_type,class_name,framework,
-       enabled,offscreen,focused,bounds:rect(element),patterns,value,selection,grid}
+       enabled,offscreen,focused,bounds:rect(element),patterns,value,selection,grid,
+       grid_item,range,toggle_state,help_text,aria_role}
 }
 fn with_automation<T>(f: impl FnOnce(&IUIAutomation)->Result<T,String>) -> Result<T,String> {
     unsafe {CoInitializeEx(None,COINIT_APARTMENTTHREADED)}.ok()
