@@ -29,7 +29,8 @@ pub fn open_allowlisted_app(id: &str) -> Result<String, String> {
        !label.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_')) {
         return Err("Provide an executable name only, without paths, arguments or commands.".into());
     }
-    let base = label.trim_end_matches(".exe").to_ascii_lowercase();
+    let lower = label.to_ascii_lowercase();
+    let base = lower.strip_suffix(".exe").unwrap_or(&lower);
     if ["cmd", "powershell", "pwsh", "wscript", "cscript", "mshta", "rundll32",
         "regsvr32", "reg", "schtasks", "wmic", "bash", "sh", "wsl",
         "python", "py", "node", "npm", "npx"].contains(&base.as_str()) {
