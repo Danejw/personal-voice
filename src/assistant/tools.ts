@@ -199,8 +199,8 @@ export function assistantFunctionDeclarations() {
       name: "uia_control_action",
       description: "Windows accessibility action on an inspected, exact-name focused element. Operations: focus, invoke, select, expand, collapse, scroll-up, scroll-down, set-value. Confirm before acting. For set-value supply text. Never attempt passwords, destructive changes, submissions, purchases or OS settings.",
       parameters: { type: "object", properties: {
-        action: { type: "string" }, name: { type: "string" }, value: { type: "string" }
-      }, required: ["action", "name"] },
+        action: { type: "string" }, window: { type: "string" }, name: { type: "string" }, value: { type: "string" }
+      }, required: ["action", "window", "name"] },
     },
     {
       name: "list_installed_apps",
@@ -469,12 +469,13 @@ export function decideToolCall(
     case "uia_control_action": {
       const choices = ["focus", "invoke", "select", "expand", "collapse", "scroll-up", "scroll-down", "set-value"];
       if (typeof args.action !== "string" || !choices.includes(args.action) ||
+          typeof args.window !== "string" || !args.window.trim() || args.window.length > 120 ||
           typeof args.name !== "string" || !args.name.trim() || args.name.length > 280 ||
           (args.action === "set-value" && (typeof args.value !== "string" || args.value.length > 1000))) {
         return {kind: "reject", id: call.id, name: call.name, message: "Invalid accessibility control action."};
       }
       return confirm(call.id, "uia_control_action", JSON.stringify({
-        action: args.action, name: args.name, value: args.action === "set-value" ? args.value : null
+        action: args.action, window: args.window, name: args.name, value: args.action === "set-value" ? args.value : null
       }), "Control Windows accessibility element", null, null);
     }
     case "focus_accessible_control":
