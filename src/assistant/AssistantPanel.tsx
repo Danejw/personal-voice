@@ -90,6 +90,31 @@ export function AssistantPanel({
   const [photoSending, setPhotoSending] = useState(false);
   const [photoNotice, setPhotoNotice] = useState<string | null>(null);
   const [computerHistory, setComputerHistory] = useState<Array<{ label: string; phase: string; at: string }>>([]);
+  const [accessibilityWatch, setAccessibilityWatch] = useState(false);
+  const [treeReport, setTreeReport] = useState<{
+    windowTitle:string;truncated:boolean;
+    nodes:Array<{path:string;name:string;automationId:string;controlType:number;
+      framework:string;patterns:string[];bounds?:{x:number;y:number;width:number;height:number}|null;}>;
+  } | null>(null);
+  const [treeFilter,setTreeFilter] = useState("");
+  const [treeBusy,setTreeBusy] = useState(false);
+  const [treeError,setTreeError] = useState<string|null>(null);
+  const [accessibilityWatchError, setAccessibilityWatchError] = useState<string | null>(null);
+  const [accessibilityEvents, setAccessibilityEvents] = useState<Array<{kind:string; windowTitle:string|null;at:string}>>([]);
+  useEffect(() => {
+    if (!navigator.userAgent.includes("Windows")) return;
+    let mounted = true;
+    void invoke<boolean>("accessibility_watch_status").then((enabled) => {
+      if (mounted) setAccessibilityWatch(enabled);
+    }).catch(() => undefined);
+    const unsubscribe = listen<{kind:string;windowTitle:string|null}>("accessibility-event",(event) => {
+      setAccessibilityEvents((previous) => [{
+        kind:event.payload.kind,windowTitle:event.payload.windowTitle,
+        at:new Date().toLocaleTimeString()
+      },...previous].slice(0,40));
+    });
+    return () => {mounted=false;void unsubscribe.then((stop)=>stop());};
+  }, [snapshot.status]);
   useEffect(() => {
     const subscription = listen<{ label: string; phase: string }>("computer-activity", (event) => {
       const entry = { label: event.payload.label, phase: event.payload.phase, at: new Date().toLocaleTimeString() };
@@ -358,7 +383,69 @@ export function AssistantPanel({
       </div>
       {navigator.userAgent.includes("Windows") && (
         <div className="assistant-action" role="region" aria-label="Computer interaction history">
+          <p className="note-meta">Accessibility element explorer</p>
+          <div className="assistant-action-buttons">
+            <button type="button" className="secondary" disabled={treeBusy} onClick={() => {
+              setTreeBusy(true);
+              setTreeError(null);
+              void invoke<typeof treeReport>("inspect_accessibility_tree")
+                .then(setTreeReport).catch((error:unknown)=>setTreeError(String(error)))
+                .finally(()=>setTreeBusy(false));
+            }}>{treeBusy ? "Inspecting…" : "Inspect current window controls"}</button>
+            {treeReport && <span className="note-meta">{treeReport.nodes.length} controls · {treeReport.windowTitle}{treeReport.truncated ? " (partial)" : ""}</span>}
+          </div>
+          {treeError && <p className="error" role="alert">{treeError}</p>}
+          {treeReport && (
+            <div className="assistant-action">
+              <input aria-label="Filter accessible controls" placeholder="Filter names or automation IDs" value={treeFilter}
+                onChange={(event)=>setTreeFilter(event.target.value)} />
+              <ol style={{maxHeight:230,overflowY:"auto",paddingInlineStart:22}}>
+                {treeReport.nodes.filter((node)=>!treeFilter ||
+                  node.name.toLowerCase().includes(treeFilter.toLowerCase()) ||
+                  node.automationId.toLowerCase().includes(treeFilter.toLowerCase()))
+                  .slice(0,60).map((node)=>(
+                    <li key={node.path} className="note-meta">
+                      <span>{node.name || node.automationId || "(unnamed)"} · {node.patterns.join(", ") || "read only"}</span>{" "}
+                      <button type="button" className="secondary" onClick={()=>{
+                        setTreeError(null);
+                        void invoke("accessibility_pattern_action",{
+                          locator:{window:treeReport.windowTitle,path:node.path,name:node.name,
+                            automationId:node.automationId,controlType:node.controlType},
+                          action:"highlight",text:null,number:null
+                        }).catch((error:unknown)=>setTreeError(String(error)));
+                      }}>Highlight</button>
+                    </li>
+                  ))}
+              </ol>
+            </div>
+          )}
           <p className="note-meta">Computer interaction activity</p>
+          <div className="assistant-action-buttons">
+            <button type="button" className="secondary" onClick={() => {
+              setAccessibilityWatchError(null);
+              const enabled = !accessibilityWatch;
+              void invoke<string>("accessibility_watch",{enabled})
+                .then(() => setAccessibilityWatch(enabled))
+                .catch((error:unknown) => setAccessibilityWatchError(String(error)));
+            }}>{accessibilityWatch ? "Stop live UI awareness" : "Start live UI awareness"}</button>
+            <button type="button" className="secondary" onClick={() => {
+              setAccessibilityEvents([]);
+              setComputerHistory([]);
+            }}>Clear history</button>
+          </div>
+          <p className="note-meta">{accessibilityWatch
+            ? "Windows accessibility monitoring active. Focus, selection, and UI changes are visible locally; no text is continuously sent to Gemini."
+            : "Live accessibility monitoring is off."}</p>
+          {accessibilityWatchError && <p className="error" role="alert">{accessibilityWatchError}</p>}
+          {accessibilityEvents.length > 0 && (
+            <ol style={{maxHeight:160,overflowY:"auto",paddingInlineStart:22}}>
+              {accessibilityEvents.map((event,index) => (
+                <li key={`${event.at}-${index}`} className="note-meta">
+                  {event.at} · {event.kind}: {event.windowTitle ?? "Unknown window"}
+                </li>
+              ))}
+            </ol>
+          )}
           {computerHistory.length === 0 ? (
             <p className="note-meta">No accessibility or computer actions in this view yet.</p>
           ) : (
@@ -370,7 +457,7 @@ export function AssistantPanel({
               ))}
             </ol>
           )}
-          <button type="button" className="secondary" onClick={() => setComputerHistory([])}>Clear activity history</button>
+
         </div>
       )}
       {(snapshot.computerRunning || snapshot.computerPrompt) && (

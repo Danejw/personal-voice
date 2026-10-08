@@ -48,6 +48,10 @@ describe("assistant tool schema", () => {
       "read_insights",
       "capture_selection",
       "read_remote_device",
+      "inspect_accessibility_tree",
+      "accessibility_pattern_action",
+      "start_accessibility_watch",
+      "stop_accessibility_watch",
       "inspect_accessible_elements",
       "list_windows",
       "navigate_window",
@@ -78,6 +82,27 @@ describe("assistant tool schema", () => {
       kind: "memorySearch", id: "s1", name: "search_memory", query: "project details",
     });
     expect(decideToolCall({ id: "s2", name: "search_memory", args: { query: " " } }, plan).kind).toBe("reject");
+  });
+
+  it("requires a complete UIA locator and confirms changes", () => {
+    const base = { window: "Untitled - Notepad", path: "0.1.0", name: "Editor",
+      automationId: "Editor", controlType: 50004, action: "set-value", text: "Hello" };
+    expect(decideToolCall({id:"target",name:"accessibility_pattern_action",args:base},plan)).toMatchObject({
+      kind:"confirm",name:"accessibility_pattern_action",
+    });
+    expect(decideToolCall({id:"missing",name:"accessibility_pattern_action",
+      args:{...base,path:"0..1"}},plan)).toMatchObject({kind:"reject"});
+    expect(decideToolCall({id:"range",name:"accessibility_pattern_action",
+      args:{...base,action:"set-range",number:Number.NaN}},plan)).toMatchObject({kind:"reject"});
+  });
+
+  it("keeps Windows monitoring explicitly opt-in and allows immediate stop", () => {
+    expect(decideToolCall({id:"on",name:"start_accessibility_watch",args:{}},plan)).toMatchObject({
+      kind:"confirm",name:"start_accessibility_watch",
+    });
+    expect(decideToolCall({id:"off",name:"stop_accessibility_watch",args:{}},plan)).toEqual({
+      kind:"watchStop",id:"off",name:"stop_accessibility_watch",
+    });
   });
 
   it("accepts session end and confirms a destination before pasting a camera photo", () => {

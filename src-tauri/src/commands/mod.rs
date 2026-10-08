@@ -6,6 +6,55 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::platform;
 
 pub const INDICATOR_WINDOW: &str = "indicator";
+
+#[cfg(windows)]
+#[tauri::command]
+pub async fn inspect_accessibility_tree(app:AppHandle)->Result<platform::AccessibilityTreeReport,String>{
+    let window=app.get_webview_window("main").ok_or("Settings window missing")?;
+    window.hide().map_err(|e|e.to_string())?;
+    let result=tauri::async_runtime::spawn_blocking(||{
+        std::thread::sleep(std::time::Duration::from_millis(180));
+        platform::inspect_accessibility_tree()
+    }).await.map_err(|e|e.to_string()).and_then(|r|r);
+    let _=platform::show_without_focus(&window);
+    if let Ok(ref report)=result{
+        if let Some(bounds)=report.nodes.iter().find(|n|n.focused).and_then(|n|n.bounds){
+            visual_target(&app,bounds,"Inspecting focused control","inspect");
+        }
+    }
+    result
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub async fn accessibility_pattern_action(app:AppHandle, locator:platform::AccessibilityLocator,
+    action:String,text:Option<String>,number:Option<f64>)->Result<platform::AccessibilityActionResult,String>{
+    let window=app.get_webview_window("main").ok_or("Settings window missing")?;
+    window.hide().map_err(|e|e.to_string())?;
+    let label=format!("{} · {}",action,locator.name);
+    // Foreground focus is validated again inside the actual UIA operation.
+    let result=tauri::async_runtime::spawn_blocking(move||{
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        platform::accessibility_action(locator,&action,text.as_deref(),number)
+    }).await.map_err(|e|e.to_string()).and_then(|r|r);
+    let _=platform::show_without_focus(&window);
+    if let Some(bounds)=result.as_ref().ok().and_then(|r|r.bounds).or_else(platform::foreground_bounds){
+        visual_target(&app,bounds,&label,if result.is_ok(){"complete"}else{"error"});
+    }
+    result
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn accessibility_watch(app:AppHandle,enabled:bool)->Result<String,String>{
+    if enabled{platform::start_accessibility_watch(app)}
+    else{platform::stop_accessibility_watch()}
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn accessibility_watch_status()->bool{platform::accessibility_watch_active()}
+
 #[cfg(windows)]
 fn visual_target(app: &AppHandle, bounds: platform::UiBounds, label: &str, phase: &str) {
     use tauri::{PhysicalPosition, PhysicalSize};

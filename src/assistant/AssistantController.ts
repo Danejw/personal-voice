@@ -657,6 +657,9 @@ export class AssistantController {
   /** Closes the session and stops the microphone and playback. An unfinished line is kept as interrupted. */
   end(): void {
     this.haltComputer();
+    if (navigator.userAgent.includes("Windows")) {
+      void invoke("accessibility_watch", {enabled:false}).catch(() => undefined);
+    }
     if (this.snapshot.status === "IDLE") return;
     this.generation += 1;
     this.connection += 1;
@@ -1228,6 +1231,14 @@ export class AssistantController {
           await this.runSelection(decision);
           continue;
         }
+        if (decision.kind === "tree") {
+          await this.runAccessibilityTree(decision);
+          continue;
+        }
+        if (decision.kind === "watchStop") {
+          await this.runStopAccessibilityWatch(decision);
+          continue;
+        }
         if (decision.kind === "elements") {
           await this.runElements(decision);
           continue;
@@ -1295,7 +1306,7 @@ export class AssistantController {
           working: false,
         };
         // Camera photos can leave the device. Always require a review card.
-        if (this.autoRun && decision.name !== "paste_camera_photo") {
+        if (this.autoRun && !["paste_camera_photo","accessibility_pattern_action","start_accessibility_watch"].includes(decision.name)) {
           this.pending.working = true;
           const epoch = this.toolEpoch;
           await this.finishPending(this.pending, epoch);
@@ -1419,6 +1430,36 @@ export class AssistantController {
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
       this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runAccessibilityTree(decision: Extract<ToolDecision, { kind: "tree" }>) {
+    const epoch = this.toolEpoch;
+    if (!navigator.userAgent.includes("Windows")) {
+      this.replyTool(decision.id, decision.name, false, "Windows-only accessibility tool.");
+      return;
+    }
+    try {
+      const report = await invoke<{windowTitle:string;nodes:Array<{name:string;automationId:string;path:string}>;truncated:boolean}>("inspect_accessibility_tree");
+      if (epoch !== this.toolEpoch) return;
+      const filter = decision.filter.toLowerCase();
+      const matching = report.nodes.filter((node) => !filter || node.name.toLowerCase().includes(filter) || node.automationId.toLowerCase().includes(filter));
+      const payload = {windowTitle:report.windowTitle,truncated:report.truncated,
+        totalMatches:matching.length,nodes:matching.slice(0,decision.maxResults)};
+      this.replyTool(decision.id, decision.name, true, JSON.stringify(payload));
+    } catch (error) {
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runStopAccessibilityWatch(decision: Extract<ToolDecision, {kind:"watchStop"}>) {
+    const epoch = this.toolEpoch;
+    try {
+      if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
+      const message = await invoke<string>("accessibility_watch", {enabled:false});
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, message);
+    } catch (error) {
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
     }
   }
 
@@ -1649,6 +1690,18 @@ export class AssistantController {
       case "navigate_window":
         if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
         return invoke<string>("activate_accessible_window", { title: pending.text });
+      case "start_accessibility_watch":
+        if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
+        return invoke<string>("accessibility_watch", {enabled:true});
+      case "accessibility_pattern_action": {
+        if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
+        const payload = JSON.parse(pending.text) as {
+          locator:{window:string;path:string;name:string;automationId:string;controlType:number};
+          action:string;text:string|null;number:number|null
+        };
+        const result = await invoke<{message:string;observed:string|null}>("accessibility_pattern_action",payload);
+        return [result.message,result.observed].filter(Boolean).join("\n");
+      }
       case "uia_control_action": {
         if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
         const payload = JSON.parse(pending.text) as {action: string; window: string; name: string; value: string | null};

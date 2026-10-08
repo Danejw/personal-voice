@@ -83,3 +83,10 @@ pub fn activate_window(exact_title: &str) -> Result<String, String> {
     }
     Ok(format!("Focused window '{exact_title}'."))
 }
+
+/// Read only the foreground window title for user-approved accessibility monitoring.
+pub fn foreground_window_title() -> Option<String> {
+    let hwnd = unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+    if hwnd.0.is_null() { return None; }
+    title_of(hwnd)
+}
