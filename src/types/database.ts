@@ -417,6 +417,7 @@ export type Database = {
         Row: {
           assistant_learning_since: string | null
           assistant_memory_learning: boolean
+          assistant_semantic_search: boolean
           cloud_dictation_history: boolean
           language: string | null
           smart_transcription: boolean
@@ -632,6 +633,39 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      assistant_memory_assets: {
+        Row: {
+          id: string
+          user_id: string
+          memory_id: string
+          bucket: string
+          storage_path: string
+          mime_type: string
+          size_bytes: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          memory_id: string
+          bucket?: string
+          storage_path: string
+          mime_type: string
+          size_bytes: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          memory_id?: string
+          bucket?: string
+          storage_path?: string
+          mime_type?: string
+          size_bytes?: number
+          created_at?: string
         }
         Relationships: []
       }
