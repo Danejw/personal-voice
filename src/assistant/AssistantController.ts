@@ -1409,7 +1409,7 @@ export class AssistantController {
       return;
     }
     try {
-      const report = await this.actions.readDashboard("read_windows" as "read_insights");
+      const report = JSON.stringify(await invoke("describe_windows"));
       if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, report.slice(0, 8000));
     } catch (error) {
       if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
