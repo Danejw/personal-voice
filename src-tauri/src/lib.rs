@@ -109,6 +109,8 @@ pub fn run() {
             commands::activate_accessible_window,
             #[cfg(windows)]
             commands::hide_computer_visual,
+            #[cfg(windows)]
+            commands::show_computer_visual,
             commands::open_allowlisted_app,
             commands::press_allowlisted_shortcut,
             commands::computer_capture,
