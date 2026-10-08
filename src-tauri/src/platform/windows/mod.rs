@@ -1,3 +1,4 @@
+mod accessibility;
 mod autostart;
 mod computer;
 mod handoff_alert;
@@ -19,6 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
+pub use accessibility::{inspect_accessibility, AccessibilityContext};
 pub use autostart::{launch_at_login, set_launch_at_login};
 pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_shortcut};
 pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
