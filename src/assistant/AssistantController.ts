@@ -80,6 +80,10 @@ export interface AssistantActions {
   copyText(text: string): Promise<void>;
   insertText(text: string): Promise<void>;
   createVoiceNote(text: string): Promise<void>;
+  editVoiceNote(id: string, text: string): Promise<void>;
+  createTransform(name: string, instruction: string): Promise<void>;
+  addDictionaryWord(word: string): Promise<void>;
+  readDashboard(kind: "read_usage_analytics" | "read_insights"): Promise<string>;
   /** Resolves the handoff target without sending. Throws when none is available. */
   planHandoff(deviceName: string | null): { deviceId: string; label: string };
   sendHandoff(text: string, deviceId: string): Promise<void>;
@@ -1196,6 +1200,10 @@ export class AssistantController {
           await this.runSelection(decision);
           continue;
         }
+        if (decision.kind === "dashboard") {
+          await this.runDashboard(decision);
+          continue;
+        }
         if (decision.kind === "notes") {
           await this.runNotes(decision);
           continue;
@@ -1365,6 +1373,18 @@ export class AssistantController {
     }
   }
 
+  private async runDashboard(decision: Extract<ToolDecision, { kind: "dashboard" }>) {
+    const epoch = this.toolEpoch;
+    try {
+      const text = await this.actions.readDashboard(decision.name);
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, true, text.slice(0, 8000));
+    } catch (error) {
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
   private async runNotes(decision: Extract<ToolDecision, { kind: "notes" }>) {
     const epoch = this.toolEpoch;
     try {
@@ -1492,6 +1512,19 @@ export class AssistantController {
       case "insert_text":
         await this.actions.insertText(pending.text);
         return "Inserted the text into the focused app.";
+      case "edit_voice_note": {
+        const input = JSON.parse(pending.text) as {id: string; text: string};
+        await this.actions.editVoiceNote(input.id, input.text);
+        return "Updated the note.";
+      }
+      case "create_transform": {
+        const input = JSON.parse(pending.text) as {name: string; instruction: string};
+        await this.actions.createTransform(input.name, input.instruction);
+        return "Created the transform.";
+      }
+      case "add_dictionary_word":
+        await this.actions.addDictionaryWord(pending.text);
+        return "Added the dictionary word.";
       case "create_voice_note":
         await this.actions.createVoiceNote(pending.text);
         return "Saved the note.";
