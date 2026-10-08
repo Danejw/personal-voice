@@ -131,6 +131,20 @@ pub async fn inspect_accessibility(app: AppHandle) -> Result<platform::Accessibi
     result
 }
 
+/// Paste a camera bitmap into the user-selected foreground application input.
+#[cfg(windows)]
+#[tauri::command]
+pub async fn paste_camera_photo_image(app: AppHandle, bitmap_base64: String, expected_window: String) -> Result<String, String> {
+    let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
+    window.hide().map_err(|e| e.to_string())?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        platform::insert_camera_image(&bitmap_base64, &expected_window)
+    }).await.map_err(|e| e.to_string()).and_then(|value| value);
+    let _ = platform::show_without_focus(&window);
+    result
+}
+
 /// Pastes into the window focused at call time. Blocks a worker thread for the paste settle delay.
 /// Returns the receiving application when the paste is sent, or null when it cannot be named.
 #[tauri::command]
