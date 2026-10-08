@@ -277,8 +277,10 @@ export class AssistantController {
   }
 
   /** Backward-compatible hook. Transcript leases fence storage, not local tool calls. */
-  setProducer(_mayProduce: () => boolean): void {
-    // No-op: another device holding a transcript lease cannot disable local tools.
+  setProducer(mayProduce: () => boolean): void {
+    // Compatibility with existing callers; transcript leases cannot disable local tools.
+    // Validate the hook without invoking it or blocking a local action.
+    if (typeof mayProduce !== "function") throw new TypeError("Expected a producer predicate.");
   }
 
   /** Receives each committed turn once. Streaming text is not included. */
