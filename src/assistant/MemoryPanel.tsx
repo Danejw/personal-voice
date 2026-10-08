@@ -24,6 +24,8 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
   const [notice, setNotice] = useState<string | null>(null);
   const [semanticEnabled, setSemanticEnabled] = useState(false);
   const [semanticBusy, setSemanticBusy] = useState(false);
+  const [notesSearch, setNotesSearch] = useState(false);
+  const [dictationSearch, setDictationSearch] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,8 +35,12 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
     void (async () => {
       const { data: { user } } = await client.auth.getUser();
       if (!user) return;
-      const { data } = await client.from("settings").select("assistant_semantic_search").eq("user_id", user.id).maybeSingle();
-      if (!cancelled) setSemanticEnabled(data?.assistant_semantic_search ?? false);
+      const { data } = await client.from("settings").select("assistant_semantic_search, assistant_recall_notes, assistant_recall_dictations").eq("user_id", user.id).maybeSingle();
+      if (!cancelled) {
+        setSemanticEnabled(data?.assistant_semantic_search ?? false);
+        setNotesSearch(data?.assistant_recall_notes ?? false);
+        setDictationSearch(data?.assistant_recall_dictations ?? false);
+      }
     })();
     return () => { cancelled = true; };
   }, [signedIn]);
@@ -54,6 +60,26 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
       if (enabled) void indexNextMemoryBatch().catch(() => undefined);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not change semantic search.");
+    } finally { setSemanticBusy(false); }
+  }
+
+  async function toggleSource(kind: "notes" | "dictations", enabled: boolean): Promise<void> {
+    const client = getSupabase();
+    if (!client) return;
+    setSemanticBusy(true);
+    try {
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) throw new Error("Sign in to manage memory sources.");
+      const patch = kind === "notes" ? { assistant_recall_notes: enabled } : { assistant_recall_dictations: enabled };
+      const { data, error } = await client.from("settings").update(patch)
+        .eq("user_id", user.id).select("user_id").maybeSingle();
+      if (error || !data) throw new Error(error?.message ?? "Account settings unavailable.");
+      if (kind === "notes") setNotesSearch(enabled);
+      else setDictationSearch(enabled);
+      setNotice(`${kind === "notes" ? "Notes" : "Dictations"} search ${enabled ? "enabled" : "disabled"}.`);
+      if (enabled && semanticEnabled) void indexNextMemoryBatch().catch(() => undefined);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not change source preferences.");
     } finally { setSemanticBusy(false); }
   }
 
@@ -148,6 +174,14 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
         disabled={semanticBusy}
         onChange={(enabled) => { void toggleSemantic(enabled); }}
       />}
+      {signedIn && <Toggle label="Include saved Notes in search"
+        description="Notes stay separate from permanent Assistant memories."
+        checked={notesSearch} disabled={semanticBusy}
+        onChange={(enabled) => { void toggleSource("notes", enabled); }} />}
+      {signedIn && <Toggle label="Include synced Dictations in search"
+        description="Requires the separate Sync recent dictations setting. Never uploads local-only history."
+        checked={dictationSearch} disabled={semanticBusy}
+        onChange={(enabled) => { void toggleSource("dictations", enabled); }} />}
       {signedIn && <p>Multimodal Gemini Embedding 2 · 1536 dimensions. Files are private and saved only when attached explicitly.</p>}
       {signedIn && <button type="button" className="secondary" disabled={semanticBusy} onClick={() => { void indexPending(); }}>Index next three memories</button>}
       {snapshot.offline && <p>Showing the saved copy on this device. Assistant will not use it until it reconnects.</p>}
