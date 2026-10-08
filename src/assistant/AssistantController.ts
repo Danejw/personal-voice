@@ -205,6 +205,7 @@ export class AssistantController {
   private computerConfirm: ((allowed: boolean) => void) | null = null;
   /** Off shows a confirm card. On runs the action when the tool is called. */
   private autoRun = true;
+  private routineAccessibilityAutoRun = false;
   /** Duplex until capture reports otherwise, so desktop barge-in stays open. */
   private echo: EchoGate = duplexEchoGate();
   private echoKnown = false;
@@ -273,6 +274,10 @@ export class AssistantController {
   /** Auto runs confirming actions. Review waits for Confirm or Cancel. */
   setAutoRun(enabled: boolean): void {
     this.autoRun = enabled;
+  }
+
+  setRoutineAccessibilityAutoRun(enabled: boolean): void {
+    this.routineAccessibilityAutoRun = enabled;
   }
 
   getSnapshot(): AssistantSnapshot {
@@ -657,6 +662,7 @@ export class AssistantController {
   /** Closes the session and stops the microphone and playback. An unfinished line is kept as interrupted. */
   end(): void {
     this.haltComputer();
+    this.dispatch({ type:"toolActivity",activity:null });
     if (navigator.userAgent.includes("Windows")) {
       void invoke("accessibility_watch", {enabled:false}).catch(() => undefined);
     }
@@ -1306,7 +1312,7 @@ export class AssistantController {
           working: false,
         };
         // Camera photos can leave the device. Always require a review card.
-        if (this.autoRun && !["paste_camera_photo","accessibility_pattern_action","start_accessibility_watch"].includes(decision.name)) {
+        if (this.shouldAutoRun(decision)) {
           this.pending.working = true;
           const epoch = this.toolEpoch;
           await this.finishPending(this.pending, epoch);
@@ -1318,6 +1324,21 @@ export class AssistantController {
       this.toolDepth -= 1;
       if (this.toolDepth === 0 && this.memoryRestartPending) this.restartWithoutResume();
     }
+  }
+
+  private shouldAutoRun(decision: Extract<ToolDecision, {kind:"confirm"}>): boolean {
+    if (!this.autoRun) return false;
+    if (decision.name === "paste_camera_photo" || decision.name === "start_accessibility_watch") return false;
+    if (decision.name === "accessibility_pattern_action") {
+      if (!this.routineAccessibilityAutoRun) return false;
+      try {
+        const data = JSON.parse(decision.text) as {action:string};
+        return ["highlight","focus","scroll-up","scroll-down","scroll-left","scroll-right",
+          "scroll-into-view","expand","collapse","select","add-selection","remove-selection",
+          "minimize","maximize","restore","move","resize"].includes(data.action);
+      } catch { return false; }
+    }
+    return true;
   }
 
   private async runRemote(decision: Extract<ToolDecision, { kind: "remote" }>) {
@@ -1592,12 +1613,15 @@ export class AssistantController {
 
   private async finishPending(pending: ConfirmedTool, epoch: number) {
     // User-confirmed local actions do not require ownership of the shared transcript lease.
+    this.dispatch({ type:"toolActivity", activity:{ id:pending.id, label:pending.title, status:"running" } });
     try {
       const message = await this.execute(pending);
       if (epoch !== this.toolEpoch) return;
+       this.dispatch({type:"toolActivity", activity:{id:pending.id,label:pending.title,status:"completed"}});
        this.replyTool(pending.id, pending.name, true, message);
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
+      this.dispatch({type:"toolActivity", activity:{id:pending.id,label:pending.title,status:"failed"}});
       this.replyTool(pending.id, pending.name, false, toolFailure(error));
     } finally {
       if (epoch === this.toolEpoch && this.pending?.id === pending.id) {
