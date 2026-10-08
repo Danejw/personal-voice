@@ -101,6 +101,8 @@ pub fn run() {
             commands::invoke_accessible_control,
             #[cfg(windows)]
             commands::focus_accessible_control,
+            #[cfg(windows)]
+            commands::list_installed_apps,
             commands::open_allowlisted_app,
             commands::press_allowlisted_shortcut,
             commands::computer_capture,
