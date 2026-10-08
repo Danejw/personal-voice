@@ -201,7 +201,7 @@ begin
   delete from public.assistant_memory_sources where user_id=old.user_id and source_kind='asset' and source_record_id=old.id;
   return old;
  end if;
- perform public.assistant_memory_upsert_source(new.user_id,'asset',new.id,new.memory_id,'',
+ perform public.assistant_memory_upsert_source(new.user_id,'asset',new.id,new.memory_id,'Saved memory attachment (' || new.mime_type || ')',
    md5(new.storage_path || ':' || new.size_bytes::text || ':' || new.mime_type));
  return new;
 end;
@@ -225,7 +225,7 @@ begin
     from public.notes n join public.settings s on s.user_id=n.user_id
     where n.user_id=uid and s.assistant_semantic_search and s.assistant_recall_notes
    union all
-   select 'note_attachment',a.id,null::uuid,''::text,md5(a.storage_path||':'||a.size_bytes::text||':'||coalesce(a.mime_type,'')),a.created_at
+   select 'note_attachment',a.id,null::uuid,left(a.file_name,8000),md5(a.storage_path||':'||a.size_bytes::text||':'||coalesce(a.mime_type,'')),a.created_at
     from public.note_attachments a join public.notes n on n.id=a.note_id and n.user_id=a.user_id
     join public.settings s on s.user_id=a.user_id
     where a.user_id=uid and a.size_bytes<=7340032 and a.mime_type in
