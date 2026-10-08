@@ -441,6 +441,32 @@ describe("AssistantController", () => {
     expect(created.getSnapshot().selectionError).toBe(message);
   });
 
+  it("ends the live assistant session through a voice tool call", async () => {
+    vi.useFakeTimers();
+    const { created } = controller();
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [
+      { id: "end-1", name: "end_assistant_session", args: {} },
+    ] });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(created.getSnapshot().status).toBe("IDLE");
+    expect(session.closed).toBe(true);
+  });
+
+  it("requires explicit confirmation to paste a camera photo even in auto-run", async () => {
+    const { created } = controller();
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [
+      { id: "photo-1", name: "paste_camera_photo", args: { window: "ChatGPT - Google Chrome" } },
+    ] });
+    await settle();
+    expect(created.getSnapshot().pendingAction?.title).toMatch(/camera photo/i);
+    created.cancelPending();
+    expect(created.getSnapshot().pendingAction).toBeNull();
+  });
+
   it("copies without confirmation and returns the same function id", async () => {
     const { created } = controller();
     const used = toolActions();
