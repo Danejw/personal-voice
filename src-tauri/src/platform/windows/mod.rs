@@ -22,7 +22,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 pub use installed_apps::{list_installed_apps, open_start_menu_app, InstalledApp};
-pub use accessibility::{inspect_accessibility, invoke_focused_control, focus_accessible_control, AccessibilityContext};
+pub use accessibility::{inspect_accessibility, invoke_focused_control, focus_accessible_control, foreground_bounds, UiBounds, AccessibilityContext};
 pub use autostart::{launch_at_login, set_launch_at_login};
 pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_shortcut};
 pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
