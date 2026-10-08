@@ -50,6 +50,7 @@ create table public.assistant_memory_sources (
  attempts int not null default 0 check (attempts between 0 and 8),
  retry_after timestamptz,
  leased_until timestamptz,
+ lease_token uuid,
  updated_at timestamptz not null default now(),
  created_at timestamptz not null default now(),
  unique(user_id,source_kind,source_record_id),
@@ -164,7 +165,7 @@ begin
  values(p_uid,p_kind,p_id,p_memory,left(coalesce(p_text,''),8000),p_fingerprint)
  on conflict (user_id,source_kind,source_record_id)
  do update set search_text=excluded.search_text,memory_id=excluded.memory_id,
- fingerprint=excluded.fingerprint,state='pending',attempts=0,retry_after=null,leased_until=null,updated_at=now()
+ fingerprint=excluded.fingerprint,state='pending',attempts=0,retry_after=null,leased_until=null,lease_token=null,updated_at=now()
  where public.assistant_memory_sources.fingerprint is distinct from excluded.fingerprint
     or public.assistant_memory_sources.state='disabled';
 end;
@@ -254,12 +255,12 @@ begin
   order by s.created_at limit p_limit for update skip locked
  ), claimed as (
   update public.assistant_memory_sources s set state='processing',attempts=s.attempts+1,
-   leased_until=now()+interval '2 minutes',updated_at=now()
+   leased_until=now()+interval '2 minutes',lease_token=gen_random_uuid(),updated_at=now()
    from eligible e where s.id=e.id
    returning s.*
  )
  select coalesce(jsonb_agg(jsonb_build_object('id',c.id,'kind',c.source_kind,
-  'recordId',c.source_record_id,'text',c.search_text,'fingerprint',c.fingerprint,
+  'recordId',c.source_record_id,'text',c.search_text,'fingerprint',c.fingerprint,'leaseToken',c.lease_token,
   'assetPath',a.storage_path,'mimeType',a.mime_type)), '[]'::jsonb)
  into result from claimed c left join public.assistant_memory_assets a
    on c.source_kind='asset' and a.id=c.source_record_id and a.user_id=uid;
@@ -268,7 +269,7 @@ end;
 $$;
 
 create function public.assistant_memory_complete_embedding(p_user_id uuid,p_source_id uuid,p_fingerprint text,
- p_modality text,p_values text)
+ p_modality text,p_values text,p_lease_token uuid)
 returns boolean language plpgsql security definer set search_path='' as $$
 declare uid uuid; src public.assistant_memory_sources%rowtype; vec extensions.vector(1536);
 begin
@@ -277,14 +278,15 @@ begin
  select * into src from public.assistant_memory_sources
   where id=p_source_id and user_id=uid for update;
  if not found or src.state<>'processing' or src.leased_until<now()
-    or src.fingerprint<>p_fingerprint or not public.assistant_memory_source_allowed(uid,src.source_kind,src.source_record_id)
+    or src.fingerprint<>p_fingerprint or src.lease_token is distinct from p_lease_token
+    or not public.assistant_memory_source_allowed(uid,src.source_kind,src.source_record_id)
  then return false; end if;
  vec:=p_values::extensions.vector(1536);
  insert into public.assistant_memory_embeddings(user_id,source_id,modality,fingerprint,embedding)
  values(uid,src.id,p_modality,p_fingerprint,vec)
  on conflict(source_id,modality,chunk_index,model,dimensions)
  do update set embedding=excluded.embedding,fingerprint=excluded.fingerprint,created_at=now();
- update public.assistant_memory_sources set state='ready',leased_until=null,retry_after=null,updated_at=now() where id=src.id;
+ update public.assistant_memory_sources set state='ready',leased_until=null,lease_token=null,retry_after=null,updated_at=now() where id=src.id;
  insert into public.memory_graph_nodes(user_id,node_kind,source_id,label)
  values(uid,'source',src.id,left(coalesce(nullif(src.search_text,''),src.source_kind||' asset'),240))
  on conflict(user_id,source_id) where source_id is not null do update set label=excluded.label;
@@ -292,14 +294,14 @@ begin
 end;
 $$;
 
-create function public.assistant_memory_fail_embedding(p_user_id uuid,p_source_id uuid,p_fingerprint text)
+create function public.assistant_memory_fail_embedding(p_user_id uuid,p_source_id uuid,p_fingerprint text,p_lease_token uuid)
 returns void language plpgsql security definer set search_path='' as $$
 declare uid uuid;
 begin
  uid:=public.assistant_require_account(p_user_id);
- update public.assistant_memory_sources set state='error',leased_until=null,
+ update public.assistant_memory_sources set state='error',leased_until=null,lease_token=null,
   retry_after=now()+make_interval(secs=>least(3600, 15*power(2,least(attempts,7)))::int),updated_at=now()
- where user_id=uid and id=p_source_id and fingerprint=p_fingerprint and state='processing';
+ where user_id=uid and id=p_source_id and fingerprint=p_fingerprint and lease_token=p_lease_token and state='processing';
 end;
 $$;
 
@@ -367,15 +369,15 @@ $$;
 
 revoke all on function public.assistant_memory_queue_sources(uuid,int),
  public.assistant_memory_claim_batch(uuid,int),
- public.assistant_memory_complete_embedding(uuid,uuid,text,text,text),
- public.assistant_memory_fail_embedding(uuid,uuid,text),
+ public.assistant_memory_complete_embedding(uuid,uuid,text,text,text,uuid),
+ public.assistant_memory_fail_embedding(uuid,uuid,text,uuid),
  public.assistant_memory_link_nodes(uuid,uuid,uuid,text,uuid),
  public.search_assistant_memory_hybrid(uuid,text,text,int)
  from public,anon;
 grant execute on function public.assistant_memory_queue_sources(uuid,int),
  public.assistant_memory_claim_batch(uuid,int),
- public.assistant_memory_complete_embedding(uuid,uuid,text,text,text),
- public.assistant_memory_fail_embedding(uuid,uuid,text),
+ public.assistant_memory_complete_embedding(uuid,uuid,text,text,text,uuid),
+ public.assistant_memory_fail_embedding(uuid,uuid,text,uuid),
  public.assistant_memory_link_nodes(uuid,uuid,uuid,text,uuid),
  public.search_assistant_memory_hybrid(uuid,text,text,int)
  to authenticated;
