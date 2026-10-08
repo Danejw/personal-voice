@@ -662,9 +662,11 @@ textarea:focus {
 .hotkey-remove:hover:not(:disabled) { color: #f3a7a7; }
 .hotkey-remove:disabled { opacity: 0.35; cursor: default; }
 .hotkey-add { flex: none; }
-.hotkey-long-press select {
-  font: inherit; font-size: 11px; color: #e9edf4; background: #19232e;
-  border: 0; border-radius: 6px; padding: 3px 6px; cursor: pointer;
+.hotkey-long-press .select-field { width: 112px; }
+.hotkey-long-press .select-trigger { background: #19232e; padding: 5px 8px; font-size: 11px; }
+.hotkey-long-press .select-field-label {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 .record { font: inherit; font-size: 13px; font-weight: 600; color: #111820; background: #88d8c1; border: 0; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
 .record:hover:not(:disabled) { background: #a3e4d2; }
