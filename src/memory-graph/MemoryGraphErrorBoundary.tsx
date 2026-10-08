@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, type ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
@@ -19,7 +19,7 @@ export class MemoryGraphErrorBoundary extends Component<Props, State> {
     return { failed: true };
   }
 
-  componentDidCatch(error: Error, _info: ErrorInfo): void {
+  componentDidCatch(error: Error): void {
     // Never log graph payload, account records, or memory text.
     console.error("Memory visualization failed to render:", error.name);
   }
