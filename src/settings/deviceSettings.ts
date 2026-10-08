@@ -44,6 +44,8 @@ export interface DevicePreferences {
   assistantProfile: boolean;
   /** Assistant runs confirming actions without a card. Off means review each one. */
   assistantAutoRun: boolean;
+  /** Opt-in: automatically perform reversible UIA navigation/window actions. */
+  assistantAutoApproveRoutine: boolean;
   /** This PC may run an allowlisted action asked by another owned device. */
   remoteComputerActions: boolean;
   /**
@@ -129,6 +131,7 @@ function fromLegacy(storage: KeyValueStorage): DevicePreferences {
     remoteReads: false,
     assistantProfile: true,
     assistantAutoRun: true,
+    assistantAutoApproveRoutine: false,
     remoteComputerActions: false,
     remoteDictation: true,
     remoteDictationTargetDeviceId: null,
@@ -165,6 +168,7 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
       remoteReads: fields.remoteReads === true,
       assistantProfile: fields.assistantProfile !== false,
       assistantAutoRun: fields.assistantAutoRun !== false,
+      assistantAutoApproveRoutine: fields.assistantAutoApproveRoutine === true,
       remoteComputerActions: fields.remoteComputerActions === true,
       // Absence means ON. Do not use === true.
       remoteDictation: fields.remoteDictation !== false,
@@ -380,4 +384,12 @@ export function loadAutoUpdate(storage: KeyValueStorage = localStorage, deviceId
 
 export function saveAutoUpdate(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
   write(storage, scope(deviceId), { autoUpdate: enabled });
+}
+
+/** Stored per device and OFF until explicitly enabled. */
+export function loadAssistantAutoApproveRoutine(storage: KeyValueStorage = localStorage, deviceId?: string | null): boolean {
+  return read(storage, scope(deviceId)).assistantAutoApproveRoutine;
+}
+export function saveAssistantAutoApproveRoutine(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), {assistantAutoApproveRoutine: enabled});
 }
