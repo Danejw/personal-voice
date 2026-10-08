@@ -1196,6 +1196,11 @@ export class AssistantController {
           this.replyTool(decision.id, decision.name, false, decision.message);
           continue;
         }
+        // Track every async tool while it is executing, including read-only and remote calls.
+        // The popup may delay showing fast operations, but never invents success.
+        const activityId = decision.id;
+        this.dispatch({type:"toolActivity",activity:{id:activityId,title:decision.name.replaceAll("_"," ")}});
+        try {
         if (decision.kind === "copy") {
           await this.runCopy(decision);
           continue;
@@ -1313,6 +1318,11 @@ export class AssistantController {
           continue;
         }
         this.dispatch({ type: "setPending", pending: pendingCard(this.pending) });
+        } finally {
+          if (this.snapshot.toolActivity?.id === activityId) {
+            this.dispatch({type:"toolActivity",activity:null});
+          }
+        }
       }
     } finally {
       this.toolDepth -= 1;
