@@ -123,6 +123,7 @@ pub async fn invoke_accessible_control(app: AppHandle, expected_name: String) ->
     result
 }
 
+#[cfg(windows)]
 #[tauri::command]
 pub async fn inspect_accessibility(app: AppHandle) -> Result<platform::AccessibilityContext, String> {
     let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
