@@ -27,7 +27,7 @@ const ACCEPTED_MIME: Record<string, "image" | "audio" | "video" | "pdf"> = {
 
 type Item = {
   id: string; kind: "memory" | "note" | "message" | "dictation" | "asset";
-  fingerprint: string; text: string;
+  fingerprint: string; text: string; leaseToken: string;
   assetPath?: string | null; mimeType?: string | null;
 };
 function reply(status: number, data: Record<string, unknown>): Response {
@@ -156,7 +156,7 @@ async function indexBatch(uid: string, auth: string, apiKey: string): Promise<Re
   for (const raw of batch) {
     const item = raw as Item;
     try {
-      if (typeof item.id !== "string" || typeof item.fingerprint !== "string") throw new Error("Malformed memory job.");
+      if (typeof item.id !== "string" || typeof item.fingerprint !== "string" || typeof item.leaseToken !== "string") throw new Error("Malformed memory job.");
       const media = item.kind === "asset"
         ? await attachment(item, auth, apiKey)
         : { modality: "text" as const, part: {
@@ -165,7 +165,7 @@ async function indexBatch(uid: string, auth: string, apiKey: string): Promise<Re
       const vector = await embed(media.part);
       const committed = await rpc("assistant_memory_complete_embedding", {
         p_user_id: uid, p_source_id: item.id, p_fingerprint: item.fingerprint,
-        p_modality: media.modality, p_values: JSON.stringify(vector),
+        p_modality: media.modality, p_values: JSON.stringify(vector), p_lease_token: item.leaseToken,
       }, auth, apiKey);
       if (committed === true) {
         done++;
@@ -175,7 +175,7 @@ async function indexBatch(uid: string, auth: string, apiKey: string): Promise<Re
       failed++;
       if (typeof item?.id === "string" && typeof item?.fingerprint === "string") {
         await rpc("assistant_memory_fail_embedding", {
-          p_user_id: uid, p_source_id: item.id, p_fingerprint: item.fingerprint,
+          p_user_id: uid, p_source_id: item.id, p_fingerprint: item.fingerprint, p_lease_token: item.leaseToken,
         }, auth, apiKey).catch(() => undefined);
       }
       console.error("memory-embed: one source failed", error instanceof Error ? error.message : "Unknown error");
