@@ -34,7 +34,7 @@ pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
 pub use hook::{set_active as set_dictation_active, set_paused};
 pub use insert::{capture_selection, finish_pending_restore, insert_text, insert_camera_image};
 pub use live_text::live_dictation_text;
-pub use snapshot::capture_snapshot;
+pub use snapshot::{capture_snapshot, capture_pointer_snapshot};
 pub use pointer_context::{pointer_position, inspect_pointer_context, PointerPosition, PointerContext};
 pub use windows_info::{describe_windows, activate_window};
 
