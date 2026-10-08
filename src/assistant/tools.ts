@@ -181,6 +181,11 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
+      name: "inspect_accessible_elements",
+      description: "List accessible controls, names, bounding rectangles and supported patterns in the active Windows application. Read-only. Use before choosing a uniquely named UIA target.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
       name: "list_windows",
       description: "Read visible Windows application window titles to navigate between them.",
       parameters: { type: "object", properties: {} },
@@ -346,6 +351,7 @@ export type ToolDecision =
   | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
   | { kind: "selection"; id: string; name: "capture_selection" }
   | { kind: "accessibility"; id: string; name: "inspect_active_app" }
+  | { kind: "elements"; id: string; name: "inspect_accessible_elements" }
   | { kind: "windows"; id: string; name: "list_windows" }
   | { kind: "apps"; id: string; name: "list_installed_apps" }
   | { kind: "snippets"; id: string; name: "list_snippets" }
@@ -424,6 +430,8 @@ export function decideToolCall(
       return { kind: "accessibility", id: call.id, name: "inspect_active_app" };
     case "capture_selection":
       return { kind: "selection", id: call.id, name: "capture_selection" };
+    case "inspect_accessible_elements":
+      return { kind: "elements", id: call.id, name: "inspect_accessible_elements" };
     case "list_windows":
       return { kind: "windows", id: call.id, name: "list_windows" };
     case "list_installed_apps":
