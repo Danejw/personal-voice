@@ -91,6 +91,7 @@ describe("assistant setup and typed turns", () => {
       "press_shortcut",
       "supervise_screen",
       "list_memories",
+      "search_memory",
       "remember_memory",
       "change_memory",
       "forget_memory",

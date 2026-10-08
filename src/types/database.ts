@@ -417,6 +417,9 @@ export type Database = {
         Row: {
           assistant_learning_since: string | null
           assistant_memory_learning: boolean
+          assistant_semantic_search: boolean
+          assistant_recall_notes: boolean
+          assistant_recall_dictations: boolean
           cloud_dictation_history: boolean
           language: string | null
           smart_transcription: boolean
@@ -428,6 +431,9 @@ export type Database = {
         Insert: {
           assistant_learning_since?: string | null
           assistant_memory_learning?: boolean
+          assistant_semantic_search?: boolean
+          assistant_recall_notes?: boolean
+          assistant_recall_dictations?: boolean
           cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
@@ -439,6 +445,9 @@ export type Database = {
         Update: {
           assistant_learning_since?: string | null
           assistant_memory_learning?: boolean
+          assistant_semantic_search?: boolean
+          assistant_recall_notes?: boolean
+          assistant_recall_dictations?: boolean
           cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
@@ -635,6 +644,39 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_memory_assets: {
+        Row: {
+          id: string
+          user_id: string
+          memory_id: string
+          bucket: string
+          storage_path: string
+          mime_type: string
+          size_bytes: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          memory_id: string
+          bucket?: string
+          storage_path: string
+          mime_type: string
+          size_bytes: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          memory_id?: string
+          bucket?: string
+          storage_path?: string
+          mime_type?: string
+          size_bytes?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       assistant_memories: {
         Row: {
           category: string | null
@@ -742,6 +784,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_assistant_memory_graph: {
+        Args: {
+          p_user_id: string
+          p_limit?: number
+        }
+        Returns: Json
+      }
       compact_insight_run: {
         Args: {
           p_keep_newest?: number

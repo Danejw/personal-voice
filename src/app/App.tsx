@@ -8,6 +8,8 @@ import { AssistantConversationStore } from "@/assistant/AssistantConversationSto
 import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
 import { MemoryPanel } from "@/assistant/MemoryPanel";
+import { MemoryGraphPanel } from "@/memory-graph/MemoryGraphPanel";
+import { MemoryGraphErrorBoundary } from "@/memory-graph/MemoryGraphErrorBoundary";
 import { useAssistantMemory } from "@/assistant/useAssistantMemory";
 import { AssistantController } from "@/assistant/AssistantController";
 import { AssistantHeader, AssistantPanel } from "@/assistant/AssistantPanel";
@@ -65,6 +67,7 @@ import { WindowsBehaviorPanel } from "@/platform/windows/WindowsBehaviorPanel";
 import { assistantConversationsApi } from "@/services/assistantConversationsService";
 import { assistantMemoriesApi } from "@/services/assistantMemoriesService";
 import { requestMemoryLearn } from "@/services/memoryLearnService";
+import { indexNextMemoryBatch, memorySearchToolText, searchPersonalMemory } from "@/services/personalMemoryService";
 import { deviceApi } from "@/services/deviceService";
 import { dictationsApi } from "@/services/dictationsService";
 import { remoteContextApi } from "@/services/remoteContextService";
@@ -183,7 +186,12 @@ const assistantMemory = new AssistantMemoryStore(
   assistantMemoriesApi,
   localStorage,
   supabaseMemoryFeed(),
-  (rows) => assistant.setMemories(rows),
+  (rows) => {
+    assistant.setMemories(rows);
+    if (rows.some((row) => row.status === "active")) {
+      void indexNextMemoryBatch().catch(() => undefined);
+    }
+  },
   () => assistantLibrary.getSnapshot().currentId,
 );
 assistantLibrary.setOnUserSaved(() => {
@@ -375,6 +383,7 @@ assistant.setActions({
   deleteVoiceNote: (id) => notesStore.remove(id),
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
+  searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
   rememberMemory: (input) => assistantMemory.remember(input.kind, input.key, input.value),
   changeMemory: (input) => assistantMemory.change(input.key, input.value),
   forgetMemory: (key) => assistantMemory.forget(key),
@@ -1141,6 +1150,20 @@ export default function App() {
             <TransformPanel store={transformStore} snapshot={transforms} />
           </section>
         </div>
+
+        {section === "memory-graph" && (
+          <div className="panel-stack memory-graph-section">
+            <section aria-label="Interactive personal memory network" className="page-panel">
+              <MemoryGraphErrorBoundary onBack={() => setSection("assistant")}>
+                <MemoryGraphPanel
+                  userId={auth.userId}
+                  active={section === "memory-graph"}
+                  onNavigate={(next) => setSection(next)}
+                />
+              </MemoryGraphErrorBoundary>
+            </section>
+          </div>
+        )}
 
         <div className="panel-stack" hidden={section !== "assistant"}>
           <section aria-labelledby="page-title" className="page-panel">

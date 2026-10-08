@@ -109,6 +109,7 @@ export interface AssistantActions {
   dismissHandoff(id: string): Promise<void>;
   /** Active and forgotten memories for this account. */
   listMemories(): Promise<string>;
+  searchMemory(query: string): Promise<string>;
   rememberMemory(input: { key: string; kind: "preference" | "fact"; value: string }): Promise<string>;
   changeMemory(input: { key: string; value: string }): Promise<string>;
   forgetMemory(key: string): Promise<string>;
@@ -242,6 +243,7 @@ export class AssistantController {
       deleteVoiceNote: unavailable,
       dismissHandoff: unavailable,
       listMemories: async () => { throw new Error("Assistant actions are not available."); },
+      searchMemory: async () => { throw new Error("Memory search is not configured."); },
       rememberMemory: async () => { throw new Error("Assistant actions are not available."); },
       changeMemory: async () => { throw new Error("Assistant actions are not available."); },
       forgetMemory: async () => { throw new Error("Assistant actions are not available."); },
@@ -1265,6 +1267,10 @@ export class AssistantController {
           await this.runMemories(decision);
           continue;
         }
+        if (decision.kind === "memorySearch") {
+          await this.runMemorySearch(decision);
+          continue;
+        }
         if (decision.kind === "handoffs") {
           await this.runHandoffs(decision);
           continue;
@@ -1541,6 +1547,18 @@ export class AssistantController {
       const text = await this.actions.listMemories();
       if (epoch !== this.toolEpoch) return;
       this.replyTool(decision.id, decision.name, true, text);
+    } catch (error) {
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runMemorySearch(decision: Extract<ToolDecision, { kind: "memorySearch" }>) {
+    const epoch = this.toolEpoch;
+    try {
+      const text = await this.actions.searchMemory(decision.query);
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, true, text.slice(0, 6500));
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
       this.replyTool(decision.id, decision.name, false, toolFailure(error));
