@@ -81,6 +81,9 @@ export interface AssistantActions {
   insertText(text: string): Promise<void>;
   createVoiceNote(text: string): Promise<void>;
   editVoiceNote(id: string, text: string): Promise<void>;
+  listSnippets(): Promise<string>;
+  createSnippet(trigger: string, content: string): Promise<void>;
+  updateSnippet(id: string, trigger: string, content: string): Promise<void>;
   sendRemoteDictation(text: string, device: string): Promise<void>;
   createTransform(name: string, instruction: string): Promise<void>;
   addDictionaryWord(word: string): Promise<void>;
@@ -220,6 +223,9 @@ export class AssistantController {
       insertText: unavailable,
       createVoiceNote: unavailable,
       editVoiceNote: unavailable,
+      listSnippets: async () => { throw new Error("Snippets unavailable."); },
+      createSnippet: unavailable,
+      updateSnippet: unavailable,
       sendRemoteDictation: unavailable,
       createTransform: unavailable,
       addDictionaryWord: unavailable,
@@ -1204,6 +1210,10 @@ export class AssistantController {
           await this.runSelection(decision);
           continue;
         }
+        if (decision.kind === "snippets") {
+          await this.runSnippets(decision);
+          continue;
+        }
         if (decision.kind === "dashboard") {
           await this.runDashboard(decision);
           continue;
@@ -1377,6 +1387,16 @@ export class AssistantController {
     }
   }
 
+  private async runSnippets(decision: Extract<ToolDecision, { kind: "snippets" }>) {
+    const epoch = this.toolEpoch;
+    try {
+      const result = await this.actions.listSnippets();
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, result.slice(0, 8000));
+    } catch (error) {
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
   private async runDashboard(decision: Extract<ToolDecision, { kind: "dashboard" }>) {
     const epoch = this.toolEpoch;
     try {
@@ -1503,6 +1523,16 @@ export class AssistantController {
       case "insert_text":
         await this.actions.insertText(pending.text);
         return "Inserted the text into the focused app.";
+      case "create_snippet":
+      case "update_snippet": {
+        const input = JSON.parse(pending.text) as {id: string | null; trigger: string; content: string};
+        if (pending.name === "create_snippet") await this.actions.createSnippet(input.trigger, input.content);
+        else {
+          if (!input.id) throw new Error("Snippet id required.");
+          await this.actions.updateSnippet(input.id, input.trigger, input.content);
+        }
+        return pending.name === "create_snippet" ? "Created the snippet." : "Updated the snippet.";
+      }
       case "send_remote_dictation": {
         const input = JSON.parse(pending.text) as {text: string; device: string};
         await this.actions.sendRemoteDictation(input.text, input.device);
