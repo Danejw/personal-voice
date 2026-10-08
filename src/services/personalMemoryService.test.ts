@@ -43,6 +43,7 @@ describe("1536-dimensional personal memory service", () => {
       relations: [{ relation: "related_to", relatedSourceId: "s2" }],
     });
     const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    if (!call) throw new Error('Expected a memory service request.');
     expect(call[0]).toBe("https://test.supabase.co/functions/v1/memory-embed");
     const req = call[1] as RequestInit;
     expect(JSON.parse(req.body as string)).toEqual({ action: "search", query: "project context" });
