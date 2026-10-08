@@ -200,7 +200,7 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "accessibility_pattern_action",
-      description: "Windows only. Execute a verified UI Automation action on an element path from inspect_accessibility_tree. Requires explicit confirmation. Supported actions: focus, invoke, toggle, select, add-selection, remove-selection, expand, collapse, scroll-into-view, realize, set-value, set-range, minimize, maximize, restore, move, resize. Must supply exact window, path, name, automationId and controlType from latest inspection. For set-value give text; for set-range give number; move/resize give text 'x,y'. Never use for passwords, payments, OS settings or irreversible submissions.",
+      description: "Windows only. Execute a verified UI Automation action on an element path from inspect_accessibility_tree. Requires explicit confirmation. Supported actions: highlight, focus, invoke, toggle, scroll-up, scroll-down, scroll-left, scroll-right, select, add-selection, remove-selection, expand, collapse, scroll-into-view, realize, set-value, set-range, minimize, maximize, restore, move, resize. Must supply exact window, path, name, automationId and controlType from latest inspection. For set-value give text; for set-range give number; move/resize give text 'x,y'. Never use for passwords, payments, OS settings or irreversible submissions.",
       parameters: { type: "object", properties: {
         window: {type:"string"}, path: {type:"string"}, name: {type:"string"},
         automationId: {type:"string"}, controlType: {type:"integer"},
@@ -525,7 +525,7 @@ export function decideToolCall(
     case "start_accessibility_watch":
       return confirm(call.id, "start_accessibility_watch", "", "Start local Windows accessibility monitoring", null, null);
     case "accessibility_pattern_action": {
-      const operations = ["focus","invoke","toggle","select","add-selection","remove-selection",
+      const operations = ["highlight","focus","scroll-up","scroll-down","scroll-left","scroll-right","invoke","toggle","select","add-selection","remove-selection",
         "expand","collapse","scroll-into-view","realize","set-value","set-range",
         "minimize","maximize","restore","move","resize"];
       if (typeof args.window !== "string" || !args.window.trim() || args.window.length > 240 ||
