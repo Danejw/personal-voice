@@ -139,6 +139,11 @@ export function assistantFunctionDeclarations() {
       parameters: { type: "object", properties: {} },
     },
     {
+      name: "inspect_pointer_context",
+      description: "Windows only. Read what the mouse currently points to: screen coordinates, window name, accessible control, and selected text if supported. Use this whenever the user says 'this', 'that', 'over here', 'where I am pointing', or asks about an item under their cursor. Read-only, no mouse movement, clicks, or screenshots. Some graphical controls cannot be identified, so use capture_screen on request if the result is position-only. Do not guess.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
       name: "inspect_active_app",
       description: "Windows only. When the user asks what is visible or to read the active app, inspect its accessible text without a screenshot. This is on-demand and read-only. Do not claim access to content not returned.",
       parameters: { type: "object", properties: {} },
@@ -411,6 +416,7 @@ export type ToolDecision =
   | { kind: "cameraStart"; id: string; name: "start_camera_context"; facing: CameraFacing }
   | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
   | { kind: "selection"; id: string; name: "capture_selection" }
+  | { kind: "pointer"; id: string; name: "inspect_pointer_context" }
   | { kind: "accessibility"; id: string; name: "inspect_active_app" }
   | { kind: "tree"; id: string; name: "inspect_accessibility_tree"; filter: string; maxResults: number }
   | { kind: "watchStop"; id: string; name: "stop_accessibility_watch" }
@@ -498,6 +504,8 @@ export function decideToolCall(
       return { kind: "accessibility", id: call.id, name: "inspect_active_app" };
     case "capture_selection":
       return { kind: "selection", id: call.id, name: "capture_selection" };
+    case "inspect_pointer_context":
+      return { kind: "pointer", id: call.id, name: "inspect_pointer_context" };
     case "inspect_accessibility_tree": {
       const filter = typeof args.filter === "string" ? args.filter.trim() : "";
       const maxResults = typeof args.maxResults === "number" ? Math.floor(args.maxResults) : 45;
