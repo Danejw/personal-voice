@@ -6,8 +6,8 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
 };
 use windows::Win32::UI::Accessibility::{
-    CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTextPattern,
-    IUIAutomationValuePattern, UIA_TextPatternId, UIA_ValuePatternId,
+    CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationInvokePattern, IUIAutomationTextPattern,
+    IUIAutomationValuePattern, UIA_InvokePatternId, UIA_TextPatternId, UIA_ValuePatternId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
 
@@ -118,6 +118,40 @@ pub fn inspect_accessibility() -> Result<AccessibilityContext, String> {
             status: if text.is_some() { "text-available" } else { "metadata-only" },
             text,
         })
+    })();
+    unsafe { CoUninitialize() };
+    result
+}
+
+/** Invoke the currently focused accessible control, only when its name matches.
+ * This cannot click arbitrary coordinates, type into a field, or call a shell.
+ */
+pub fn invoke_focused_control(expected_name: &str) -> Result<String, String> {
+    if expected_name.trim().is_empty() || expected_name.chars().count() > 280 {
+        return Err("Provide the exact focused control name.".into());
+    }
+    unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
+        .ok().map_err(|e| format!("Accessibility initialization failed: {e}"))?;
+    let result = (|| -> Result<String, String> {
+        let automation: IUIAutomation = unsafe {
+            CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+        }.map_err(|e| format!("UI Automation unavailable: {e}"))?;
+        let element = unsafe { automation.GetFocusedElement() }
+            .map_err(|e| format!("No focused accessibility element: {e}"))?;
+        if unsafe { element.CurrentIsPassword() }.map(|v| v.as_bool()).unwrap_or(true) {
+            return Err("Protected controls cannot be invoked.".into());
+        }
+        let name = unsafe { element.CurrentName() }
+            .map_err(|e| format!("Control name unavailable: {e}"))?.to_string();
+        if name != expected_name {
+            return Err(format!("Focus changed. Expected '{expected_name}', found '{name}'."));
+        }
+        let pattern = unsafe { element.GetCurrentPattern(UIA_InvokePatternId) }
+            .map_err(|_| "Focused control does not support InvokePattern.".to_string())?
+            .cast::<IUIAutomationInvokePattern>()
+            .map_err(|e| format!("Cannot invoke control: {e}"))?;
+        unsafe { pattern.Invoke() }.map_err(|e| format!("Invocation failed: {e}"))?;
+        Ok(format!("Invoked accessible control '{name}'."))
     })();
     unsafe { CoUninitialize() };
     result
