@@ -95,6 +95,8 @@ pub fn run() {
             commands::capture_selection,
             commands::capture_snapshot,
             commands::describe_windows,
+            #[cfg(windows)]
+            commands::inspect_accessibility,
             commands::open_allowlisted_app,
             commands::press_allowlisted_shortcut,
             commands::computer_capture,
