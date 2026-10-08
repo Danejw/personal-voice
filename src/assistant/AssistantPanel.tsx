@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ConversationBar } from "@/assistant/ConversationBar";
+import { SelectField } from "@/components/SelectField";
 import type { AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 import { selectionPreview } from "@/assistant/selectionContext";
 import { cameraContextPreviewUrl } from "@/assistant/cameraPhoto";
@@ -324,10 +325,17 @@ export function AssistantPanel({
                     setPhotoWindow((current) => windows.includes(current) ? current : "");
                   }).catch((error: unknown) => setPhotoNotice(String(error)));
                 }}>Find open windows</button>
-                <select aria-label="Photo destination window" value={photoWindow} onChange={(event) => setPhotoWindow(event.target.value)}>
-                  <option value="">Select destination window</option>
-                  {photoWindows.map((title) => <option key={title} value={title}>{title}</option>)}
-                </select>
+                <SelectField
+                  label="Photo destination window"
+                  layout="stack"
+                  value={photoWindow}
+                  options={[
+                    { value: "", label: "Select destination window" },
+                    ...photoWindows.map((title) => ({ value: title, label: title })),
+                  ]}
+                  disabled={photoSending || photoWindows.length === 0}
+                  onChange={setPhotoWindow}
+                />
                 <button type="button" className="secondary" disabled={!photoWindow || photoSending} onClick={() => {
                   setPhotoSending(true);
                   setPhotoNotice(null);
