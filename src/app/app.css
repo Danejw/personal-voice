@@ -72,8 +72,13 @@ h1 { font-size: 15px; line-height: 1.2; font-weight: 600; margin: 0; }
 }
 /* Indicator window is tiny until tip-space expands; keep tips readable. */
 html.indicator-view .app-tooltip {
-  max-width: 200px;
-  white-space: nowrap;
+  /* The native tray reserves 220px for side tips, including the gap. */
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(200px, calc(100vw - 70px));
+  max-height: calc(100vh - 16px);
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .app-tooltip.is-left::after,
 .app-tooltip.is-right::after {
@@ -939,7 +944,11 @@ html.indicator-view #root {
 .overlay-dock {
   box-sizing: border-box;
   width: 100%;
-  height: 100%;
+  /* Keep the buttons anchored as the HWND adds transparent room above them for tips. */
+  height: 194px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -947,6 +956,7 @@ html.indicator-view #root {
   padding-right: 6px;
   gap: 6px;
 }
+.overlay-dock.has-confirmation { height: 270px; }
 .overlay-dock.is-tip-right {
   align-items: flex-start;
   padding-right: 0;
