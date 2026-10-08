@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { cameraPhotoToDibBase64 } from "@/assistant/cameraPhotoClipboard";
+import { requiresExplicitToolApproval } from "@/assistant/approvalPolicy";
 import {
   screenOmittedText,
   type AssistantContinuation,
@@ -205,6 +206,7 @@ export class AssistantController {
   private computerConfirm: ((allowed: boolean) => void) | null = null;
   /** Off shows a confirm card. On runs the action when the tool is called. */
   private autoRun = true;
+  private autoApproveRoutineAccessibility = false;
   /** Duplex until capture reports otherwise, so desktop barge-in stays open. */
   private echo: EchoGate = duplexEchoGate();
   private echoKnown = false;
@@ -273,6 +275,11 @@ export class AssistantController {
   /** Auto runs confirming actions. Review waits for Confirm or Cancel. */
   setAutoRun(enabled: boolean): void {
     this.autoRun = enabled;
+  }
+
+  /** Opt-in for reversible UIA navigation/window actions, never form submit or outbound data. */
+  setAutoApproveRoutineAccessibility(enabled: boolean): void {
+    this.autoApproveRoutineAccessibility = enabled;
   }
 
   getSnapshot(): AssistantSnapshot {
@@ -1311,7 +1318,7 @@ export class AssistantController {
           working: false,
         };
         // Camera photos can leave the device. Always require a review card.
-        if (this.autoRun && !["paste_camera_photo","accessibility_pattern_action","start_accessibility_watch"].includes(decision.name)) {
+        if (this.autoRun && !requiresExplicitToolApproval(decision.name, decision.text, this.autoApproveRoutineAccessibility)) {
           this.pending.working = true;
           const epoch = this.toolEpoch;
           await this.finishPending(this.pending, epoch);
