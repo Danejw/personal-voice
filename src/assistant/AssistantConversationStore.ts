@@ -106,6 +106,8 @@ export class AssistantConversationStore {
   private snapshot: AssistantLibrarySnapshot = EMPTY;
   private listeners = new Set<() => void>();
   private userId: string | null = null;
+  private initializing: Promise<void> = Promise.resolve();
+  private producing: Promise<void> | null = null;
   private generation = 0;
   private currentId: string | null = null;
   private conversations: AssistantLibraryConversation[] = [];
@@ -191,7 +193,13 @@ export class AssistantConversationStore {
    * Follows the signed-in account. Call this after the live session has already ended,
    * so the last unfinished line is saved on the account that spoke it.
    */
-  async setUser(userId: string | null): Promise<void> {
+  setUser(userId: string | null): Promise<void> {
+    const task = this.hydrateUser(userId);
+    this.initializing = task;
+    return task;
+  }
+
+  private async hydrateUser(userId: string | null): Promise<void> {
     this.generation += 1;
     const generation = this.generation;
     this.userId = userId;
@@ -233,6 +241,12 @@ export class AssistantConversationStore {
     this.feedStop = this.feed.subscribe(userId, () => this.scheduleCatchUp());
     await this.reloadList(userId, generation);
     if (!this.sameAccount(userId, generation)) return;
+    // A different device may have the most recent thread. Prefer it only when this
+    // device has not already saved an explicit selection or new-thread intent.
+    if (!this.currentId && this.conversations.length) {
+      this.currentId = this.conversations[0]!.id;
+      writeOpenConversation(this.storage, userId, this.currentId);
+    }
     if (this.currentId) await this.load(this.currentId, generation);
     if (this.sameAccount(userId, generation)) void this.flush();
   }
@@ -257,7 +271,16 @@ export class AssistantConversationStore {
    * Claims the conversation and then starts the microphone.
    * Opening a thread does not call this. Continue here is the explicit takeover.
    */
-  async produce(): Promise<void> {
+  produce(): Promise<void> {
+    if (this.producing) return this.producing;
+    const task = this.produceLoaded();
+    this.producing = task;
+    void task.finally(() => { if (this.producing === task) this.producing = null; }).catch(() => undefined);
+    return task;
+  }
+
+  private async produceLoaded(): Promise<void> {
+    await this.initializing;
     const userId = this.userId;
     if (!userId) return;
     if (!this.currentId) this.startThread();
