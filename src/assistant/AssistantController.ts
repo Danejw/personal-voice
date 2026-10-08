@@ -1550,9 +1550,18 @@ export class AssistantController {
       return await runComputerTask(goal, {
         now: () => Date.now(),
         stopped: () => this.computerStopped,
-        capture: () => this.actions.computer.capture(),
+        capture: async () => {
+          if (navigator.userAgent.includes("Windows")) await invoke("hide_computer_visual").catch(() => undefined);
+          return this.actions.computer.capture();
+        },
         propose: (body) => this.actions.computer.propose(body),
-        execute: (call, image) => this.actions.computer.execute(call, image),
+        execute: async (call, image) => {
+          const result = await this.actions.computer.execute(call, image);
+          if (navigator.userAgent.includes("Windows")) {
+            await invoke("show_computer_visual", {label: call.name, phase: "complete"}).catch(() => undefined);
+          }
+          return result;
+        },
         confirm: (explanation) => this.confirmComputerStep(explanation),
       });
     } finally {
@@ -1560,6 +1569,7 @@ export class AssistantController {
       this.computerStopped = true;
       this.dispatch({ type: "computer", running: false, prompt: null });
       await this.actions.computer.restore().catch(() => undefined);
+      if (navigator.userAgent.includes("Windows")) await invoke("hide_computer_visual").catch(() => undefined);
     }
   }
 
