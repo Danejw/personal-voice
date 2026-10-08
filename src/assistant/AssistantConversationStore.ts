@@ -476,7 +476,11 @@ export class AssistantConversationStore {
       if ((this.titles.get(id) ?? null) === seenTitle) this.titles.set(id, conversation.title);
       this.ensured.add(id);
       this.offlineCopy = false;
-      this.observeLease(conversation);
+      // A delayed GET may carry an older fence than our successful takeover.
+      // Never let stale reads revoke an actively held producer lease.
+      if (!(this.holding && this.fence !== null && conversation.fence < this.fence)) {
+        this.observeLease(conversation);
+      }
       const pending = this.pending.filter((entry) => {
         if (entry.userId !== userId || entry.conversationId !== id) return false;
         if (entry.message.role === "user") return true;
@@ -863,6 +867,10 @@ export class AssistantConversationStore {
       this.holding = true;
       this.fence = conversation.fence;
       this.expiresAt = conversation.leaseExpiresAt;
+      return;
+    }
+    if (this.holding && this.fence !== null && conversation.fence < this.fence) {
+      // Out-of-order feed / refresh result after this device took ownership.
       return;
     }
     if (this.holding) this.loseLease();
