@@ -32,6 +32,30 @@ pub fn hide_computer_visual(app: AppHandle) {
 #[cfg(windows)]
 #[cfg(windows)]
 #[tauri::command]
+pub async fn uia_control_action(app: AppHandle, action: String, expected_name: String, value: Option<String>) -> Result<String, String> {
+    let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
+    window.hide().map_err(|e| e.to_string())?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(std::time::Duration::from_millis(180));
+        platform::control_action(&action, &expected_name, value.as_deref())
+    }).await.map_err(|e| e.to_string()).and_then(|v| v);
+    let _ = window.show();
+    if let Some(bounds) = platform::foreground_bounds() {
+        visual_target(&app, bounds, if result.is_ok() { "UIA action completed" } else { "UIA action failed" },
+            if result.is_ok() { "complete" } else { "error" });
+    }
+    result
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub async fn activate_accessible_window(title: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || platform::activate_window(&title))
+        .await.map_err(|e| e.to_string())?
+}
+
+#[cfg(windows)]
+#[tauri::command]
 pub async fn list_installed_apps() -> Result<Vec<platform::InstalledApp>, String> {
     tauri::async_runtime::spawn_blocking(platform::list_installed_apps)
         .await.map_err(|e| e.to_string())
