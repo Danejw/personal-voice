@@ -1585,11 +1585,21 @@ export class AssistantController {
         },
         propose: (body) => this.actions.computer.propose(body),
         execute: async (call, image) => {
-          const result = await this.actions.computer.execute(call, image);
           if (navigator.userAgent.includes("Windows")) {
-            await invoke("show_computer_visual", {label: call.name, phase: "complete"}).catch(() => undefined);
+            await invoke("show_computer_visual", { label: `Running ${call.name}`, phase: "action" }).catch(() => undefined);
           }
-          return result;
+          try {
+            const result = await this.actions.computer.execute(call, image);
+            if (navigator.userAgent.includes("Windows")) {
+              await invoke("show_computer_visual", { label: `Completed ${call.name}`, phase: "complete" }).catch(() => undefined);
+            }
+            return result;
+          } catch (error) {
+            if (navigator.userAgent.includes("Windows")) {
+              await invoke("show_computer_visual", { label: `Failed ${call.name}`, phase: "error" }).catch(() => undefined);
+            }
+            throw error;
+          }
         },
         confirm: (explanation) => this.confirmComputerStep(explanation),
       });
