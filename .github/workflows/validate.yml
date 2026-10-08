@@ -2,7 +2,7 @@ name: Validate
 
 on:
   push:
-    branches: [main, feature/windows-accessibility-v3-pr17]
+    branches: [main]
   pull_request:
     branches: [main]
 
