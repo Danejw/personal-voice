@@ -35,6 +35,7 @@ use crate::platform::TargetApp;
 use super::hook::SYNTHETIC_INPUT_MARK;
 
 const CF_UNICODETEXT: u32 = 13;
+const CF_DIB: u32 = 8;
 /// Long enough for Chromium/Electron apps to read or write the clipboard asynchronously.
 const PASTE_SETTLE: Duration = Duration::from_millis(400);
 const COPY_SETTLE: Duration = PASTE_SETTLE;
@@ -82,6 +83,90 @@ pub fn insert_text(text: &str) -> Result<Option<TargetApp>, String> {
         restore(&previous, ours);
     }));
     pasted.map(|()| target)
+}
+
+/// Paste a real bitmap into a user-selected field on another app.
+pub fn insert_camera_image(dib_base64: &str, expected_window: &str) -> Result<String, String> {
+    if expected_window.trim().is_empty() || expected_window.chars().count() > 200 {
+        return Err("Specify an exact target window title.".into());
+    }
+    let dib = decode_base64_limited(dib_base64, 12 * 1024 * 1024)?;
+    if dib.len() < 40 { return Err("Invalid bitmap data.".into()); }
+    let header = u32::from_le_bytes(dib[0..4].try_into().unwrap_or([0; 4]));
+    let width = i32::from_le_bytes(dib[4..8].try_into().unwrap_or([0; 4]));
+    let height = i32::from_le_bytes(dib[8..12].try_into().unwrap_or([0; 4]));
+    let planes = u16::from_le_bytes(dib[12..14].try_into().unwrap_or([0; 2]));
+    let depth = u16::from_le_bytes(dib[14..16].try_into().unwrap_or([0; 2]));
+    let compression = u32::from_le_bytes(dib[16..20].try_into().unwrap_or([0; 4]));
+    if header != 40 || planes != 1 || depth != 32 || compression != 0 ||
+       width < 1 || height < 1 || width > 1600 || height > 1600 ||
+       dib.len() != 40 + (width as usize * height as usize * 4) {
+        return Err("Unsupported camera bitmap format.".into());
+    }
+    let mut pending = PENDING_RESTORE.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(restore) = pending.take() { let _ = restore.join(); }
+    if foreground_title().as_deref() != Some(expected_window) {
+        return Err("The target window is not focused. Focus its input field and retry.".into());
+    }
+    let previous = {
+        let _open = Clipboard::open()?;
+        snapshot()
+    };
+    {
+        let _open = Clipboard::open()?;
+        unsafe { EmptyClipboard() }.map_err(|e| format!("Could not clear the clipboard: {e}"))?;
+        if let Err(error) = set_bytes(CF_DIB, &dib) {
+            drop(_open);
+            let changed = unsafe { GetClipboardSequenceNumber() };
+            restore(&previous, changed);
+            return Err(error);
+        }
+        exclude_from_history();
+    }
+    let ours = unsafe { GetClipboardSequenceNumber() };
+    wait_for_modifiers_released();
+    if foreground_title().as_deref() != Some(expected_window) {
+        restore(&previous, ours);
+        return Err("Focus changed before image paste. No image was inserted.".into());
+    }
+    let result = send_paste();
+    *pending = Some(std::thread::spawn(move || {
+        sleep(PASTE_SETTLE + Duration::from_millis(350));
+        restore(&previous, ours);
+    }));
+    result?;
+    Ok(format!("Pasted camera image into '{expected_window}'. Check that the attachment appears before sending."))
+}
+
+fn decode_base64_limited(input: &str, max_len: usize) -> Result<Vec<u8>, String> {
+    if input.len() > ((max_len + 2) / 3) * 4 + 4 || input.len() % 4 != 0 {
+        return Err("Camera image exceeds clipboard size limit.".into());
+    }
+    let mut out = Vec::with_capacity(input.len() / 4 * 3);
+    let bytes = input.as_bytes();
+    for (index, group) in bytes.chunks_exact(4).enumerate() {
+        let mut v = [0u8; 4];
+        for (i, byte) in group.iter().copied().enumerate() {
+            v[i] = match byte {
+                b'A'..=b'Z' => byte - b'A',
+                b'a'..=b'z' => byte - b'a' + 26,
+                b'0'..=b'9' => byte - b'0' + 52,
+                b'+' => 62,
+                b'/' => 63,
+                b'=' if index == bytes.len() / 4 - 1 && i >= 2 => 0,
+                _ => return Err("Invalid camera bitmap encoding.".into()),
+            };
+        }
+        let padding = usize::from(group[3] == b'=') + usize::from(group[2] == b'=');
+        if padding > 0 && index != bytes.len() / 4 - 1 { return Err("Invalid padding.".into()); }
+        let triple = (u32::from(v[0]) << 18) | (u32::from(v[1]) << 12) |
+                     (u32::from(v[2]) << 6) | u32::from(v[3]);
+        for shift in [16u32, 8, 0].into_iter().take(3 - padding) {
+            out.push((triple >> shift) as u8);
+        }
+    }
+    if out.len() > max_len { return Err("Camera image exceeds clipboard size limit.".into()); }
+    Ok(out)
 }
 
 /// Copies the focused app's selection, then restores the previous clipboard.
