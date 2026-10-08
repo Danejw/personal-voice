@@ -418,6 +418,8 @@ export type Database = {
           assistant_learning_since: string | null
           assistant_memory_learning: boolean
           assistant_semantic_search: boolean
+          assistant_recall_notes: boolean
+          assistant_recall_dictations: boolean
           cloud_dictation_history: boolean
           language: string | null
           smart_transcription: boolean
@@ -430,6 +432,8 @@ export type Database = {
           assistant_learning_since?: string | null
           assistant_memory_learning?: boolean
           assistant_semantic_search?: boolean
+          assistant_recall_notes?: boolean
+          assistant_recall_dictations?: boolean
           cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
@@ -442,6 +446,8 @@ export type Database = {
           assistant_learning_since?: string | null
           assistant_memory_learning?: boolean
           assistant_semantic_search?: boolean
+          assistant_recall_notes?: boolean
+          assistant_recall_dictations?: boolean
           cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
