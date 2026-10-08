@@ -32,6 +32,7 @@ References: https://ai.google.dev/gemini-api/docs/embeddings
 
 - Additive source registry, private memory-asset metadata, account-scoped pgvector embeddings, graph nodes/edges, and auth-checked SQL procedures.
 - Existing `assistant_memories` lifecycle preserved. Active rows are queued; superseded/forgotten rows leave the search index. Pending writes are revision/fingerprint-fenced.
+- Consent-enabled Note attachments can also be embedded without copying their original objects. Source changes and deletions invalidate stale vectors and graph edges.
 - One explicit attachment per uploaded file, with additional files allowed for the same memory. The original file remains the canonical private Storage object, not duplicated in the graph.
 - Authenticated Edge Function reads only eligible sources, validates provider dimension count, and commits vectors. Missing credentials and provider failure do not mutate the original memory.
 - Keyword plus semantic ranking; related graph source IDs returned as evidence. Conservative related-to connections use similarity, never infer factual support from similarity.
@@ -53,11 +54,12 @@ References: https://ai.google.dev/gemini-api/docs/embeddings
 
 1. Review and run `supabase/migrations/20261008090000_multimodal_memory.sql`.
 2. Review and run `supabase/migrations/20261008091000_memory_graph_enrichment.sql`.
-3. Deploy `supabase/functions/memory-embed` using the project's authenticated Edge Function pattern. Set `GEMINI_API_KEY` in server secrets; never put it in Vite/client config. Follow the same JWT gateway policy as `memory-learn`.
-4. Open Remembered on a test account and click **Index next three memories**. Verify vectors have exactly 1536 dimensions, the server returns evidence, and cross-user queries fail.
-5. Opt into Notes or synced Dictations only from that same test account. Confirm no old local-only recordings or screenshot pixels are copied.
-6. Verify save/correct/forget on Android and Windows. Run additional bounded indexing only after explicit approval.
-7. Do not merge/release until CI, schema tests, privacy tests, and real-device checks are complete.
+3. Review and run `supabase/migrations/20261008092000_memory_source_lifecycle.sql`.
+4. Deploy `supabase/functions/memory-embed` using the project's authenticated Edge Function pattern. Set `GEMINI_API_KEY` in server secrets; never put it in Vite/client config. Follow the same JWT gateway policy as `memory-learn`.
+5. Open Remembered on a test account and click **Index next three memories**. Verify vectors have exactly 1536 dimensions, the server returns evidence, and cross-user queries fail.
+6. Opt into Notes or synced Dictations only from that same test account. Confirm no old local-only recordings or screenshot pixels are copied.
+7. Verify save/correct/forget on Android and Windows. Run additional bounded indexing only after explicit approval.
+8. Do not merge/release until CI, schema tests, privacy tests, and real-device checks are complete.
 
 ## Known limitations requiring follow-up before calling this fully production-ready
 
