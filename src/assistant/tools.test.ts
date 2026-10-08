@@ -34,6 +34,8 @@ describe("assistant tool schema", () => {
       "list_handoffs",
       "dismiss_handoff",
       "capture_screen",
+      "end_assistant_session",
+      "paste_camera_photo",
       "capture_camera_photo",
       "start_camera_context",
       "stop_camera_context",
