@@ -129,6 +129,11 @@ export function assistantFunctionDeclarations() {
       parameters: { type: "object", properties: {} },
     },
     {
+      name: "inspect_active_app",
+      description: "Windows only. When the user asks what is visible or to read the active app, inspect its accessible text without a screenshot. This is on-demand and read-only. Do not claim access to content not returned.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
       name: "capture_selection",
       description: "Read the text highlighted in the other app and attach it as context. Call this when the user asks what is selected or to use the selection. Do not describe a selection until this tool has returned. This does not change the other app.",
       parameters: { type: "object", properties: {} },
@@ -253,6 +258,7 @@ export type ToolDecision =
   | { kind: "cameraStart"; id: string; name: "start_camera_context"; facing: CameraFacing }
   | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
   | { kind: "selection"; id: string; name: "capture_selection" }
+  | { kind: "accessibility"; id: string; name: "inspect_active_app" }
   | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
   | { kind: "memories"; id: string; name: "list_memories" }
   | { kind: "handoffs"; id: string; name: "list_handoffs" }
@@ -323,6 +329,8 @@ export function decideToolCall(
     }
     case "stop_camera_context":
       return { kind: "cameraStop", id: call.id, name: "stop_camera_context" };
+    case "inspect_active_app":
+      return { kind: "accessibility", id: call.id, name: "inspect_active_app" };
     case "capture_selection":
       return { kind: "selection", id: call.id, name: "capture_selection" };
     case "list_voice_notes":
