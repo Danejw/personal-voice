@@ -128,9 +128,8 @@ export function filterGraph(
   const related = new Set<string>();
   if (connectedOnly) {
     for (const e of graph.edges) {
-      if (matchedIds.has(e.source) && matchedIds.has(e.target)) {
-        related.add(e.source); related.add(e.target);
-      }
+      if (matchedIds.has(e.source)) related.add(e.source);
+      if (matchedIds.has(e.target)) related.add(e.target);
     }
   }
   const nodes = graph.nodes.filter((n) => matchedIds.has(n.id) && (!connectedOnly || related.has(n.id)));
