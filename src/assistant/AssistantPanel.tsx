@@ -91,6 +91,14 @@ export function AssistantPanel({
   const [photoNotice, setPhotoNotice] = useState<string | null>(null);
   const [computerHistory, setComputerHistory] = useState<Array<{ label: string; phase: string; at: string }>>([]);
   const [accessibilityWatch, setAccessibilityWatch] = useState(false);
+  const [treeReport, setTreeReport] = useState<{
+    windowTitle:string;truncated:boolean;
+    nodes:Array<{path:string;name:string;automationId:string;controlType:number;
+      framework:string;patterns:string[];bounds?:{x:number;y:number;width:number;height:number}|null;}>;
+  } | null>(null);
+  const [treeFilter,setTreeFilter] = useState("");
+  const [treeBusy,setTreeBusy] = useState(false);
+  const [treeError,setTreeError] = useState<string|null>(null);
   const [accessibilityWatchError, setAccessibilityWatchError] = useState<string | null>(null);
   const [accessibilityEvents, setAccessibilityEvents] = useState<Array<{kind:string; windowTitle:string|null;at:string}>>([]);
   useEffect(() => {
@@ -375,6 +383,42 @@ export function AssistantPanel({
       </div>
       {navigator.userAgent.includes("Windows") && (
         <div className="assistant-action" role="region" aria-label="Computer interaction history">
+          <p className="note-meta">Accessibility element explorer</p>
+          <div className="assistant-action-buttons">
+            <button type="button" className="secondary" disabled={treeBusy} onClick={() => {
+              setTreeBusy(true);
+              setTreeError(null);
+              void invoke<typeof treeReport>("inspect_accessibility_tree")
+                .then(setTreeReport).catch((error:unknown)=>setTreeError(String(error)))
+                .finally(()=>setTreeBusy(false));
+            }}>{treeBusy ? "Inspecting…" : "Inspect current window controls"}</button>
+            {treeReport && <span className="note-meta">{treeReport.nodes.length} controls · {treeReport.windowTitle}{treeReport.truncated ? " (partial)" : ""}</span>}
+          </div>
+          {treeError && <p className="error" role="alert">{treeError}</p>}
+          {treeReport && (
+            <div className="assistant-action">
+              <input aria-label="Filter accessible controls" placeholder="Filter names or automation IDs" value={treeFilter}
+                onChange={(event)=>setTreeFilter(event.target.value)} />
+              <ol style={{maxHeight:230,overflowY:"auto",paddingInlineStart:22}}>
+                {treeReport.nodes.filter((node)=>!treeFilter ||
+                  node.name.toLowerCase().includes(treeFilter.toLowerCase()) ||
+                  node.automationId.toLowerCase().includes(treeFilter.toLowerCase()))
+                  .slice(0,60).map((node)=>(
+                    <li key={node.path} className="note-meta">
+                      <span>{node.name || node.automationId || "(unnamed)"} · {node.patterns.join(", ") || "read only"}</span>{" "}
+                      <button type="button" className="secondary" onClick={()=>{
+                        setTreeError(null);
+                        void invoke("accessibility_pattern_action",{
+                          locator:{window:treeReport.windowTitle,path:node.path,name:node.name,
+                            automationId:node.automationId,controlType:node.controlType},
+                          action:"highlight",text:null,number:null
+                        }).catch((error:unknown)=>setTreeError(String(error)));
+                      }}>Highlight</button>
+                    </li>
+                  ))}
+              </ol>
+            </div>
+          )}
           <p className="note-meta">Computer interaction activity</p>
           <div className="assistant-action-buttons">
             <button type="button" className="secondary" onClick={() => {
