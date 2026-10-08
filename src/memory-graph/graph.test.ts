@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterGraph, graphColor, kindLabel, layoutGraph, parseGraphSnapshot } from "@/memory-graph/graph";
+import { filterGraph, graphCanvasState, graphColor, kindLabel, layoutGraph, parseGraphSnapshot } from "@/memory-graph/graph";
 
 const example = {
   activeMemoryCount: 3, eligibleSourceCount: 4, sampleLimit: 180,
@@ -25,6 +25,16 @@ const example = {
 };
 
 describe("Memory Graph read-only projection", () => {
+  it("never renders a graph SVG when an account RPC fails before data loads", () => {
+    expect(graphCanvasState(null, null, 0)).toBe("loading");
+    expect(graphCanvasState(null, "Failed to load graph", 0)).toBe("error");
+    const graph = parseGraphSnapshot(example);
+    expect(graphCanvasState(graph, null, 0)).toBe("empty");
+    expect(graphCanvasState(graph, null, graph.nodes.length)).toBe("ready");
+    expect(graphCanvasState(graph, "Refresh failed", graph.nodes.length)).toBe("ready");
+  });
+
+
   it("accepts genuine source-backed nodes and removes dangling/duplicate edges", () => {
     const graph = parseGraphSnapshot(example);
     expect(graph.nodes).toHaveLength(4);
