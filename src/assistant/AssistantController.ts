@@ -1523,6 +1523,9 @@ export class AssistantController {
       case "insert_text":
         await this.actions.insertText(pending.text);
         return "Inserted the text into the focused app.";
+      case "invoke_accessible_control":
+        if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
+        return invoke<string>("invoke_accessible_control", { expectedName: pending.text });
       case "create_snippet":
       case "update_snippet": {
         const input = JSON.parse(pending.text) as {id: string | null; trigger: string; content: string};
