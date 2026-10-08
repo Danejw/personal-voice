@@ -316,8 +316,8 @@ pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) ->
                 if unsafe { p.CurrentIsReadOnly() }.map(|v| v.as_bool()).unwrap_or(true) {
                     return Err("The field is read-only.".into());
                 }
-                let wide: Vec<u16> = value.unwrap_or("").encode_utf16().chain(std::iter::once(0)).collect();
-                unsafe { p.SetValue(windows::core::PCWSTR(wide.as_ptr())) }.map_err(|e| e.to_string())?;
+                let replacement = windows::core::BSTR::from(value.unwrap_or(""));
+                unsafe { p.SetValue(&replacement) }.map_err(|e| e.to_string())?;
             },
             _ => unreachable!(),
         }
