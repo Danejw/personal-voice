@@ -226,7 +226,10 @@ begin
    select 'dictation',d.id,null::uuid,left(d.text,8000),md5(d.text),d.created_at
     from public.dictations d join public.settings s on s.user_id=d.user_id
     where d.user_id=uid and d.outcome='success' and s.assistant_semantic_search and s.cloud_dictation_history and s.assistant_recall_dictations
-  ) eligible order by ts desc limit p_limit
+  ) eligible
+  left join public.assistant_memory_sources old on old.user_id=uid and old.source_kind=eligible.kind and old.source_record_id=eligible.id
+  where old.id is null or old.fingerprint is distinct from eligible.fingerprint or old.state='disabled'
+  order by eligible.ts desc limit p_limit
  loop
   perform public.assistant_memory_upsert_source(uid,row.kind,row.id,row.memory_id,row.body,row.fingerprint);
   n:=n+1;
