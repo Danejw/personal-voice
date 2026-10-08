@@ -195,3 +195,15 @@
 @media (prefers-reduced-motion: reduce) {
   .memory-graph-node, .memory-graph-link { transition: none; }
 }
+
+/* Isolate a graph-specific rendering failure without covering sidebar chrome. */
+.memory-graph-recovery {
+  display: flex; flex-direction: column; align-items: flex-start;
+  justify-content: center; gap: 13px; width: 100%; min-height: 280px;
+  border-radius: 14px; padding: 28px;
+  background: #17242c; color: #e9edf4;
+}
+.memory-graph-recovery h3 { margin: 0; font-size: 19px; }
+.memory-graph-recovery p { margin: 0; max-width: 480px; color: #a5b4c2; }
+.memory-graph-recovery-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.memory-graph-recovery-actions button { min-width: 112px; }
