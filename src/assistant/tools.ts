@@ -191,6 +191,33 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
+      name: "inspect_accessibility_tree",
+      description: "Windows only. Inspect the bounded structured accessibility tree of the foreground window, including stable-in-snapshot paths, roles, automation IDs, text selections, grid dimensions, supported patterns and bounds. Use before a targeted action; never guess a locator. You can filter by control name to reduce the response.",
+      parameters: { type: "object", properties: {
+        filter: { type: "string", description: "Optional case-insensitive control-name or AutomationId filter." },
+        maxResults: { type: "integer", description: "Optional maximum matching controls, up to 80." },
+      } },
+    },
+    {
+      name: "accessibility_pattern_action",
+      description: "Windows only. Execute a verified UI Automation action on an element path from inspect_accessibility_tree. Requires explicit confirmation. Supported actions: focus, invoke, toggle, select, add-selection, remove-selection, expand, collapse, scroll-into-view, realize, set-value, set-range, minimize, maximize, restore, move, resize. Must supply exact window, path, name, automationId and controlType from latest inspection. For set-value give text; for set-range give number; move/resize give text 'x,y'. Never use for passwords, payments, OS settings or irreversible submissions.",
+      parameters: { type: "object", properties: {
+        window: {type:"string"}, path: {type:"string"}, name: {type:"string"},
+        automationId: {type:"string"}, controlType: {type:"integer"},
+        action: {type:"string"}, text: {type:"string"}, number: {type:"number"}
+      }, required: ["window","path","name","automationId","controlType","action"] },
+    },
+    {
+      name: "start_accessibility_watch",
+      description: "Start opt-in local Windows accessibility event monitoring of focus, window changes, selections, and UI structure. No raw text or screenshots are collected by the watcher. Requires confirmation; stops when the assistant ends or the user stops it.",
+      parameters: {type:"object",properties:{}},
+    },
+    {
+      name: "stop_accessibility_watch",
+      description: "Immediately stop the local Windows accessibility event monitor.",
+      parameters: {type:"object",properties:{}},
+    },
+    {
       name: "inspect_accessible_elements",
       description: "List accessible controls, names, bounding rectangles and supported patterns in the active Windows application. Read-only. Use before choosing a uniquely named UIA target.",
       parameters: { type: "object", properties: {} },
@@ -331,6 +358,8 @@ export type ConfirmToolName =
   | "focus_accessible_control"
   | "navigate_window"
   | "uia_control_action"
+  | "accessibility_pattern_action"
+  | "start_accessibility_watch"
   | "invoke_accessible_control"
   | "paste_camera_photo"
   | "create_snippet"
@@ -363,6 +392,8 @@ export type ToolDecision =
   | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
   | { kind: "selection"; id: string; name: "capture_selection" }
   | { kind: "accessibility"; id: string; name: "inspect_active_app" }
+  | { kind: "tree"; id: string; name: "inspect_accessibility_tree"; filter: string; maxResults: number }
+  | { kind: "watchStop"; id: string; name: "stop_accessibility_watch" }
   | { kind: "elements"; id: string; name: "inspect_accessible_elements" }
   | { kind: "windows"; id: string; name: "list_windows" }
   | { kind: "apps"; id: string; name: "list_installed_apps" }
@@ -444,6 +475,16 @@ export function decideToolCall(
       return { kind: "accessibility", id: call.id, name: "inspect_active_app" };
     case "capture_selection":
       return { kind: "selection", id: call.id, name: "capture_selection" };
+    case "inspect_accessibility_tree": {
+      const filter = typeof args.filter === "string" ? args.filter.trim() : "";
+      const maxResults = typeof args.maxResults === "number" ? Math.floor(args.maxResults) : 45;
+      if (filter.length > 100 || maxResults < 1 || maxResults > 80) {
+        return { kind: "reject", id: call.id, name: call.name, message: "Invalid tree filter or limit." };
+      }
+      return { kind: "tree", id: call.id, name: "inspect_accessibility_tree", filter, maxResults };
+    }
+    case "stop_accessibility_watch":
+      return { kind: "watchStop", id: call.id, name: "stop_accessibility_watch" };
     case "inspect_accessible_elements":
       return { kind: "elements", id: call.id, name: "inspect_accessible_elements" };
     case "list_windows":
@@ -480,6 +521,30 @@ export function decideToolCall(
         return { kind: "reject", id: call.id, name: call.name, message: "Provide an exact destination window title from list_windows." };
       }
       return confirm(call.id, "paste_camera_photo", destination, "Paste camera photo into destination app", null, null);
+    }
+    case "start_accessibility_watch":
+      return confirm(call.id, "start_accessibility_watch", "", "Start local Windows accessibility monitoring", null, null);
+    case "accessibility_pattern_action": {
+      const operations = ["focus","invoke","toggle","select","add-selection","remove-selection",
+        "expand","collapse","scroll-into-view","realize","set-value","set-range",
+        "minimize","maximize","restore","move","resize"];
+      if (typeof args.window !== "string" || !args.window.trim() || args.window.length > 240 ||
+        typeof args.path !== "string" || !/^0(?:\.\d{1,3}){0,9}$/.test(args.path) ||
+        typeof args.name !== "string" || args.name.length > 320 ||
+        typeof args.automationId !== "string" || args.automationId.length > 320 ||
+        typeof args.controlType !== "number" || !Number.isInteger(args.controlType) ||
+        typeof args.action !== "string" || !operations.includes(args.action) ||
+        (["set-value","move","resize"].includes(args.action) &&
+          (typeof args.text !== "string" || args.text.length > 1500)) ||
+        (args.action === "set-range" && (typeof args.number !== "number" || !Number.isFinite(args.number)))) {
+        return {kind: "reject", id: call.id, name: call.name, message: "Invalid or incomplete accessibility target or action." };
+      }
+      const payload = { locator: {window:args.window,path:args.path,name:args.name,
+        automationId:args.automationId,controlType:args.controlType},
+        action:args.action, text: typeof args.text === "string" ? args.text : null,
+        number: typeof args.number === "number" ? args.number : null };
+      return confirm(call.id, "accessibility_pattern_action", JSON.stringify(payload),
+        `Accessibility: ${args.action} ${args.name || args.automationId}`, null, null);
     }
     case "navigate_window": {
       if (typeof args.title !== "string" || !args.title.trim() || args.title.length > 120) {
