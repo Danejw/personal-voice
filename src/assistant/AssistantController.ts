@@ -1217,6 +1217,10 @@ export class AssistantController {
           await this.runSelection(decision);
           continue;
         }
+        if (decision.kind === "apps") {
+          await this.runInstalledApps(decision);
+          continue;
+        }
         if (decision.kind === "snippets") {
           await this.runSnippets(decision);
           continue;
@@ -1391,6 +1395,22 @@ export class AssistantController {
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
       this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runInstalledApps(decision: Extract<ToolDecision, { kind: "apps" }>) {
+    const epoch = this.toolEpoch;
+    if (!navigator.userAgent.includes("Windows")) {
+      this.replyTool(decision.id, decision.name, false, "Windows only.");
+      return;
+    }
+    try {
+      const apps = await invoke<Array<{name: string}>>("list_installed_apps");
+      if (epoch === this.toolEpoch) {
+        this.replyTool(decision.id, decision.name, true, JSON.stringify(apps).slice(0, 8000));
+      }
+    } catch (error) {
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
     }
   }
 
