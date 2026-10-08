@@ -181,9 +181,24 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
+      name: "list_snippets",
+      description: "Read saved voice snippets and their expansion text.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
+      name: "create_snippet",
+      description: "Create a snippet with voice trigger and expansion content, requiring confirmation.",
+      parameters: { type: "object", properties: { trigger: { type: "string" }, content: { type: "string" } }, required: ["trigger", "content"] },
+    },
+    {
+      name: "update_snippet",
+      description: "Update an existing snippet by id from list_snippets, requiring confirmation.",
+      parameters: { type: "object", properties: { id: { type: "string" }, trigger: { type: "string" }, content: { type: "string" } }, required: ["id", "trigger", "content"] },
+    },
+    {
       name: "open_app",
-      description: "Open Notepad or Calculator on this computer. Call this when the user asks. Do not ask them to click. No other application, and no shell.",
-      parameters: { type: "object", properties: { app: { type: "string", description: "notepad or calculator." } }, required: ["app"] },
+      description: "Open a named Windows executable application on this device when asked. Do not run commands, scripts, shell interpreters, or pass arguments.",
+      parameters: { type: "object", properties: { app: { type: "string", description: "Application executable name, such as notepad, calc, or code." } }, required: ["app"] },
     },
     {
       name: "press_shortcut",
@@ -266,6 +281,8 @@ export interface HandoffPlan {
 export type ConfirmToolName =
   | "insert_text"
   | "create_voice_note"
+  | "create_snippet"
+  | "update_snippet"
   | "send_remote_dictation"
   | "edit_voice_note"
   | "create_transform"
@@ -293,6 +310,7 @@ export type ToolDecision =
   | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
   | { kind: "selection"; id: string; name: "capture_selection" }
   | { kind: "accessibility"; id: string; name: "inspect_active_app" }
+  | { kind: "snippets"; id: string; name: "list_snippets" }
   | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
   | { kind: "dashboard"; id: string; name: "read_usage_analytics" | "read_insights" }
   | { kind: "memories"; id: string; name: "list_memories" }
@@ -368,6 +386,8 @@ export function decideToolCall(
       return { kind: "accessibility", id: call.id, name: "inspect_active_app" };
     case "capture_selection":
       return { kind: "selection", id: call.id, name: "capture_selection" };
+    case "list_snippets":
+      return { kind: "snippets", id: call.id, name: "list_snippets" };
     case "read_usage_analytics":
     case "read_insights":
       return { kind: "dashboard", id: call.id, name: call.name };
@@ -389,6 +409,18 @@ export function decideToolCall(
           : `Remember ${memory.key}`;
       const body = memory.action === "forget" ? memory.key : memory.value;
       return confirm(call.id, call.name, body, title, null, null, memory);
+    }
+    case "create_snippet":
+    case "update_snippet": {
+      const id = call.name === "update_snippet" ? readId(args) : null;
+      if (id && "error" in id) return {kind: "reject", id: call.id, name: call.name, message: id.error};
+      if (typeof args.trigger !== "string" || !args.trigger.trim() || args.trigger.length > 120 ||
+          typeof args.content !== "string" || !args.content.trim() || args.content.length > 20000) {
+        return {kind: "reject", id: call.id, name: call.name, message: "Provide a valid snippet trigger and content."};
+      }
+      return confirm(call.id, call.name,
+        JSON.stringify({ id: id && "id" in id ? id.id : null, trigger: args.trigger, content: args.content }),
+        call.name === "create_snippet" ? "Create snippet" : "Update snippet", null, null);
     }
     case "send_remote_dictation": {
       const body = readText(args);
