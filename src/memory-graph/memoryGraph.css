@@ -1,0 +1,197 @@
+/* Memory Graph. Borderless surfaces follow app chrome conventions. */
+.memory-graph-page {
+  display: flex; flex-direction: column; gap: 15px;
+  min-height: 0; flex: 1; color: #e9edf4;
+}
+.memory-graph-intro {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 22px; padding: 7px 4px 3px;
+}
+.memory-graph-kicker {
+  font-size: 10px; color: #88d8c1; font-weight: 700;
+  letter-spacing: 1.8px; margin: 0 0 6px;
+}
+.memory-graph-intro h3 {
+  font-size: clamp(18px, 2.4vw, 23px); letter-spacing: -.4px; margin: 0 0 8px;
+  font-weight: 650;
+}
+.memory-graph-intro p:not(.memory-graph-kicker) {
+  font-size: 12px; color: #a5b4c2; margin: 0; line-height: 1.5;
+  max-width: 640px;
+}
+.memory-graph-sync { display: flex; gap: 12px; align-items: center; flex: none; }
+.memory-graph-status {
+  display: inline-flex; gap: 7px; align-items: center; color: #97cfb7;
+  font-size: 12px; white-space: nowrap;
+}
+.memory-graph-status::before {
+  content: ""; width: 7px; height: 7px; background: #88d8c1; border-radius: 50%;
+}
+.memory-graph-status.is-error { color: #f2b09c; }
+.memory-graph-status.is-error::before { background: #df937d; }
+.memory-graph-stats {
+  display: grid; grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 10px;
+}
+.memory-graph-stats > div {
+  background: #16232c; border-radius: 13px; padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.memory-graph-stats strong { color: #e9edf4; font-size: 23px; font-variant-numeric: tabular-nums; }
+.memory-graph-stats span { color: #a2b1bf; font-size: 11px; }
+.memory-graph-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 9px; color: #bbc9d3;
+}
+.memory-graph-toolbar input,
+.memory-graph-toolbar select {
+  height: 38px; font: inherit; font-size: 12px; color: #e4edf4;
+  background: transparent; border: 0; outline: 0;
+}
+.memory-graph-toolbar input::placeholder { color: #8599aa; }
+.memory-graph-search {
+  flex: 1; min-width: 175px; display: flex; align-items: center; gap: 8px;
+  padding: 0 13px; border-radius: 10px; background: #182630;
+}
+.memory-graph-search:focus-within, .memory-graph-filter:focus-within {
+  outline: 2px solid #88d8c1; outline-offset: 2px;
+}
+.memory-graph-search svg { width: 15px; height: 15px; flex: none; fill: none; stroke: #96aab9; stroke-width: 1.7; }
+.memory-graph-search input { width: 100%; min-width: 0; }
+.memory-graph-filter { border-radius: 10px; padding: 0 10px; background: #182630; }
+.memory-graph-filter select { max-width: 180px; cursor: pointer; }
+.memory-graph-filter option { background: #15232d; }
+.memory-graph-toggle {
+  display: flex; align-items: center; gap: 6px; font-size: 12px;
+  white-space: nowrap; cursor: pointer; padding: 7px 2px;
+}
+.memory-graph-toggle input { accent-color: #88d8c1; }
+.memory-graph-layout {
+  min-height: 360px; flex: 1; display: grid;
+  grid-template-columns: minmax(0,1fr) 268px; gap: 11px;
+}
+.memory-graph-stage {
+  position: relative; min-width: 0; min-height: 375px;
+  display: flex; flex-direction: column;
+  border-radius: 15px; overflow: hidden;
+  background-color: #111d26;
+  background-image: radial-gradient(#273744 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.memory-graph-stagebar {
+  z-index: 2; padding: 12px 16px 5px; pointer-events: none;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: #9eafbe; gap: 10px;
+}
+.memory-graph-stagebar > * { pointer-events: auto; }
+.memory-graph-stage-dot {
+  width: 6px; height: 6px; display: inline-block;
+  margin-right: 6px; border-radius: 50%; background: #88d8c1;
+}
+.memory-graph-zoom { display: flex; gap: 6px; }
+.memory-graph-zoom button {
+  border: 0; background: #273643; color: #eaf1f5;
+  height: 30px; min-width: 30px; padding: 0 8px;
+  border-radius: 8px; cursor: pointer; font: inherit; font-size: 15px;
+}
+.memory-graph-zoom button:hover { background: #365164; }
+.memory-graph-zoom button:last-child { font-size: 11px; }
+.memory-graph-zoom button:focus-visible { outline: 2px solid #88d8c1; outline-offset: 2px; }
+.memory-graph-canvas {
+  width: 100%; min-height: 260px; flex: 1; display: block;
+  touch-action: none; cursor: grab; user-select: none;
+}
+.memory-graph-canvas:active { cursor: grabbing; }
+.memory-graph-node { cursor: pointer; outline: none; }
+.memory-graph-node rect { filter: drop-shadow(0 6px 13px rgba(0,0,0,.2)); }
+.memory-graph-node.is-selected rect:first-child { stroke: #88d8c1; stroke-width: 2; }
+.memory-graph-node:focus-visible rect:first-child { stroke: #c6fff0; stroke-width: 2; }
+.memory-graph-node text { pointer-events: none; }
+.memory-graph-link { pointer-events: none; }
+.memory-graph-empty {
+  flex: 1; padding: 40px 24px; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; gap: 12px;
+  text-align: center; color: #a7b8c7;
+}
+.memory-graph-empty > span { font-size: 47px; color: #88d8c1; }
+.memory-graph-empty strong { color: #e9edf4; font-weight: 600; font-size: 16px; }
+.memory-graph-empty p { max-width: 310px; line-height: 1.5; margin: 0; font-size: 12px; }
+.memory-graph-stage-hint {
+  margin: 0; padding: 7px 14px 12px; pointer-events: none;
+  font-size: 10px; color: #8499aa; text-align: center;
+}
+.memory-graph-detail {
+  min-height: 0; min-width: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 15px;
+  padding: 18px 17px; border-radius: 15px; background: #16242e;
+}
+.memory-graph-detail-heading { display: flex; flex-direction: column; gap: 9px; }
+.memory-graph-detail-heading h4 {
+  margin: 0; font-size: 17px; line-height: 1.35;
+  font-weight: 600; overflow-wrap: anywhere;
+}
+.memory-graph-detail-heading p { margin: 0; color: #a1b1c1; font-size: 12px; line-height: 1.6; }
+.memory-graph-kind { font-size: 10px; font-weight: 800; letter-spacing: 1.15px; text-transform: uppercase; }
+.memory-graph-detail-state {
+  align-self: flex-start; font-size: 10px;
+  color: #88d8c1; background: #213c37; border-radius: 6px; padding: 5px 7px;
+  text-transform: capitalize;
+}
+.memory-graph-excerpt {
+  margin: 0; padding: 13px; border-radius: 9px;
+  font-size: 12px; line-height: 1.6; overflow-wrap: anywhere;
+  background: #20313d; color: #d5e2ec;
+}
+.memory-graph-facts { display: flex; flex-direction: column; gap: 12px; margin: 0; }
+.memory-graph-facts div { display: flex; flex-direction: column; gap: 4px; }
+.memory-graph-facts dt { color: #91a4b4; font-size: 11px; }
+.memory-graph-facts dd { color: #d5e1e9; font-size: 12px; margin: 0; overflow-wrap: anywhere; }
+.memory-graph-record-id { font-family: ui-monospace, Consolas, monospace; font-size: 10px !important; }
+.memory-graph-open { align-self: flex-start; }
+.memory-graph-detail h5 {
+  font-size: 12px; margin: 7px 0 0; font-weight: 600; color: #e7eff3;
+}
+.memory-graph-detail h5 span { font-weight: 400; color: #92a6b4; }
+.memory-graph-detail-help { margin: 0; font-size: 12px; color: #92a6b4; line-height: 1.5; }
+.memory-graph-relations, .memory-graph-legend { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
+.memory-graph-relations li button {
+  width: 100%; cursor: pointer; border: 0; background: #22313d;
+  display: flex; flex-direction: column; text-align: left;
+  padding: 10px; gap: 6px; border-radius: 8px; color: #d4e4ed;
+}
+.memory-graph-relations li button:hover { background: #294254; }
+.memory-graph-relations li button:focus-visible { outline: 2px solid #88d8c1; }
+.memory-graph-relationship { color: #96a8b5; text-transform: uppercase; letter-spacing: .5px; font-size: 9px; }
+.memory-graph-related-label { display: flex; align-items: center; gap: 8px; font-size: 11px; overflow-wrap: anywhere; }
+.memory-graph-related-label span { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; }
+.memory-graph-legend li {
+  display: flex; align-items: center; gap: 9px; font-size: 12px;
+  padding: 7px 3px; color: #c3d1dc;
+}
+.memory-graph-legend li span { width: 8px; height: 8px; border-radius: 50%; }
+.memory-graph-legend li strong { margin-left: auto; color: #879dab; font-weight: 500; }
+.memory-graph-footnote {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 20px;
+  color: #879eaf; font-size: 10px; padding: 0 3px;
+}
+@media (max-width: 1000px) {
+  .memory-graph-layout { grid-template-columns: minmax(0,1fr) 225px; }
+}
+@media (max-width: 720px) {
+  .memory-graph-intro { flex-direction: column; gap: 10px; }
+  .memory-graph-intro p { max-width: none; }
+  .memory-graph-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .memory-graph-stats > div { padding: 12px 14px; }
+  .memory-graph-stats strong { font-size: 20px; }
+  .memory-graph-layout { grid-template-columns: minmax(0,1fr); }
+  .memory-graph-stage { min-height: 360px; height: 380px; flex: none; }
+  .memory-graph-detail { min-height: 170px; max-height: 450px; }
+  .memory-graph-toolbar { align-items: flex-start; }
+  .memory-graph-search { flex-basis: 100%; }
+  .memory-graph-page { overflow-y: auto; padding-bottom: 8px; }
+  .memory-graph-stagebar { padding-left: 10px; padding-right: 10px; }
+  .memory-graph-stage-hint { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .memory-graph-node, .memory-graph-link { transition: none; }
+}
