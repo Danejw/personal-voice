@@ -138,6 +138,7 @@ export function useOverlay({
       overlayAssistantFrom(assistant.status),
     ),
     cameraOn: assistant.cameraContextActive,
+    computerActive: assistant.computerRunning,
     remoteTargetId,
     remoteTargetLabel,
     remoteTargetPlatform,
