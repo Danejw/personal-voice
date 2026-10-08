@@ -26,9 +26,9 @@ const ACCEPTED_MIME: Record<string, "image" | "audio" | "video" | "pdf"> = {
 };
 
 type Item = {
-  id: string; kind: "memory" | "note" | "message" | "dictation" | "asset";
+  id: string; kind: "memory" | "note" | "message" | "dictation" | "asset" | "note_attachment";
   fingerprint: string; text: string; leaseToken: string;
-  assetPath?: string | null; mimeType?: string | null;
+  assetPath?: string | null; mimeType?: string | null; assetBucket?: string | null;
 };
 function reply(status: number, data: Record<string, unknown>): Response {
   return new Response(JSON.stringify(data), {
@@ -96,8 +96,11 @@ async function attachment(item: Item, auth: string, apiKey: string): Promise<{
   const modality = ACCEPTED_MIME[mime];
   if (!modality || !item.assetPath || !/^[0-9a-f-]{36}\//i.test(item.assetPath) ||
       item.assetPath.includes("..")) throw new Error("Unsupported or invalid memory attachment.");
+  if (item.assetBucket !== "assistant-memory" && item.assetBucket !== "note-attachments") {
+    throw new Error("Unexpected memory storage bucket.");
+  }
   const path = item.assetPath.split("/").map(encodeURIComponent).join("/");
-  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/authenticated/assistant-memory/${path}`, {
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/authenticated/${item.assetBucket}/${path}`, {
     headers: { Authorization: auth, apikey: apiKey }, signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error("Private memory attachment could not be read.");
@@ -157,7 +160,7 @@ async function indexBatch(uid: string, auth: string, apiKey: string): Promise<Re
     const item = raw as Item;
     try {
       if (typeof item.id !== "string" || typeof item.fingerprint !== "string" || typeof item.leaseToken !== "string") throw new Error("Malformed memory job.");
-      const media = item.kind === "asset"
+      const media = item.kind === "asset" || item.kind === "note_attachment"
         ? await attachment(item, auth, apiKey)
         : { modality: "text" as const, part: {
             text: `title: none | text: ${item.text.slice(0, 12000)}`,
