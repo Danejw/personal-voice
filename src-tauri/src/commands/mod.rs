@@ -11,6 +11,19 @@ pub const INDICATOR_WINDOW: &str = "indicator";
 #[cfg(windows)]
 #[cfg(windows)]
 #[tauri::command]
+pub async fn focus_accessible_control(app: AppHandle, expected_name: String) -> Result<String, String> {
+    let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
+    window.hide().map_err(|e| e.to_string())?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(std::time::Duration::from_millis(180));
+        platform::focus_accessible_control(&expected_name)
+    }).await.map_err(|e| e.to_string()).and_then(|v| v);
+    let _ = window.show();
+    result
+}
+
+#[cfg(windows)]
+#[tauri::command]
 pub async fn invoke_accessible_control(app: AppHandle, expected_name: String) -> Result<String, String> {
     let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
     window.hide().map_err(|e| e.to_string())?;
