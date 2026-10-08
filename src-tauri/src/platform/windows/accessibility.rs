@@ -7,7 +7,9 @@ use windows::Win32::System::Com::{
 };
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationInvokePattern, IUIAutomationTextPattern,
-    IUIAutomationValuePattern, UIA_InvokePatternId, UIA_TextPatternId, UIA_ValuePatternId,
+    IUIAutomationValuePattern, IUIAutomationExpandCollapsePattern, IUIAutomationSelectionItemPattern,
+    IUIAutomationScrollPattern, UIA_InvokePatternId, UIA_TextPatternId, UIA_ValuePatternId,
+    UIA_ExpandCollapsePatternId, UIA_SelectionItemPatternId, UIA_ScrollPatternId, ScrollAmount,
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW};
 
@@ -207,6 +209,80 @@ pub fn focus_accessible_control(expected_name: &str) -> Result<String, String> {
         if name != expected_name { return Err("The focused control changed. Inspect again.".into()); }
         unsafe { element.SetFocus() }.map_err(|e| format!("Cannot focus control: {e}"))?;
         Ok(format!("Focused accessible control '{name}'."))
+    })();
+    unsafe { CoUninitialize() };
+    result
+}
+
+/** Single explicit, bounded UI Automation operation on an exact-name focused element.
+ * Never traverses password fields or accepts arbitrary process commands.
+ */
+pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) -> Result<String, String> {
+    if expected_name.is_empty() || expected_name.chars().count() > 280 {
+        return Err("Provide the exact control name from inspection.".into());
+    }
+    if !matches!(action, "focus" | "invoke" | "select" | "expand" | "collapse" | "scroll-up" | "scroll-down" | "set-value") {
+        return Err("Unsupported accessibility operation.".into());
+    }
+    if action == "set-value" && value.map(|v| v.chars().count() > 1000).unwrap_or(true) {
+        return Err("A value of at most 1000 characters is required.".into());
+    }
+    unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
+        .ok().map_err(|e| format!("Accessibility initialization failed: {e}"))?;
+    let result = (|| -> Result<String, String> {
+        let automation: IUIAutomation = unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) }
+            .map_err(|e| format!("UI Automation unavailable: {e}"))?;
+        let element = unsafe { automation.GetFocusedElement() }
+            .map_err(|e| format!("Focused control unavailable: {e}"))?;
+        if unsafe { element.CurrentIsPassword() }.map(|v| v.as_bool()).unwrap_or(true) {
+            return Err("Password or protected controls cannot be accessed.".into());
+        }
+        let name = unsafe { element.CurrentName() }.map_err(|e| e.to_string())?.to_string();
+        if name != expected_name { return Err("Focus changed. Inspect again before acting.".into()); }
+        if unsafe { element.CurrentIsEnabled() }.map(|v| !v.as_bool()).unwrap_or(true) {
+            return Err("That control is disabled.".into());
+        }
+        match action {
+            "focus" => unsafe { element.SetFocus() }.map_err(|e| e.to_string())?,
+            "invoke" => {
+                let p = unsafe { element.GetCurrentPattern(UIA_InvokePatternId) }
+                    .map_err(|_| "InvokePattern not supported.")?.cast::<IUIAutomationInvokePattern>()
+                    .map_err(|e| e.to_string())?;
+                unsafe { p.Invoke() }.map_err(|e| e.to_string())?;
+            },
+            "select" => {
+                let p = unsafe { element.GetCurrentPattern(UIA_SelectionItemPatternId) }
+                    .map_err(|_| "SelectionItemPattern not supported.")?.cast::<IUIAutomationSelectionItemPattern>()
+                    .map_err(|e| e.to_string())?;
+                unsafe { p.Select() }.map_err(|e| e.to_string())?;
+            },
+            "expand" | "collapse" => {
+                let p = unsafe { element.GetCurrentPattern(UIA_ExpandCollapsePatternId) }
+                    .map_err(|_| "ExpandCollapsePattern not supported.")?.cast::<IUIAutomationExpandCollapsePattern>()
+                    .map_err(|e| e.to_string())?;
+                if action == "expand" { unsafe { p.Expand() } } else { unsafe { p.Collapse() } }
+                    .map_err(|e| e.to_string())?;
+            },
+            "scroll-up" | "scroll-down" => {
+                let p = unsafe { element.GetCurrentPattern(UIA_ScrollPatternId) }
+                    .map_err(|_| "ScrollPattern not supported.")?.cast::<IUIAutomationScrollPattern>()
+                    .map_err(|e| e.to_string())?;
+                let amount = if action == "scroll-down" { ScrollAmount(1) } else { ScrollAmount(0) };
+                unsafe { p.Scroll(ScrollAmount(2), amount) }.map_err(|e| e.to_string())?;
+            },
+            "set-value" => {
+                let p = unsafe { element.GetCurrentPattern(UIA_ValuePatternId) }
+                    .map_err(|_| "ValuePattern not supported.")?.cast::<IUIAutomationValuePattern>()
+                    .map_err(|e| e.to_string())?;
+                if unsafe { p.CurrentIsReadOnly() }.map(|v| v.as_bool()).unwrap_or(true) {
+                    return Err("The field is read-only.".into());
+                }
+                let wide: Vec<u16> = value.unwrap_or("").encode_utf16().chain(std::iter::once(0)).collect();
+                unsafe { p.SetValue(windows::core::PCWSTR(wide.as_ptr())) }.map_err(|e| e.to_string())?;
+            },
+            _ => unreachable!(),
+        }
+        Ok(format!("{action} succeeded on '{name}'."))
     })();
     unsafe { CoUninitialize() };
     result
