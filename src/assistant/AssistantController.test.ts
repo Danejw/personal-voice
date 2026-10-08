@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildContinuation } from "@/assistant/continuation";
 import { AssistantController, type AssistantSessionHandle } from "@/assistant/AssistantController";
+import { assistantCueTransition, bindAssistantCues } from "@/assistant/assistantCues";
 import type { AssistantEvent } from "@/assistant/events";
 import type { AudioCapture } from "@/voice/audio/AudioCapture";
 import { MicrophoneLease } from "@/voice/audio/microphoneLease";
@@ -64,6 +65,65 @@ function controller() {
 afterEach(() => { FakeSession.opened = []; vi.useRealTimers(); });
 
 describe("AssistantController", () => {
+  it("plays the same ready/done cues when Assistant starts and stops, honoring the existing sound preference", () => {
+    const { created } = controller();
+    const playDictationCue = vi.fn().mockResolvedValue(undefined);
+    let enabled = true;
+    const unbind = bindAssistantCues(created, { playDictationCue }, () => enabled);
+
+    created.start();
+    expect(playDictationCue).toHaveBeenCalledTimes(1);
+    expect(playDictationCue).toHaveBeenCalledWith("ready");
+    created.send("Hello");
+    (FakeSession.opened[0] as FakeSession).emit({ type: "outputTranscription", text: "Hi!" });
+    (FakeSession.opened[0] as FakeSession).emit({ type: "turnComplete" });
+    expect(playDictationCue).toHaveBeenCalledTimes(1);
+    created.end();
+    expect(playDictationCue).toHaveBeenNthCalledWith(2, "done");
+    created.end();
+    expect(playDictationCue).toHaveBeenCalledTimes(2);
+
+    enabled = false;
+    created.start();
+    created.end();
+    expect(playDictationCue).toHaveBeenCalledTimes(2);
+    enabled = true;
+    created.start();
+    expect(playDictationCue).toHaveBeenNthCalledWith(3, "ready");
+    unbind();
+    created.end();
+    expect(playDictationCue).toHaveBeenCalledTimes(3);
+  });
+
+  it("ignores audio playback errors without interrupting Assistant", async () => {
+    const { created } = controller();
+    const playDictationCue = vi.fn().mockRejectedValue(new Error("No output device"));
+    const unbind = bindAssistantCues(created, { playDictationCue }, () => true);
+    created.start();
+    expect(created.getSnapshot().status).toBe("READY");
+    created.end();
+    await Promise.resolve();
+    expect(created.getSnapshot().status).toBe("IDLE");
+    expect(playDictationCue).toHaveBeenCalledTimes(2);
+    unbind();
+  });
+
+  it("never replays the ready cue on reconnect or during Assistant replies", () => {
+    const idle = { status: "IDLE" as const, resuming: false };
+    const connecting = { status: "CONNECTING" as const, resuming: false };
+    const ready = { status: "READY" as const, resuming: false };
+    const responding = { status: "RESPONDING" as const, resuming: false };
+    const reconnecting = { status: "CONNECTING" as const, resuming: true };
+    expect(assistantCueTransition(idle, connecting, false)).toEqual({ cue: null, readySeen: false });
+    expect(assistantCueTransition(connecting, ready, false)).toEqual({ cue: "ready", readySeen: true });
+    expect(assistantCueTransition(ready, responding, true).cue).toBeNull();
+    expect(assistantCueTransition(responding, ready, true).cue).toBeNull();
+    expect(assistantCueTransition(ready, reconnecting, true).cue).toBeNull();
+    expect(assistantCueTransition(reconnecting, ready, true)).toEqual({ cue: null, readySeen: true });
+    expect(assistantCueTransition(ready, idle, true)).toEqual({ cue: "done", readySeen: false });
+    expect(assistantCueTransition({ status: "ERROR", resuming: false }, idle, false).cue).toBeNull();
+  });
+
   it("plays a reply, returns to ready, and sends a second turn on the same session", () => {
     const { created, playback } = controller();
     created.start();
