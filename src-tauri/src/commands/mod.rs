@@ -11,6 +11,13 @@ pub const INDICATOR_WINDOW: &str = "indicator";
 #[cfg(windows)]
 #[cfg(windows)]
 #[tauri::command]
+pub async fn list_installed_apps() -> Result<Vec<platform::InstalledApp>, String> {
+    tauri::async_runtime::spawn_blocking(platform::list_installed_apps)
+        .await.map_err(|e| e.to_string())
+}
+
+#[cfg(windows)]
+#[tauri::command]
 pub async fn focus_accessible_control(app: AppHandle, expected_name: String) -> Result<String, String> {
     let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
     window.hide().map_err(|e| e.to_string())?;
