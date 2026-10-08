@@ -107,6 +107,46 @@ async function attachment(item: Item, auth: string, apiKey: string): Promise<{
   // media must be chunked before indexing, not mislabeled as successfully indexed.
   return { modality, part: { inline_data: { mime_type: mime, data: asBase64(bytes) } } };
 }
+/** Conservative extraction of named entities from explicitly remembered text only. */
+async function extractEntities(item: Item, uid: string, auth: string, apiKey: string): Promise<void> {
+  if (item.kind !== "memory" || !item.text || !GOOGLE_KEY) return;
+  try {
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GOOGLE_KEY },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text:
+          "Extract at most 4 clear named entities from a person's explicit saved memory. " +
+          "Return ONLY JSON array items {kind,label,evidence}. kind must be one of person, project, organization, goal, concept, decision, event. " +
+          "label must be an exact substring of evidence, and evidence an exact substring of input. " +
+          "Do not infer sensitive traits, identity, diagnoses, or relationships. Return [] when unsupported."
+        }] },
+        contents: [{ role: "user", parts: [{ text: item.text.slice(0, 1200) }] }],
+        generationConfig: { responseMimeType: "application/json" },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) return;
+    const body = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    const json = body.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("") ?? "[]";
+    const proposals: unknown = JSON.parse(json);
+    if (!Array.isArray(proposals)) return;
+    for (const row of proposals.slice(0, 4)) {
+      if (!row || typeof row !== "object") continue;
+      const proposal = row as Record<string, unknown>;
+      const kind = proposal.kind, label = proposal.label, evidence = proposal.evidence;
+      if (typeof kind !== "string" || typeof label !== "string" || typeof evidence !== "string" ||
+        !item.text.toLocaleLowerCase().includes(evidence.toLocaleLowerCase()) ||
+        !evidence.toLocaleLowerCase().includes(label.toLocaleLowerCase())) continue;
+      await rpc("assistant_memory_link_entity", {
+        p_user_id: uid, p_source_id: item.id, p_kind: kind, p_label: label, p_evidence: evidence,
+      }, auth, apiKey).catch(() => undefined);
+    }
+  } catch {
+    // Entity extraction is optional enrichment; indexing itself has already succeeded.
+  }
+}
+
 async function indexBatch(uid: string, auth: string, apiKey: string): Promise<Record<string, unknown>> {
   await rpc("assistant_memory_queue_sources", { p_user_id: uid, p_limit: 40 }, auth, apiKey);
   const batch = await rpc("assistant_memory_claim_batch", { p_user_id: uid, p_limit: 3 }, auth, apiKey);
@@ -127,8 +167,10 @@ async function indexBatch(uid: string, auth: string, apiKey: string): Promise<Re
         p_user_id: uid, p_source_id: item.id, p_fingerprint: item.fingerprint,
         p_modality: media.modality, p_values: JSON.stringify(vector),
       }, auth, apiKey);
-      if (committed === true) done++;
-      else failed++;
+      if (committed === true) {
+        done++;
+        await extractEntities(item, uid, auth, apiKey);
+      } else failed++;
     } catch (error) {
       failed++;
       if (typeof item?.id === "string" && typeof item?.fingerprint === "string") {
