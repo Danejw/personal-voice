@@ -497,6 +497,50 @@ describe("one producer across devices", () => {
     await vi.waitFor(() => expect(hostB.turns.map((item) => item.text)).toEqual(["Caught up"]));
   });
 
+  it("auto-selects the latest saved account conversation on another device and restores its context", async () => {
+    const api = new FakeApi();
+    const threadId = "44444444-4444-4444-8444-000000000510";
+    await api.create(USER_A, { id: threadId, title: "Cross device project" });
+    await api.append(USER_A, {
+      id: "44444444-4444-4444-8444-000000000511",
+      conversationId: threadId, role: "user", status: "final",
+      body: "Continue planning the voice workflow.", sourceDeviceId: DEVICE,
+    });
+    const host = new FakeHost();
+    const phone = new AssistantConversationStore(host, api, memory(),
+      () => "44444444-4444-4444-8444-000000000512", () => DEVICE_B);
+    await phone.setUser(USER_A);
+    expect(phone.getSnapshot().currentId).toBe(threadId);
+    expect(host.turns.map((item) => item.text)).toContain("Continue planning the voice workflow.");
+    await phone.produce();
+    expect(host.seeded.map((item) => item.text).join(" ")).toContain("Continue planning the voice workflow.");
+  });
+
+  it("waits for initial transcript hydration and deduplicates simultaneous start requests", async () => {
+    const api = new FakeApi();
+    const threadId = "44444444-4444-4444-8444-000000000520";
+    await api.create(USER_A, { id: threadId, title: "Recover me" });
+    await api.append(USER_A, {
+      id: "44444444-4444-4444-8444-000000000521",
+      conversationId: threadId, role: "user", status: "final",
+      body: "This conversation must resume.", sourceDeviceId: DEVICE,
+    });
+    const wait = deferred();
+    api.delayGet = wait.promise;
+    const host = new FakeHost();
+    const store = new AssistantConversationStore(host, api, memory(),
+      () => "44444444-4444-4444-8444-000000000522", () => DEVICE);
+    const loading = store.setUser(USER_A);
+    const first = store.produce();
+    const second = store.produce();
+    expect(first).toBe(second);
+    expect(host.starts).toBe(0);
+    wait.resolve();
+    await Promise.all([loading, first, second]);
+    expect(host.starts).toBe(1);
+    expect(host.seeded.map((item) => item.text).join(" ")).toContain("This conversation must resume.");
+  });
+
   it("seeds the next fresh session from the saved line", async () => {
     const { api, hostA, laptop } = pair();
     await laptop.setUser(USER_A);
