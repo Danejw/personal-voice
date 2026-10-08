@@ -91,6 +91,8 @@ import { transformProfilesApi } from "@/services/transformProfilesService";
 import {
   bindDeviceSettings,
   loadAssistantAutoRun,
+  loadAssistantRoutineAutoRun,
+  saveAssistantRoutineAutoRun,
   loadAssistantProfile,
   loadAutoUpdate,
   loadDictationSounds,
@@ -594,6 +596,7 @@ export default function App() {
   const [entryPhase, setEntryPhase] = useState<"checking" | "wizard" | "app">("checking");
   const [profileEnabled, setProfileEnabled] = useState(true);
   const [autoRun, setAutoRun] = useState(true);
+  const [routineAutoRun, setRoutineAutoRun] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(() => loadAutoUpdate());
   const [dictationSounds, setDictationSounds] = useState(() => loadDictationSounds());
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
@@ -791,6 +794,9 @@ export default function App() {
     const auto = loadAssistantAutoRun();
     setAutoRun(auto);
     assistant.setAutoRun(auto);
+    const routine = loadAssistantRoutineAutoRun();
+    setRoutineAutoRun(routine);
+    assistant.setRoutineAccessibilityAutoRun(routine);
     setAutoUpdate(loadAutoUpdate());
     setDictationSounds(loadDictationSounds());
   }, [settingsDeviceId]);
@@ -1325,6 +1331,16 @@ export default function App() {
                 saveAssistantAutoRun(enabled);
                 setAutoRun(enabled);
                 assistant.setAutoRun(enabled);
+              }}
+            />
+            <Toggle
+              label="Auto-run routine Windows controls"
+              description="Skip repeated approval for focus, scroll, selection, window arrangement, and reversible UI operations. Editing, invoking buttons, sending images, and starting monitoring still require your approval. Requires Auto-run actions."
+              checked={routineAutoRun}
+              onChange={(enabled) => {
+                saveAssistantRoutineAutoRun(enabled);
+                setRoutineAutoRun(enabled);
+                assistant.setRoutineAccessibilityAutoRun(enabled);
               }}
             />
             <Toggle
