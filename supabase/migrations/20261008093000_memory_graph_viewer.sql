@@ -62,9 +62,15 @@ begin
     left join allowed_sources s on s.source_kind = 'memory' and s.source_record_id = m.id
     where m.user_id = uid and m.status = 'active'
       and not exists (
-        select 1 from source_nodes existing
-        where existing.table_name = 'assistant_memories'
-          and existing.record_id = m.id::text
+        select 1
+        from public.assistant_memory_sources existing_source
+        join public.memory_graph_nodes existing_node
+          on existing_node.source_id = existing_source.id
+          and existing_node.user_id = uid
+          and existing_node.node_kind = 'source'
+        where existing_source.user_id = uid
+          and existing_source.source_kind = 'memory'
+          and existing_source.source_record_id = m.id
       )
     order by m.created_at desc, m.id
     limit p_limit
