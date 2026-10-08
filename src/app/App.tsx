@@ -391,8 +391,14 @@ assistant.setActions({
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
   searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
-  listPastConversations: (query, cursor) => listPastConversations(assistantConversationsApi, accountUserId ?? "", query, cursor),
+  listPastConversations: (query, cursor, count) => listPastConversations(assistantConversationsApi, accountUserId ?? "", query, cursor, count),
   readPastConversation: (conversationId) => readPastConversation(assistantConversationsApi, accountUserId ?? "", conversationId),
+  checkPastConversation: async (conversationId) => {
+    if (!accountUserId) throw new Error("Sign in to continue a conversation.");
+    const conversation = await assistantConversationsApi.get(accountUserId, conversationId);
+    return conversation.title;
+  },
+  continuePastConversation: (conversationId) => assistantLibrary.continueThread(conversationId),
   rememberMemory: (input) => assistantMemory.remember(input.kind, input.key, input.value),
   changeMemory: (input) => assistantMemory.change(input.key, input.value),
   forgetMemory: (key) => assistantMemory.forget(key),
