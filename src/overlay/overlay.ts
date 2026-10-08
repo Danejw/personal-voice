@@ -41,6 +41,7 @@ export interface OverlaySnapshot {
   assistantInterrupt: boolean;
   /** Live Camera Context is sending frames. Keep the indicator obvious and small. */
   cameraOn: boolean;
+  computerActive: boolean;
   remoteTargetId: string | null;
   remoteTargetLabel: string | null;
   /** Account device platform string (`android`, `windows`, …). */
@@ -94,6 +95,7 @@ export const emptyOverlaySnapshot: OverlaySnapshot = {
   pendingWorking: false,
   assistantInterrupt: false,
   cameraOn: false,
+  computerActive: false,
   remoteTargetId: null,
   remoteTargetLabel: null,
   remoteTargetPlatform: null,
@@ -212,6 +214,7 @@ export function buildOverlaySnapshot(input: {
   pendingWorking: boolean;
   assistantInterrupt?: boolean;
   cameraOn?: boolean;
+  computerActive?: boolean;
   remoteTargetId?: string | null;
   remoteTargetLabel?: string | null;
   remoteTargetPlatform?: string | null;
@@ -241,6 +244,7 @@ export function buildOverlaySnapshot(input: {
     pendingWorking: input.pendingWorking,
     assistantInterrupt: input.assistantInterrupt === true,
     cameraOn: input.cameraOn === true,
+    computerActive: input.computerActive === true,
     remoteTargetId: input.remoteTargetId ?? null,
     remoteTargetLabel: input.remoteTargetLabel ?? null,
     remoteTargetPlatform: input.remoteTargetPlatform ?? null,
