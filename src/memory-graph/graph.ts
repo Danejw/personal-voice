@@ -116,6 +116,16 @@ export function kindLabel(kind: string): string {
   return SOURCE_LABELS[kind] ?? kind.replace(/_/g, " ");
 }
 
+/** Keep loading/error/empty states distinct so a failed RPC cannot enter the SVG path. */
+export function graphCanvasState(
+  graph: GraphSnapshot | null,
+  error: string | null,
+  visibleCount: number,
+): "loading" | "error" | "empty" | "ready" {
+  if (!graph) return error ? "error" : "loading";
+  return visibleCount === 0 ? "empty" : "ready";
+}
+
 /** Text search filters nodes, then preserves their connections to visible nodes. */
 export function filterGraph(
   graph: GraphSnapshot, query: string, kind: string, connectedOnly: boolean,
