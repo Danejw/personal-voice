@@ -1602,8 +1602,8 @@ export class AssistantController {
         return invoke<string>("activate_accessible_window", { title: pending.text });
       case "uia_control_action": {
         if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
-        const payload = JSON.parse(pending.text) as {action: string; name: string; value: string | null};
-        return invoke<string>("uia_control_action", { action: payload.action, expectedName: payload.name, value: payload.value });
+        const payload = JSON.parse(pending.text) as {action: string; window: string; name: string; value: string | null};
+        return invoke<string>("uia_control_action", { action: payload.action, expectedWindow: payload.window, expectedName: payload.name, value: payload.value });
       }
       case "focus_accessible_control":
         if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
