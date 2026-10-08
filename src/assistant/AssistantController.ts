@@ -1166,10 +1166,8 @@ export class AssistantController {
     this.toolDepth += 1;
     try {
       for (const call of calls) {
-        if (!this.mayProduce()) {
-          if (call.id) this.replyTool(call.id, call.name, false, "Another device is continuing this conversation.");
-          continue;
-        }
+        // Tool execution is local to the active socket, not gated by the cloud transcript lease.
+        // The conversation store independently fences shared transcript writes.
         const decision = decideToolCall(call, (deviceName) => this.actions.planHandoff(deviceName));
         if (decision.kind === "ignore") continue;
         if (decision.kind === "reject") {
@@ -1439,24 +1437,11 @@ export class AssistantController {
   }
 
   private async finishPending(pending: ConfirmedTool, epoch: number) {
-    if (!this.mayProduce()) {
-      this.dispatch({ type: "actionNotice", message: "Another device is continuing this conversation. This device did not run that action." });
-      this.replyTool(pending.id, pending.name, false, "Another device is continuing this conversation.");
-      if (epoch === this.toolEpoch && this.pending?.id === pending.id) {
-        this.pending = null;
-        this.dispatch({ type: "clearPending" });
-      }
-      return;
-    }
+    // User-confirmed local actions do not require ownership of the shared transcript lease.
     try {
       const message = await this.execute(pending);
       if (epoch !== this.toolEpoch) return;
-      if (!this.mayProduce()) {
-        this.dispatch({ type: "actionNotice", message: "That action finished on this device. It was not run again." });
-        this.onToolRecord?.({ name: pending.name, outcome: message });
-        return;
-      }
-      this.replyTool(pending.id, pending.name, true, message);
+       this.replyTool(pending.id, pending.name, true, message);
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
       this.replyTool(pending.id, pending.name, false, toolFailure(error));
