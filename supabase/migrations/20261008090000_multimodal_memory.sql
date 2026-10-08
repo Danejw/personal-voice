@@ -251,7 +251,7 @@ begin
    and (s.state in ('pending','error') or (s.state='processing' and s.leased_until<now()))
    and (s.retry_after is null or s.retry_after<=now())
    and public.assistant_memory_source_allowed(uid,s.source_kind,s.source_record_id)
-  order by s.created_at for update skip locked limit p_limit
+  order by s.created_at limit p_limit for update skip locked
  ), claimed as (
   update public.assistant_memory_sources s set state='processing',attempts=s.attempts+1,
    leased_until=now()+interval '2 minutes',updated_at=now()
