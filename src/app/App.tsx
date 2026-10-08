@@ -285,6 +285,17 @@ assistant.setActions({
   insertText: (text) => pasteIntoField(text),
   createVoiceNote: (text) => notesStore.create(text, "assistant"),
   editVoiceNote: (id, text) => notesStore.updateText(id, text),
+  sendRemoteDictation: async (text, deviceName) => {
+    const snap = remoteDictation.getSnapshot();
+    const matches = snap.devices.filter((device) => device.name.toLocaleLowerCase() === deviceName.toLocaleLowerCase());
+    if (matches.length !== 1) throw new Error("Choose an exact, unique online remote device name.");
+    const target = remoteDictation.lockTarget(matches[0].id);
+    try {
+      await remoteDictation.send(text, target);
+    } finally {
+      remoteDictation.setActive(false);
+    }
+  },
   createTransform: (name, instruction) => transformStore.create(name, instruction),
   addDictionaryWord: async (word) => {
     const error = personalSync.addTerm(word);
