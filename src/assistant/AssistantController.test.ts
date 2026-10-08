@@ -124,6 +124,24 @@ describe("AssistantController", () => {
     expect(assistantCueTransition({ status: "ERROR", resuming: false }, idle, false).cue).toBeNull();
   });
 
+  it("lets the Assistant retrieve earlier transcripts without modifying them", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    const id = "33333333-3333-4333-8333-333333333333";
+    session.emit({ type: "toolCalls", calls: [
+      { id: "history-list", name: "list_past_conversations", args: { query: "earlier" } },
+      { id: "history-read", name: "read_past_conversation", args: { conversation_id: id } },
+    ] });
+    await vi.waitFor(() => expect(actions.readPastConversation).toHaveBeenCalledWith(id));
+    expect(actions.listPastConversations).toHaveBeenCalledWith("earlier", null);
+    expect(session.responses).toHaveLength(2);
+    expect(JSON.stringify(session.responses)).toContain("Earlier talk");
+    created.end();
+  });
+
   it("plays a reply, returns to ready, and sends a second turn on the same session", () => {
     const { created, playback } = controller();
     created.start();
