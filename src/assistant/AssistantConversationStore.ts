@@ -386,6 +386,12 @@ export class AssistantConversationStore {
       }
       if (this.error) throw new Error(this.error);
     }
+    // A start already in flight for the previous thread must settle before we
+    // can claim and open this thread, otherwise produce() would reuse it.
+    if (this.producing) await this.producing.catch(() => undefined);
+    if (this.userId !== userId || this.currentId !== conversation.id) {
+      throw new Error("The conversation changed before starting.");
+    }
     await this.produce();
     if (this.userId !== userId || this.currentId !== conversation.id) {
       throw new Error("The conversation changed before the session started.");
