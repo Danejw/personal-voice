@@ -52,6 +52,13 @@ pub async fn inspect_pointer_context() -> Result<platform::PointerContext, Strin
 
 #[cfg(windows)]
 #[tauri::command]
+pub async fn capture_pointer_snapshot() -> Result<platform::SnapshotFrame, String> {
+    tauri::async_runtime::spawn_blocking(platform::capture_pointer_snapshot)
+        .await.map_err(|e| e.to_string())?
+}
+
+#[cfg(windows)]
+#[tauri::command]
 pub async fn inspect_accessibility_tree(app:AppHandle)->Result<platform::AccessibilityTreeReport,String>{
     let window=app.get_webview_window("main").ok_or("Settings window missing")?;
     window.hide().map_err(|e|e.to_string())?;
