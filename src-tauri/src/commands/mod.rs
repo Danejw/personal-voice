@@ -413,6 +413,9 @@ pub fn sync_assistant_popup(app: AppHandle, payload: serde_json::Value) -> Resul
         let y = pos.y + 20;
         window.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e|e.to_string())?;
     }
+    #[cfg(windows)]
+    platform::show_assistant_card(&window)?;
+    #[cfg(not(windows))]
     platform::show_without_focus(&window)?;
     app.emit_to("assistant-popup", "assistant-popup-state", payload).map_err(|e|e.to_string())
 }
