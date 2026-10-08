@@ -4,7 +4,7 @@
 use std::sync::{atomic::{AtomicBool,Ordering}, mpsc::{self,Sender}, Mutex,OnceLock};
 use std::thread::{self,JoinHandle};
 use std::time::{Duration,Instant};
-use tauri::{AppHandle,Emitter};
+use tauri::{AppHandle,Emitter,Manager,PhysicalPosition,PhysicalSize};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::Accessibility::{SetWinEventHook,UnhookWinEvent,HWINEVENTHOOK,
     WINEVENT_OUTOFCONTEXT,WINEVENT_SKIPOWNPROCESS};
@@ -60,9 +60,22 @@ pub fn start(app:AppHandle)->Result<String,String>{
             if let Some(event)=newest{
                 if previous.elapsed()>=Duration::from_millis(180){
                     previous=Instant::now();
+                    let kind=event_name(event);
+                    let window=foreground_window_title();
                     let _=app.emit_to("main","accessibility-event",serde_json::json!({
-                        "kind":event_name(event), "windowTitle":foreground_window_title()
+                        "kind":kind, "windowTitle":window
                     }));
+                    if matches!(kind,"focus"|"window"|"selection") {
+                        if let (Some(bounds),Some(highlight))=(super::accessibility_plus::focused_element_bounds(),
+                            app.get_webview_window("computer-visual")){
+                            let _=highlight.set_ignore_cursor_events(true);
+                            let _=highlight.set_position(PhysicalPosition::new(bounds.x,bounds.y));
+                            let _=highlight.set_size(PhysicalSize::new(bounds.width as u32,bounds.height as u32));
+                            let _=highlight.show();
+                            let _=app.emit_to("computer-visual","computer-visual-activity",
+                                serde_json::json!({"label":"Live UI focus","phase":"inspect"}));
+                        }
+                    }
                 }
             }
             thread::sleep(Duration::from_millis(40));
