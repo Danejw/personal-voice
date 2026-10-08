@@ -204,6 +204,7 @@ export class AssistantController {
   private onRevised: ((turn: AssistantTurn) => void) | null = null;
   private computerStopped = false;
   private computerConfirm: ((allowed: boolean) => void) | null = null;
+  private computerApprovalNumber = 0;
   /** Off shows a confirm card. On runs the action when the tool is called. */
   private autoRun = true;
   private autoApproveRoutineAccessibility = false;
@@ -1638,7 +1639,8 @@ export class AssistantController {
   private confirmComputerStep(explanation: string): Promise<boolean> {
     if (this.computerStopped) return Promise.resolve(false);
     if (this.autoRun) return Promise.resolve(true);
-    this.dispatch({ type: "computer", running: true, prompt: explanation });
+    const approvalId = `computer-${++this.computerApprovalNumber}`;
+    this.dispatch({ type: "computer", running: true, prompt: explanation, approvalId });
     return new Promise((resolve) => {
       this.computerConfirm = (allowed) => {
         this.computerConfirm = null;
