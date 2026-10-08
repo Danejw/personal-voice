@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen, emitTo } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 
 export type AssistantPopupPayload =
   | { kind: "hidden" }
@@ -14,6 +15,10 @@ export default function AssistantPopup() {
     const subscription = listen<AssistantPopupPayload>("assistant-popup-state", (event) => {
       setState(event.payload);
       setBusy(false);
+    }).then(async (unsubscribe) => {
+      const current = await invoke<AssistantPopupPayload>("assistant_popup_state").catch(() => null);
+      if (current) setState(current);
+      return unsubscribe;
     });
     return () => { void subscription.then((unsubscribe) => unsubscribe()); };
   }, []);
