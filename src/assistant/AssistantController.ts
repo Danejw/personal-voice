@@ -81,6 +81,7 @@ export interface AssistantActions {
   insertText(text: string): Promise<void>;
   createVoiceNote(text: string): Promise<void>;
   editVoiceNote(id: string, text: string): Promise<void>;
+  sendRemoteDictation(text: string, device: string): Promise<void>;
   createTransform(name: string, instruction: string): Promise<void>;
   addDictionaryWord(word: string): Promise<void>;
   readDashboard(kind: "read_usage_analytics" | "read_insights"): Promise<string>;
@@ -219,6 +220,7 @@ export class AssistantController {
       insertText: unavailable,
       createVoiceNote: unavailable,
       editVoiceNote: unavailable,
+      sendRemoteDictation: unavailable,
       createTransform: unavailable,
       addDictionaryWord: unavailable,
       readDashboard: async () => { throw new Error("Assistant dashboards are not available."); },
@@ -1501,6 +1503,11 @@ export class AssistantController {
       case "insert_text":
         await this.actions.insertText(pending.text);
         return "Inserted the text into the focused app.";
+      case "send_remote_dictation": {
+        const input = JSON.parse(pending.text) as {text: string; device: string};
+        await this.actions.sendRemoteDictation(input.text, input.device);
+        return `Sent dictation to ${input.device}.`;
+      }
       case "edit_voice_note": {
         const input = JSON.parse(pending.text) as {id: string; text: string};
         await this.actions.editVoiceNote(input.id, input.text);
