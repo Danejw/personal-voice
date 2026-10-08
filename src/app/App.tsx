@@ -296,7 +296,9 @@ assistant.setActions({
     const snap = remoteDictation.getSnapshot();
     const matches = snap.devices.filter((device) => device.name.toLocaleLowerCase() === deviceName.toLocaleLowerCase());
     if (matches.length !== 1) throw new Error("Choose an exact, unique online remote device name.");
-    const target = remoteDictation.lockTarget(matches[0].id);
+    const selected = matches[0];
+    if (!selected) throw new Error("Choose an exact, unique online remote device name.");
+    const target = remoteDictation.lockTarget(selected.id);
     try {
       await remoteDictation.send(text, target);
     } finally {
