@@ -54,3 +54,19 @@ $$;
 create trigger assistant_memory_dictation_delete after delete on public.dictations
  for each row execute function public.assistant_memory_sync_dictation();
 revoke all on function public.assistant_memory_sync_dictation() from public,anon,authenticated;
+
+-- A changed source is not permitted to retain edges inferred from its old text.
+create function public.assistant_memory_drop_stale_index()
+returns trigger language plpgsql security definer set search_path='' as $$
+begin
+ if old.fingerprint is distinct from new.fingerprint then
+  delete from public.memory_graph_nodes where user_id=new.user_id and source_id=new.id;
+  delete from public.assistant_memory_embeddings where user_id=new.user_id and source_id=new.id;
+ end if;
+ return new;
+end;
+$$;
+create trigger assistant_memory_source_fingerprint_changed
+ after update of fingerprint on public.assistant_memory_sources
+ for each row execute function public.assistant_memory_drop_stale_index();
+revoke all on function public.assistant_memory_drop_stale_index() from public,anon,authenticated;
