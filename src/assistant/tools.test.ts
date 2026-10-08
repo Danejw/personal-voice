@@ -62,6 +62,7 @@ describe("assistant tool schema", () => {
       "press_shortcut",
       "supervise_screen",
       "list_memories",
+      "search_memory",
       "remember_memory",
       "change_memory",
       "forget_memory",
@@ -70,6 +71,13 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("replace_selection");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
+  });
+
+  it("validates and routes bounded semantic memory search", () => {
+    expect(decideToolCall({ id: "s1", name: "search_memory", args: { query: "project details" } }, plan)).toEqual({
+      kind: "memorySearch", id: "s1", name: "search_memory", query: "project details",
+    });
+    expect(decideToolCall({ id: "s2", name: "search_memory", args: { query: " " } }, plan).kind).toBe("reject");
   });
 
   it("accepts session end and confirms a destination before pasting a camera photo", () => {
