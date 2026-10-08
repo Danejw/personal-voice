@@ -220,6 +220,9 @@ pub fn focus_accessible_control(expected_name: &str) -> Result<String, String> {
 pub struct UiActionResult { pub message: String, pub bounds: Option<UiBounds> }
 
 pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) -> Result<UiActionResult, String> {
+    if expected_window.is_empty() || expected_window.chars().count() > 120 {
+        return Err("Provide the exact active window title from inspection.".into());
+    }
     if expected_name.is_empty() || expected_name.chars().count() > 280 {
         return Err("Provide the exact control name from inspection.".into());
     }
@@ -236,6 +239,9 @@ pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) ->
             .map_err(|e| format!("UI Automation unavailable: {e}"))?;
         let hwnd = unsafe { GetForegroundWindow() };
         if hwnd.0.is_null() { return Err("No foreground window.".into()); }
+        if window_title().as_deref() != Some(expected_window) {
+            return Err("Foreground application changed. Inspect the intended window again.".into());
+        }
         let root = unsafe { automation.ElementFromHandle(hwnd) }
             .map_err(|e| format!("Cannot inspect foreground application: {e}"))?;
         let walker = unsafe { automation.ControlViewWalker() }.map_err(|e| e.to_string())?;
