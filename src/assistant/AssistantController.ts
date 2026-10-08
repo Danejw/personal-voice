@@ -110,6 +110,8 @@ export interface AssistantActions {
   /** Active and forgotten memories for this account. */
   listMemories(): Promise<string>;
   searchMemory(query: string): Promise<string>;
+  listPastConversations(query: string, cursor: string | null): Promise<string>;
+  readPastConversation(conversationId: string): Promise<string>;
   rememberMemory(input: { key: string; kind: "preference" | "fact"; value: string }): Promise<string>;
   changeMemory(input: { key: string; value: string }): Promise<string>;
   forgetMemory(key: string): Promise<string>;
@@ -245,6 +247,8 @@ export class AssistantController {
       dismissHandoff: unavailable,
       listMemories: async () => { throw new Error("Assistant actions are not available."); },
       searchMemory: async () => { throw new Error("Memory search is not configured."); },
+      listPastConversations: async () => { throw new Error("Conversation history is unavailable."); },
+      readPastConversation: async () => { throw new Error("Conversation history is unavailable."); },
       rememberMemory: async () => { throw new Error("Assistant actions are not available."); },
       changeMemory: async () => { throw new Error("Assistant actions are not available."); },
       forgetMemory: async () => { throw new Error("Assistant actions are not available."); },
@@ -1270,6 +1274,10 @@ export class AssistantController {
           await this.runNotes(decision);
           continue;
         }
+        if (decision.kind === "conversations" || decision.kind === "conversationRead") {
+          await this.runConversationHistory(decision);
+          continue;
+        }
         if (decision.kind === "memories") {
           await this.runMemories(decision);
           continue;
@@ -1341,6 +1349,21 @@ export class AssistantController {
       } catch { return false; }
     }
     return true;
+  }
+
+  private async runConversationHistory(decision: Extract<ToolDecision, { kind: "conversations" | "conversationRead" }>) {
+    const epoch = this.toolEpoch;
+    const generation = this.generation;
+    try {
+      const answer = decision.kind === "conversations"
+        ? await this.actions.listPastConversations(decision.query, decision.cursor)
+        : await this.actions.readPastConversation(decision.conversationId);
+      if (epoch !== this.toolEpoch || generation !== this.generation) return;
+      this.replyTool(decision.id, decision.name, true, answer);
+    } catch (error) {
+      if (epoch !== this.toolEpoch || generation !== this.generation) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
   }
 
   private async runRemote(decision: Extract<ToolDecision, { kind: "remote" }>) {
