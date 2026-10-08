@@ -181,6 +181,23 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
+      name: "list_windows",
+      description: "Read visible Windows application window titles to navigate between them.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
+      name: "navigate_window",
+      description: "Activate an existing application window with the exact title from list_windows. Requires confirmation.",
+      parameters: { type: "object", properties: { title: { type: "string" } }, required: ["title"] },
+    },
+    {
+      name: "uia_control_action",
+      description: "Windows accessibility action on an inspected, exact-name focused element. Operations: focus, invoke, select, expand, collapse, scroll-up, scroll-down, set-value. Confirm before acting. For set-value supply text. Never attempt passwords, destructive changes, submissions, purchases or OS settings.",
+      parameters: { type: "object", properties: {
+        action: { type: "string" }, name: { type: "string" }, value: { type: "string" }
+      }, required: ["action", "name"] },
+    },
+    {
       name: "list_installed_apps",
       description: "Windows only. Discover installed apps by Start Menu shortcut name; use exact returned names to open apps.",
       parameters: { type: "object", properties: {} },
@@ -297,6 +314,8 @@ export type ConfirmToolName =
   | "insert_text"
   | "create_voice_note"
   | "focus_accessible_control"
+  | "navigate_window"
+  | "uia_control_action"
   | "invoke_accessible_control"
   | "create_snippet"
   | "update_snippet"
@@ -327,6 +346,7 @@ export type ToolDecision =
   | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
   | { kind: "selection"; id: string; name: "capture_selection" }
   | { kind: "accessibility"; id: string; name: "inspect_active_app" }
+  | { kind: "windows"; id: string; name: "list_windows" }
   | { kind: "apps"; id: string; name: "list_installed_apps" }
   | { kind: "snippets"; id: string; name: "list_snippets" }
   | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
@@ -404,6 +424,8 @@ export function decideToolCall(
       return { kind: "accessibility", id: call.id, name: "inspect_active_app" };
     case "capture_selection":
       return { kind: "selection", id: call.id, name: "capture_selection" };
+    case "list_windows":
+      return { kind: "windows", id: call.id, name: "list_windows" };
     case "list_installed_apps":
       return { kind: "apps", id: call.id, name: "list_installed_apps" };
     case "list_snippets":
@@ -429,6 +451,23 @@ export function decideToolCall(
           : `Remember ${memory.key}`;
       const body = memory.action === "forget" ? memory.key : memory.value;
       return confirm(call.id, call.name, body, title, null, null, memory);
+    }
+    case "navigate_window": {
+      if (typeof args.title !== "string" || !args.title.trim() || args.title.length > 120) {
+        return { kind: "reject", id: call.id, name: call.name, message: "Provide an exact window title." };
+      }
+      return confirm(call.id, "navigate_window", args.title, "Switch to Windows application", null, null);
+    }
+    case "uia_control_action": {
+      const choices = ["focus", "invoke", "select", "expand", "collapse", "scroll-up", "scroll-down", "set-value"];
+      if (typeof args.action !== "string" || !choices.includes(args.action) ||
+          typeof args.name !== "string" || !args.name.trim() || args.name.length > 280 ||
+          (args.action === "set-value" && (typeof args.value !== "string" || args.value.length > 1000))) {
+        return {kind: "reject", id: call.id, name: call.name, message: "Invalid accessibility control action."};
+      }
+      return confirm(call.id, "uia_control_action", JSON.stringify({
+        action: args.action, name: args.name, value: args.action === "set-value" ? args.value : null
+      }), "Control Windows accessibility element", null, null);
     }
     case "focus_accessible_control":
     case "invoke_accessible_control": {
