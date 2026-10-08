@@ -23,6 +23,22 @@
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows"
       },
       {
+        "label": "computer-visual",
+        "title": "Personal Voice Computer Activity",
+        "width": 300,
+        "height": 160,
+        "visible": false,
+        "focus": false,
+        "focusable": false,
+        "decorations": false,
+        "transparent": true,
+        "backgroundColor": "#00000000",
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false
+      },
+      {
         "label": "indicator",
         "title": "Personal Voice",
         "width": 44,
