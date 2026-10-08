@@ -63,6 +63,7 @@ describe("assistant setup and typed turns", () => {
       "start_camera_context",
       "stop_camera_context",
       "inspect_active_app",
+    "focus_accessible_control",
     "invoke_accessible_control",
     "list_snippets",
     "create_snippet",
