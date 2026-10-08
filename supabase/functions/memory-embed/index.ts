@@ -151,6 +151,7 @@ async function extractEntities(item: Item, uid: string, auth: string, apiKey: st
 }
 
 async function indexBatch(uid: string, auth: string, apiKey: string): Promise<Record<string, unknown>> {
+  if (!GOOGLE_KEY) throw new Error("Gemini embedding is not configured; no jobs were claimed.");
   await rpc("assistant_memory_queue_sources", { p_user_id: uid, p_limit: 40 }, auth, apiKey);
   const batch = await rpc("assistant_memory_claim_batch", { p_user_id: uid, p_limit: 3 }, auth, apiKey);
   if (!Array.isArray(batch)) throw new Error("Malformed memory job response.");
