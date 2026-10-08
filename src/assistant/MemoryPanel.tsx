@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getSupabase } from "@/services/supabase";
+import { attachFileToMemory, indexNextMemoryBatch } from "@/services/personalMemoryService";
 import { SelectField } from "@/components/SelectField";
 import { Toggle } from "@/components/Toggle";
 import type { AssistantMemory, MemoryKind } from "@/assistant/memory";
@@ -20,6 +22,87 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [semanticEnabled, setSemanticEnabled] = useState(false);
+  const [semanticBusy, setSemanticBusy] = useState(false);
+  const [notesSearch, setNotesSearch] = useState(false);
+  const [dictationSearch, setDictationSearch] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!signedIn) { return; }
+    const client = getSupabase();
+    if (!client) return;
+    void (async () => {
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return;
+      const { data } = await client.from("settings").select("assistant_semantic_search, assistant_recall_notes, assistant_recall_dictations").eq("user_id", user.id).maybeSingle();
+      if (!cancelled) {
+        setSemanticEnabled(data?.assistant_semantic_search ?? false);
+        setNotesSearch(data?.assistant_recall_notes ?? false);
+        setDictationSearch(data?.assistant_recall_dictations ?? false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [signedIn]);
+
+  async function toggleSemantic(enabled: boolean): Promise<void> {
+    const client = getSupabase();
+    if (!client) return;
+    setSemanticBusy(true);
+    try {
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) throw new Error("Sign in to change semantic indexing.");
+      const { data, error } = await client.from("settings").update({ assistant_semantic_search: enabled })
+        .eq("user_id", user.id).select("user_id").maybeSingle();
+      if (error || !data) throw new Error(error?.message ?? "Your account settings are not ready.");
+      setSemanticEnabled(enabled);
+      setNotice(enabled ? "Other eligible saved content may now be indexed." : "Indexing of other saved content is disabled.");
+      if (enabled) void indexNextMemoryBatch().catch(() => undefined);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not change semantic search.");
+    } finally { setSemanticBusy(false); }
+  }
+
+  async function toggleSource(kind: "notes" | "dictations", enabled: boolean): Promise<void> {
+    const client = getSupabase();
+    if (!client) return;
+    setSemanticBusy(true);
+    try {
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) throw new Error("Sign in to manage memory sources.");
+      const patch = kind === "notes" ? { assistant_recall_notes: enabled } : { assistant_recall_dictations: enabled };
+      const { data, error } = await client.from("settings").update(patch)
+        .eq("user_id", user.id).select("user_id").maybeSingle();
+      if (error || !data) throw new Error(error?.message ?? "Account settings unavailable.");
+      if (kind === "notes") setNotesSearch(enabled);
+      else setDictationSearch(enabled);
+      setNotice(`${kind === "notes" ? "Notes" : "Dictations"} search ${enabled ? "enabled" : "disabled"}.`);
+      if (enabled && semanticEnabled) void indexNextMemoryBatch().catch(() => undefined);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not change source preferences.");
+    } finally { setSemanticBusy(false); }
+  }
+
+  async function attachMemoryFile(memoryId: string, file: File): Promise<void> {
+    setSemanticBusy(true);
+    try {
+      await attachFileToMemory(memoryId, file);
+      setNotice("Saved the private attachment. Indexing up to three pending memory sources.");
+      void indexNextMemoryBatch().catch(() => undefined);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not save the attachment.");
+    } finally { setSemanticBusy(false); }
+  }
+
+  async function indexPending(): Promise<void> {
+    setSemanticBusy(true);
+    try {
+      const result = await indexNextMemoryBatch();
+      setNotice(`Indexed ${result.processed} source(s) with Gemini ${result.dimensions}-dimensional embeddings; ${result.failed} failed. ${result.claimed} claimed.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Memory indexing is unavailable.");
+    } finally { setSemanticBusy(false); }
+  }
   const active = snapshot.memories.filter((row) => row.status === "active");
   const candidates = snapshot.memories.filter((row) => row.status === "candidate");
   const forgotten = forgottenKeys(snapshot.memories);
@@ -84,6 +167,23 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
           onChange={onLearningChange}
         />
       )}
+      {signedIn && <Toggle
+        label="Semantic search across saved content"
+        description="Optional. Search eligible notes and saved Assistant conversations in addition to explicit memories. Other source permissions still apply."
+        checked={semanticEnabled}
+        disabled={semanticBusy}
+        onChange={(enabled) => { void toggleSemantic(enabled); }}
+      />}
+      {signedIn && <Toggle label="Include saved Notes in search"
+        description="Notes stay separate from permanent Assistant memories."
+        checked={notesSearch} disabled={semanticBusy}
+        onChange={(enabled) => { void toggleSource("notes", enabled); }} />}
+      {signedIn && <Toggle label="Include synced Dictations in search"
+        description="Requires the separate Sync recent dictations setting. Never uploads local-only history."
+        checked={dictationSearch} disabled={semanticBusy}
+        onChange={(enabled) => { void toggleSource("dictations", enabled); }} />}
+      {signedIn && <p>Multimodal Gemini Embedding 2 · 1536 dimensions. Files are private and saved only when attached explicitly.</p>}
+      {signedIn && <button type="button" className="secondary" disabled={semanticBusy} onClick={() => { void indexPending(); }}>Index next three memories</button>}
       {snapshot.offline && <p>Showing the saved copy on this device. Assistant will not use it until it reconnects.</p>}
       {signedIn && (
         <form className="field stack" onSubmit={(event) => { event.preventDefault(); void remember(); }}>
@@ -108,6 +208,10 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
               <strong>{row.key}</strong> · {row.kind} · {row.origin} · revision {row.revision}
               <p>{row.value}</p>
               <p>{sourceLine(row)}</p>
+              <label className="field">Attach image, audio, video, or PDF
+                <input type="file" accept=".jpg,.jpeg,.png,.mp3,.wav,.mp4,.mov,.pdf" disabled={snapshot.saving || semanticBusy}
+                  onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void attachMemoryFile(row.id, file); event.currentTarget.value = ""; }} />
+              </label>
               {editing === row.key ? (
                 <form className="field" onSubmit={(event) => { event.preventDefault(); void save(row); }}>
                   <input value={draft} onChange={(event) => setDraft(event.target.value)} aria-label={`New value for ${row.key}`} />
