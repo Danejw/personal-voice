@@ -267,7 +267,7 @@ pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) ->
                 let p = unsafe { element.GetCurrentPattern(UIA_ScrollPatternId) }
                     .map_err(|_| "ScrollPattern not supported.")?.cast::<IUIAutomationScrollPattern>()
                     .map_err(|e| e.to_string())?;
-                let amount = if action == "scroll-down" { ScrollAmount(1) } else { ScrollAmount(0) };
+                let amount = if action == "scroll-down" { ScrollAmount(4) } else { ScrollAmount(1) };
                 unsafe { p.Scroll(ScrollAmount(2), amount) }.map_err(|e| e.to_string())?;
             },
             "set-value" => {
