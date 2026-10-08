@@ -14,8 +14,9 @@ fn visual_target(app: &AppHandle, bounds: platform::UiBounds, label: &str, phase
         let _ = window.set_position(PhysicalPosition::new(bounds.x, bounds.y));
         let _ = window.set_size(PhysicalSize::new(bounds.width as u32, bounds.height as u32));
         let _ = window.show();
-        let _ = app.emit_to("computer-visual", "computer-visual-activity",
-            serde_json::json!({"label": label, "phase": phase}));
+        let payload = serde_json::json!({"label": label, "phase": phase});
+        let _ = app.emit_to("computer-visual", "computer-visual-activity", payload.clone());
+        let _ = app.emit_to("main", "computer-activity", payload);
     }
 }
 
@@ -57,9 +58,17 @@ pub async fn inspect_accessible_elements(app: AppHandle) -> Result<Vec<platform:
 pub async fn uia_control_action(app: AppHandle, action: String, expected_window: String, expected_name: String, value: Option<String>) -> Result<String, String> {
     let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
     window.hide().map_err(|e| e.to_string())?;
-    let action_label = action.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    let action_label = format!("{} · {}", action, expected_name);
+    // The target is first outlined at window level, before changing its UI.
+    // The exact element bounds replace this highlight after the operation.
+    let before_bounds = tauri::async_runtime::spawn_blocking(|| {
         std::thread::sleep(std::time::Duration::from_millis(180));
+        platform::foreground_bounds()
+    }).await.ok().flatten();
+    if let Some(bounds) = before_bounds {
+        visual_target(&app, bounds, &action_label, "action");
+    }
+    let result = tauri::async_runtime::spawn_blocking(move || {
         platform::control_action(&action, &expected_window, &expected_name, value.as_deref())
     }).await.map_err(|e| e.to_string()).and_then(|v| v);
     // Restore Settings without stealing focus from the app being controlled.
