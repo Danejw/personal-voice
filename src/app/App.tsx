@@ -285,6 +285,13 @@ assistant.setActions({
   insertText: (text) => pasteIntoField(text),
   createVoiceNote: (text) => notesStore.create(text, "assistant"),
   editVoiceNote: (id, text) => notesStore.updateText(id, text),
+  listSnippets: async () => {
+    const snap = snippetStore.getSnapshot();
+    if (snap.status === "signed-out") throw new Error("Sign in to read snippets.");
+    return JSON.stringify({ status: snap.status, snippets: snap.snippets.map(({id, trigger, content, enabled}) => ({id, trigger, content, enabled})) }).slice(0, 8000);
+  },
+  createSnippet: (trigger, content) => snippetStore.create(trigger, content),
+  updateSnippet: (id, trigger, content) => snippetStore.update(id, trigger, content),
   sendRemoteDictation: async (text, deviceName) => {
     const snap = remoteDictation.getSnapshot();
     const matches = snap.devices.filter((device) => device.name.toLocaleLowerCase() === deviceName.toLocaleLowerCase());
