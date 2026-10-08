@@ -99,6 +99,8 @@ pub fn run() {
             commands::inspect_accessibility,
             #[cfg(windows)]
             commands::invoke_accessible_control,
+            #[cfg(windows)]
+            commands::focus_accessible_control,
             commands::open_allowlisted_app,
             commands::press_allowlisted_shortcut,
             commands::computer_capture,
