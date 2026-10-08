@@ -1539,6 +1539,7 @@ export class AssistantController {
   }
 
   private haltComputer(): void {
+    if (navigator.userAgent.includes("Windows")) void invoke("hide_computer_visual").catch(() => undefined);
     this.computerStopped = true;
     const confirm = this.computerConfirm;
     this.computerConfirm = null;
