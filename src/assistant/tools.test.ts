@@ -38,6 +38,7 @@ describe("assistant tool schema", () => {
       "start_camera_context",
       "stop_camera_context",
       "inspect_active_app",
+    "inspect_accessible_elements",
     "list_windows",
     "navigate_window",
     "uia_control_action",
