@@ -156,3 +156,31 @@ pub fn invoke_focused_control(expected_name: &str) -> Result<String, String> {
     unsafe { CoUninitialize() };
     result
 }
+
+/** Focus a Windows UI Automation control with a verified exact accessible name.
+ * Never attempts to type, invoke or change values.
+ */
+pub fn focus_accessible_control(expected_name: &str) -> Result<String, String> {
+    if expected_name.trim().is_empty() || expected_name.chars().count() > 280 {
+        return Err("Provide the exact focused control name.".into());
+    }
+    unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
+        .ok().map_err(|e| format!("Accessibility initialization failed: {e}"))?;
+    let result = (|| -> Result<String, String> {
+        let automation: IUIAutomation = unsafe {
+            CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+        }.map_err(|e| format!("UI Automation unavailable: {e}"))?;
+        let element = unsafe { automation.GetFocusedElement() }
+            .map_err(|e| format!("No focused element: {e}"))?;
+        if unsafe { element.CurrentIsPassword() }.map(|v| v.as_bool()).unwrap_or(true) {
+            return Err("Protected controls are unavailable.".into());
+        }
+        let name = unsafe { element.CurrentName() }
+            .map_err(|e| format!("Name unavailable: {e}"))?.to_string();
+        if name != expected_name { return Err("The focused control changed. Inspect again.".into()); }
+        unsafe { element.SetFocus() }.map_err(|e| format!("Cannot focus control: {e}"))?;
+        Ok(format!("Focused accessible control '{name}'."))
+    })();
+    unsafe { CoUninitialize() };
+    result
+}
