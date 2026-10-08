@@ -284,6 +284,21 @@ assistant.setActions({
   copyText: (text) => navigator.clipboard.writeText(text),
   insertText: (text) => pasteIntoField(text),
   createVoiceNote: (text) => notesStore.create(text, "assistant"),
+  editVoiceNote: (id, text) => notesStore.updateText(id, text),
+  createTransform: (name, instruction) => transformStore.create(name, instruction),
+  addDictionaryWord: async (word) => {
+    const error = personalSync.addTerm(word);
+    if (error) throw new Error(error);
+    await personalSync.settled();
+  },
+  readDashboard: async (kind) => {
+    if (kind === "read_insights") {
+      const snapshot = insightsStore.getSnapshot();
+      return JSON.stringify({ status: snapshot.status, candidates: snapshot.candidates.slice(0, 40) });
+    }
+    const snapshot = usage.getSnapshot();
+    return JSON.stringify({ days: snapshot.days.slice(-30), remote: snapshot.remote.slice(-30) });
+  },
   planHandoff: (deviceName) => {
     const snap = handoffs.getSnapshot();
     const only = snap.devices[0];
