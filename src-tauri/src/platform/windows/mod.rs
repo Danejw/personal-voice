@@ -22,7 +22,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 pub use installed_apps::{list_installed_apps, open_start_menu_app, InstalledApp};
-pub use accessibility::{inspect_accessibility, invoke_focused_control, focus_accessible_control, foreground_bounds, UiBounds, AccessibilityContext};
+pub use accessibility::{inspect_accessibility, invoke_focused_control, focus_accessible_control, control_action, foreground_bounds, UiBounds, AccessibilityContext};
 pub use autostart::{launch_at_login, set_launch_at_login};
 pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_shortcut};
 pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
@@ -30,7 +30,7 @@ pub use hook::{set_active as set_dictation_active, set_paused};
 pub use insert::{capture_selection, finish_pending_restore, insert_text};
 pub use live_text::live_dictation_text;
 pub use snapshot::capture_snapshot;
-pub use windows_info::describe_windows;
+pub use windows_info::{describe_windows, activate_window};
 
 use push_to_talk::{DestOverride, LongPressShortcut, PttEvent, Shortcut};
 
