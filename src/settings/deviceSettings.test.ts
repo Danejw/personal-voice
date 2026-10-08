@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bindDeviceSettings,
   loadAssistantAutoRun,
+  loadAssistantRoutineAutoRun,
   loadAutoUpdate,
   loadDestination,
   loadDictationSounds,
@@ -17,6 +18,7 @@ import {
   loadStoredRemoteDictationHotkey,
   loadStoredVoiceNoteHotkey,
   saveAssistantAutoRun,
+  saveAssistantRoutineAutoRun,
   saveAutoUpdate,
   saveDestination,
   saveDictationSounds,
@@ -71,6 +73,16 @@ describe("device settings", () => {
 
     saveDictationSounds(true, storage, "windows");
     expect(loadDictationSounds(storage, "windows")).toBe(true);
+  });
+
+  it("keeps routine accessibility auto-run off until explicitly enabled per device", () => {
+    const storage=memoryStorage();
+    expect(loadAssistantRoutineAutoRun(storage,"windows")).toBe(false);
+    saveAssistantRoutineAutoRun(true,storage,"windows");
+    expect(loadAssistantRoutineAutoRun(storage,"windows")).toBe(true);
+    expect(loadAssistantRoutineAutoRun(storage,"android")).toBe(false);
+    saveAssistantRoutineAutoRun(false,storage,"windows");
+    expect(loadAssistantRoutineAutoRun(storage,"windows")).toBe(false);
   });
 
   it("keeps Windows and Android preferences on separate device ids", () => {

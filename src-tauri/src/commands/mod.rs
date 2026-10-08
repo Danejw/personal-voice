@@ -7,6 +7,35 @@ use crate::platform;
 
 pub const INDICATOR_WINDOW: &str = "indicator";
 
+/// Sync one actionable popup for tool progress or a pending user approval.
+/// Only the local main webview may call this command.
+#[cfg(windows)]
+#[tauri::command]
+pub fn sync_assistant_tool_popup(app: AppHandle, snapshot: serde_json::Value) -> Result<(), String> {
+    let popup = app.get_webview_window("assistant-tool-popup").ok_or("Assistant popup missing")?;
+    let active = snapshot.get("pending").is_some_and(|v| !v.is_null())
+        || snapshot.get("computerPrompt").is_some_and(|v| !v.is_null())
+        || snapshot.get("activity").is_some_and(|v| !v.is_null())
+        || snapshot.get("computerRunning").and_then(|v| v.as_bool()) == Some(true);
+    if !active {
+        popup.hide().map_err(|e|e.to_string())?;
+        return Ok(());
+    }
+    if let Ok(Some(monitor)) = popup.primary_monitor() {
+        if let Ok(size) = popup.outer_size() {
+            let pos = monitor.position();
+            let screen = monitor.size();
+            let x = pos.x + (screen.width as i32 - size.width as i32 - 24).max(0);
+            let y = pos.y + (screen.height as i32 - size.height as i32 - 75).max(0);
+            let _ = popup.set_position(tauri::PhysicalPosition::new(x,y));
+        }
+    }
+    app.emit_to("assistant-tool-popup", "assistant-popup-state", snapshot)
+        .map_err(|e| e.to_string())?;
+    platform::show_without_focus(&popup)
+}
+
+
 #[cfg(windows)]
 #[tauri::command]
 pub async fn inspect_accessibility_tree(app:AppHandle)->Result<platform::AccessibilityTreeReport,String>{

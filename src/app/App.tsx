@@ -1,3 +1,5 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { formatHandoffList, formatNoteList } from "@/assistant/accountTools";
 import { buildContinuation, handoffDisplayText } from "@/assistant/continuation";
@@ -91,6 +93,8 @@ import { transformProfilesApi } from "@/services/transformProfilesService";
 import {
   bindDeviceSettings,
   loadAssistantAutoRun,
+  loadAssistantRoutineAutoRun,
+  saveAssistantRoutineAutoRun,
   loadAssistantProfile,
   loadAutoUpdate,
   loadDictationSounds,
@@ -586,6 +590,42 @@ export default function App() {
   const computerSnapshot = useComputerActions(computerActions, auth.userId);
   const remoteDictationSnapshot = useRemoteDictation(remoteDictation, auth.userId);
   const assistantSnapshot = useAssistant(assistant);
+  useEffect(() => {
+    if (platform.platform !== "windows") return;
+    const ready=listen("assistant-popup-ready",()=>{
+      const state=assistant.getSnapshot();
+      void invoke("sync_assistant_tool_popup",{snapshot:{
+        pending:state.pendingAction,activity:state.toolActivity,
+        computerPrompt:state.computerPrompt,computerRunning:state.computerRunning,
+      }}).catch(()=>undefined);
+    });
+    const listener = listen<{kind:"tool"|"computer";id:string|null;computerPrompt?:string|null;allow:boolean}>("assistant-popup-answer",(event)=>{
+      const value=event.payload;
+      if(value.kind==="tool") {
+        const pending=assistant.getSnapshot().pendingAction;
+        if(!pending || pending.working || pending.id!==value.id) return;
+        if(value.allow) assistant.confirmPending();
+        else assistant.cancelPending();
+      } else if (value.computerPrompt && value.computerPrompt === assistant.getSnapshot().computerPrompt) {
+        if(value.allow) assistant.confirmComputer();
+        else assistant.stopComputer();
+      }
+    });
+    return ()=>{void listener.then(unlisten=>unlisten());void ready.then(unlisten=>unlisten());};
+  },[assistant,platform.platform]);
+
+  useEffect(() => {
+    if (platform.platform !== "windows") return;
+    const popup={
+      pending:assistantSnapshot.pendingAction,
+      activity:assistantSnapshot.toolActivity,
+      computerPrompt:assistantSnapshot.computerPrompt,
+      computerRunning:assistantSnapshot.computerRunning,
+    };
+    void invoke("sync_assistant_tool_popup",{snapshot:popup}).catch(()=>undefined);
+  },[platform.platform,assistantSnapshot.pendingAction,assistantSnapshot.toolActivity,
+      assistantSnapshot.computerPrompt,assistantSnapshot.computerRunning]);
+
   const assistantLibrarySnapshot = useAssistantLibrary(assistantLibrary);
   const assistantMemorySnapshot = useAssistantMemory(assistantMemory);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -594,6 +634,7 @@ export default function App() {
   const [entryPhase, setEntryPhase] = useState<"checking" | "wizard" | "app">("checking");
   const [profileEnabled, setProfileEnabled] = useState(true);
   const [autoRun, setAutoRun] = useState(true);
+  const [routineAutoRun, setRoutineAutoRun] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(() => loadAutoUpdate());
   const [dictationSounds, setDictationSounds] = useState(() => loadDictationSounds());
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
@@ -791,6 +832,9 @@ export default function App() {
     const auto = loadAssistantAutoRun();
     setAutoRun(auto);
     assistant.setAutoRun(auto);
+    const routine = loadAssistantRoutineAutoRun();
+    setRoutineAutoRun(routine);
+    assistant.setRoutineAccessibilityAutoRun(routine);
     setAutoUpdate(loadAutoUpdate());
     setDictationSounds(loadDictationSounds());
   }, [settingsDeviceId]);
@@ -1325,6 +1369,16 @@ export default function App() {
                 saveAssistantAutoRun(enabled);
                 setAutoRun(enabled);
                 assistant.setAutoRun(enabled);
+              }}
+            />
+            <Toggle
+              label="Auto-run routine Windows controls"
+              description="Skip repeated approval for focus, scroll, selection, window arrangement, and reversible UI operations. Editing, invoking buttons, sending images, and starting monitoring still require your approval. Requires Auto-run actions."
+              checked={routineAutoRun}
+              onChange={(enabled) => {
+                saveAssistantRoutineAutoRun(enabled);
+                setRoutineAutoRun(enabled);
+                assistant.setRoutineAccessibilityAutoRun(enabled);
               }}
             />
             <Toggle
