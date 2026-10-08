@@ -57,6 +57,7 @@ pub async fn inspect_accessible_elements(app: AppHandle) -> Result<Vec<platform:
 pub async fn uia_control_action(app: AppHandle, action: String, expected_name: String, value: Option<String>) -> Result<String, String> {
     let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
     window.hide().map_err(|e| e.to_string())?;
+    let action_label = action.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         std::thread::sleep(std::time::Duration::from_millis(180));
         platform::control_action(&action, &expected_name, value.as_deref())
@@ -67,7 +68,7 @@ pub async fn uia_control_action(app: AppHandle, action: String, expected_name: S
         .or_else(platform::foreground_bounds);
     if let Some(bounds) = bounds {
         visual_target(&app, bounds,
-            if result.is_ok() { "UIA action completed" } else { "UIA action failed" },
+            if result.is_ok() { action_label.as_str() } else { "UIA action failed" },
             if result.is_ok() { "complete" } else { "error" });
     }
     result.map(|completed| completed.message)
