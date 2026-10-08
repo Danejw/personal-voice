@@ -1,7 +1,7 @@
 //! Allowlisted open and shortcut, plus one normalized click.
 //! There is no shell command. The id is matched here, not passed to the OS as a path.
 
-use windows::core::w;
+use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::RECT;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
@@ -17,15 +17,28 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use super::hook::SYNTHETIC_INPUT_MARK;
 
+/// Launch an installed executable by filename without a shell, path, arguments, or URL.
 pub fn open_allowlisted_app(id: &str) -> Result<String, String> {
-    let (file, label) = match id {
-        "notepad" => (w!("notepad.exe"), "Notepad"),
-        "calculator" => (w!("calc.exe"), "Calculator"),
-        _ => return Err("That application is not on the allowlist.".into()),
+    let label = match id {
+        "notepad" => "notepad.exe",
+        "calculator" => "calc.exe",
+        _ => id,
     };
-    let result = unsafe { ShellExecuteW(None, w!("open"), file, None, None, SW_SHOWNORMAL) };
+    if label.len() > 84 || label.contains("..") ||
+       !label.to_ascii_lowercase().ends_with(".exe") ||
+       !label.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_')) {
+        return Err("Provide an executable name only, without paths, arguments or commands.".into());
+    }
+    let base = label.trim_end_matches(".exe").to_ascii_lowercase();
+    if ["cmd", "powershell", "pwsh", "wscript", "cscript", "mshta", "rundll32",
+        "regsvr32", "reg", "schtasks", "wmic", "bash", "sh", "wsl",
+        "python", "py", "node", "npm", "npx"].contains(&base.as_str()) {
+        return Err("Command shells and interpreters are blocked.".into());
+    }
+    let wide: Vec<u16> = label.encode_utf16().chain(std::iter::once(0)).collect();
+    let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), None, None, SW_SHOWNORMAL) };
     if (result.0 as isize) <= 32 {
-        return Err(format!("Windows could not open {label}."));
+        return Err(format!("Windows could not open {label}. Check the application name or installation."));
     }
     Ok(format!("Opened {label}."))
 }
