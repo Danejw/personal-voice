@@ -110,6 +110,10 @@ pub fn run() {
             #[cfg(windows)]
             commands::inspect_accessibility_tree,
             #[cfg(windows)]
+            commands::pointer_position,
+            #[cfg(windows)]
+            commands::inspect_pointer_context,
+            #[cfg(windows)]
             commands::accessibility_pattern_action,
             #[cfg(windows)]
             commands::accessibility_watch,
