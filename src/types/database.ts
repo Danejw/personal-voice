@@ -784,6 +784,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_assistant_memory_graph: {
+        Args: {
+          p_user_id: string
+          p_limit?: number
+        }
+        Returns: Json
+      }
       compact_insight_run: {
         Args: {
           p_keep_newest?: number
