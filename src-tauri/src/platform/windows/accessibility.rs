@@ -35,6 +35,7 @@ pub fn inspect_accessibility() -> Result<AccessibilityContext, String> {
     let title = window_title();
     // UIA's COM apartment is local to the blocking worker thread.
     unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
+        .ok()
         .map_err(|e| format!("Accessibility initialization failed: {e}"))?;
     let result = (|| -> Result<AccessibilityContext, String> {
         let automation: IUIAutomation = unsafe {
