@@ -106,6 +106,8 @@ pub fn run() {
             #[cfg(windows)]
             commands::uia_control_action,
             #[cfg(windows)]
+            commands::inspect_accessible_elements,
+            #[cfg(windows)]
             commands::activate_accessible_window,
             #[cfg(windows)]
             commands::hide_computer_visual,
