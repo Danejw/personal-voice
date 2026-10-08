@@ -55,6 +55,10 @@ pub fn open_start_menu_app(name: &str) -> Result<String, String> {
     if name.trim().is_empty() || name.chars().count() > 120 {
         return Err("Name an installed application.".into());
     }
+    let normalized = name.trim().to_ascii_lowercase();
+    if ["command prompt", "windows powershell", "powershell", "terminal", "windows terminal", "wscript", "cscript", "run"].contains(&normalized.as_str()) {
+        return Err("Command interpreters cannot be launched through Assistant.".into());
+    }
     let matches: Vec<_> = shortcuts().into_iter()
         .filter(|(label, _)| label.eq_ignore_ascii_case(name)).collect();
     if matches.is_empty() { return Err("No matching Start Menu application was found.".into()); }
