@@ -514,7 +514,14 @@ fn utf16le_nul_terminated(bytes: &[u8]) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{app_from_image_path, utf16le_nul_terminated};
+    use super::{app_from_image_path, utf16le_nul_terminated, decode_base64_limited};
+
+    #[test]
+    fn camera_clipboard_base64_decoding_rejects_bad_input() {
+        assert_eq!(decode_base64_limited("AQIDBA==", 4).unwrap(), [1u8, 2, 3, 4]);
+        assert!(decode_base64_limited("!!!!", 10).is_err());
+        assert!(decode_base64_limited("AQIDBA==", 3).is_err());
+    }
 
     #[test]
     fn image_path_keeps_only_the_file_name() {
