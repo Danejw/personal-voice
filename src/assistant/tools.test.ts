@@ -20,7 +20,7 @@ function plan(deviceName: string | null): HandoffPlan {
 }
 
 describe("assistant tool schema", () => {
-  it("declares the four safe actions and no replace or search", () => {
+  it("declares bounded tools without shell execution or selection replacement", () => {
     const names = assistantFunctionDeclarations().map((tool) => tool.name);
     expect(names).toEqual([
       "copy_text",
