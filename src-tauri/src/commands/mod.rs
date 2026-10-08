@@ -394,6 +394,29 @@ pub fn set_dictation_active(active: bool) {
 }
 
 /// Shows or hides the always-on-top control and pushes its snapshot to the overlay window.
+/// Compact non-modal Assistant activity and approval popup. It never takes foreground focus.
+#[tauri::command]
+pub fn sync_assistant_popup(app: AppHandle, payload: serde_json::Value) -> Result<(), String> {
+    let window = app.get_webview_window("assistant-popup").ok_or("Assistant popup missing.")?;
+    let kind = payload.get("kind").and_then(|v| v.as_str()).unwrap_or("hidden");
+    if kind == "hidden" {
+        return platform::hide_window(&window);
+    }
+    if !matches!(kind, "working" | "approval" | "computer-approval") {
+        return Err("Unknown assistant popup state".into());
+    }
+    if let Ok(Some(monitor)) = window.primary_monitor() {
+        let size = monitor.size();
+        let pos = monitor.position();
+        let bounds = window.outer_size().map_err(|e|e.to_string())?;
+        let x = pos.x + size.width.saturating_sub(bounds.width.saturating_add(20)) as i32;
+        let y = pos.y + 20;
+        window.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e|e.to_string())?;
+    }
+    platform::show_without_focus(&window)?;
+    app.emit_to("assistant-popup", "assistant-popup-state", payload).map_err(|e|e.to_string())
+}
+
 #[tauri::command]
 pub fn sync_overlay(app: AppHandle, snapshot: serde_json::Value) -> Result<(), String> {
     let visible = snapshot
