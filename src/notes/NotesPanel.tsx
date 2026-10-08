@@ -6,6 +6,7 @@ import {
   type FormEvent,
 } from "react";
 import { HoverActionItem } from "@/components/HoverActionItem";
+import { SelectField } from "@/components/SelectField";
 import type { NotesSnapshot, NotesStatus, NotesStore } from "@/notes/NotesStore";
 import type { Note } from "@/notes/note";
 import type { NoteGroup } from "@/notes/noteGroup";
@@ -273,20 +274,17 @@ function NoteCard(props: NoteCardProps) {
               onChange={(event) => onDraftTitle(event.target.value)}
             />
           </label>
-          <label className="note-edit-field">
-            <span>Group</span>
-            <select
-              aria-label="Note group"
-              value={draftGroupId}
-              disabled={pending}
-              onChange={(event) => onDraftGroupId(event.target.value)}
-            >
-              <option value="">Ungrouped</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>{group.name}</option>
-              ))}
-            </select>
-          </label>
+          <SelectField
+            label="Group"
+            layout="stack"
+            value={draftGroupId}
+            disabled={pending}
+            options={[
+              { value: "", label: "Ungrouped" },
+              ...groups.map((group) => ({ value: group.id, label: group.name })),
+            ]}
+            onChange={onDraftGroupId}
+          />
           <textarea
             aria-label="Edit note"
             value={draft}
@@ -697,20 +695,17 @@ export function NotesPanel({
                 onChange={(event) => setNewNoteTitle(event.target.value)}
               />
             </label>
-            <label className="note-edit-field">
-              <span>Group (optional)</span>
-              <select
-                aria-label="New note group"
-                value={newNoteGroupId}
-                disabled={!editable || busy === "create"}
-                onChange={(event) => setNewNoteGroupId(event.target.value)}
-              >
-                <option value="">Organize automatically</option>
-                {snapshot.groups.map((group) => (
-                  <option key={group.id} value={group.id}>{group.name}</option>
-                ))}
-              </select>
-            </label>
+            <SelectField
+              label="Group (optional)"
+              layout="stack"
+              value={newNoteGroupId}
+              disabled={!editable || busy === "create"}
+              options={[
+                { value: "", label: "Organize automatically" },
+                ...snapshot.groups.map((group) => ({ value: group.id, label: group.name })),
+              ]}
+              onChange={setNewNoteGroupId}
+            />
           </div>
           <label className="note-edit-field">
             <span>Note</span>
