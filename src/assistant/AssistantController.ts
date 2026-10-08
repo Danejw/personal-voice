@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import {
   screenOmittedText,
   type AssistantContinuation,
@@ -1187,6 +1188,10 @@ export class AssistantController {
           await this.runCameraStop(decision);
           continue;
         }
+        if (decision.kind === "accessibility") {
+          await this.runAccessibility(decision);
+          continue;
+        }
         if (decision.kind === "selection") {
           await this.runSelection(decision);
           continue;
@@ -1315,6 +1320,27 @@ export class AssistantController {
       await this.stopCameraContext();
       if (epoch !== this.toolEpoch) return;
       this.replyTool(decision.id, decision.name, true, "Camera Context is off.");
+    } catch (error) {
+      if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runAccessibility(decision: Extract<ToolDecision, { kind: "accessibility" }>) {
+    const epoch = this.toolEpoch;
+    if (!navigator.userAgent.includes("Windows")) {
+      this.replyTool(decision.id, decision.name, false, "Accessibility inspection is Windows-only.");
+      return;
+    }
+    try {
+      const result = await invoke<{windowTitle: string | null; focusedName: string | null; text: string | null; status: string}>("inspect_accessibility");
+      if (epoch !== this.toolEpoch) return;
+      if (result.status === "protected") {
+        this.replyTool(decision.id, decision.name, false, "The focused control is protected.");
+        return;
+      }
+      const text = [result.windowTitle, result.focusedName, result.text].filter(Boolean).join("\n");
+      this.replyTool(decision.id, decision.name, true, text || "No accessible text was available.");
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
       this.replyTool(decision.id, decision.name, false, toolFailure(error));
