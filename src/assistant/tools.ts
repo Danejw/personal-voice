@@ -104,6 +104,16 @@ export function assistantFunctionDeclarations() {
       parameters: { type: "object", properties: {} },
     },
     {
+      name: "end_assistant_session",
+      description: "End this Personal Voice assistant session and turn off its microphone, camera and current computer task. Use when the user says end session, stop the assistant or goodbye. This does not close other apps.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
+      name: "paste_camera_photo",
+      description: "Windows only. Paste the most recently captured camera photo as an IMAGE into the currently focused input in the exact named window. Use only when user explicitly requests putting their photo into ChatGPT or another app. First capture_camera_photo, then list_windows for exact target title. Requires explicit user confirmation. Does not submit/send the message.",
+      parameters: { type: "object", properties: { window: { type: "string", description: "Exact destination window title, from list_windows. That window must be active with an input focused." } }, required: ["window"] },
+    },
+    {
       name: "capture_camera_photo",
       description: "Take one still photo from this device's camera and attach it. Call this only when the user explicitly asks to use the camera, take a picture, or look through the camera. camera may be default, front, or back. Do not turn the camera on just because visual context might help. This is not a screenshot.",
       parameters: {
@@ -322,6 +332,7 @@ export type ConfirmToolName =
   | "navigate_window"
   | "uia_control_action"
   | "invoke_accessible_control"
+  | "paste_camera_photo"
   | "create_snippet"
   | "update_snippet"
   | "send_remote_dictation"
@@ -346,6 +357,7 @@ export type ToolDecision =
   | { kind: "reject"; id: string; name: string; message: string }
   | { kind: "copy"; id: string; name: "copy_text"; text: string }
   | { kind: "capture"; id: string; name: "capture_screen" }
+  | { kind: "endSession"; id: string; name: "end_assistant_session" }
   | { kind: "cameraPhoto"; id: string; name: "capture_camera_photo"; facing: CameraFacing }
   | { kind: "cameraStart"; id: string; name: "start_camera_context"; facing: CameraFacing }
   | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
@@ -412,6 +424,8 @@ export function decideToolCall(
       if ("error" in device) return { kind: "reject", id: call.id, name: call.name, message: device.error };
       return { kind: "remote", id: call.id, name: "read_remote_device", read: read.kind, device: device.name };
     }
+    case "end_assistant_session":
+      return { kind: "endSession", id: call.id, name: "end_assistant_session" };
     case "capture_screen":
       return { kind: "capture", id: call.id, name: "capture_screen" };
     case "capture_camera_photo": {
@@ -459,6 +473,13 @@ export function decideToolCall(
           : `Remember ${memory.key}`;
       const body = memory.action === "forget" ? memory.key : memory.value;
       return confirm(call.id, call.name, body, title, null, null, memory);
+    }
+    case "paste_camera_photo": {
+      const destination = args.window;
+      if (typeof destination !== "string" || !destination.trim() || destination.length > 200) {
+        return { kind: "reject", id: call.id, name: call.name, message: "Provide an exact destination window title from list_windows." };
+      }
+      return confirm(call.id, "paste_camera_photo", destination, "Paste camera photo into destination app", null, null);
     }
     case "navigate_window": {
       if (typeof args.title !== "string" || !args.title.trim() || args.title.length > 120) {
