@@ -1217,6 +1217,10 @@ export class AssistantController {
           await this.runSelection(decision);
           continue;
         }
+        if (decision.kind === "windows") {
+          await this.runWindows(decision);
+          continue;
+        }
         if (decision.kind === "apps") {
           await this.runInstalledApps(decision);
           continue;
@@ -1398,6 +1402,20 @@ export class AssistantController {
     }
   }
 
+  private async runWindows(decision: Extract<ToolDecision, { kind: "windows" }>) {
+    const epoch = this.toolEpoch;
+    if (!navigator.userAgent.includes("Windows")) {
+      this.replyTool(decision.id, decision.name, false, "Windows only.");
+      return;
+    }
+    try {
+      const report = await this.actions.readDashboard("read_windows" as "read_insights");
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, report.slice(0, 8000));
+    } catch (error) {
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
   private async runInstalledApps(decision: Extract<ToolDecision, { kind: "apps" }>) {
     const epoch = this.toolEpoch;
     if (!navigator.userAgent.includes("Windows")) {
@@ -1550,6 +1568,14 @@ export class AssistantController {
       case "insert_text":
         await this.actions.insertText(pending.text);
         return "Inserted the text into the focused app.";
+      case "navigate_window":
+        if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
+        return invoke<string>("activate_accessible_window", { title: pending.text });
+      case "uia_control_action": {
+        if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
+        const payload = JSON.parse(pending.text) as {action: string; name: string; value: string | null};
+        return invoke<string>("uia_control_action", { action: payload.action, expectedName: payload.name, value: payload.value });
+      }
       case "focus_accessible_control":
         if (!navigator.userAgent.includes("Windows")) throw new Error("Windows only.");
         return invoke<string>("focus_accessible_control", { expectedName: pending.text });
