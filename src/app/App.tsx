@@ -8,6 +8,7 @@ import { AssistantConversationStore } from "@/assistant/AssistantConversationSto
 import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
 import { MemoryPanel } from "@/assistant/MemoryPanel";
+import { MemoryGraphPanel } from "@/memory-graph/MemoryGraphPanel";
 import { useAssistantMemory } from "@/assistant/useAssistantMemory";
 import { AssistantController } from "@/assistant/AssistantController";
 import { AssistantHeader, AssistantPanel } from "@/assistant/AssistantPanel";
@@ -1148,6 +1149,18 @@ export default function App() {
             <TransformPanel store={transformStore} snapshot={transforms} />
           </section>
         </div>
+
+        {section === "memory-graph" && (
+          <div className="panel-stack memory-graph-section">
+            <section aria-label="Interactive personal memory network" className="page-panel">
+              <MemoryGraphPanel
+                userId={auth.userId}
+                active={section === "memory-graph"}
+                onNavigate={(next) => setSection(next)}
+              />
+            </section>
+          </div>
+        )}
 
         <div className="panel-stack" hidden={section !== "assistant"}>
           <section aria-labelledby="page-title" className="page-panel">
