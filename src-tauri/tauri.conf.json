@@ -36,7 +36,8 @@
         "shadow": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "resizable": false
+        "resizable": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows"
       },
       {
         "label": "indicator",
@@ -65,7 +66,9 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDA5RUM0MEQ4M0VBQjg3OEEKUldTS2g2cysyRURzQ1dNMENaU2RZRlRqN1ZJQkVpV3BRMUdOa2pWb2M3VHhueFRSSVBQQVl4NC8K",
-      "endpoints": ["https://github.com/Danejw/personal-voice/releases/latest/download/latest.json"],
+      "endpoints": [
+        "https://github.com/Danejw/personal-voice/releases/latest/download/latest.json"
+      ],
       "requireSignedVersion": true,
       "windows": {
         "installMode": "passive"
@@ -74,7 +77,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "createUpdaterArtifacts": true,
     "publisher": "Personal Voice",
     "shortDescription": "Push-to-talk dictation into any app",
