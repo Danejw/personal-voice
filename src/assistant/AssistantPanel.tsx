@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { ConversationBar } from "@/assistant/ConversationBar";
 import type { AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 import { selectionPreview } from "@/assistant/selectionContext";
@@ -78,6 +79,9 @@ export function AssistantPanel({
   onDismissRecovery,
 }: AssistantChromeProps) {
   const [draft, setDraft] = useState("");
+  const [accessibility, setAccessibility] = useState<{windowTitle: string | null; focusedName: string | null; focusedClass: string | null; text: string | null; status: string} | null>(null);
+  const [accessibilityError, setAccessibilityError] = useState<string | null>(null);
+  const [inspecting, setInspecting] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [capturingCamera, setCapturingCamera] = useState(false);
   const [continuing, setContinuing] = useState(false);
@@ -178,6 +182,29 @@ export function AssistantPanel({
         </div>
       )}
       {snapshot.accountError && <p className="error" role="alert">{snapshot.accountError}</p>}
+      {navigator.userAgent.includes("Windows") && (
+        <div className="assistant-selection" role="region" aria-label="Windows accessibility inspection">
+          <p className="note-meta">Windows accessibility · read-only · manual</p>
+          <button type="button" className="secondary" disabled={inspecting} onClick={() => {
+            setInspecting(true);
+            setAccessibilityError(null);
+            void invoke<{windowTitle: string | null; focusedName: string | null; focusedClass: string | null; text: string | null; status: string}>("inspect_accessibility")
+              .then(setAccessibility)
+              .catch((error: unknown) => setAccessibilityError(String(error)))
+              .finally(() => setInspecting(false));
+          }}>{inspecting ? "Inspecting…" : "Inspect active app"}</button>
+          {accessibilityError && <p role="alert" className="error">{accessibilityError}</p>}
+          {accessibility && (
+            <div className="selection-preview">
+              <p className="note-meta">{accessibility.windowTitle ?? "Untitled window"} · {accessibility.status}</p>
+              <p>{accessibility.focusedName ?? "Unnamed control"}{accessibility.focusedClass ? ` · ${accessibility.focusedClass}` : ""}</p>
+              {accessibility.text && <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 200, overflowY: "auto" }}>{accessibility.text}</pre>}
+              <button type="button" className="secondary" onClick={() => setAccessibility(null)}>Clear</button>
+            </div>
+          )}
+          <p className="note-meta">Not sent to Gemini or synced. Focus a field in another app, then inspect.</p>
+        </div>
+      )}
       <div className="assistant-selection">
         <button
           type="button"
