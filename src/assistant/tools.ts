@@ -134,6 +134,31 @@ export function assistantFunctionDeclarations() {
       parameters: { type: "object", properties: {} },
     },
     {
+      name: "edit_voice_note",
+      description: "Edit an existing note by id obtained from list_voice_notes. Replaces its full text, with confirmation.",
+      parameters: { type: "object", properties: { id: { type: "string" }, text: TEXT }, required: ["id", "text"] },
+    },
+    {
+      name: "create_transform",
+      description: "Create a reusable text transform with a name and instruction. Requires user confirmation.",
+      parameters: { type: "object", properties: { name: { type: "string" }, instruction: { type: "string" } }, required: ["name", "instruction"] },
+    },
+    {
+      name: "add_dictionary_word",
+      description: "Add a word or phrase to the personal dictionary. Requires user confirmation.",
+      parameters: { type: "object", properties: { text: TEXT }, required: ["text"] },
+    },
+    {
+      name: "read_usage_analytics",
+      description: "Read the signed-in user's existing usage analytics and totals. Does not change settings.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
+      name: "read_insights",
+      description: "Read the existing usage insights and suggestions. Does not make any changes.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
       name: "capture_selection",
       description: "Read the text highlighted in the other app and attach it as context. Call this when the user asks what is selected or to use the selection. Do not describe a selection until this tool has returned. This does not change the other app.",
       parameters: { type: "object", properties: {} },
@@ -236,6 +261,9 @@ export interface HandoffPlan {
 export type ConfirmToolName =
   | "insert_text"
   | "create_voice_note"
+  | "edit_voice_note"
+  | "create_transform"
+  | "add_dictionary_word"
   | "send_handoff"
   | "archive_voice_note"
   | "restore_voice_note"
@@ -260,6 +288,7 @@ export type ToolDecision =
   | { kind: "selection"; id: string; name: "capture_selection" }
   | { kind: "accessibility"; id: string; name: "inspect_active_app" }
   | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
+  | { kind: "dashboard"; id: string; name: "read_usage_analytics" | "read_insights" }
   | { kind: "memories"; id: string; name: "list_memories" }
   | { kind: "handoffs"; id: string; name: "list_handoffs" }
   | {
@@ -333,6 +362,9 @@ export function decideToolCall(
       return { kind: "accessibility", id: call.id, name: "inspect_active_app" };
     case "capture_selection":
       return { kind: "selection", id: call.id, name: "capture_selection" };
+    case "read_usage_analytics":
+    case "read_insights":
+      return { kind: "dashboard", id: call.id, name: call.name };
     case "list_voice_notes":
       return { kind: "notes", id: call.id, name: "list_voice_notes", includeArchived: args.include_archived === true || args.includeArchived === true };
     case "list_handoffs":
@@ -351,6 +383,23 @@ export function decideToolCall(
           : `Remember ${memory.key}`;
       const body = memory.action === "forget" ? memory.key : memory.value;
       return confirm(call.id, call.name, body, title, null, null, memory);
+    }
+    case "edit_voice_note": {
+      const id = readId(args);
+      const body = readText(args);
+      if ("error" in id || "error" in body) return { kind: "reject", id: call.id, name: call.name, message: "error" in id ? id.error : "error" in body ? body.error : "Invalid note." };
+      return confirm(call.id, "edit_voice_note", JSON.stringify({ id: id.id, text: body.text }), "Edit this note", null, null);
+    }
+    case "create_transform": {
+      if (typeof args.name !== "string" || !args.name.trim() || args.name.length > 80 || typeof args.instruction !== "string" || !args.instruction.trim() || args.instruction.length > 4000) {
+        return { kind: "reject", id: call.id, name: call.name, message: "Provide a transform name and instruction." };
+      }
+      return confirm(call.id, "create_transform", JSON.stringify({ name: args.name.trim(), instruction: args.instruction.trim() }), "Create this transform", null, null);
+    }
+    case "add_dictionary_word": {
+      const word = readText(args);
+      if ("error" in word) return { kind: "reject", id: call.id, name: call.name, message: word.error };
+      return confirm(call.id, "add_dictionary_word", word.text, "Add this dictionary word", null, null);
     }
     case "archive_voice_note":
     case "restore_voice_note":
