@@ -467,6 +467,21 @@ describe("AssistantController", () => {
     expect(created.getSnapshot().pendingAction).toBeNull();
   });
 
+  it("retrieves personal memory by tool without granting action permissions", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [
+      { id: "mem-srch", name: "search_memory", args: { query: "voice project" } },
+    ] });
+    await settle();
+    expect(actions.searchMemory).toHaveBeenCalledWith("voice project");
+    expect(JSON.stringify(session.responses)).toContain("Search evidence for voice project");
+    expect(actions.rememberMemory).not.toHaveBeenCalled();
+  });
+
   it("copies without confirmation and returns the same function id", async () => {
     const { created } = controller();
     const used = toolActions();
@@ -1254,6 +1269,7 @@ function toolActions() {
     deleteVoiceNote: vi.fn(async () => {}),
     dismissHandoff: vi.fn(async () => {}),
     listMemories: vi.fn(async () => "No memories are remembered."),
+    searchMemory: vi.fn(async (query: string) => `Search evidence for ${query}`),
     rememberMemory: vi.fn(async () => "Remembered answer_length: Prefer short answers."),
     changeMemory: vi.fn(async () => "Changed answer_length."),
     forgetMemory: vi.fn(async () => "Forgot answer_length."),
