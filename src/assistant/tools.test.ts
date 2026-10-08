@@ -65,6 +65,8 @@ describe("assistant tool schema", () => {
       "open_app",
       "press_shortcut",
       "supervise_screen",
+      "list_past_conversations",
+      "read_past_conversation",
       "list_memories",
       "search_memory",
       "remember_memory",
@@ -75,6 +77,18 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("replace_selection");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
+  });
+
+  it("validates read-only, account-scoped prior conversation tool calls", () => {
+    const id = "33333333-3333-4333-8333-333333333333";
+    expect(decideToolCall({ id: "list", name: "list_past_conversations", args: { query: "bike" } }, plan))
+      .toEqual({ kind: "conversations", id: "list", name: "list_past_conversations", query: "bike", cursor: null });
+    expect(decideToolCall({ id: "read", name: "read_past_conversation", args: { conversation_id: id } }, plan))
+      .toEqual({ kind: "conversationRead", id: "read", name: "read_past_conversation", conversationId: id });
+    expect(decideToolCall({ id: "bad", name: "read_past_conversation", args: { conversation_id: "invalid" } }, plan).kind)
+      .toBe("reject");
+    expect(decideToolCall({ id: "bad-search", name: "list_past_conversations", args: { query: "x".repeat(161) } }, plan).kind)
+      .toBe("reject");
   });
 
   it("validates and routes bounded semantic memory search", () => {
