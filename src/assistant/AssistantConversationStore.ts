@@ -273,16 +273,17 @@ export class AssistantConversationStore {
    */
   produce(): Promise<void> {
     if (this.producing) return this.producing;
-    const task = this.produceLoaded();
+    const task = this.produceLoaded(this.userId, this.initializing);
     this.producing = task;
     void task.finally(() => { if (this.producing === task) this.producing = null; }).catch(() => undefined);
     return task;
   }
 
-  private async produceLoaded(): Promise<void> {
-    await this.initializing;
-    const userId = this.userId;
-    if (!userId) return;
+  private async produceLoaded(expectedUser: string | null, loading: Promise<void>): Promise<void> {
+    await loading;
+    // Ignore a delayed Start from an account that signed out while history loaded.
+    if (!expectedUser || this.userId !== expectedUser) return;
+    const userId = expectedUser;
     if (!this.currentId) this.startThread();
     const id = this.currentId;
     if (!id || this.userId !== userId) return;
