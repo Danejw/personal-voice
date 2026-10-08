@@ -429,6 +429,7 @@ export type Database = {
         Insert: {
           assistant_learning_since?: string | null
           assistant_memory_learning?: boolean
+          assistant_semantic_search?: boolean
           cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
@@ -440,6 +441,7 @@ export type Database = {
         Update: {
           assistant_learning_since?: string | null
           assistant_memory_learning?: boolean
+          assistant_semantic_search?: boolean
           cloud_dictation_history?: boolean
           language?: string | null
           smart_transcription?: boolean
