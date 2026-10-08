@@ -14,6 +14,7 @@ import { MemoryGraphPanel } from "@/memory-graph/MemoryGraphPanel";
 import { MemoryGraphErrorBoundary } from "@/memory-graph/MemoryGraphErrorBoundary";
 import { useAssistantMemory } from "@/assistant/useAssistantMemory";
 import { AssistantController } from "@/assistant/AssistantController";
+import { bindAssistantCues } from "@/assistant/assistantCues";
 import { AssistantHeader, AssistantPanel } from "@/assistant/AssistantPanel";
 import { PersonalContextPanel } from "@/assistant/PersonalContextPanel";
 import { personalContextBody, profileFacts } from "@/assistant/personalContext";
@@ -637,6 +638,9 @@ export default function App() {
   const [routineAutoRun, setRoutineAutoRun] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(() => loadAutoUpdate());
   const [dictationSounds, setDictationSounds] = useState(() => loadDictationSounds());
+  const voiceSoundsRef = useRef(dictationSounds);
+  voiceSoundsRef.current = dictationSounds;
+  useEffect(() => bindAssistantCues(assistant, platform, () => voiceSoundsRef.current), []);
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
     const data = personalSync.getSnapshot().data;
     return {
@@ -1346,8 +1350,8 @@ export default function App() {
             <h2 id="transcription-heading">Transcription</h2>
             <TranscriptionSettingsPanel store={personalSync} sync={sync} />
             <Toggle
-              label="Dictation sounds"
-              description="Plays a subtle ready cue when this device starts listening and a slightly different cue when recording stops."
+              label="Voice sounds"
+              description="Play the same subtle start and stop sounds for both Dictation and Assistant on this device."
               checked={dictationSounds}
               onChange={(enabled) => {
                 saveDictationSounds(enabled);
