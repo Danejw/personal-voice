@@ -217,7 +217,9 @@ pub fn focus_accessible_control(expected_name: &str) -> Result<String, String> {
 /** Single explicit, bounded UI Automation operation on an exact-name focused element.
  * Never traverses password fields or accepts arbitrary process commands.
  */
-pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) -> Result<String, String> {
+pub struct UiActionResult { pub message: String, pub bounds: Option<UiBounds> }
+
+pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) -> Result<UiActionResult, String> {
     if expected_name.is_empty() || expected_name.chars().count() > 280 {
         return Err("Provide the exact control name from inspection.".into());
     }
@@ -229,7 +231,7 @@ pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) ->
     }
     unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
         .ok().map_err(|e| format!("Accessibility initialization failed: {e}"))?;
-    let result = (|| -> Result<String, String> {
+    let result = (|| -> Result<UiActionResult, String> {
         let automation: IUIAutomation = unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) }
             .map_err(|e| format!("UI Automation unavailable: {e}"))?;
         let hwnd = unsafe { GetForegroundWindow() };
@@ -272,6 +274,7 @@ pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) ->
         if unsafe { element.CurrentIsEnabled() }.map(|v| !v.as_bool()).unwrap_or(true) {
             return Err("That control is disabled.".into());
         }
+        let bounds = element_bounds(&element);
         match action {
             "focus" => unsafe { element.SetFocus() }.map_err(|e| e.to_string())?,
             "invoke" => {
@@ -312,7 +315,7 @@ pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) ->
             },
             _ => unreachable!(),
         }
-        Ok(format!("{action} succeeded on '{name}'."))
+        Ok(UiActionResult { message: format!("{action} succeeded on '{name}'."), bounds })
     })();
     unsafe { CoUninitialize() };
     result
