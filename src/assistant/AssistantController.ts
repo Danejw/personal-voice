@@ -112,8 +112,10 @@ export interface AssistantActions {
   /** Active and forgotten memories for this account. */
   listMemories(): Promise<string>;
   searchMemory(query: string): Promise<string>;
-  listPastConversations(query: string, cursor: string | null): Promise<string>;
+  listPastConversations(query: string, cursor: string | null, count: number): Promise<string>;
   readPastConversation(conversationId: string): Promise<string>;
+  checkPastConversation(conversationId: string): Promise<string>;
+  continuePastConversation(conversationId: string): Promise<void>;
   rememberMemory(input: { key: string; kind: "preference" | "fact"; value: string }): Promise<string>;
   changeMemory(input: { key: string; value: string }): Promise<string>;
   forgetMemory(key: string): Promise<string>;
@@ -253,6 +255,8 @@ export class AssistantController {
       searchMemory: async () => { throw new Error("Memory search is not configured."); },
       listPastConversations: async () => { throw new Error("Conversation history is unavailable."); },
       readPastConversation: async () => { throw new Error("Conversation history is unavailable."); },
+      checkPastConversation: async () => { throw new Error("Conversation history is unavailable."); },
+      continuePastConversation: async () => { throw new Error("Conversation continuation is unavailable."); },
       rememberMemory: async () => { throw new Error("Assistant actions are not available."); },
       changeMemory: async () => { throw new Error("Assistant actions are not available."); },
       forgetMemory: async () => { throw new Error("Assistant actions are not available."); },
@@ -1286,6 +1290,10 @@ export class AssistantController {
           await this.runNotes(decision);
           continue;
         }
+        if (decision.kind === "conversationContinue") {
+          await this.runConversationContinue(decision);
+          return;
+        }
         if (decision.kind === "conversations" || decision.kind === "conversationRead") {
           await this.runConversationHistory(decision);
           continue;
@@ -1363,12 +1371,36 @@ export class AssistantController {
     return true;
   }
 
+  private async runConversationContinue(decision: Extract<ToolDecision, { kind: "conversationContinue" }>) {
+    const epoch = this.toolEpoch;
+    const connection = this.connection;
+    try {
+      // Check ownership before acknowledging a switch. Do not close this session
+      // on an invalid or deleted conversation id.
+      const title = await this.actions.checkPastConversation(decision.conversationId);
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
+      this.replyTool(decision.id, decision.name, true,
+        `Opening saved conversation "${title}". Further messages will be written to that same thread. The Assistant session is restarting to restore its history.`);
+      // Give Gemini's current socket time to receive the tool response before
+      // the store ends it and opens a new, context-seeded session.
+      setTimeout(() => {
+        if (epoch !== this.toolEpoch || connection !== this.connection || this.snapshot.status === "IDLE") return;
+        void this.actions.continuePastConversation(decision.conversationId).catch(() => {
+          // The conversation store publishes any load/start errors in the UI.
+        });
+      }, 150);
+    } catch (error) {
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
   private async runConversationHistory(decision: Extract<ToolDecision, { kind: "conversations" | "conversationRead" }>) {
     const epoch = this.toolEpoch;
     const generation = this.generation;
     try {
       const answer = decision.kind === "conversations"
-        ? await this.actions.listPastConversations(decision.query, decision.cursor)
+        ? await this.actions.listPastConversations(decision.query, decision.cursor, decision.count)
         : await this.actions.readPastConversation(decision.conversationId);
       if (epoch !== this.toolEpoch || generation !== this.generation) return;
       this.replyTool(decision.id, decision.name, true, answer);
