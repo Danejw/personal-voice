@@ -323,6 +323,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
       className={[
         "overlay-dock",
         draggingTray ? "is-dragging" : "",
+        snapshot.pendingTitle ? "has-confirmation" : "",
         tipSide === "right" ? "is-tip-right" : "",
       ].filter(Boolean).join(" ")}
       onMouseEnter={() => {
