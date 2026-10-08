@@ -592,6 +592,13 @@ export default function App() {
   const assistantSnapshot = useAssistant(assistant);
   useEffect(() => {
     if (platform.platform !== "windows") return;
+    const ready=listen("assistant-popup-ready",()=>{
+      const state=assistant.getSnapshot();
+      void invoke("sync_assistant_tool_popup",{snapshot:{
+        pending:state.pendingAction,activity:state.toolActivity,
+        computerPrompt:state.computerPrompt,computerRunning:state.computerRunning,
+      }}).catch(()=>undefined);
+    });
     const listener = listen<{kind:"tool"|"computer";id:string|null;allow:boolean}>("assistant-popup-answer",(event)=>{
       const value=event.payload;
       if(value.kind==="tool") {
@@ -604,7 +611,7 @@ export default function App() {
         else assistant.stopComputer();
       }
     });
-    return ()=>{void listener.then(unlisten=>unlisten());};
+    return ()=>{void listener.then(unlisten=>unlisten());void ready.then(unlisten=>unlisten());};
   },[assistant,platform.platform]);
 
   useEffect(() => {
