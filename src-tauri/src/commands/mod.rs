@@ -146,11 +146,22 @@ pub async fn inspect_accessibility(app: AppHandle) -> Result<platform::Accessibi
 pub async fn paste_camera_photo_image(app: AppHandle, bitmap_base64: String, expected_window: String) -> Result<String, String> {
     let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
     window.hide().map_err(|e| e.to_string())?;
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    let before_bounds = tauri::async_runtime::spawn_blocking(|| {
         std::thread::sleep(std::time::Duration::from_millis(200));
+        platform::foreground_bounds()
+    }).await.ok().flatten();
+    if let Some(bounds) = before_bounds {
+        visual_target(&app, bounds, "Pasting camera photo", "action");
+    }
+    let result = tauri::async_runtime::spawn_blocking(move || {
         platform::insert_camera_image(&bitmap_base64, &expected_window)
     }).await.map_err(|e| e.to_string()).and_then(|value| value);
     let _ = platform::show_without_focus(&window);
+    if let Some(bounds) = before_bounds {
+        visual_target(&app, bounds,
+            if result.is_ok() { "Camera photo paste requested" } else { "Camera photo paste failed" },
+            if result.is_ok() { "complete" } else { "error" });
+    }
     result
 }
 
