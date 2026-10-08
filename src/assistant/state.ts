@@ -34,6 +34,8 @@ export interface AssistantSnapshot {
   selectionError: string | null;
   /** An action waiting for Confirm or Cancel. The full text stays on the controller. */
   pendingAction: PendingAssistantAction | null;
+  /** In-flight local tool call for nonintrusive desktop progress. */
+  toolActivity: { id: string; title: string } | null;
   /** Shown after a clipboard copy, which does not ask for confirmation. */
   actionNotice: string | null;
   /** One explicit screenshot. Null after Remove or End. Not written to disk. */
@@ -90,6 +92,7 @@ export type AssistantAction =
   | { type: "detachSelection" }
   | { type: "selectionError"; message: string }
   | { type: "setPending"; pending: PendingAssistantAction }
+  | { type: "toolActivity"; activity: { id: string; title: string } | null }
   | { type: "computer"; running: boolean; prompt: string | null }
   | { type: "clearPending" }
   | { type: "actionNotice"; message: string | null }
@@ -121,6 +124,7 @@ export const initialAssistantState: AssistantSnapshot = {
   selection: null,
   selectionError: null,
   pendingAction: null,
+  toolActivity: null,
   actionNotice: null,
   screen: null,
   screenError: null,
@@ -163,6 +167,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         error: null,
         resuming: false,
         pendingAction: null,
+        toolActivity: null,
         actionNotice: null,
         echoFallback: false,
         playbackHeld: false,
@@ -261,6 +266,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         liveSources: [],
         resuming: false,
         pendingAction: null,
+        toolActivity: null,
         actionNotice: null,
         echoFallback: false,
         playbackHeld: false,
@@ -279,6 +285,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         selection: null,
         selectionError: null,
         pendingAction: null,
+        toolActivity: null,
         actionNotice: null,
         screen: null,
         screenError: null,
@@ -302,6 +309,8 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
       return { ...state, selection: null, selectionError: null };
     case "selectionError":
       return { ...state, selectionError: action.message };
+    case "toolActivity":
+      return { ...state, toolActivity: action.activity };
     case "setPending":
       return { ...state, pendingAction: action.pending, actionNotice: null };
     case "clearPending":
