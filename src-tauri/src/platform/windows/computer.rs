@@ -36,7 +36,7 @@ pub fn open_allowlisted_app(id: &str) -> Result<String, String> {
     let base = lower.strip_suffix(".exe").unwrap_or(&lower);
     if ["cmd", "powershell", "pwsh", "wscript", "cscript", "mshta", "rundll32",
         "regsvr32", "reg", "schtasks", "wmic", "bash", "sh", "wsl",
-        "python", "py", "node", "npm", "npx"].contains(&base.as_str()) {
+        "python", "py", "node", "npm", "npx"].contains(&base) {
         return Err("Command shells and interpreters are blocked.".into());
     }
     let wide: Vec<u16> = label.encode_utf16().chain(std::iter::once(0)).collect();
