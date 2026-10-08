@@ -48,7 +48,8 @@ pub async fn uia_control_action(app: AppHandle, action: String, expected_name: S
         std::thread::sleep(std::time::Duration::from_millis(180));
         platform::control_action(&action, &expected_name, value.as_deref())
     }).await.map_err(|e| e.to_string()).and_then(|v| v);
-    let _ = window.show();
+    // Restore Settings without stealing focus from the app being controlled.
+    let _ = platform::show_without_focus(&window);
     let bounds = result.as_ref().ok().and_then(|completed| completed.bounds)
         .or_else(platform::foreground_bounds);
     if let Some(bounds) = bounds {
