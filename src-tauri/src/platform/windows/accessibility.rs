@@ -320,3 +320,64 @@ pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) ->
     unsafe { CoUninitialize() };
     result
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccessibleElement {
+    pub name: String,
+    pub class_name: String,
+    pub bounds: Option<UiBounds>,
+    pub patterns: Vec<&'static str>,
+}
+
+/// Discover control names and supported actions within the current foreground app.
+/// Read-only, limited to 120 controls / depth 7; never reads password values.
+pub fn list_accessible_elements() -> Result<Vec<AccessibleElement>, String> {
+    unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
+        .ok().map_err(|e| format!("Accessibility initialization failed: {e}"))?;
+    let result = (|| -> Result<Vec<AccessibleElement>, String> {
+        let automation: IUIAutomation = unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) }
+            .map_err(|e| format!("UI Automation unavailable: {e}"))?;
+        let hwnd = unsafe { GetForegroundWindow() };
+        if hwnd.0.is_null() { return Err("No active application window.".into()); }
+        let root = unsafe { automation.ElementFromHandle(hwnd) }.map_err(|e| e.to_string())?;
+        let walker = unsafe { automation.ControlViewWalker() }.map_err(|e| e.to_string())?;
+        let mut pending = vec![(root, 0usize)];
+        let mut output = Vec::new();
+        let mut visited = 0usize;
+        while let Some((element, depth)) = pending.pop() {
+            if visited >= MAX_ELEMENTS || output.len() >= 120 { break; }
+            visited += 1;
+            if unsafe { element.CurrentIsPassword() }.map(|v| v.as_bool()).unwrap_or(true) { continue; }
+            let name = unsafe { element.CurrentName() }.ok().map(|v| clip(&v.to_string(), MAX_NAME)).unwrap_or_default();
+            let class_name = unsafe { element.CurrentClassName() }.ok().map(|v| clip(&v.to_string(), 100)).unwrap_or_default();
+            let mut patterns = Vec::new();
+            for (label, id) in [
+                ("invoke", UIA_InvokePatternId),
+                ("select", UIA_SelectionItemPatternId),
+                ("expand/collapse", UIA_ExpandCollapsePatternId),
+                ("scroll", UIA_ScrollPatternId),
+                ("set-value", UIA_ValuePatternId),
+                ("text", UIA_TextPatternId),
+            ] {
+                if unsafe { element.GetCurrentPattern(id) }.is_ok() { patterns.push(label); }
+            }
+            if !name.trim().is_empty() {
+                output.push(AccessibleElement { name, class_name, bounds: element_bounds(&element), patterns });
+            }
+            if depth >= MAX_DEPTH { continue; }
+            let mut children = Vec::new();
+            if let Ok(mut child) = unsafe { walker.GetFirstChildElement(&element) } {
+                for _ in 0..MAX_ELEMENTS {
+                    let next = unsafe { walker.GetNextSiblingElement(&child) }.ok();
+                    children.push(child);
+                    match next { Some(sibling) => child = sibling, None => break }
+                }
+            }
+            for child in children.into_iter().rev() { pending.push((child, depth + 1)); }
+        }
+        Ok(output)
+    })();
+    unsafe { CoUninitialize() };
+    result
+}
