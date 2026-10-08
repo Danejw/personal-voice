@@ -9,6 +9,7 @@ import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistant
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
 import { MemoryPanel } from "@/assistant/MemoryPanel";
 import { MemoryGraphPanel } from "@/memory-graph/MemoryGraphPanel";
+import { MemoryGraphErrorBoundary } from "@/memory-graph/MemoryGraphErrorBoundary";
 import { useAssistantMemory } from "@/assistant/useAssistantMemory";
 import { AssistantController } from "@/assistant/AssistantController";
 import { AssistantHeader, AssistantPanel } from "@/assistant/AssistantPanel";
@@ -1153,11 +1154,13 @@ export default function App() {
         {section === "memory-graph" && (
           <div className="panel-stack memory-graph-section">
             <section aria-label="Interactive personal memory network" className="page-panel">
-              <MemoryGraphPanel
-                userId={auth.userId}
-                active={section === "memory-graph"}
-                onNavigate={(next) => setSection(next)}
-              />
+              <MemoryGraphErrorBoundary onBack={() => setSection("assistant")}>
+                <MemoryGraphPanel
+                  userId={auth.userId}
+                  active={section === "memory-graph"}
+                  onNavigate={(next) => setSection(next)}
+                />
+              </MemoryGraphErrorBoundary>
             </section>
           </div>
         )}
