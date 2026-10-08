@@ -181,6 +181,11 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
+      name: "invoke_accessible_control",
+      description: "Windows only. Invoke the currently focused UI Automation control by its exact accessible name. Always inspect the control first, confirm with the user, and never use for payments, security changes, deletion, or submissions.",
+      parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
+    },
+    {
       name: "list_snippets",
       description: "Read saved voice snippets and their expansion text.",
       parameters: { type: "object", properties: {} },
@@ -281,6 +286,7 @@ export interface HandoffPlan {
 export type ConfirmToolName =
   | "insert_text"
   | "create_voice_note"
+  | "invoke_accessible_control"
   | "create_snippet"
   | "update_snippet"
   | "send_remote_dictation"
@@ -409,6 +415,12 @@ export function decideToolCall(
           : `Remember ${memory.key}`;
       const body = memory.action === "forget" ? memory.key : memory.value;
       return confirm(call.id, call.name, body, title, null, null, memory);
+    }
+    case "invoke_accessible_control": {
+      if (typeof args.name !== "string" || !args.name.trim() || args.name.length > 280) {
+        return {kind: "reject", id: call.id, name: call.name, message: "Specify the exact accessible control name."};
+      }
+      return confirm(call.id, "invoke_accessible_control", args.name, "Invoke focused Windows control", null, null);
     }
     case "create_snippet":
     case "update_snippet": {
