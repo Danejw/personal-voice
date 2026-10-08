@@ -7,6 +7,7 @@ import { selectionPreview } from "@/assistant/selectionContext";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { AssistantConversationStore } from "@/assistant/AssistantConversationStore";
+import { listPastConversations, readPastConversation } from "@/assistant/assistantConversationRecall";
 import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
 import { MemoryPanel } from "@/assistant/MemoryPanel";
@@ -389,6 +390,8 @@ assistant.setActions({
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
   searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
+  listPastConversations: (query, cursor) => listPastConversations(assistantConversationsApi, accountUserId ?? "", query, cursor),
+  readPastConversation: (conversationId) => readPastConversation(assistantConversationsApi, accountUserId ?? "", conversationId),
   rememberMemory: (input) => assistantMemory.remember(input.kind, input.key, input.value),
   changeMemory: (input) => assistantMemory.change(input.key, input.value),
   forgetMemory: (key) => assistantMemory.forget(key),
@@ -766,6 +769,7 @@ export default function App() {
     canDictate: () => microphone.heldBy() !== "assistant",
     assistant: assistantSnapshot,
     assistantController: assistant,
+    onAssistantStart: () => assistantLibrary.produce(),
     remoteTargetId: remoteDictationSnapshot.targetDeviceId,
     remoteTargetLabel: remoteDictationSnapshot.targetLabel,
     remoteTargetPlatform: remoteDictationSnapshot.targetPlatform,
@@ -934,7 +938,7 @@ export default function App() {
       if (event.event !== "toggle-assistant") return;
       const intent = overlayAssistantIntent(overlayAssistantFrom(assistant.getSnapshot().status));
       if (intent === "end") assistant.end();
-      else if (signedInRef.current) assistant.start();
+      else if (signedInRef.current) void assistantLibrary.produce();
     }).then((unlisten) => { stop = unlisten; });
     return () => stop();
   }, []);
