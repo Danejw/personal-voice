@@ -21,7 +21,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
-pub use installed_apps::{list_installed_apps, open_start_menu_app, InstalledApp};
+pub use installed_apps::{list_installed_apps, InstalledApp};
 pub use accessibility::{inspect_accessibility, invoke_focused_control, focus_accessible_control, control_action, list_accessible_elements, AccessibleElement, foreground_bounds, UiBounds, AccessibilityContext};
 pub use autostart::{launch_at_login, set_launch_at_login};
 pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_shortcut};
