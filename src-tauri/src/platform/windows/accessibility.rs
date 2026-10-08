@@ -232,13 +232,43 @@ pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) ->
     let result = (|| -> Result<String, String> {
         let automation: IUIAutomation = unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) }
             .map_err(|e| format!("UI Automation unavailable: {e}"))?;
-        let element = unsafe { automation.GetFocusedElement() }
-            .map_err(|e| format!("Focused control unavailable: {e}"))?;
-        if unsafe { element.CurrentIsPassword() }.map(|v| v.as_bool()).unwrap_or(true) {
-            return Err("Password or protected controls cannot be accessed.".into());
+        let hwnd = unsafe { GetForegroundWindow() };
+        if hwnd.0.is_null() { return Err("No foreground window.".into()); }
+        let root = unsafe { automation.ElementFromHandle(hwnd) }
+            .map_err(|e| format!("Cannot inspect foreground application: {e}"))?;
+        let walker = unsafe { automation.ControlViewWalker() }.map_err(|e| e.to_string())?;
+        let mut pending = vec![(root, 0usize)];
+        let mut found = Vec::new();
+        let mut visited = 0usize;
+        while let Some((candidate, depth)) = pending.pop() {
+            if visited >= MAX_ELEMENTS || found.len() > 1 { break; }
+            visited += 1;
+            if unsafe { candidate.CurrentIsPassword() }.map(|v| v.as_bool()).unwrap_or(true) {
+                continue;
+            }
+            if unsafe { candidate.CurrentName() }.ok().map(|v| v.to_string()).as_deref() == Some(expected_name) {
+                found.push(candidate.clone());
+            }
+            if depth >= MAX_DEPTH { continue; }
+            let mut children = Vec::new();
+            if let Ok(mut child) = unsafe { walker.GetFirstChildElement(&candidate) } {
+                for _ in 0..MAX_ELEMENTS {
+                    let next = unsafe { walker.GetNextSiblingElement(&child) }.ok();
+                    children.push(child);
+                    match next { Some(sibling) => child = sibling, None => break }
+                }
+            }
+            for child in children.into_iter().rev() { pending.push((child, depth + 1)); }
         }
-        let name = unsafe { element.CurrentName() }.map_err(|e| e.to_string())?.to_string();
-        if name != expected_name { return Err("Focus changed. Inspect again before acting.".into()); }
+        if found.len() != 1 {
+            return Err(if found.is_empty() {
+                "Target not found in active window. Inspect again.".into()
+            } else {
+                "Multiple controls have that name. Specify a more unique target.".into()
+            });
+        }
+        let element = found.remove(0);
+        let name = expected_name.to_string();
         if unsafe { element.CurrentIsEnabled() }.map(|v| !v.as_bool()).unwrap_or(true) {
             return Err("That control is disabled.".into());
         }
