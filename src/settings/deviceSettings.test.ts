@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bindDeviceSettings,
   loadAssistantAutoRun,
+  loadAssistantAutoApproveRoutine,
   loadAutoUpdate,
   loadDestination,
   loadDictationSounds,
@@ -17,6 +18,7 @@ import {
   loadStoredRemoteDictationHotkey,
   loadStoredVoiceNoteHotkey,
   saveAssistantAutoRun,
+  saveAssistantAutoApproveRoutine,
   saveAutoUpdate,
   saveDestination,
   saveDictationSounds,
@@ -58,6 +60,16 @@ describe("device settings", () => {
     expect(loadShowIndicator(storage)).toBe(false);
     saveShowIndicator(true, storage);
     expect(loadShowIndicator(storage)).toBe(true);
+  });
+
+  it("keeps automatic accessibility approval opt-in and per device", () => {
+    const storage = memoryStorage();
+    expect(loadAssistantAutoApproveRoutine(storage,"windows")).toBe(false);
+    saveAssistantAutoApproveRoutine(true,storage,"windows");
+    expect(loadAssistantAutoApproveRoutine(storage,"windows")).toBe(true);
+    expect(loadAssistantAutoApproveRoutine(storage,"android")).toBe(false);
+    saveAssistantAutoApproveRoutine(false,storage,"windows");
+    expect(loadAssistantAutoApproveRoutine(storage,"windows")).toBe(false);
   });
 
   it("plays Dictation sounds by default and keeps the choice per device", () => {
