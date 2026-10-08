@@ -58,7 +58,7 @@ export function AssistantHeader({ controller, snapshot, signedIn, micBusy = fals
           else controller.start();
         }}
       >
-        {running ? "End Assistant" : viewingElsewhere ? "Continue here" : "Start Assistant"}
+        {running ? "End Assistant" : viewingElsewhere ? "Continue here" : snapshot.turns.length ? "Continue conversation" : "Start Assistant"}
       </button>
     </div>
   );
