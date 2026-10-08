@@ -199,10 +199,20 @@ export function AssistantPanel({
               <p className="note-meta">{accessibility.windowTitle ?? "Untitled window"} · {accessibility.status}</p>
               <p>{accessibility.focusedName ?? "Unnamed control"}{accessibility.focusedClass ? ` · ${accessibility.focusedClass}` : ""}</p>
               {accessibility.text && <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 200, overflowY: "auto" }}>{accessibility.text}</pre>}
+              {accessibility.text && <button type="button" className="secondary" onClick={() => {
+                const error = controller.attachSelection({
+                  type: "selection",
+                  text: accessibility.text ?? "",
+                  sourceApp: accessibility.windowTitle ?? "Windows accessibility",
+                  capturedAt: new Date().toISOString(),
+                });
+                if (error) setAccessibilityError(error);
+                else setAccessibility(null);
+              }}>Attach to Assistant</button>}
               <button type="button" className="secondary" onClick={() => setAccessibility(null)}>Clear</button>
             </div>
           )}
-          <p className="note-meta">Not sent to Gemini or synced. Focus a field in another app, then inspect.</p>
+          <p className="note-meta">Local preview only until you choose Attach to Assistant. Attached text may be sent to Gemini and saved in Assistant conversations.</p>
         </div>
       )}
       <div className="assistant-selection">
