@@ -405,6 +405,10 @@ assistant.setActions({
     if (platform.platform !== "windows" || !accountUserId) throw new Error("Pointer inspection is available only on signed-in Windows Assistant sessions.");
     return inspectAssistantPointer();
   },
+  capturePointerTarget: async () => {
+    if (platform.platform !== "windows" || !accountUserId) throw new Error("Pointed screenshots are available only on signed-in Windows Assistant sessions.");
+    return snapshotFromNative(await invoke("capture_pointer_snapshot"), encodeSnapshotJpeg);
+  },
   computer: {
     openApp: (id) => computerActions.openApp(id),
     pressShortcut: (id) => computerActions.pressShortcut(id),
