@@ -124,6 +124,36 @@ describe("AssistantController", () => {
     expect(assistantCueTransition({ status: "ERROR", resuming: false }, idle, false).cue).toBeNull();
   });
 
+  it("reads the element under the Windows cursor only on a pointer tool call", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    expect(actions.inspectPointer).not.toHaveBeenCalled();
+    session.emit({ type: "toolCalls", calls: [{ id: "where", name: "inspect_pointer_context", args: {} }] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(1));
+    expect(actions.inspectPointer).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(session.responses[0])).toContain("Browser");
+    created.end();
+  });
+
+  it("drops delayed pointer inspection results after ending Assistant", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    let answer: (value: string) => void = () => {};
+    actions.inspectPointer.mockImplementation(() => new Promise<string>((resolve) => { answer = resolve; }));
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{ id: "old", name: "inspect_pointer_context", args: {} }] });
+    await vi.waitFor(() => expect(actions.inspectPointer).toHaveBeenCalledTimes(1));
+    created.end();
+    answer("stale pointer context");
+    await Promise.resolve();
+    expect(session.responses).toHaveLength(0);
+  });
+
   it("lets the Assistant retrieve earlier transcripts without modifying them", async () => {
     const { created } = controller();
     const actions = toolActions();
@@ -1353,6 +1383,10 @@ function toolActions() {
     rememberMemory: vi.fn(async () => "Remembered answer_length: Prefer short answers."),
     changeMemory: vi.fn(async () => "Changed answer_length."),
     forgetMemory: vi.fn(async () => "Forgot answer_length."),
+    inspectPointer: vi.fn(async () => JSON.stringify({
+      position: { x: -160, y: 350 }, windowTitle: "Browser",
+      name: "Submit", status: "element-available", selectedText: null,
+    })),
     captureScreen: vi.fn(async () => ({
       source: "screen" as const,
       capturedAt: "2026-09-28T12:00:00.000Z",
