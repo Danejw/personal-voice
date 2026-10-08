@@ -9,6 +9,7 @@ mod insert;
 mod installed_apps;
 mod live_text;
 mod push_to_talk;
+mod pointer_context;
 mod snapshot;
 mod windows_info;
 
@@ -34,6 +35,7 @@ pub use hook::{set_active as set_dictation_active, set_paused};
 pub use insert::{capture_selection, finish_pending_restore, insert_text, insert_camera_image};
 pub use live_text::live_dictation_text;
 pub use snapshot::capture_snapshot;
+pub use pointer_context::{pointer_position, inspect_pointer_context, PointerPosition, PointerContext};
 pub use windows_info::{describe_windows, activate_window};
 
 use push_to_talk::{DestOverride, LongPressShortcut, PttEvent, Shortcut};
