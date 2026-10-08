@@ -702,13 +702,19 @@ textarea:focus {
 .term-delete { font: inherit; font-size: 18px; line-height: 1; color: #a2adbc; background: transparent; border: 0; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
 .term-delete:hover:not(:disabled) { color: #f3a7a7; }
 .term-delete:disabled, .toggle:has(input:disabled) { opacity: 0.5; cursor: default; }
-.note-compose { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.note-compose-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.note-compose {
+  display: grid; gap: 10px; margin-bottom: 14px; padding: 12px;
+  background: #0d141b; border: 1px solid #253342; border-radius: 10px;
+}
+.note-compose-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr); gap: 10px; }
 .note-compose textarea,
 .note-edit textarea {
   width: 100%; min-height: 64px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.45;
   color: inherit; background: #111820; border: 0; border-radius: 8px; padding: 8px 10px;
 }
-.note-compose textarea { flex: 1; }
+.note-compose textarea { min-height: 130px; }
+.app-shell.is-mobile .note-compose-fields { grid-template-columns: 1fr; }
 .note-compose .record { flex: none; }
 .note-edit { display: grid; gap: 8px; }
 .note-edit-actions { display: flex; align-items: center; gap: 6px; }
