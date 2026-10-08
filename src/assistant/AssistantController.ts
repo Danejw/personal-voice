@@ -1217,6 +1217,10 @@ export class AssistantController {
           await this.runSelection(decision);
           continue;
         }
+        if (decision.kind === "elements") {
+          await this.runElements(decision);
+          continue;
+        }
         if (decision.kind === "windows") {
           await this.runWindows(decision);
           continue;
@@ -1399,6 +1403,20 @@ export class AssistantController {
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
       this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runElements(decision: Extract<ToolDecision, { kind: "elements" }>) {
+    const epoch = this.toolEpoch;
+    if (!navigator.userAgent.includes("Windows")) {
+      this.replyTool(decision.id, decision.name, false, "Windows only.");
+      return;
+    }
+    try {
+      const elements = await invoke("inspect_accessible_elements");
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, JSON.stringify(elements).slice(0, 8000));
+    } catch (error) {
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
     }
   }
 
