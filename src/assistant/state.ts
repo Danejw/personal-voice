@@ -59,6 +59,8 @@ export interface AssistantSnapshot {
   computerRunning: boolean;
   /** Set when Computer Use asks the user to confirm one step. */
   computerPrompt: string | null;
+  /** Unique approval id; prevents stale popup clicks from approving another step. */
+  computerApprovalId: string | null;
   /** The phone could not enable echo cancellation, so the microphone pauses during playback. */
   echoFallback: boolean;
   /** Microphone audio is being withheld until playback and its echo tail finish. */
@@ -93,7 +95,7 @@ export type AssistantAction =
   | { type: "selectionError"; message: string }
   | { type: "setPending"; pending: PendingAssistantAction }
   | { type: "toolActivity"; activity: { id: string; title: string } | null }
-  | { type: "computer"; running: boolean; prompt: string | null }
+  | { type: "computer"; running: boolean; prompt: string | null; approvalId?: string }
   | { type: "clearPending" }
   | { type: "actionNotice"; message: string | null }
   | { type: "attachScreen"; screen: ScreenSnapshot }
@@ -139,6 +141,7 @@ export const initialAssistantState: AssistantSnapshot = {
   continuedFrom: null,
   computerRunning: false,
   computerPrompt: null,
+  computerApprovalId: null,
   echoFallback: false,
   playbackHeld: false,
 };
@@ -300,6 +303,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         continuedFrom: null,
         computerRunning: false,
         computerPrompt: null,
+        computerApprovalId: null,
         echoFallback: false,
         playbackHeld: false,
       };
@@ -316,7 +320,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
     case "clearPending":
       return { ...state, pendingAction: null };
     case "computer":
-      return { ...state, computerRunning: action.running, computerPrompt: action.prompt };
+      return { ...state, computerRunning: action.running, computerPrompt: action.prompt, computerApprovalId: action.approvalId ?? null };
     case "actionNotice":
       return { ...state, actionNotice: action.message };
     case "attachScreen":
