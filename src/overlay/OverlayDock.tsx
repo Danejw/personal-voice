@@ -379,7 +379,8 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           onClick={() => onAction({ type: "assistant-toggle" })}
         >
           <AssistantIcon />
-          {snapshot.cameraOn && <span className="overlay-camera-dot" aria-hidden="true" />}
+          {snapshot.cameraOn && <span className="overlay-camera-dot" aria-label="Camera is active" />}
+          {snapshot.computerActive && <span className="overlay-camera-dot" title="Assistant is controlling the screen" aria-label="Computer task active" />}
         </button>
       </Tooltip>
       {snapshot.pendingTitle && (
