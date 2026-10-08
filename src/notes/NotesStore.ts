@@ -1,4 +1,4 @@
-import type { NotesApi, NotePresentationUpdate } from "@/services/notesService";
+import type { NotesApi, NotePresentationUpdate, NewNoteDetails } from "@/services/notesService";
 import type { Note, NoteSourceType, NoteStatus } from "@/notes/note";
 import type { NoteAttachment } from "@/notes/noteAttachment";
 import type { NoteGroup } from "@/notes/noteGroup";
@@ -80,13 +80,21 @@ export class NotesStore {
   }
 
   /** Saves immediately. Title/group enrichment is best-effort and never blocks the save. */
-  async create(text: string, sourceType: NoteSourceType = "manual"): Promise<void> {
+  async create(text: string, sourceType: NoteSourceType = "manual", details: NewNoteDetails = {}): Promise<void> {
     const userId = this.requireConnected();
     const body = text.trim();
     if (!body) throw new Error("An empty note cannot be saved.");
+    const title = details.title?.trim();
+    if (title && title.length > 120) throw new Error("A note title cannot exceed 120 characters.");
+    if (details.groupId && !this.snapshot.groups.some((group) => group.id === details.groupId)) {
+      throw new Error("That note group no longer exists.");
+    }
     const generation = this.generation;
     try {
-      const note = await this.api.create(userId, body, this.sourceDeviceId(userId), sourceType);
+      const note = await this.api.create(userId, body, this.sourceDeviceId(userId), sourceType, {
+        ...(title ? { title } : {}),
+        ...(details.groupId ? { groupId: details.groupId } : {}),
+      });
       try { this.onCreated?.(sourceType); } catch { /* usage must not fail note save */ }
       if (generation === this.generation) {
         this.publish({
