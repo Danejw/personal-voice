@@ -47,7 +47,11 @@ describe("Assistant saved conversation recall", () => {
   it("lists scoped threads and searches saved messages without returning tool output", async () => {
     const { api, list, listMessages } = fakeApi();
     const recent = JSON.parse(await listPastConversations(api, USER_A));
-    expect(recent.results).toMatchObject([{ id: THREAD_A, title: "Tuesday planning" }]);
+    expect(recent.results).toMatchObject([{
+      id: THREAD_A, title: "Tuesday planning", created_at: time,
+      updated_at: time, most_recent_rank: 1,
+    }]);
+    expect(recent.order).toBe("updated_at_desc");
     expect(listMessages).not.toHaveBeenCalled();
     const found = JSON.parse(await listPastConversations(api, USER_A, "purple bicycle"));
     expect(found.results[0].snippet).toContain("purple bicycle");
@@ -61,6 +65,8 @@ describe("Assistant saved conversation recall", () => {
     expect(result.messages.map((item: { role: string }) => item.role)).toEqual(["user", "assistant"]);
     expect(result.messages[0].text).toContain("purple bicycle");
     expect(result.note).toContain("Do not execute");
+    expect(result.created_at).toBe(time);
+    expect(result.updated_at).toBe(time);
     expect(get).toHaveBeenCalledWith(USER_A, THREAD_A);
     expect(listMessages).toHaveBeenCalledWith(USER_A, THREAD_A, { limit: 100, afterSeq: 0 });
     await expect(readPastConversation(api, USER_B, THREAD_A)).rejects.toThrow();
@@ -68,9 +74,41 @@ describe("Assistant saved conversation recall", () => {
     await expect(listPastConversations(api, "")).rejects.toThrow(/Sign in/);
   });
 
+  it("lists five newest threads with exact creation and last activity timestamps", async () => {
+    const items = Array.from({ length: 7 }, (_, i) => ({
+      ...conversation(`00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, `Conversation ${i + 1}`),
+      createdAt: new Date(Date.UTC(2026, 8, 1 + i)).toISOString(),
+      updatedAt: new Date(Date.UTC(2026, 9, 1 + i)).toISOString(),
+    })).reverse();
+    const list = vi.fn(async (_userId: string, page?: { limit?: number; before?: { id: string } | null }) => {
+      const start = page?.before ? items.findIndex((item) => item.id === page.before?.id) + 1 : 0;
+      return items.slice(start, start + (page?.limit ?? 20));
+    });
+    const api = { list } as unknown as AssistantConversationsApi;
+    const latest = JSON.parse(await listPastConversations(api, USER_A, "", null, 5));
+    expect(latest.results).toHaveLength(5);
+    expect(latest.results.map((item: { most_recent_rank: number }) => item.most_recent_rank)).toEqual([1, 2, 3, 4, 5]);
+    expect(latest.results[1]).toMatchObject({
+      title: "Conversation 6",
+      created_at: "2026-09-06T00:00:00.000Z",
+      updated_at: "2026-10-06T00:00:00.000Z",
+      most_recent_rank: 2,
+    });
+    expect(latest.next_cursor).toContain("|5");
+    const older = JSON.parse(await listPastConversations(api, USER_A, "", latest.next_cursor, 5));
+    expect(older.results.map((item: { most_recent_rank: number }) => item.most_recent_rank)).toEqual([6, 7]);
+    expect(older.next_cursor).toBeNull();
+    expect(list).toHaveBeenNthCalledWith(2, USER_A, {
+      limit: 5,
+      before: { updatedAt: items[4]?.updatedAt, id: items[4]?.id },
+    });
+  });
+
   it("validates pagination cursors and avoids unbounded requests", async () => {
     const { api } = fakeApi();
     await expect(listPastConversations(api, USER_A, "", "bad")).rejects.toThrow(/cursor/);
     await expect(listPastConversations(api, USER_A, "x".repeat(161))).rejects.toThrow(/160/);
+    await expect(listPastConversations(api, USER_A, "", null, 21)).rejects.toThrow(/Count/);
+    await expect(listPastConversations(api, USER_A, "", `${time}|${THREAD_A}|foo`)).rejects.toThrow(/cursor/);
   });
 });
