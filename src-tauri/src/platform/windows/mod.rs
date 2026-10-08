@@ -504,6 +504,16 @@ pub fn show_without_focus(window: &WebviewWindow) -> Result<(), String> {
 }
 
 /// Pairs with `show_without_focus`: tao never learned the window was shown, so its `hide()` is a no-op.
+pub fn show_assistant_card(window: &WebviewWindow) -> Result<(), String> {
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)
+            .map_err(|e| e.to_string())
+    }
+}
+
 pub fn hide_window(window: &WebviewWindow) -> Result<(), String> {
     let hwnd = window.hwnd().map_err(|e| e.to_string())?;
     unsafe {
