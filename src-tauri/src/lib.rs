@@ -114,6 +114,8 @@ pub fn run() {
             #[cfg(windows)]
             commands::inspect_pointer_context,
             #[cfg(windows)]
+            commands::capture_pointer_snapshot,
+            #[cfg(windows)]
             commands::accessibility_pattern_action,
             #[cfg(windows)]
             commands::accessibility_watch,
