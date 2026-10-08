@@ -599,14 +599,14 @@ export default function App() {
         computerPrompt:state.computerPrompt,computerRunning:state.computerRunning,
       }}).catch(()=>undefined);
     });
-    const listener = listen<{kind:"tool"|"computer";id:string|null;allow:boolean}>("assistant-popup-answer",(event)=>{
+    const listener = listen<{kind:"tool"|"computer";id:string|null;computerPrompt?:string|null;allow:boolean}>("assistant-popup-answer",(event)=>{
       const value=event.payload;
       if(value.kind==="tool") {
         const pending=assistant.getSnapshot().pendingAction;
         if(!pending || pending.working || pending.id!==value.id) return;
         if(value.allow) assistant.confirmPending();
         else assistant.cancelPending();
-      } else if (assistant.getSnapshot().computerPrompt) {
+      } else if (value.computerPrompt && value.computerPrompt === assistant.getSnapshot().computerPrompt) {
         if(value.allow) assistant.confirmComputer();
         else assistant.stopComputer();
       }
