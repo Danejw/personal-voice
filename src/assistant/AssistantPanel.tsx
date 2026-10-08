@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { ConversationBar } from "@/assistant/ConversationBar";
 import type { AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 import { selectionPreview } from "@/assistant/selectionContext";
@@ -84,6 +85,19 @@ export function AssistantPanel({
   const [inspecting, setInspecting] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [capturingCamera, setCapturingCamera] = useState(false);
+  const [photoWindows, setPhotoWindows] = useState<string[]>([]);
+  const [photoWindow, setPhotoWindow] = useState("");
+  const [photoSending, setPhotoSending] = useState(false);
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null);
+  const [computerHistory, setComputerHistory] = useState<Array<{ label: string; phase: string; at: string }>>([]);
+  useEffect(() => {
+    const subscription = listen<{ label: string; phase: string }>("computer-activity", (event) => {
+      const entry = { label: event.payload.label, phase: event.payload.phase, at: new Date().toLocaleTimeString() };
+      setComputerHistory((history) => [entry, ...history].slice(0, 25));
+    });
+    return () => { void subscription.then((unsubscribe) => unsubscribe()); };
+  }, []);
+
   const [continuing, setContinuing] = useState(false);
   const [continueNotice, setContinueNotice] = useState<string | null>(null);
   const [continueError, setContinueError] = useState<string | null>(null);
@@ -274,6 +288,31 @@ export function AssistantPanel({
               {` · ${new Date(snapshot.cameraPhoto.capturedAt).toLocaleTimeString()}`}
             </p>
             <button type="button" className="secondary" onClick={() => controller.detachCameraPhoto()}>Remove</button>
+            {navigator.userAgent.includes("Windows") && (
+              <div className="assistant-action" role="group" aria-label="Paste camera photo into another app">
+                <p className="note-meta">Insert this photo into a focused input, including a ChatGPT conversation. Does not press Send.</p>
+                <button type="button" className="secondary" onClick={() => {
+                  setPhotoNotice(null);
+                  void invoke<{ windows: string[] }>("describe_windows").then((report) => {
+                    const windows = report.windows.filter((name) => name !== "Personal Voice");
+                    setPhotoWindows(windows);
+                    setPhotoWindow((current) => windows.includes(current) ? current : "");
+                  }).catch((error: unknown) => setPhotoNotice(String(error)));
+                }}>Find open windows</button>
+                <select aria-label="Photo destination window" value={photoWindow} onChange={(event) => setPhotoWindow(event.target.value)}>
+                  <option value="">Select destination window</option>
+                  {photoWindows.map((title) => <option key={title} value={title}>{title}</option>)}
+                </select>
+                <button type="button" className="secondary" disabled={!photoWindow || photoSending} onClick={() => {
+                  setPhotoSending(true);
+                  setPhotoNotice(null);
+                  void controller.pasteCameraPhotoToApp(photoWindow)
+                    .then(setPhotoNotice).catch((error: unknown) => setPhotoNotice(String(error)))
+                    .finally(() => setPhotoSending(false));
+                }}>{photoSending ? "Pasting photo…" : "Paste photo into focused input"}</button>
+                {photoNotice && <p className="note-meta" role="status">{photoNotice}</p>}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -317,6 +356,23 @@ export function AssistantPanel({
           )}
         </div>
       </div>
+      {navigator.userAgent.includes("Windows") && (
+        <div className="assistant-action" role="region" aria-label="Computer interaction history">
+          <p className="note-meta">Computer interaction activity</p>
+          {computerHistory.length === 0 ? (
+            <p className="note-meta">No accessibility or computer actions in this view yet.</p>
+          ) : (
+            <ol style={{ maxHeight: 190, overflowY: "auto", paddingInlineStart: 22 }}>
+              {computerHistory.map((entry, index) => (
+                <li key={`${entry.at}-${index}`} className="note-meta">
+                  {entry.at} · {entry.phase}: {entry.label}
+                </li>
+              ))}
+            </ol>
+          )}
+          <button type="button" className="secondary" onClick={() => setComputerHistory([])}>Clear activity history</button>
+        </div>
+      )}
       {(snapshot.computerRunning || snapshot.computerPrompt) && (
         <div className="assistant-action" role="region" aria-label="Supervised screen task">
           <p>{snapshot.computerPrompt ?? "A supervised screen task is running."}</p>
