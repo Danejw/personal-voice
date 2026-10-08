@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
-import { filterGraph, graphColor, kindLabel, layoutGraph, type GraphNode, type GraphPoint, type GraphSnapshot } from "@/memory-graph/graph";
+import { filterGraph, graphCanvasState, graphColor, kindLabel, layoutGraph, type GraphNode, type GraphPoint, type GraphSnapshot } from "@/memory-graph/graph";
 import { loadMemoryGraph } from "@/memory-graph/graphService";
 import "./memoryGraph.css";
 
@@ -89,6 +89,7 @@ export function MemoryGraphPanel({ userId, active, onNavigate }: MemoryGraphPane
 
   const visible = useMemo(() => graph ? filterGraph(graph, query, kind, connectedOnly) : null, [graph, query, kind, connectedOnly]);
   const positions = useMemo(() => graph ? layoutGraph(graph) : new Map<string, GraphPoint>(), [graph]);
+  const canvasState = graphCanvasState(graph, error, visible?.nodes.length ?? 0);
   const pointFor = useCallback((id: string): GraphPoint => dragged[id] ?? positions.get(id) ?? { x: 0, y: 0 }, [dragged, positions]);
   const selected = graph?.nodes.find((n) => n.id === selectedId) ?? null;
   const neighbors = useMemo(() => {
@@ -210,18 +211,18 @@ export function MemoryGraphPanel({ userId, active, onNavigate }: MemoryGraphPane
               <button type="button" aria-label="Reset graph view" onClick={() => { setView(HOME); setDragged({}); }}>Reset</button>
             </div>
           </div>
-          {!graph ? (
+          {canvasState === "loading" || canvasState === "error" ? (
             <div className="memory-graph-empty" role={error ? "alert" : "status"}>
-              <span aria-hidden="true">{error ? "!" : "◎"}</span>
-              <strong>{error ? "Memory is temporarily unavailable" : "Loading your knowledge network…"}</strong>
-              {error && <>
+              <span aria-hidden="true">{canvasState === "error" ? "!" : "◎"}</span>
+              <strong>{canvasState === "error" ? "Memory is temporarily unavailable" : "Loading your knowledge network…"}</strong>
+              {canvasState === "error" && <>
                 <p>The graph could not be loaded. Your other Personal Voice features are unaffected.</p>
                 <button className="secondary" type="button" disabled={busy} onClick={() => { void reload(); }}>
                   Retry loading
                 </button>
               </>}
             </div>
-          ) : visible?.nodes.length === 0 ? (
+          ) : canvasState === "empty" ? (
             <div className="memory-graph-empty">
               <span aria-hidden="true">◎</span>
               <strong>{graph?.nodes.length ? "No matches" : "Your memory graph is empty"}</strong>
@@ -229,7 +230,7 @@ export function MemoryGraphPanel({ userId, active, onNavigate }: MemoryGraphPane
                 ? "Try a different search or remove the filters."
                 : "Saved Assistant memories will appear here automatically. Graph relationships appear when indexing and linking have completed."}</p>
             </div>
-          ) : (
+          ) : visible ? (
             <svg
               ref={svgRef} className="memory-graph-canvas" role="img"
               aria-label={`Interactive memory graph showing ${visible.nodes.length} nodes and ${visible.edges.length} connections. Select a node to inspect it.`}
@@ -282,6 +283,8 @@ export function MemoryGraphPanel({ userId, active, onNavigate }: MemoryGraphPane
                 </g>;
               })}
             </svg>
+          ) : (
+            <div className="memory-graph-empty" role="alert">Memory view is unavailable. Try refreshing.</div>
           )}
           {visible && visible.nodes.length > 0 && <p className="memory-graph-stage-hint">Drag to pan. Scroll or use +/− to zoom. Drag nodes to rearrange. Tap a node for details.</p>}
         </div>
