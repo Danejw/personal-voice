@@ -393,12 +393,28 @@ pub fn set_dictation_active(active: bool) {
     platform::set_dictation_active(active);
 }
 
-/// Shows or hides the always-on-top control and pushes its snapshot to the overlay window.
+/// Last displayed popup payload is retained so a newly loaded WebView can
+/// fetch the current approval even when it missed the first native event.
+static ASSISTANT_POPUP_STATE: std::sync::OnceLock<std::sync::Mutex<serde_json::Value>> =
+    std::sync::OnceLock::new();
+
+#[tauri::command]
+pub fn assistant_popup_state() -> serde_json::Value {
+    ASSISTANT_POPUP_STATE
+        .get_or_init(|| std::sync::Mutex::new(serde_json::json!({"kind":"hidden"})))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
+}
+
 /// Compact non-modal Assistant activity and approval popup. It never takes foreground focus.
 #[tauri::command]
 pub fn sync_assistant_popup(app: AppHandle, payload: serde_json::Value) -> Result<(), String> {
     let window = app.get_webview_window("assistant-popup").ok_or("Assistant popup missing.")?;
     let kind = payload.get("kind").and_then(|v| v.as_str()).unwrap_or("hidden");
+    *ASSISTANT_POPUP_STATE
+        .get_or_init(|| std::sync::Mutex::new(serde_json::json!({"kind":"hidden"})))
+        .lock().unwrap_or_else(std::sync::PoisonError::into_inner) = payload.clone();
     if kind == "hidden" {
         return platform::hide_window(&window);
     }
