@@ -376,7 +376,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           className={`overlay-btn ${snapshot.computerActive ? "overlay-busy" : assistantTone(snapshot.assistant)}${snapshot.cameraOn ? " overlay-camera-on" : ""}`}
           aria-label={snapshot.computerActive ? "Assistant is controlling the computer. Open Assistant to stop." : assistantTitle}
           disabled={assistantBlocked}
-          onClick={() => onAction({ type: "assistant-toggle" })}
+          onClick={() => onAction({ type: snapshot.computerActive ? "stop-computer" : "assistant-toggle" })}
         >
           <AssistantIcon />
           {snapshot.cameraOn && <span className="overlay-camera-dot" aria-label="Camera is active" />}
