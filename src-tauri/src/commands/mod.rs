@@ -54,13 +54,13 @@ pub async fn inspect_accessible_elements(app: AppHandle) -> Result<Vec<platform:
 
 #[cfg(windows)]
 #[tauri::command]
-pub async fn uia_control_action(app: AppHandle, action: String, expected_name: String, value: Option<String>) -> Result<String, String> {
+pub async fn uia_control_action(app: AppHandle, action: String, expected_window: String, expected_name: String, value: Option<String>) -> Result<String, String> {
     let window = app.get_webview_window("main").ok_or("Settings window missing.")?;
     window.hide().map_err(|e| e.to_string())?;
     let action_label = action.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         std::thread::sleep(std::time::Duration::from_millis(180));
-        platform::control_action(&action, &expected_name, value.as_deref())
+        platform::control_action(&action, &expected_window, &expected_name, value.as_deref())
     }).await.map_err(|e| e.to_string()).and_then(|v| v);
     // Restore Settings without stealing focus from the app being controlled.
     let _ = platform::show_without_focus(&window);
