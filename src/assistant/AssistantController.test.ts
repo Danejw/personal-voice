@@ -463,7 +463,7 @@ describe("AssistantController", () => {
     }]);
   });
 
-  it("does not run a tool when this device is not producing", async () => {
+  it("runs local tools even when the transcript lease belongs to another device", async () => {
     const { created } = controller();
     const used = toolActions();
     created.setActions(used);
@@ -475,8 +475,8 @@ describe("AssistantController", () => {
       calls: [{ id: "call-1", name: "copy_text", args: { text: "copied by assistant" } }],
     });
     await settle();
-    expect(used.copyText).not.toHaveBeenCalled();
-    expect(created.getSnapshot().actionNotice).toBeNull();
+    expect(used.copyText).toHaveBeenCalledWith("copied by assistant");
+    expect(created.getSnapshot().actionNotice).toBe("Copied to the clipboard.");
   });
 
   it("captures the screen when asked and reports a capture failure", async () => {
@@ -1199,6 +1199,14 @@ function toolActions() {
     copyText: vi.fn(async () => {}),
     insertText: vi.fn(async () => {}),
     createVoiceNote: vi.fn(async () => {}),
+    editVoiceNote: vi.fn(async () => {}),
+    listSnippets: vi.fn(async () => "[]"),
+    createSnippet: vi.fn(async () => {}),
+    updateSnippet: vi.fn(async () => {}),
+    sendRemoteDictation: vi.fn(async () => {}),
+    createTransform: vi.fn(async () => {}),
+    addDictionaryWord: vi.fn(async () => {}),
+    readDashboard: vi.fn(async () => "{}"),
     planHandoff: vi.fn((deviceName: string | null) => {
       if (deviceName && deviceName.toLocaleLowerCase() !== "desktop") {
         throw new Error(`No other device is named ${deviceName}.`);
