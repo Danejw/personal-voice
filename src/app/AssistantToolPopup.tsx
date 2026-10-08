@@ -12,6 +12,7 @@ export default function AssistantToolPopup() {
   const [state,setState] = useState<Popup>({pending:null,activity:null,computerPrompt:null,computerRunning:false});
   useEffect(()=>{
     const listener=listen<Popup>("assistant-popup-state",event=>setState(event.payload));
+    void listener.then(()=>emitTo("main","assistant-popup-ready",{}));
     return ()=>{void listener.then(fn=>fn());};
   },[]);
   const approval=state.pending&&!state.pending.working?state.pending:null;
