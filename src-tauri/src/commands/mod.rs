@@ -38,6 +38,20 @@ pub fn sync_assistant_tool_popup(app: AppHandle, snapshot: serde_json::Value) ->
 
 #[cfg(windows)]
 #[tauri::command]
+pub fn pointer_position() -> Result<platform::PointerPosition, String> {
+    platform::pointer_position()
+}
+
+/// Inspect the actual UI element under the mouse without moving or clicking it.
+#[cfg(windows)]
+#[tauri::command]
+pub async fn inspect_pointer_context() -> Result<platform::PointerContext, String> {
+    tauri::async_runtime::spawn_blocking(platform::inspect_pointer_context)
+        .await.map_err(|e| e.to_string())?
+}
+
+#[cfg(windows)]
+#[tauri::command]
 pub async fn inspect_accessibility_tree(app:AppHandle)->Result<platform::AccessibilityTreeReport,String>{
     let window=app.get_webview_window("main").ok_or("Settings window missing")?;
     window.hide().map_err(|e|e.to_string())?;
