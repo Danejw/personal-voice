@@ -69,6 +69,7 @@ describe("assistant tool schema", () => {
       "supervise_screen",
       "list_past_conversations",
       "read_past_conversation",
+      "continue_past_conversation",
       "list_memories",
       "search_memory",
       "remember_memory",
@@ -93,9 +94,17 @@ describe("assistant tool schema", () => {
   it("validates read-only, account-scoped prior conversation tool calls", () => {
     const id = "33333333-3333-4333-8333-333333333333";
     expect(decideToolCall({ id: "list", name: "list_past_conversations", args: { query: "bike" } }, plan))
-      .toEqual({ kind: "conversations", id: "list", name: "list_past_conversations", query: "bike", cursor: null });
+      .toEqual({ kind: "conversations", id: "list", name: "list_past_conversations", query: "bike", cursor: null, count: 20 });
+    expect(decideToolCall({ id: "last-five", name: "list_past_conversations", args: { count: 5 } }, plan))
+      .toMatchObject({ kind: "conversations", count: 5, query: "" });
+    expect(decideToolCall({ id: "bad-count", name: "list_past_conversations", args: { count: 21 } }, plan).kind)
+      .toBe("reject");
     expect(decideToolCall({ id: "read", name: "read_past_conversation", args: { conversation_id: id } }, plan))
       .toEqual({ kind: "conversationRead", id: "read", name: "read_past_conversation", conversationId: id });
+    expect(decideToolCall({ id: "resume", name: "continue_past_conversation", args: { conversation_id: id } }, plan))
+      .toEqual({ kind: "conversationContinue", id: "resume", name: "continue_past_conversation", conversationId: id });
+    expect(decideToolCall({ id: "wrong", name: "continue_past_conversation", args: { conversation_id: "invalid" } }, plan).kind)
+      .toBe("reject");
     expect(decideToolCall({ id: "bad", name: "read_past_conversation", args: { conversation_id: "invalid" } }, plan).kind)
       .toBe("reject");
     expect(decideToolCall({ id: "bad-search", name: "list_past_conversations", args: { query: "x".repeat(161) } }, plan).kind)
