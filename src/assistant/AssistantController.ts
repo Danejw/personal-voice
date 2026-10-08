@@ -1198,6 +1198,7 @@ export class AssistantController {
         // The conversation store independently fences shared transcript writes.
         const decision = decideToolCall(call, (deviceName) => this.actions.planHandoff(deviceName));
         if (decision.kind === "ignore") continue;
+        this.dispatch({ type:"toolActivity", activity:{ id:call.id??call.name, label:call.name.replace(/_/g," "), status:"running" } });
         if (decision.kind === "reject") {
           this.replyTool(decision.id, decision.name, false, decision.message);
           continue;
@@ -1319,6 +1320,7 @@ export class AssistantController {
           continue;
         }
         this.dispatch({ type: "setPending", pending: pendingCard(this.pending) });
+        this.dispatch({ type:"toolActivity", activity:null });
       }
     } finally {
       this.toolDepth -= 1;
@@ -1811,6 +1813,13 @@ export class AssistantController {
   }
 
   private replyTool(id: string, name: string, ok: boolean, message: string) {
+    this.dispatch({ type:"toolActivity", activity:{ id, label:name.replace(/_/g," "), status:ok?"completed":"failed" } });
+    const completedId=id;
+    setTimeout(() => {
+      if (this.snapshot.toolActivity?.id === completedId && this.snapshot.toolActivity.status !== "running") {
+        this.dispatch({type:"toolActivity",activity:null});
+      }
+    }, 2200);
     if (ok) this.onToolRecord?.({ name, outcome: message });
     const session = this.session;
     if (!session) return;
