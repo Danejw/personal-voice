@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { formatHandoffList, formatNoteList } from "@/assistant/accountTools";
 import { buildContinuation, handoffDisplayText } from "@/assistant/continuation";
 import { selectionPreview } from "@/assistant/selectionContext";
@@ -91,6 +93,7 @@ import { transformProfilesApi } from "@/services/transformProfilesService";
 import {
   bindDeviceSettings,
   loadAssistantAutoRun,
+  loadAssistantAutoApproveRoutine,
   loadAssistantProfile,
   loadAutoUpdate,
   loadDictationSounds,
@@ -99,6 +102,7 @@ import {
   loadShowIndicator,
   loadTransformProfileId,
   saveAssistantAutoRun,
+  saveAssistantAutoApproveRoutine,
   saveAssistantProfile,
   saveAutoUpdate,
   saveDictationSounds,
@@ -594,6 +598,7 @@ export default function App() {
   const [entryPhase, setEntryPhase] = useState<"checking" | "wizard" | "app">("checking");
   const [profileEnabled, setProfileEnabled] = useState(true);
   const [autoRun, setAutoRun] = useState(true);
+  const [autoApproveRoutine, setAutoApproveRoutine] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(() => loadAutoUpdate());
   const [dictationSounds, setDictationSounds] = useState(() => loadDictationSounds());
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
@@ -791,9 +796,67 @@ export default function App() {
     const auto = loadAssistantAutoRun();
     setAutoRun(auto);
     assistant.setAutoRun(auto);
+    const routine = loadAssistantAutoApproveRoutine();
+    setAutoApproveRoutine(routine);
+    assistant.setAutoApproveRoutineAccessibility(routine);
     setAutoUpdate(loadAutoUpdate());
     setDictationSounds(loadDictationSounds());
   }, [settingsDeviceId]);
+
+  // Floating popup is independent of the Assistant page; buttons are checked
+  // against the current request id so late/stale clicks never authorize new work.
+  useEffect(() => {
+    if (platform.platform !== "windows") return;
+    const subscription = listen<{id:string;kind:"approval"|"computer-approval";choice:"approve"|"deny"|"open"}>(
+      "assistant-popup-response",
+      (event) => {
+        const {id,kind,choice} = event.payload;
+        if (choice === "open") {
+          setSection("assistant");
+          void platform.openSettings();
+          return;
+        }
+        const current = assistant.getSnapshot();
+        if (kind === "approval" && current.pendingAction?.id === id && !current.pendingAction.working) {
+          if (choice === "approve") assistant.confirmPending();
+          else assistant.cancelPending();
+        }
+        if (kind === "computer-approval" && current.computerApprovalId === id && current.computerPrompt) {
+          if (choice === "approve") assistant.confirmComputer();
+          else assistant.stopComputer();
+        }
+      },
+    );
+    return () => { void subscription.then((unsubscribe) => unsubscribe()); };
+  }, []);
+
+  useEffect(() => {
+    if (platform.platform !== "windows") return;
+    const pending = assistantSnapshot.pendingAction;
+    const computerPrompt = assistantSnapshot.computerPrompt;
+    let payload: {kind:string;id?:string;title?:string;preview?:string;working?:boolean};
+    if (pending && !pending.working) {
+      payload = {kind:"approval",id:pending.id,title:pending.title,preview:pending.preview,working:false};
+    } else if (computerPrompt && assistantSnapshot.computerApprovalId) {
+      payload = {kind:"computer-approval",id:assistantSnapshot.computerApprovalId,
+        title:"Computer action needs approval",preview:computerPrompt};
+    } else if (pending?.working) {
+      payload = {kind:"working",id:pending.id,title:pending.title};
+    } else if (assistantSnapshot.toolActivity) {
+      payload = {kind:"working",...assistantSnapshot.toolActivity};
+    } else if (assistantSnapshot.computerRunning) {
+      payload = {kind:"working",id:"supervised-task",title:"Using computer tools"};
+    } else {
+      payload = {kind:"hidden"};
+    }
+    // A brief async action should not flash a popup. Approvals appear immediately.
+    const delay = payload.kind === "working" ? 350 : 0;
+    const timer = window.setTimeout(() => {
+      void invoke("sync_assistant_popup",{payload}).catch(() => undefined);
+    },delay);
+    return () => window.clearTimeout(timer);
+  }, [assistantSnapshot.pendingAction, assistantSnapshot.computerPrompt,
+    assistantSnapshot.computerApprovalId, assistantSnapshot.toolActivity, assistantSnapshot.computerRunning]);
 
   useEffect(() => {
     if (transforms.status !== "synced" || !dictationTransformId) return;
@@ -1327,6 +1390,18 @@ export default function App() {
                 assistant.setAutoRun(enabled);
               }}
             />
+            {platform.platform === "windows" && (
+              <Toggle
+                label="Automatically allow routine accessibility actions"
+                description="When Auto-run is on, focus, scrolling, layout changes, and other reversible UI navigation run without repeated approval. Invoking buttons, entering text, photo sharing, and starting monitoring still ask first."
+                checked={autoApproveRoutine}
+                onChange={(enabled) => {
+                  saveAssistantAutoApproveRoutine(enabled);
+                  setAutoApproveRoutine(enabled);
+                  assistant.setAutoApproveRoutineAccessibility(enabled);
+                }}
+              />
+            )}
             <Toggle
               label="Use analytics profile"
               description="Sends dictation habits with Assistant. Turning this off keeps the facts on the Assistant page only."
