@@ -72,6 +72,20 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
   });
 
+  it("accepts session end and confirms a destination before pasting a camera photo", () => {
+    expect(decideToolCall({ id: "bye", name: "end_assistant_session", args: {} }, plan)).toEqual({
+      kind: "endSession", id: "bye", name: "end_assistant_session",
+    });
+    expect(decideToolCall({ id: "photo", name: "paste_camera_photo", args: {} }, plan)).toMatchObject({
+      kind: "reject", id: "photo",
+    });
+    expect(decideToolCall({
+      id: "photo", name: "paste_camera_photo", args: { window: "ChatGPT - Google Chrome" },
+    }, plan)).toMatchObject({
+      kind: "confirm", id: "photo", name: "paste_camera_photo", text: "ChatGPT - Google Chrome",
+    });
+  });
+
   it("keeps the call id and rejects malformed arguments before any action", () => {
     expect(parseToolCallList({ functionCalls: [{ name: "copy_text", args: { text: "hidden" } }] })).toEqual([
       { id: null, name: "copy_text", args: { text: "hidden" } },
