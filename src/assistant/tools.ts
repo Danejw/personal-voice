@@ -181,6 +181,11 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
+      name: "list_installed_apps",
+      description: "Windows only. Discover installed apps by Start Menu shortcut name; use exact returned names to open apps.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
       name: "focus_accessible_control",
       description: "Windows only. Focus the currently inspected accessibility element by its exact name, with user confirmation.",
       parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
@@ -322,6 +327,7 @@ export type ToolDecision =
   | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
   | { kind: "selection"; id: string; name: "capture_selection" }
   | { kind: "accessibility"; id: string; name: "inspect_active_app" }
+  | { kind: "apps"; id: string; name: "list_installed_apps" }
   | { kind: "snippets"; id: string; name: "list_snippets" }
   | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
   | { kind: "dashboard"; id: string; name: "read_usage_analytics" | "read_insights" }
@@ -398,6 +404,8 @@ export function decideToolCall(
       return { kind: "accessibility", id: call.id, name: "inspect_active_app" };
     case "capture_selection":
       return { kind: "selection", id: call.id, name: "capture_selection" };
+    case "list_installed_apps":
+      return { kind: "apps", id: call.id, name: "list_installed_apps" };
     case "list_snippets":
       return { kind: "snippets", id: call.id, name: "list_snippets" };
     case "read_usage_analytics":
