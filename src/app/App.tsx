@@ -65,6 +65,7 @@ import { WindowsBehaviorPanel } from "@/platform/windows/WindowsBehaviorPanel";
 import { assistantConversationsApi } from "@/services/assistantConversationsService";
 import { assistantMemoriesApi } from "@/services/assistantMemoriesService";
 import { requestMemoryLearn } from "@/services/memoryLearnService";
+import { indexNextMemoryBatch, memorySearchToolText, searchPersonalMemory } from "@/services/personalMemoryService";
 import { deviceApi } from "@/services/deviceService";
 import { dictationsApi } from "@/services/dictationsService";
 import { remoteContextApi } from "@/services/remoteContextService";
@@ -183,7 +184,12 @@ const assistantMemory = new AssistantMemoryStore(
   assistantMemoriesApi,
   localStorage,
   supabaseMemoryFeed(),
-  (rows) => assistant.setMemories(rows),
+  (rows) => {
+    assistant.setMemories(rows);
+    if (rows.some((row) => row.status === "active")) {
+      void indexNextMemoryBatch().catch(() => undefined);
+    }
+  },
   () => assistantLibrary.getSnapshot().currentId,
 );
 assistantLibrary.setOnUserSaved(() => {
@@ -375,6 +381,7 @@ assistant.setActions({
   deleteVoiceNote: (id) => notesStore.remove(id),
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
+  searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
   rememberMemory: (input) => assistantMemory.remember(input.kind, input.key, input.value),
   changeMemory: (input) => assistantMemory.change(input.key, input.value),
   forgetMemory: (key) => assistantMemory.forget(key),
