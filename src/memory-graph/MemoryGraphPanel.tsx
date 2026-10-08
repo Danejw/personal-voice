@@ -210,8 +210,17 @@ export function MemoryGraphPanel({ userId, active, onNavigate }: MemoryGraphPane
               <button type="button" aria-label="Reset graph view" onClick={() => { setView(HOME); setDragged({}); }}>Reset</button>
             </div>
           </div>
-          {!graph && !error ? (
-            <div className="memory-graph-empty" role="status">Loading your knowledge network…</div>
+          {!graph ? (
+            <div className="memory-graph-empty" role={error ? "alert" : "status"}>
+              <span aria-hidden="true">{error ? "!" : "◎"}</span>
+              <strong>{error ? "Memory is temporarily unavailable" : "Loading your knowledge network…"}</strong>
+              {error && <>
+                <p>The graph could not be loaded. Your other Personal Voice features are unaffected.</p>
+                <button className="secondary" type="button" disabled={busy} onClick={() => { void reload(); }}>
+                  Retry loading
+                </button>
+              </>}
+            </div>
           ) : visible?.nodes.length === 0 ? (
             <div className="memory-graph-empty">
               <span aria-hidden="true">◎</span>
