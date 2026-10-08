@@ -1,3 +1,5 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { formatHandoffList, formatNoteList } from "@/assistant/accountTools";
 import { buildContinuation, handoffDisplayText } from "@/assistant/continuation";
@@ -588,6 +590,35 @@ export default function App() {
   const computerSnapshot = useComputerActions(computerActions, auth.userId);
   const remoteDictationSnapshot = useRemoteDictation(remoteDictation, auth.userId);
   const assistantSnapshot = useAssistant(assistant);
+  useEffect(() => {
+    if (platform.platform !== "windows") return;
+    const listener = listen<{kind:"tool"|"computer";id:string|null;allow:boolean}>("assistant-popup-answer",(event)=>{
+      const value=event.payload;
+      if(value.kind==="tool") {
+        const pending=assistant.getSnapshot().pendingAction;
+        if(!pending || pending.working || pending.id!==value.id) return;
+        if(value.allow) assistant.confirmPending();
+        else assistant.cancelPending();
+      } else if (assistant.getSnapshot().computerPrompt) {
+        if(value.allow) assistant.confirmComputer();
+        else assistant.stopComputer();
+      }
+    });
+    return ()=>{void listener.then(unlisten=>unlisten());};
+  },[assistant,platform.platform]);
+
+  useEffect(() => {
+    if (platform.platform !== "windows") return;
+    const popup={
+      pending:assistantSnapshot.pendingAction,
+      activity:assistantSnapshot.toolActivity,
+      computerPrompt:assistantSnapshot.computerPrompt,
+      computerRunning:assistantSnapshot.computerRunning,
+    };
+    void invoke("sync_assistant_tool_popup",{snapshot:popup}).catch(()=>undefined);
+  },[platform.platform,assistantSnapshot.pendingAction,assistantSnapshot.toolActivity,
+      assistantSnapshot.computerPrompt,assistantSnapshot.computerRunning]);
+
   const assistantLibrarySnapshot = useAssistantLibrary(assistantLibrary);
   const assistantMemorySnapshot = useAssistantMemory(assistantMemory);
   const [drawerOpen, setDrawerOpen] = useState(false);
