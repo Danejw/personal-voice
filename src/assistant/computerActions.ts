@@ -79,14 +79,17 @@ export function validateOpenApp(value: unknown): { ok: true; id: string; label: 
   const name = value.trim();
   const mapped = ALLOWED_APPS.find((item) => item.id === name.toLowerCase() || item.label.toLowerCase() === name.toLowerCase());
   if (mapped) return { ok: true, id: mapped.id, label: mapped.label };
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}$/.test(name) || name.includes("..")) {
-    return { ok: false, message: "Provide an executable name only, without a path, command, URL, or arguments." };
+  // A returned Start Menu display name can contain spaces, unlike an executable.
+  const shortcutName = /^[\p{L}\p{N}][\p{L}\p{N} _().+&'-]{0,119}$/u.test(name);
+  const executableName = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}$/.test(name);
+  if ((!shortcutName && !executableName) || name.includes("..")) {
+    return { ok: false, message: "Provide an installed app name or executable filename, without a path, command, URL, or arguments." };
   }
   const base = name.replace(/\.exe$/i, "").toLowerCase();
   if (["cmd","powershell","pwsh","wscript","cscript","mshta","rundll32","regsvr32","reg","schtasks","wmic","bash","sh","wsl","python","py","node","npm","npx"].includes(base)) {
     return { ok: false, message: "Shells, interpreters and administrative command tools cannot be launched by Assistant." };
   }
-  return { ok: true, id: name.endsWith(".exe") ? name : name + ".exe", label: name };
+  return { ok: true, id: name.includes(" ") || !executableName ? name : name.endsWith(".exe") ? name : name + ".exe", label: name };
 }
 
 export function validateShortcut(value: unknown): { ok: true; id: AllowedShortcutId; label: string } | { ok: false; message: string } {
