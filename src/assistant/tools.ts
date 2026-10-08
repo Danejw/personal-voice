@@ -134,6 +134,11 @@ export function assistantFunctionDeclarations() {
       parameters: { type: "object", properties: {} },
     },
     {
+      name: "send_remote_dictation",
+      description: "Send already dictated or supplied text to an online paired device for insertion at its focused field. Requires confirmation and an exact device name. This is different from a handoff.",
+      parameters: { type: "object", properties: { text: TEXT, device: { type: "string" } }, required: ["text", "device"] },
+    },
+    {
       name: "edit_voice_note",
       description: "Edit an existing note by id obtained from list_voice_notes. Replaces its full text, with confirmation.",
       parameters: { type: "object", properties: { id: { type: "string" }, text: TEXT }, required: ["id", "text"] },
@@ -261,6 +266,7 @@ export interface HandoffPlan {
 export type ConfirmToolName =
   | "insert_text"
   | "create_voice_note"
+  | "send_remote_dictation"
   | "edit_voice_note"
   | "create_transform"
   | "add_dictionary_word"
@@ -383,6 +389,14 @@ export function decideToolCall(
           : `Remember ${memory.key}`;
       const body = memory.action === "forget" ? memory.key : memory.value;
       return confirm(call.id, call.name, body, title, null, null, memory);
+    }
+    case "send_remote_dictation": {
+      const body = readText(args);
+      const device = readDevice(args);
+      if ("error" in body || "error" in device || !device.name) {
+        return { kind: "reject", id: call.id, name: call.name, message: "Provide text and a device name." };
+      }
+      return confirm(call.id, "send_remote_dictation", JSON.stringify({ text: body.text, device: device.name }), "Send dictation to remote device", null, null);
     }
     case "edit_voice_note": {
       const id = readId(args);
