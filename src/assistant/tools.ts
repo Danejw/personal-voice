@@ -139,6 +139,11 @@ export function assistantFunctionDeclarations() {
       parameters: { type: "object", properties: {} },
     },
     {
+      name: "capture_pointer_target",
+      description: "Windows only. Take one screenshot of the window under the mouse, with a visible crosshair marking the cursor, and attach it for visual understanding. Use if inspect_pointer_context cannot identify what the user is pointing to or if the user asks you to look at a graphic under the mouse. Read-only; never starts continuous screenshots.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
       name: "inspect_pointer_context",
       description: "Windows only. Read what the mouse currently points to: screen coordinates, window name, accessible control, and selected text if supported. Use this whenever the user says 'this', 'that', 'over here', 'where I am pointing', or asks about an item under their cursor. Read-only, no mouse movement, clicks, or screenshots. Some graphical controls cannot be identified, so use capture_screen on request if the result is position-only. Do not guess.",
       parameters: { type: "object", properties: {} },
@@ -417,6 +422,7 @@ export type ToolDecision =
   | { kind: "cameraStop"; id: string; name: "stop_camera_context" }
   | { kind: "selection"; id: string; name: "capture_selection" }
   | { kind: "pointer"; id: string; name: "inspect_pointer_context" }
+  | { kind: "pointerSnapshot"; id: string; name: "capture_pointer_target" }
   | { kind: "accessibility"; id: string; name: "inspect_active_app" }
   | { kind: "tree"; id: string; name: "inspect_accessibility_tree"; filter: string; maxResults: number }
   | { kind: "watchStop"; id: string; name: "stop_accessibility_watch" }
@@ -506,6 +512,8 @@ export function decideToolCall(
       return { kind: "selection", id: call.id, name: "capture_selection" };
     case "inspect_pointer_context":
       return { kind: "pointer", id: call.id, name: "inspect_pointer_context" };
+    case "capture_pointer_target":
+      return { kind: "pointerSnapshot", id: call.id, name: "capture_pointer_target" };
     case "inspect_accessibility_tree": {
       const filter = typeof args.filter === "string" ? args.filter.trim() : "";
       const maxResults = typeof args.maxResults === "number" ? Math.floor(args.maxResults) : 45;
