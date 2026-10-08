@@ -89,7 +89,7 @@ export function validateOpenApp(value: unknown): { ok: true; id: string; label: 
   if (["cmd","powershell","pwsh","wscript","cscript","mshta","rundll32","regsvr32","reg","schtasks","wmic","bash","sh","wsl","python","py","node","npm","npx"].includes(base)) {
     return { ok: false, message: "Shells, interpreters and administrative command tools cannot be launched by Assistant." };
   }
-  return { ok: true, id: name.includes(" ") || !executableName ? name : name.endsWith(".exe") ? name : name + ".exe", label: name };
+  return { ok: true, id: name, label: name };
 }
 
 export function validateShortcut(value: unknown): { ok: true; id: AllowedShortcutId; label: string } | { ok: false; message: string } {
