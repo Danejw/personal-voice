@@ -41,7 +41,7 @@ create policy "Delete personal memory files" on storage.objects for delete to au
 create table public.assistant_memory_sources (
  id uuid primary key default gen_random_uuid(),
  user_id uuid not null references auth.users(id) on delete cascade,
- source_kind text not null check (source_kind in ('memory','note','message','dictation','asset')),
+ source_kind text not null check (source_kind in ('memory','note','message','dictation','asset','note_attachment')),
  source_record_id uuid not null,
  memory_id uuid references public.assistant_memories(id) on delete cascade,
  search_text text not null default '' check (length(search_text) <= 8000),
@@ -141,6 +141,12 @@ returns boolean language sql stable security definer set search_path='' as $$
  when 'asset' then exists (
   select 1 from public.assistant_memory_assets a join public.assistant_memories m on m.id=a.memory_id
   where a.id=p_record and a.user_id=p_uid and m.user_id=p_uid and m.status='active')
+ when 'note_attachment' then exists (
+  select 1 from public.note_attachments a join public.notes n on n.id=a.note_id and n.user_id=a.user_id
+  join public.settings s on s.user_id=a.user_id
+  where a.id=p_record and a.user_id=p_uid and a.size_bytes<=7340032
+  and a.mime_type in ('image/jpeg','image/png','audio/mpeg','audio/wav','video/mp4','video/quicktime','application/pdf')
+  and s.assistant_semantic_search and s.assistant_recall_notes)
  when 'note' then exists (
   select 1 from public.notes n join public.settings s on s.user_id=n.user_id
   where n.id=p_record and n.user_id=p_uid and s.assistant_semantic_search and s.assistant_recall_notes)
@@ -219,6 +225,13 @@ begin
     from public.notes n join public.settings s on s.user_id=n.user_id
     where n.user_id=uid and s.assistant_semantic_search and s.assistant_recall_notes
    union all
+   select 'note_attachment',a.id,null::uuid,''::text,md5(a.storage_path||':'||a.size_bytes::text||':'||coalesce(a.mime_type,'')),a.created_at
+    from public.note_attachments a join public.notes n on n.id=a.note_id and n.user_id=a.user_id
+    join public.settings s on s.user_id=a.user_id
+    where a.user_id=uid and a.size_bytes<=7340032 and a.mime_type in
+    ('image/jpeg','image/png','audio/mpeg','audio/wav','video/mp4','video/quicktime','application/pdf')
+    and s.assistant_semantic_search and s.assistant_recall_notes
+   union all
    select 'message',m.id,null::uuid,left(m.body,8000),md5(m.body),m.created_at
     from public.assistant_messages m join public.assistant_conversations c on c.id=m.conversation_id
     join public.settings s on s.user_id=m.user_id
@@ -261,9 +274,11 @@ begin
  )
  select coalesce(jsonb_agg(jsonb_build_object('id',c.id,'kind',c.source_kind,
   'recordId',c.source_record_id,'text',c.search_text,'fingerprint',c.fingerprint,'leaseToken',c.lease_token,
-  'assetPath',a.storage_path,'mimeType',a.mime_type)), '[]'::jsonb)
+  'assetPath',coalesce(a.storage_path,na.storage_path),'mimeType',coalesce(a.mime_type,na.mime_type),
+  'assetBucket',case when c.source_kind='note_attachment' then 'note-attachments' else 'assistant-memory' end)), '[]'::jsonb)
  into result from claimed c left join public.assistant_memory_assets a
-   on c.source_kind='asset' and a.id=c.source_record_id and a.user_id=uid;
+   on c.source_kind='asset' and a.id=c.source_record_id and a.user_id=uid
+  left join public.note_attachments na on c.source_kind='note_attachment' and na.id=c.source_record_id and na.user_id=uid;
  return result;
 end;
 $$;
