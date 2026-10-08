@@ -6,6 +6,27 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::platform;
 
 pub const INDICATOR_WINDOW: &str = "indicator";
+#[cfg(windows)]
+fn visual_target(app: &AppHandle, bounds: platform::UiBounds, label: &str, phase: &str) {
+    use tauri::{PhysicalPosition, PhysicalSize};
+    if let Some(window) = app.get_webview_window("computer-visual") {
+        let _ = window.set_ignore_cursor_events(true);
+        let _ = window.set_position(PhysicalPosition::new(bounds.x, bounds.y));
+        let _ = window.set_size(PhysicalSize::new(bounds.width as u32, bounds.height as u32));
+        let _ = window.show();
+        let _ = app.emit_to("computer-visual", "computer-visual-activity",
+            serde_json::json!({"label": label, "phase": phase}));
+    }
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn hide_computer_visual(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("computer-visual") {
+        let _ = window.hide();
+    }
+}
+
 
 /// Inspect the foreground app after hiding Settings. No screenshot or storage.
 #[cfg(windows)]
@@ -51,9 +72,13 @@ pub async fn inspect_accessibility(app: AppHandle) -> Result<platform::Accessibi
         platform::inspect_accessibility()
     }).await.map_err(|e| e.to_string()).and_then(|v| v);
     let _ = window.show();
+    if let Ok(ref inspected) = result {
+        if let Some(bounds) = inspected.bounds {
+            visual_target(&app, bounds, inspected.focused_name.as_deref().unwrap_or("Accessible control"), "inspect");
+        }
+    }
     result
 }
-
 
 /// Pastes into the window focused at call time. Blocks a worker thread for the paste settle delay.
 /// Returns the receiving application when the paste is sent, or null when it cannot be named.
