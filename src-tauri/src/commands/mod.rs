@@ -49,11 +49,14 @@ pub async fn uia_control_action(app: AppHandle, action: String, expected_name: S
         platform::control_action(&action, &expected_name, value.as_deref())
     }).await.map_err(|e| e.to_string()).and_then(|v| v);
     let _ = window.show();
-    if let Some(bounds) = platform::foreground_bounds() {
-        visual_target(&app, bounds, if result.is_ok() { "UIA action completed" } else { "UIA action failed" },
+    let bounds = result.as_ref().ok().and_then(|completed| completed.bounds)
+        .or_else(platform::foreground_bounds);
+    if let Some(bounds) = bounds {
+        visual_target(&app, bounds,
+            if result.is_ok() { "UIA action completed" } else { "UIA action failed" },
             if result.is_ok() { "complete" } else { "error" });
     }
-    result
+    result.map(|completed| completed.message)
 }
 
 #[cfg(windows)]
