@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { cameraPhotoToDibBase64 } from "@/assistant/cameraPhotoClipboard";
 import {
   screenOmittedText,
   type AssistantContinuation,
@@ -1198,6 +1199,13 @@ export class AssistantController {
           await this.runCapture(decision);
           continue;
         }
+        if (decision.kind === "endSession") {
+          this.replyTool(decision.id, decision.name, true, "Ending the assistant session now.");
+          // Let the tool acknowledgement enter the Live socket before closing it.
+          const currentConnection = this.connection;
+          setTimeout(() => { if (this.connection === currentConnection) this.end(); }, 120);
+          return;
+        }
         if (decision.kind === "cameraPhoto") {
           await this.runCameraPhoto(decision);
           continue;
@@ -1280,7 +1288,8 @@ export class AssistantController {
           memory: decision.memory,
           working: false,
         };
-        if (this.autoRun) {
+        // Camera photos can leave the device. Always require a review card.
+        if (this.autoRun && decision.name !== "paste_camera_photo") {
           this.pending.working = true;
           const epoch = this.toolEpoch;
           await this.finishPending(this.pending, epoch);
@@ -1593,8 +1602,19 @@ export class AssistantController {
     }
   }
 
+  /** Paste an existing, explicit camera still as an image, not as base64 text. */
+  async pasteCameraPhotoToApp(expectedWindow: string): Promise<string> {
+    if (!navigator.userAgent.includes("Windows")) throw new Error("Image insertion is currently Windows-only.");
+    if (!this.cameraPhoto) throw new Error("Take a camera photo first.");
+    if (!expectedWindow.trim() || expectedWindow.length > 200) throw new Error("Choose a destination window.");
+    const dib = await cameraPhotoToDibBase64(this.cameraPhoto);
+    return invoke<string>("paste_camera_photo_image", { bitmapBase64: dib, expectedWindow });
+  }
+
   private async execute(pending: ConfirmedTool): Promise<string> {
     switch (pending.name) {
+      case "paste_camera_photo":
+        return this.pasteCameraPhotoToApp(pending.text);
       case "insert_text":
         await this.actions.insertText(pending.text);
         return "Inserted the text into the focused app.";
