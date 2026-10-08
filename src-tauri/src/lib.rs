@@ -132,6 +132,7 @@ pub fn run() {
             commands::set_hotkeys,
             commands::set_hotkey_capture,
             commands::set_dictation_active,
+            commands::sync_assistant_popup,
             commands::sync_overlay,
             commands::resize_overlay,
             commands::resize_overlay_confirm,
