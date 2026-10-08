@@ -76,6 +76,27 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
   });
 
+  it("requires a complete UIA locator and confirms changes", () => {
+    const base = { window: "Untitled - Notepad", path: "0.1.0", name: "Editor",
+      automationId: "Editor", controlType: 50004, action: "set-value", text: "Hello" };
+    expect(decideToolCall({id:"target",name:"accessibility_pattern_action",args:base},plan)).toMatchObject({
+      kind:"confirm",name:"accessibility_pattern_action",
+    });
+    expect(decideToolCall({id:"missing",name:"accessibility_pattern_action",
+      args:{...base,path:"0..1"}},plan)).toMatchObject({kind:"reject"});
+    expect(decideToolCall({id:"range",name:"accessibility_pattern_action",
+      args:{...base,action:"set-range",number:Number.NaN}},plan)).toMatchObject({kind:"reject"});
+  });
+
+  it("keeps Windows monitoring explicitly opt-in and allows immediate stop", () => {
+    expect(decideToolCall({id:"on",name:"start_accessibility_watch",args:{}},plan)).toMatchObject({
+      kind:"confirm",name:"start_accessibility_watch",
+    });
+    expect(decideToolCall({id:"off",name:"stop_accessibility_watch",args:{}},plan)).toEqual({
+      kind:"watchStop",id:"off",name:"stop_accessibility_watch",
+    });
+  });
+
   it("accepts session end and confirms a destination before pasting a camera photo", () => {
     expect(decideToolCall({ id: "bye", name: "end_assistant_session", args: {} }, plan)).toEqual({
       kind: "endSession", id: "bye", name: "end_assistant_session",
