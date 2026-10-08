@@ -219,7 +219,7 @@ pub fn focus_accessible_control(expected_name: &str) -> Result<String, String> {
  */
 pub struct UiActionResult { pub message: String, pub bounds: Option<UiBounds> }
 
-pub fn control_action(action: &str, expected_name: &str, value: Option<&str>) -> Result<UiActionResult, String> {
+pub fn control_action(action: &str, expected_window: &str, expected_name: &str, value: Option<&str>) -> Result<UiActionResult, String> {
     if expected_window.is_empty() || expected_window.chars().count() > 120 {
         return Err("Provide the exact active window title from inspection.".into());
     }
