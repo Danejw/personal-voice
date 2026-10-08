@@ -15,6 +15,7 @@ import { MemoryGraphPanel } from "@/memory-graph/MemoryGraphPanel";
 import { MemoryGraphErrorBoundary } from "@/memory-graph/MemoryGraphErrorBoundary";
 import { useAssistantMemory } from "@/assistant/useAssistantMemory";
 import { AssistantController } from "@/assistant/AssistantController";
+import { inspectAssistantPointer, trackAssistantPointer } from "@/assistant/pointerAwareness";
 import { bindAssistantCues } from "@/assistant/assistantCues";
 import { AssistantHeader, AssistantPanel } from "@/assistant/AssistantPanel";
 import { PersonalContextPanel } from "@/assistant/PersonalContextPanel";
@@ -400,6 +401,10 @@ assistant.setActions({
     return remoteReads.ask(accountUserId, kind, deviceName);
   },
   captureScreen: async () => snapshotFromNative(await platform.captureSnapshot(), encodeSnapshotJpeg),
+  inspectPointer: () => {
+    if (platform.platform !== "windows" || !accountUserId) throw new Error("Pointer inspection is available only on signed-in Windows Assistant sessions.");
+    return inspectAssistantPointer();
+  },
   computer: {
     openApp: (id) => computerActions.openApp(id),
     pressShortcut: (id) => computerActions.pressShortcut(id),
@@ -672,6 +677,10 @@ export default function App() {
   const updates = useUpdates(platform, { autoUpdate, busy: !idle });
   const assistantLive = assistantSnapshot.status === "CONNECTING" || assistantSnapshot.status === "READY" || assistantSnapshot.status === "RESPONDING";
   const dictationLive = state === "CONNECTING" || state === "LISTENING";
+  useEffect(() => {
+    if (!signedIn || platform.platform !== "windows" || !assistantLive) return;
+    return trackAssistantPointer();
+  }, [assistantLive, platform.platform, signedIn]);
   const availableTransforms = transformOptions(transforms.profiles);
   const selectedDictationTransform = transformById(transforms.profiles, dictationTransformId);
   const dictationTransformOptions: readonly SelectOption[] = [
