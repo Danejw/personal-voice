@@ -12,6 +12,7 @@ export type AppSection =
   | "snippets"
   | "transforms"
   | "assistant"
+  | "memory-graph"
   | "devices"
   | "settings"
   | "analytics"
@@ -26,7 +27,7 @@ export type VoiceSection =
   | "snippets"
   | "transforms";
 
-type TopSection = "voice" | "assistant" | "insights" | "devices" | "settings" | "analytics";
+type TopSection = "voice" | "assistant" | "memory-graph" | "insights" | "devices" | "settings" | "analytics";
 
 const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   dictation: { label: "Dictations" },
@@ -37,6 +38,7 @@ const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   snippets: { label: "Snippets" },
   transforms: { label: "Transforms" },
   assistant: { label: "Assistant" },
+  "memory-graph": { label: "Memory Graph" },
   devices: { label: "Devices & Controls" },
   settings: { label: "Settings" },
   analytics: { label: "Analytics" },
@@ -53,10 +55,11 @@ const VOICE_CHILDREN: readonly VoiceSection[] = [
   "transforms",
 ];
 
-const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "insights", "devices", "settings", "analytics"];
+const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "memory-graph", "insights", "devices", "settings", "analytics"];
 const TOP_LABELS: Record<TopSection, string> = {
   voice: "Voice",
   assistant: "Assistant",
+  "memory-graph": "Memory Graph",
   insights: "Insights",
   devices: "Devices & Controls",
   settings: "Settings",
@@ -394,6 +397,16 @@ function NavIcon({ section }: { section: TopSection }) {
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6 6.5h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H11l-4 3.2V16.5H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        </svg>
+      );
+    case "memory-graph":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 7 17 6M7 8l3.5 9M17 7l-6 10M11 17l8-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="6" cy="7" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="18" cy="6" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="11" cy="18" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="20" cy="14" r="1.7" fill="currentColor" />
         </svg>
       );
     case "insights":
