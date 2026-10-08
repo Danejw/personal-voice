@@ -19,6 +19,9 @@ use super::hook::SYNTHETIC_INPUT_MARK;
 
 /// Launch an installed executable by filename without a shell, path, arguments, or URL.
 pub fn open_allowlisted_app(id: &str) -> Result<String, String> {
+    if !id.to_ascii_lowercase().ends_with(".exe") && id != "notepad" && id != "calculator" {
+        return super::installed_apps::open_start_menu_app(id);
+    }
     let label = match id {
         "notepad" => "notepad.exe",
         "calculator" => "calc.exe",
