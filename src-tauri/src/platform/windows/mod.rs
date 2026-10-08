@@ -1,4 +1,6 @@
 mod accessibility;
+mod accessibility_plus;
+mod accessibility_events;
 mod autostart;
 mod computer;
 mod handoff_alert;
@@ -22,6 +24,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 pub use installed_apps::{list_installed_apps, InstalledApp};
+pub use accessibility_plus::{inspect_tree as inspect_accessibility_tree, action as accessibility_action, Locator as AccessibilityLocator, ActionResult as AccessibilityActionResult, TreeReport as AccessibilityTreeReport};
+pub use accessibility_events::{start as start_accessibility_watch, stop as stop_accessibility_watch, active as accessibility_watch_active};
 pub use accessibility::{inspect_accessibility, invoke_focused_control, focus_accessible_control, control_action, list_accessible_elements, AccessibleElement, foreground_bounds, UiBounds, AccessibilityContext};
 pub use autostart::{launch_at_login, set_launch_at_login};
 pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_shortcut};
