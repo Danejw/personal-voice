@@ -70,6 +70,7 @@ export type OverlayAction =
   | { type: "copy-handoff"; id: string }
   | { type: "open-settings" }
   | { type: "assistant-toggle" }
+  | { type: "stop-computer" }
   | { type: "assistant-interrupt" }
   | { type: "detach-selection" }
   | { type: "confirm-action" }
