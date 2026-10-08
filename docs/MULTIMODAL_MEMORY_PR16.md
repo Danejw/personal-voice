@@ -55,11 +55,47 @@ References: https://ai.google.dev/gemini-api/docs/embeddings
 1. Review and run `supabase/migrations/20261008090000_multimodal_memory.sql`.
 2. Review and run `supabase/migrations/20261008091000_memory_graph_enrichment.sql`.
 3. Review and run `supabase/migrations/20261008092000_memory_source_lifecycle.sql`.
-4. Deploy `supabase/functions/memory-embed` using the project's authenticated Edge Function pattern. Set `GEMINI_API_KEY` in server secrets; never put it in Vite/client config. Follow the same JWT gateway policy as `memory-learn`.
-5. Open Remembered on a test account and click **Index next three memories**. Verify vectors have exactly 1536 dimensions, the server returns evidence, and cross-user queries fail.
-6. Opt into Notes or synced Dictations only from that same test account. Confirm no old local-only recordings or screenshot pixels are copied.
-7. Verify save/correct/forget on Android and Windows. Run additional bounded indexing only after explicit approval.
-8. Do not merge/release until CI, schema tests, privacy tests, and real-device checks are complete.
+4. Review and run `supabase/migrations/20261008093000_memory_graph_viewer.sql` for the new graph page.
+5. Deploy `supabase/functions/memory-embed` using the project's authenticated Edge Function pattern. Set `GEMINI_API_KEY` in server secrets; never put it in Vite/client config. Follow the same JWT gateway policy as `memory-learn`.
+6. Open Remembered on a test account and click **Index next three memories**. Verify vectors have exactly 1536 dimensions, the server returns evidence, and cross-user queries fail.
+7. Opt into Notes or synced Dictations only from that same test account. Confirm no old local-only recordings or screenshot pixels are copied.
+8. Verify save/correct/forget on Android and Windows. Run additional bounded indexing only after explicit approval.
+9. Do not merge/release until CI, schema tests, privacy tests, and real-device checks are complete.
+
+
+## New interactive Memory Graph page
+
+The sidebar now includes a **Memory Graph** top-level destination, available in the shared Windows and Android shell. It renders an interactive, read-only SVG network without a new npm package:
+
+- Each active Assistant memory appears, even if its embedding is still pending.
+- Indexed memories, Notes, Assistant messages, eligible Dictations and file attachments appear as source-type nodes.
+- Person, project, goal, decision, and other known entity nodes appear only when linked to a currently authorized source.
+- Relationships are **actual** rows from `memory_graph_edges`. The interface does not invent links or build a graph from similar-looking text.
+- Click or tap a node to inspect its saved memory preview, state, real source table, record ID, date, and connected nodes.
+- Pan/drag/zoom/reset, search, filter by source type, connected-only mode, and category legend are available.
+- The page polls a read-only database snapshot every 15 seconds while mounted and visible (optional auto-refresh). It never invokes paid embeddings or creates memories on page load.
+- On small screens the details inspector stacks below the graph canvas.
+- A bounded database sample limits payload size. Extend with server-side neighborhood pagination if this reaches hundreds/thousands of nodes; avoid loading the full graph into mobile memory.
+
+**Because the first PR16 migrations were already applied in the user's database, this UI adds a new migration rather than editing those migrations in place:**
+
+`supabase/migrations/20261008093000_memory_graph_viewer.sql`
+
+Apply this fourth migration after the first three. It adds only the authenticated, consent-filtered `get_assistant_memory_graph` **read-only RPC**. It does not create/change personal memory data, generate embeddings, or modify storage. The underlying source registry and graph nodes/edges must also have been populated through the existing indexing pipeline for visible cross-table connections.
+
+The RPC uses `assistant_require_account` and `assistant_memory_source_allowed` to exclude forgotten and currently unauthorized sources. It returns no embeddings or transient microphone/screen material.
+
+**Quick manual verification**
+
+1. Apply the fourth migration to the authorized Supabase database.
+2. Build the updated PR16 Windows/Android app and sign into a test account with one or more active memories.
+3. Open **Memory Graph** from the sidebar. Confirm the memory appears even before indexing.
+4. Index a supported memory/attachment with explicit permission, then refresh the graph and inspect real links and their table names.
+5. Add/forget a memory using the Assistant, navigate back to Memory Graph, and verify node arrival/disappearance.
+6. Disable Note/Dictation consent, refresh, and confirm those sources/links disappear.
+7. Verify on mobile and Windows and repeat as a second test account to confirm tenant isolation.
+8. Test empty/loading/error/large-network and pinch-accessible zoom-button behavior.
+
 
 ## Known limitations requiring follow-up before calling this fully production-ready
 
