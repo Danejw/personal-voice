@@ -1330,6 +1330,8 @@ function toolActions() {
     dismissHandoff: vi.fn(async () => {}),
     listMemories: vi.fn(async () => "No memories are remembered."),
     searchMemory: vi.fn(async (query: string) => `Search evidence for ${query}`),
+    listPastConversations: vi.fn(async () => '{"results":[{"id":"33333333-3333-4333-8333-333333333333","title":"Earlier talk"}]}'),
+    readPastConversation: vi.fn(async () => '{"messages":[{"role":"user","text":"Earlier talk"}]}'),
     rememberMemory: vi.fn(async () => "Remembered answer_length: Prefer short answers."),
     changeMemory: vi.fn(async () => "Changed answer_length."),
     forgetMemory: vi.fn(async () => "Forgot answer_length."),
