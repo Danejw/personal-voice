@@ -372,6 +372,25 @@ describe("one producer across devices", () => {
     return { api, hostA, hostB, laptop, phone, storageA, storageB };
   }
 
+  it("ignores an out-of-order older lease snapshot after takeover", async () => {
+    const { laptop, hostA, api } = pair();
+    await laptop.setUser(USER_A);
+    await laptop.produce();
+    expect(laptop.getSnapshot().holding).toBe(true);
+    const id = laptop.getSnapshot().currentId;
+    if (!id) throw new Error("expected conversation");
+    const current = await api.get(USER_A, id);
+    const stale = {
+      ...current,
+      fence: Math.max(0, current.fence - 1),
+      leaseDeviceId: DEVICE_B,
+    };
+    // Exercise the state transition directly to model an out-of-order response.
+    (laptop as unknown as { observeLease: (value: typeof current) => void }).observeLease(stale);
+    expect(laptop.getSnapshot().holding).toBe(true);
+    expect(hostA.status).not.toBe("IDLE");
+  });
+
   it("lets a second device read the thread without starting its microphone", async () => {
     const { api, hostA, hostB, laptop, phone } = pair();
     await laptop.setUser(USER_A);
