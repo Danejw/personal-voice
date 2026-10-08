@@ -221,7 +221,7 @@ export class AssistantController {
       editVoiceNote: unavailable,
       createTransform: unavailable,
       addDictionaryWord: unavailable,
-      readDashboard: unavailable,
+      readDashboard: async () => { throw new Error("Assistant dashboards are not available."); },
       planHandoff: () => { throw new Error("Choose a device in Handoffs first."); },
       sendHandoff: unavailable,
       readRemote: async () => { throw new Error("Assistant actions are not available."); },
