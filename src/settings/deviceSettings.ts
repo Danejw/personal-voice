@@ -44,6 +44,8 @@ export interface DevicePreferences {
   assistantProfile: boolean;
   /** Assistant runs confirming actions without a card. Off means review each one. */
   assistantAutoRun: boolean;
+  /** Allow routine, reversible accessibility commands without per-action review. */
+  assistantRoutineAutoRun: boolean;
   /** This PC may run an allowlisted action asked by another owned device. */
   remoteComputerActions: boolean;
   /**
@@ -129,6 +131,7 @@ function fromLegacy(storage: KeyValueStorage): DevicePreferences {
     remoteReads: false,
     assistantProfile: true,
     assistantAutoRun: true,
+    assistantRoutineAutoRun: false,
     remoteComputerActions: false,
     remoteDictation: true,
     remoteDictationTargetDeviceId: null,
@@ -165,6 +168,7 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
       remoteReads: fields.remoteReads === true,
       assistantProfile: fields.assistantProfile !== false,
       assistantAutoRun: fields.assistantAutoRun !== false,
+      assistantRoutineAutoRun: fields.assistantRoutineAutoRun === true,
       remoteComputerActions: fields.remoteComputerActions === true,
       // Absence means ON. Do not use === true.
       remoteDictation: fields.remoteDictation !== false,
@@ -380,4 +384,11 @@ export function loadAutoUpdate(storage: KeyValueStorage = localStorage, deviceId
 
 export function saveAutoUpdate(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
   write(storage, scope(deviceId), { autoUpdate: enabled });
+}
+
+export function loadAssistantRoutineAutoRun(storage: KeyValueStorage = localStorage, deviceId?: string | null): boolean {
+  return read(storage, scope(deviceId)).assistantRoutineAutoRun;
+}
+export function saveAssistantRoutineAutoRun(enabled: boolean, storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { assistantRoutineAutoRun: enabled });
 }
