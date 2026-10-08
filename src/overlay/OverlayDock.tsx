@@ -373,8 +373,8 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
       <Tooltip content={assistantTitle} side={tipSide} delayMs={280}>
         <button
           type="button"
-          className={`overlay-btn ${assistantTone(snapshot.assistant)}${snapshot.cameraOn ? " overlay-camera-on" : ""}`}
-          aria-label={assistantTitle}
+          className={`overlay-btn ${snapshot.computerActive ? "overlay-busy" : assistantTone(snapshot.assistant)}${snapshot.cameraOn ? " overlay-camera-on" : ""}`}
+          aria-label={snapshot.computerActive ? "Assistant is controlling the computer. Open Assistant to stop." : assistantTitle}
           disabled={assistantBlocked}
           onClick={() => onAction({ type: "assistant-toggle" })}
         >
