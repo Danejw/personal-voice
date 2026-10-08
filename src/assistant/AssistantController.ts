@@ -199,7 +199,6 @@ export class AssistantController {
   private published = new Set<string>();
   private onCommitted: ((turn: AssistantTurn) => void) | null = null;
   private onRevised: ((turn: AssistantTurn) => void) | null = null;
-  private mayProduce: () => boolean = () => true;
   private computerStopped = false;
   private computerConfirm: ((allowed: boolean) => void) | null = null;
   /** Off shows a confirm card. On runs the action when the tool is called. */
@@ -277,9 +276,9 @@ export class AssistantController {
     return this.snapshot;
   }
 
-  /** When this returns false, new tool work does not start. Already-running work is not repeated. */
-  setProducer(mayProduce: () => boolean): void {
-    this.mayProduce = mayProduce;
+  /** Backward-compatible hook. Transcript leases fence storage, not local tool calls. */
+  setProducer(_mayProduce: () => boolean): void {
+    // No-op: another device holding a transcript lease cannot disable local tools.
   }
 
   /** Receives each committed turn once. Streaming text is not included. */
