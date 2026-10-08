@@ -485,9 +485,16 @@ export class AssistantController {
   /** UI / tool entry: start live Camera Context. */
   async startCameraContext(facing: CameraFacing = "default"): Promise<void> {
     this.cameraDesired = { facing };
-    this.dispatch({ type: "cameraContext", active: true, facing });
     this.dispatch({ type: "cameraContextError", message: null });
-    await this.openCameraFrames(facing);
+    try {
+      await this.openCameraFrames(facing);
+    } catch (error) {
+      this.cameraDesired = null;
+      await this.stopCameraHardware();
+      this.dispatch({ type: "cameraContext", active: false, facing: null });
+      this.dispatch({ type: "cameraContextError", message: messageOf(error) });
+      throw error;
+    }
     this.sendNote(cameraContextStartedText(facing));
   }
 
