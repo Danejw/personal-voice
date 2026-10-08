@@ -63,6 +63,7 @@ describe("assistant setup and typed turns", () => {
       "start_camera_context",
       "stop_camera_context",
       "inspect_active_app",
+    "send_remote_dictation",
     "edit_voice_note",
     "create_transform",
     "add_dictionary_word",
