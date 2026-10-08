@@ -46,8 +46,10 @@ export function bindAssistantCues(
     readySeen = transition.readySeen;
     if (!transition.cue || !enabled()) return;
     // Playback must never interfere with the Assistant microphone/session.
-    void Promise.resolve()
-      .then(() => platform.playDictationCue(transition.cue!))
-      .catch(() => undefined);
+    try {
+      void platform.playDictationCue(transition.cue).catch(() => undefined);
+    } catch {
+      // Treat synchronous platform failures as non-fatal too.
+    }
   });
 }
