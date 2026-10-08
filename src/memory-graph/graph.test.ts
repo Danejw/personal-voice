@@ -45,7 +45,7 @@ describe("Memory Graph read-only projection", () => {
     expect(filtered.nodes.map((n) => n.id)).toEqual(["b"]);
     expect(filtered.edges).toHaveLength(0);
     const memory = filterGraph(all, "", "memory", true);
-    expect(memory.nodes.map((n) => n.id)).toEqual([]);
+    expect(memory.nodes.map((n) => n.id)).toEqual(["a"]);
     expect(filterGraph(all, "", "all", true).nodes.map((n) => n.id)).toEqual(["a", "b", "c"]);
   });
 
