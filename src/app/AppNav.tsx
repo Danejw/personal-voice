@@ -38,7 +38,7 @@ const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   snippets: { label: "Snippets" },
   transforms: { label: "Transforms" },
   assistant: { label: "Assistant" },
-  "memory-graph": { label: "Memory Graph" },
+  "memory-graph": { label: "Memory" },
   devices: { label: "Devices & Controls" },
   settings: { label: "Settings" },
   analytics: { label: "Analytics" },
@@ -55,11 +55,11 @@ const VOICE_CHILDREN: readonly VoiceSection[] = [
   "transforms",
 ];
 
-const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "memory-graph", "insights", "devices", "settings", "analytics"];
+const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "memory-graph", "insights", "analytics", "devices", "settings"];
 const TOP_LABELS: Record<TopSection, string> = {
   voice: "Voice",
   assistant: "Assistant",
-  "memory-graph": "Memory Graph",
+  "memory-graph": "Memory",
   insights: "Insights",
   devices: "Devices & Controls",
   settings: "Settings",
