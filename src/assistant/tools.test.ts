@@ -39,6 +39,7 @@ describe("assistant tool schema", () => {
       "capture_camera_photo",
       "start_camera_context",
       "stop_camera_context",
+      "capture_pointer_target",
       "inspect_pointer_context",
       "inspect_active_app",
       "send_remote_dictation",
@@ -83,6 +84,8 @@ describe("assistant tool schema", () => {
   it("routes mouse pointer inspection read-only, rejecting missing tool ids", () => {
     expect(decideToolCall({ id: "pointer-1", name: "inspect_pointer_context", args: {} }, plan))
       .toEqual({ kind: "pointer", id: "pointer-1", name: "inspect_pointer_context" });
+    expect(decideToolCall({ id: "picture-1", name: "capture_pointer_target", args: {} }, plan))
+      .toEqual({ kind: "pointerSnapshot", id: "picture-1", name: "capture_pointer_target" });
     expect(decideToolCall({ id: null, name: "inspect_pointer_context", args: {} }, plan).kind)
       .toBe("ignore");
   });
