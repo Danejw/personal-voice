@@ -138,6 +138,21 @@ describe("AssistantController", () => {
     created.end();
   });
 
+  it("attaches a cursor-marked screenshot only when requested", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    expect(actions.capturePointerTarget).not.toHaveBeenCalled();
+    session.emit({ type: "toolCalls", calls: [{ id: "picture", name: "capture_pointer_target", args: {} }] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(1));
+    expect(actions.capturePointerTarget).toHaveBeenCalledTimes(1);
+    expect(session.frames).toContain("/9j/marker");
+    expect(JSON.stringify(session.responses)).toContain("crosshair");
+    created.end();
+  });
+
   it("drops delayed pointer inspection results after ending Assistant", async () => {
     const { created } = controller();
     const actions = toolActions();
@@ -1383,6 +1398,10 @@ function toolActions() {
     rememberMemory: vi.fn(async () => "Remembered answer_length: Prefer short answers."),
     changeMemory: vi.fn(async () => "Changed answer_length."),
     forgetMemory: vi.fn(async () => "Forgot answer_length."),
+    capturePointerTarget: vi.fn(async () => ({
+      source: "window" as const, sourceApp: "Browser", width: 1280, height: 720,
+      capturedAt: "2026-10-08T20:00:00Z", jpeg: "/9j/marker",
+    })),
     inspectPointer: vi.fn(async () => JSON.stringify({
       position: { x: -160, y: 350 }, windowTitle: "Browser",
       name: "Submit", status: "element-available", selectedText: null,
