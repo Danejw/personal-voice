@@ -97,6 +97,7 @@ export interface AssistantActions {
   /** One still of this device's screen. Does not click or type. */
   captureScreen(): Promise<ScreenSnapshot>;
   inspectPointer(): Promise<string>;
+  capturePointerTarget(): Promise<ScreenSnapshot>;
   /** Highlighted text in the other app. */
   captureSelection(): Promise<ContextItem>;
   /** Inbox notes, or every note when archived ones are included. */
@@ -241,6 +242,7 @@ export class AssistantController {
       captureScreen: async () => { throw new Error("Assistant actions are not available."); },
       captureSelection: async () => { throw new Error("Assistant actions are not available."); },
       inspectPointer: async () => { throw new Error("Pointer inspection is Windows-only."); },
+      capturePointerTarget: async () => { throw new Error("Pointed screenshot capture is Windows-only."); },
       listVoiceNotes: async () => { throw new Error("Assistant actions are not available."); },
       listHandoffs: async () => { throw new Error("Assistant actions are not available."); },
       describeItem: () => { throw new Error("Assistant actions are not available."); },
@@ -1240,6 +1242,10 @@ export class AssistantController {
           await this.runAccessibility(decision);
           continue;
         }
+        if (decision.kind === "pointerSnapshot") {
+          await this.runPointerSnapshot(decision);
+          continue;
+        }
         if (decision.kind === "pointer") {
           await this.runPointer(decision);
           continue;
@@ -1463,6 +1469,21 @@ export class AssistantController {
       this.replyTool(decision.id, decision.name, true, text || "No accessible text was available.");
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runPointerSnapshot(decision: Extract<ToolDecision, { kind: "pointerSnapshot" }>) {
+    const epoch = this.toolEpoch;
+    const connection = this.connection;
+    try {
+      const snapshot = await this.actions.capturePointerTarget();
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
+      this.attachSnapshot(snapshot);
+      this.replyTool(decision.id, decision.name, true,
+        "Captured one fresh screenshot of the pointed-at window with a yellow crosshair showing the mouse position.");
+    } catch (error) {
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
       this.replyTool(decision.id, decision.name, false, toolFailure(error));
     }
   }
