@@ -24,7 +24,7 @@ function fakeServer() {
       return structuredClone(notes.filter((note) => note.userId === userId));
     },
     async listGroups() { return structuredClone(groups); },
-    async create(userId, text, sourceDeviceId, sourceType) {
+    async create(userId, text, sourceDeviceId, sourceType, details = {}) {
       guard();
       if (control.failCreate) throw new Error("Saving the note failed.");
       sequence += 1;
@@ -33,11 +33,11 @@ function fakeServer() {
         id: `note-${sequence}`,
         userId,
         text,
-        title: null,
-        titleSource: null,
-        groupId: null,
-        groupSource: null,
-        organizedAt: null,
+        title: details.title ?? null,
+        titleSource: details.title ? "manual" : null,
+        groupId: details.groupId ?? null,
+        groupSource: details.groupId ? "manual" : null,
+        organizedAt: details.title && details.groupId ? createdAt : null,
         sourceDeviceId,
         sourceType,
         status: "inbox",
@@ -120,6 +120,49 @@ describe("NotesStore", () => {
       ["Typed note.", "manual"],
       ["From dictation.", "voice"],
     ]);
+  });
+
+  it("saves pasted manual notes with optional title and group across devices", async () => {
+    const server = fakeServer();
+    const windows = new NotesStore(server.api, () => "windows-device");
+    const android = new NotesStore(server.api, () => "android-device");
+    await Promise.all([windows.setUser("user-1"), android.setUser("user-1")]);
+    const group = await server.api.createGroup("user-1", "Research");
+    await windows.reload();
+
+    await windows.create("  Copied paragraph.\n\nA second paragraph.  ", "manual", {
+      title: "  Read later  ",
+      groupId: group.id,
+    });
+    await android.reload();
+    expect(android.getSnapshot().notes[0]).toMatchObject({
+      text: "Copied paragraph.\n\nA second paragraph.",
+      title: "Read later",
+      titleSource: "manual",
+      groupId: group.id,
+      groupSource: "manual",
+      sourceType: "manual",
+      organizedAt: expect.any(String),
+    });
+
+    await windows.create("No custom title.", "manual");
+    expect(windows.getSnapshot().notes[0]).toMatchObject({
+      title: null,
+      titleSource: null,
+      groupId: null,
+      groupSource: null,
+    });
+  });
+
+  it("validates manual note title length and group before saving", async () => {
+    const server = fakeServer();
+    const store = new NotesStore(server.api, () => "windows-device");
+    await store.setUser("user-1");
+    await expect(store.create("Body", "manual", { title: "x".repeat(121) }))
+      .rejects.toThrow("A note title cannot exceed 120 characters.");
+    await expect(store.create("Body", "manual", { groupId: "missing-group" }))
+      .rejects.toThrow("That note group no longer exists.");
+    expect(store.getSnapshot().notes).toHaveLength(0);
   });
 
   it("edits, archives, restores, and deletes a note", async () => {
