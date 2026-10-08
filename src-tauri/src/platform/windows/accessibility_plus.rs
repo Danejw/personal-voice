@@ -281,3 +281,14 @@ pub fn action(loc: Locator, command:&str, text:Option<&str>, number:Option<f64>)
             bounds:rect(&element).or_else(foreground_bounds),observed})
     })
 }
+
+/** Used only while the user has enabled live UI awareness. Reads bounds, never control text. */
+pub fn focused_element_bounds()->Option<UiBounds>{
+    with_automation(|automation|{
+        let focused=unsafe{automation.GetFocusedElement()}.map_err(|e|e.to_string())?;
+        if unsafe{focused.CurrentIsPassword()}.map(|v|v.as_bool()).unwrap_or(true){
+            return Ok(None);
+        }
+        Ok(rect(&focused))
+    }).ok().flatten()
+}
