@@ -27,7 +27,7 @@ pub use autostart::{launch_at_login, set_launch_at_login};
 pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_shortcut};
 pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
 pub use hook::{set_active as set_dictation_active, set_paused};
-pub use insert::{capture_selection, finish_pending_restore, insert_text};
+pub use insert::{capture_selection, finish_pending_restore, insert_text, insert_camera_image};
 pub use live_text::live_dictation_text;
 pub use snapshot::capture_snapshot;
 pub use windows_info::{describe_windows, activate_window};
