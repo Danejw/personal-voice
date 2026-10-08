@@ -33,7 +33,7 @@ const TEXT = {
   description: "The exact text. Do not paraphrase it.",
 };
 
-/** Declarations sent in Live setup. No Search and no replace. */
+/** Declarations sent in Live setup. No web search or selection replacement. */
 export function assistantFunctionDeclarations() {
   return [
     {
