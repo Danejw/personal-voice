@@ -182,8 +182,40 @@ describe("AssistantController", () => {
     ] });
     await vi.waitFor(() => expect(session.responses).toHaveLength(2));
     expect(actions.readPastConversation).toHaveBeenCalledWith(id);
-    expect(actions.listPastConversations).toHaveBeenCalledWith("earlier", null);
+    expect(actions.listPastConversations).toHaveBeenCalledWith("earlier", null, 20);
     expect(JSON.stringify(session.responses)).toContain("Earlier talk");
+    created.end();
+  });
+
+  it("acknowledges a valid past thread then switches the writable session", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    const id = "33333333-3333-4333-8333-333333333333";
+    session.emit({ type: "toolCalls", calls: [{ id: "switch", name: "continue_past_conversation", args: { conversation_id: id } }] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(1));
+    expect(actions.checkPastConversation).toHaveBeenCalledWith(id);
+    expect(JSON.stringify(session.responses)).toContain("Existing project");
+    await vi.waitFor(() => expect(actions.continuePastConversation).toHaveBeenCalledWith(id), { timeout: 1000 });
+    created.end();
+  });
+
+  it("rejects unowned past conversations without changing threads", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    actions.checkPastConversation.mockRejectedValue(new Error("Not owned"));
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{ id: "blocked", name: "continue_past_conversation", args: {
+      conversation_id: "33333333-3333-4333-8333-333333333333",
+    } }] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(1));
+    expect(JSON.stringify(session.responses)).toContain("Not owned");
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    expect(actions.continuePastConversation).not.toHaveBeenCalled();
     created.end();
   });
 
@@ -1395,6 +1427,8 @@ function toolActions() {
     searchMemory: vi.fn(async (query: string) => `Search evidence for ${query}`),
     listPastConversations: vi.fn(async () => '{"results":[{"id":"33333333-3333-4333-8333-333333333333","title":"Earlier talk"}]}'),
     readPastConversation: vi.fn(async () => '{"messages":[{"role":"user","text":"Earlier talk"}]}'),
+    checkPastConversation: vi.fn(async () => "Existing project"),
+    continuePastConversation: vi.fn(async () => {}),
     rememberMemory: vi.fn(async () => "Remembered answer_length: Prefer short answers."),
     changeMemory: vi.fn(async () => "Changed answer_length."),
     forgetMemory: vi.fn(async () => "Forgot answer_length."),
