@@ -108,6 +108,14 @@ pub fn run() {
             #[cfg(windows)]
             commands::inspect_accessible_elements,
             #[cfg(windows)]
+            commands::inspect_accessibility_tree,
+            #[cfg(windows)]
+            commands::accessibility_pattern_action,
+            #[cfg(windows)]
+            commands::accessibility_watch,
+            #[cfg(windows)]
+            commands::accessibility_watch_status,
+            #[cfg(windows)]
             commands::activate_accessible_window,
             #[cfg(windows)]
             commands::hide_computer_visual,
@@ -141,6 +149,8 @@ pub fn run() {
     app.run(|_app, event| {
         if let tauri::RunEvent::Exit = event {
             platform::finish_pending_restore();
+            #[cfg(windows)]
+            let _ = platform::stop_accessibility_watch();
         }
     });
 }
