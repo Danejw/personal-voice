@@ -2,7 +2,7 @@
 //! window cannot be read. Pixels stay in the returned buffer. Nothing is written to disk.
 
 use crate::platform::SnapshotFrame;
-use windows::Win32::Foundation::{HWND, RECT};
+use windows::Win32::Foundation::{HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
     ReleaseDC, SelectObject, StretchBlt, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
@@ -10,8 +10,10 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetSystemMetrics, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
-    IsIconic, SM_CXSCREEN, SM_CYSCREEN,
+    GetAncestor, GetCursorPos, GetForegroundWindow, GetSystemMetrics, GetWindowRect,
+    GetWindowTextW, GetWindowThreadProcessId, IsIconic, WindowFromPoint, GA_ROOT,
+    SM_CXSCREEN, SM_CYSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+    SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
 };
 
 const MAX_EDGE: i32 = 1_600;
@@ -24,7 +26,25 @@ pub fn capture_snapshot() -> Result<SnapshotFrame, String> {
     capture_screen()
 }
 
+/// Read one explicitly requested screenshot of the pointed-at window, with a
+/// visible crosshair at the pointer. No continuous pixel capture or disk write.
+pub fn capture_pointer_snapshot() -> Result<SnapshotFrame, String> {
+    let mut point = POINT::default();
+    unsafe { GetCursorPos(&mut point) }.map_err(|e| format!("Cannot locate pointer: {e}"))?;
+    let hovered = unsafe { WindowFromPoint(point) };
+    if !hovered.0.is_null() {
+        let root = unsafe { GetAncestor(hovered, GA_ROOT) };
+        let hwnd = if root.0.is_null() { hovered } else { root };
+        if let Some(frame) = capture_window_at(hwnd, Some(point)) { return Ok(frame); }
+    }
+    capture_virtual_screen_at(point)
+}
+
 fn capture_window(hwnd: HWND) -> Option<SnapshotFrame> {
+    capture_window_at(hwnd, None)
+}
+
+fn capture_window_at(hwnd: HWND, pointer: Option<POINT>) -> Option<SnapshotFrame> {
     if hwnd.0.is_null() || is_our_process(hwnd) || unsafe { IsIconic(hwnd) }.as_bool() {
         return None;
     }
@@ -37,7 +57,10 @@ fn capture_window(hwnd: HWND) -> Option<SnapshotFrame> {
     if width < 2 || height < 2 {
         return None;
     }
-    let pixels = blit(rect.left, rect.top, width, height).ok()?;
+    let mut pixels = blit(rect.left, rect.top, width, height).ok()?;
+    if let Some(point) = pointer {
+        mark_cursor(&mut pixels, point.x - rect.left, point.y - rect.top, width, height);
+    }
     Some(SnapshotFrame {
         source: "window",
         source_app: window_title(hwnd),
@@ -63,11 +86,46 @@ fn capture_screen() -> Result<SnapshotFrame, String> {
     })
 }
 
+/// Virtual screen covers secondary monitors with negative x/y coordinates.
+fn capture_virtual_screen_at(point: POINT) -> Result<SnapshotFrame, String> {
+    let x = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
+    let y = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
+    let width = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
+    let height = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
+    if width < 2 || height < 2 { return Err("Couldn't capture the pointed-at screen.".into()); }
+    let mut pixels = blit(x, y, width, height)?;
+    mark_cursor(&mut pixels, point.x - x, point.y - y, width, height);
+    Ok(SnapshotFrame { source: "screen", source_app: None, width: pixels.width,
+        height: pixels.height, rgba: encode_base64(&pixels.rgba) })
+}
+
 struct Pixels {
     width: u32,
     height: u32,
     rgba: Vec<u8>,
 }
+
+/// A high-contrast ring and crosshair remains legible after JPEG downscaling.
+fn mark_cursor(pixels: &mut Pixels, logical_x: i32, logical_y: i32, source_w: i32, source_h: i32) {
+    if source_w <= 0 || source_h <= 0 || logical_x < 0 || logical_y < 0
+        || logical_x >= source_w || logical_y >= source_h { return; }
+    let cx = (logical_x as f64 * pixels.width as f64 / source_w as f64).round() as i32;
+    let cy = (logical_y as f64 * pixels.height as f64 / source_h as f64).round() as i32;
+    for dy in -14i32..=14 {
+        for dx in -14i32..=14 {
+            let x = cx + dx;
+            let y = cy + dy;
+            if x < 0 || y < 0 || x >= pixels.width as i32 || y >= pixels.height as i32 { continue; }
+            let dist2 = dx * dx + dy * dy;
+            let ring = (75..=125).contains(&dist2);
+            let cross = (dx == 0 && dy.abs() <= 14) || (dy == 0 && dx.abs() <= 14);
+            if !ring && !cross { continue; }
+            let index = ((y as u32 * pixels.width + x as u32) * 4) as usize;
+            pixels.rgba[index..index + 4].copy_from_slice(&[255, 224, 0, 255]);
+        }
+    }
+}
+
 
 fn blit(x: i32, y: i32, width: i32, height: i32) -> Result<Pixels, String> {
     let (dst_w, dst_h) = fit_edge(width, height);
@@ -197,12 +255,21 @@ fn encode_base64(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{encode_base64, fit_edge};
+    use super::{encode_base64, fit_edge, mark_cursor, Pixels};
 
     #[test]
     fn fit_keeps_small_frames_and_shrinks_the_long_edge() {
         assert_eq!(fit_edge(100, 50), (100, 50));
         assert_eq!(fit_edge(3200, 1600), (1600, 800));
+    }
+
+    #[test]
+    fn cursor_marker_is_inside_resized_frame() {
+        let mut pixels = Pixels { width: 100, height: 50, rgba: vec![0; 100 * 50 * 4] };
+        mark_cursor(&mut pixels, 400, 200, 800, 400);
+        let center = ((25 * 100 + 50) * 4) as usize;
+        assert_eq!(&pixels.rgba[center..center + 4], &[255, 224, 0, 255]);
+        mark_cursor(&mut pixels, -20, 5, 800, 400);
     }
 
     #[test]
