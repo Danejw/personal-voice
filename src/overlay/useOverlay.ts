@@ -386,6 +386,9 @@ export function useOverlay({
           assistantController.end();
           return;
         }
+        case "stop-computer":
+          assistantController.stopComputer();
+          return;
         case "assistant-interrupt":
           assistantController.interruptPlayback();
           return;
