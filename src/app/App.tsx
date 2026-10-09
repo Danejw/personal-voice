@@ -180,6 +180,30 @@ const assistant = new AssistantController(
   microphone,
 );
 assistant.setCamera(platform.createCamera());
+
+// Development-only, explicit opt-in local tool trace capture for PR26 evaluation.
+// Never installed in production and never sends/retains arguments, text, images or tokens.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  Object.defineProperty(window, "__pvToolEval", {
+    configurable: true,
+    value: {
+      begin(scenarioId: string, modality: "typed" | "voice" = "typed") {
+        assistant.setToolEvalTraceHandler(() => undefined);
+        assistant.beginToolEvalCase({ scenarioId, modality, platform: platform.platform });
+      },
+      finish() {
+        const trace = assistant.endToolEvalCase();
+        assistant.setToolEvalTraceHandler(null);
+        return trace;
+      },
+      cancel() {
+        assistant.endToolEvalCase();
+        assistant.setToolEvalTraceHandler(null);
+      },
+    },
+  });
+}
+
 const assistantLibrary = new AssistantConversationStore(
   assistant,
   assistantConversationsApi,
