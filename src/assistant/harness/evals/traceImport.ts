@@ -30,7 +30,9 @@ export function parseEvalTraces(input: unknown): ToolEvalTrace[] {
     const t = record(raw);
     only(t, ALLOWED_TRACE);
     if (t.version !== 1 || typeof t.scenarioId !== "string" || !SAFE_ID.test(t.scenarioId)
-      || !origins.has(t.origin) || !modalities.has(t.modality) || !platforms.has(t.platform))
+      || typeof t.origin !== "string" || !origins.has(t.origin)
+      || typeof t.modality !== "string" || !modalities.has(t.modality)
+      || typeof t.platform !== "string" || !platforms.has(t.platform))
       throw new Error("Invalid evaluation trace header.");
     if (!Array.isArray(t.attempts) || t.attempts.length > MAX_EVAL_TOOL_ATTEMPTS)
       throw new Error("Invalid tool attempt count.");
@@ -40,7 +42,8 @@ export function parseEvalTraces(input: unknown): ToolEvalTrace[] {
       if (typeof a.tool !== "string" || !SAFE_TOOL.test(a.tool)
         || !integerMs(a.startMs)
         || (a.durationMs !== null && !integerMs(a.durationMs))
-        || !statuses.has(a.status) || !failures.has(a.failureKind))
+        || typeof a.status !== "string" || !statuses.has(a.status)
+        || (a.failureKind !== null && typeof a.failureKind !== "string") || !failures.has(a.failureKind))
         throw new Error("Invalid tool attempt.");
       return {
         tool: a.tool,
