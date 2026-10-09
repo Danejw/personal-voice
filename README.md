@@ -47,10 +47,10 @@ Sign in and complete the device-permission onboarding before using microphone, o
 | **Dictionary, Snippets & Transforms** | Personal vocabulary; deterministic trigger-to-text snippet expansion; built-in and custom text transforms |
 | **Selection & history** | Capture selected text for further use; recent local dictations with optional account sync of final text |
 | **Notes & Handoffs** | Saved, editable Notes; send items to another signed-in device's handoff inbox; continue an Assistant conversation on another device |
-| **Assistant conversation** | Live audio/typed turns; saved conversations; list, read, search or explicitly resume older threads; Google Search grounding for public information |
+| **Assistant conversation** | Chat-first workspace with a searchable thread rail, new conversation, resume/rename/delete, full-height transcript, typed/voice turns and Google Search grounding |
 | **Visual awareness** | Explicit screen snapshots, selected text, cursor/pointer inspection on Windows, accessibility-tree inspection, camera photos, and user-requested ongoing Camera Context |
 | **Device actions** | Allowlisted Windows application/window/UI Automation actions; bounded supervised screen workflows; supported remote Windows reads/actions with existing approval controls |
-| **Memory** | Explicit remember/edit/forget, opt-in memory learning, semantic retrieval, source indexing and a **Memory** page showing a read-only network of memories and their connections |
+| **Memory** | Explicit remember/edit/forget, memory learning, semantic retrieval, source indexing and a **Memory** page showing a read-only network of memories and connections |
 | **Insights & Analytics** | Usage analytics and an **Insights** page that surfaces patterns and reviewable suggestions for dictionary, snippets, transforms and memories; suggestions require acceptance |
 | **Devices & Settings** | Signed-in device management, local controls, sync preferences, Assistant auto-run/review controls, and app updates |
 
@@ -59,6 +59,8 @@ Some features require an authenticated account, a synced device, Windows OS APIs
 ### Navigation
 
 The app sidebar contains **Voice** (Dictations, Dictionary, Selection, Notes, Handoffs, Snippets, Transforms), **Assistant**, **Memory**, **Insights**, **Analytics**, **Devices & Controls**, and **Settings**. On Android and narrow windows this appears as a menu drawer.
+
+The **Assistant** page opens on the Conversation view, with a searchable left thread rail on desktop and a collapsible history drawer on narrow screens. Select a saved thread and press **Continue conversation** to resume it. **New conversation** starts an independent thread. **Settings** contains memory learning, semantic search, notes/dictation recall and saved-memory management; **Advanced tools** contains optional screen, camera and accessibility controls. When a session is idle, the composer is disabled until you start/continue it.
 
 ## Assistant and tool harness
 
@@ -90,7 +92,7 @@ See [Assistant phase reports](docs/Assistant-Phases/), including [tool registry]
 
 - **Microphone audio** connects directly from the device to Gemini for the active session; Personal Voice does not proxy or permanently store it.
 - **Camera Context** is user-initiated, uses device permissions, sends frames to Gemini Live and does not save frames in the Personal Voice backend. See [Camera Context](docs/Camera-Context-Phases/README.md).
-- **Cloud storage is selective:** saved account content such as Notes, Handoffs, conversations and explicit memories may sync. Recent dictation **text** sync is an opt-in setting.
+- **Cloud storage is selective:** saved account content such as Notes, Handoffs, conversations and explicit memories may sync. Recent dictation **text** sync remains an independent opt-in setting. For newly created accounts, the four Assistant memory/recall settings default on: learning from newly saved Assistant user messages, semantic search, saved notes retrieval and synced dictation retrieval. Existing account settings, including prior opt-outs, are not overwritten. Turning on dictation retrieval alone never uploads local-only dictations.
 - **Insights/analytics:** event and usage metrics are distinct from storing raw microphone audio. Inspect and control what context is shared with Assistant in Settings.
 - **Remote actions and desktop controls** require the supported platform, a permitted target and applicable approvals. There is no general-purpose shell tool.
 - **Evaluation capture** is off by default, available in development only, and records tool names/timing/outcome categories rather than text, arguments, audio, screenshots or credentials.
