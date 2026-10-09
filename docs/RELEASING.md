@@ -10,14 +10,12 @@ Android's `versionName` and `versionCode` are derived by Tauri at build time int
 
 ## Publishing a release
 
-1. Bump `version` in `package.json` and `src-tauri/Cargo.toml` (SemVer, pre-1.0: `0.2.0`, `0.3.0`, ...).
-2. Run `pnpm check`, then commit and push.
-3. Tag and push the tag:
+1. Merge the validated feature PR into `main`.
+2. Bump the app version in `package.json`, `src-tauri/Cargo.toml`, and the local package entry in `src-tauri/Cargo.lock` to the same SemVer value.
+3. Commit and push the version bump to `main`. The `Start release on version bump` workflow creates a new annotated `vX.Y.Z` tag (never overwriting an existing tag) and explicitly dispatches `release.yml`.
+4. Follow the resulting Release workflow and verify both signed Windows and Android assets before announcing the release.
 
-   ```powershell
-   git tag -a v0.3.0 -m "Personal Voice 0.3.0"
-   git push origin v0.3.0
-   ```
+> GitHub Actions' `GITHUB_TOKEN` does not trigger tag-push workflows when it creates a tag. That is why the version-bump workflow explicitly dispatches `release.yml`. If this handoff fails, use **Actions → Release → Run workflow** with the existing `vX.Y.Z` tag. Do not create an alternate tag for the same app version.
 
 `.github/workflows/release.yml` then:
 
