@@ -20,6 +20,8 @@ describe("optional imported model/tool traces", () => {
       samples: report.overall.samples,
       byModality: report.byModality,
       byPlatform: report.byPlatform,
+      byOrigin: report.byOrigin,
+      liveModel: report.liveModel,
       coverage: report.scenarioCoverage,
       pathRate: report.overall.rates.pathAccuracy,
       verifiedGoalSamples: report.overall.independentlyVerifiedGoals,
