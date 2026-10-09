@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AssistantInsightsPanel } from "@/insights/AssistantInsightsPanel";
+import { listAssistantInsightData } from "@/services/assistantInsightsService";
 import type { InsightCandidate, InsightCandidateKind, InsightUsageFacts } from "@/insights/insights";
 import {
   formatHour,
@@ -203,6 +204,16 @@ export function InsightsPanel({
     setAssistantPending(previous=>previous?.userId===forUser&&previous.count===count?previous:{userId:forUser,count});
   },[]);
   const assistantCount = assistantPending?.userId===userId?assistantPending.count:0;
+  // Fetch saved suggestion counts even when Your Voice is the selected tab.
+  // This only reads stored metadata; it never invokes Gemini analysis.
+  useEffect(()=>{
+    if(!active||!userId)return;
+    let cancelled=false;
+    void listAssistantInsightData(userId).then(data=>{
+      if(!cancelled)reportAssistantPending(userId,data.candidates.filter(c=>c.status==="pending").length);
+    },()=>{ /* Assistant tab handles and displays any loading error. */ });
+    return ()=>{cancelled=true;};
+  },[active,userId,assistantInsightsRefreshToken,reportAssistantPending]);
   const latest = snapshot.runs[0] ?? null;
   const pending = snapshot.candidates.filter((candidate) => candidate.status === "pending");
   const accepted = snapshot.candidates.filter((candidate) => candidate.status === "accepted").length;
