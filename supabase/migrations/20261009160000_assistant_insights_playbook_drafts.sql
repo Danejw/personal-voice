@@ -62,6 +62,43 @@ create policy "Users manage their own Personal Playbook drafts" on public.assist
   for all to authenticated using (user_id=(select auth.uid()))
   with check (user_id=(select auth.uid()));
 
+-- Efficient bounded sampling also supports one conversation continued over thousands
+-- of sessions. The function is explicitly called by the signed-in client only
+-- after consent; it never sends any text to a model.
+create index if not exists assistant_messages_insight_sample_idx
+  on public.assistant_messages(user_id,created_at desc,id desc)
+  where role='user' and status='final';
+
+create function public.list_assistant_insight_samples(p_limit integer default 80)
+returns table(message_id uuid, conversation_id uuid, created_at timestamptz, text text)
+language plpgsql security definer set search_path = ''
+as $
+declare uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'Not signed in' using errcode = '42501';
+  end if;
+  if p_limit is null or p_limit < 6 or p_limit > 80 then
+    raise exception 'Invalid Assistant insight sample size' using errcode = '23514';
+  end if;
+  return query
+    with recent_conversations as (
+      select c.id from public.assistant_conversations c
+      where c.user_id=uid and c.deleted_at is null
+      order by c.updated_at desc,c.id desc
+      limit 12
+    )
+    select m.id,m.conversation_id,m.created_at,left(m.body,500)
+      from public.assistant_messages m
+      where m.user_id=uid and m.role='user' and m.status='final'
+        and m.conversation_id in (select id from recent_conversations)
+      order by m.created_at desc,m.id desc
+      limit p_limit;
+end;
+$;
+revoke all on function public.list_assistant_insight_samples(integer) from public,anon;
+grant execute on function public.list_assistant_insight_samples(integer) to authenticated;
+
 revoke all on public.assistant_insight_runs,public.assistant_insight_candidates,
   public.assistant_personal_playbook_drafts from anon;
 grant select,insert,update,delete on public.assistant_insight_runs,
