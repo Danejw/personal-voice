@@ -6,6 +6,8 @@ import { selectionPreview } from "@/assistant/selectionContext";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { AssistantConversationStore } from "@/assistant/AssistantConversationStore";
+import { capturedImageFile } from "@/assistant/noteAttachment";
+import type { CapturedNoteImage } from "@/assistant/noteAttachment";
 import { listPastConversations, readPastConversation } from "@/assistant/assistantConversationRecall";
 import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
@@ -321,8 +323,21 @@ function pasteReceived(text: string): Promise<void> {
 assistant.setActions({
   copyText: (text) => navigator.clipboard.writeText(text),
   insertText: (text) => pasteIntoField(text),
-  createVoiceNote: (text) => notesStore.create(text, "assistant"),
-  editVoiceNote: (id, text) => notesStore.updateText(id, text),
+  createVoiceNote: (text, image) => notesStore.create(text, "assistant", {},
+    image ? [capturedImageFile(image)] : []),
+  editVoiceNote: async (id, text, image) => {
+    const file = image ? capturedImageFile(image) : null;
+    await notesStore.updateText(id, text);
+    if (file) {
+      try {
+        await notesStore.addAttachments(id, [file]);
+      } catch (error) {
+        throw new Error(`Note text updated, but attaching the image failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  },
+  attachImageToVoiceNote: (id: string, image: CapturedNoteImage) =>
+    notesStore.addAttachments(id, [capturedImageFile(image)]),
   listSnippets: async () => {
     const snap = snippetStore.getSnapshot();
     if (snap.status === "signed-out") throw new Error("Sign in to read snippets.");
