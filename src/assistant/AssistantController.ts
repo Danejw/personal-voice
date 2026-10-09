@@ -52,6 +52,7 @@ import {
 } from "@/assistant/snapshot";
 import { decideToolCall, type ConfirmToolName, type ParsedToolCall, type ToolDecision } from "@/assistant/tools";
 import { playbookToolText } from "@/assistant/harness/playbooks";
+import { interpretToolResult, ToolFailureHistory } from "@/assistant/harness/toolResults";
 import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
 import { runComputerTask, type ComputerImage } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
@@ -204,6 +205,8 @@ export class AssistantController {
   /** Bumped when a pending action is dropped so an in-flight confirm cannot report success. */
   private toolEpoch = 0;
   private toolQueue = Promise.resolve();
+  /** Tracks only consecutive failure counts, never tool arguments or user data. */
+  private readonly toolFailures = new ToolFailureHistory();
   /** Turn ids already handed to storage, so a reload does not append them again. */
   private published = new Set<string>();
   private onCommitted: ((turn: AssistantTurn) => void) | null = null;
@@ -1920,17 +1923,21 @@ export class AssistantController {
         this.dispatch({type:"toolActivity",activity:null});
       }
     }, 2200);
-    if (ok) this.onToolRecord?.({ name, outcome: message });
+    const assessment = interpretToolResult(name, ok, message, this.toolFailures.record(name, ok));
+    if (ok && assessment.status !== "reference") {
+      this.onToolRecord?.({ name, outcome: assessment.status === "incomplete" ? `Incomplete tool attempt: ${message}` : message });
+    }
     const session = this.session;
     if (!session) return;
     try {
-      session.sendToolResponse(assistantToolResponse([{ id, name, ok, message }]));
+      session.sendToolResponse(assistantToolResponse([{ id, name, ok, message, interpretation: assessment }]));
     } catch {
       // The socket is gone. Do not invent a later success.
     }
   }
 
   private dropPending() {
+    this.toolFailures.reset();
     this.toolEpoch += 1;
     this.pending = null;
   }
