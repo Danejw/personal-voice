@@ -1,6 +1,6 @@
 import { TOOL_SELECTION_SCENARIOS } from "@/assistant/harness/evals/fixtures";
 import { scoreToolTrace, type ToolSelectionScenario, type ToolTraceScore } from "@/assistant/harness/evals/traceScore";
-import type { ToolEvalAttempt, ToolEvalTrace, EvalModality, EvalPlatform } from "@/assistant/harness/evals/traceRecorder";
+import type { ToolEvalAttempt, ToolEvalTrace, EvalModality, EvalPlatform, EvalOrigin } from "@/assistant/harness/evals/traceRecorder";
 
 export interface EvaluatedTrace {
   readonly scenarioId: string;
@@ -47,6 +47,9 @@ export interface EvalReport {
   readonly overall: EvalCohort;
   readonly byModality: Readonly<Record<EvalModality, EvalCohort>>;
   readonly byPlatform: Readonly<Record<EvalPlatform, EvalCohort>>;
+  readonly byOrigin: Readonly<Record<EvalOrigin, EvalCohort>>;
+  /** Only explicitly labeled real Live captures, never simulated or unproven imports. */
+  readonly liveModel: EvalCohort;
   readonly cases: readonly EvaluatedTrace[];
   readonly warnings: readonly string[];
 }
@@ -131,17 +134,15 @@ function cohort(cases: readonly EvaluatedTrace[]): EvalCohort {
 }
 
 export function evaluateBatch(traces: readonly ToolEvalTrace[], label = "unlabeled"): EvalReport {
-  const seen = new Set<string>();
   const cases = traces.map((trace) => {
     const scenario = KNOWN.get(trace.scenarioId);
     if (!scenario) throw new Error(`Unknown scenario ID: ${trace.scenarioId}`);
-    const identity = `${trace.scenarioId}|${trace.modality}|${trace.platform}`;
-    if (seen.has(identity)) throw new Error(`Duplicate scenario/modality/platform: ${identity}`);
-    seen.add(identity);
     return evaluateTrace(trace, scenario);
   });
+  // Multiple trials of the same scenario are necessary for a meaningful sample rate.
   const included = new Set(cases.map((row) => row.scenarioId));
-  const realCount = cases.filter((row) => row.origin === "live" || row.origin === "imported").length;
+  const liveCount = cases.filter((row) => row.origin === "live").length;
+  const distinctOrigins = new Set(cases.map((row) => row.origin));
   return {
     label,
     scenarioCount: TOOL_SELECTION_SCENARIOS.length,
@@ -157,9 +158,18 @@ export function evaluateBatch(traces: readonly ToolEvalTrace[], label = "unlabel
       android: cohort(cases.filter((row) => row.platform === "android")),
       unknown: cohort(cases.filter((row) => row.platform === "unknown")),
     },
+    byOrigin: {
+      live: cohort(cases.filter((row) => row.origin === "live")),
+      fixture: cohort(cases.filter((row) => row.origin === "fixture")),
+      mock: cohort(cases.filter((row) => row.origin === "mock")),
+      imported: cohort(cases.filter((row) => row.origin === "imported")),
+    },
+    liveModel: cohort(cases.filter((row) => row.origin === "live")),
     cases,
     warnings: [
-      ...(realCount === 0 ? ["No recorded real-model traces. Synthetic/mocked results are NOT model accuracy."] : []),
+      ...(liveCount === 0 ? ["No recorded real-model traces. Synthetic/mocked results are NOT model accuracy."] : []),
+      ...(distinctOrigins.size > 1 ? ["Mixed trace origins: use byOrigin or liveModel cohorts, not pooled rates, for model-quality claims."] : []),
+      ...(cases.some((row) => row.origin === "imported") ? ["Imported traces have unconfirmed origin; do not automatically count them as verified Live-model samples."] : []),
       ...(cases.some((row) => row.observedGoal === null) ? ["Some tasks have no independently observed end state; exclude them from verified goal rate."] : []),
       ...(cases.some((row) => row.pendingCalls > 0) ? ["Some tool calls have no completed function response; examine trace capture/session completion."] : []),
     ],
@@ -195,6 +205,12 @@ export function checkRegression(report: EvalReport, gate: RegressionGate): GateR
     return direction === "min" ? actual < threshold ? [`${name}: ${actual} < ${threshold}`] : []
       : actual > threshold ? [`${name}: ${actual} > ${threshold}`] : [];
   });
+  const origins = new Set(report.cases.map((row) => row.origin));
+  const hasThresholds = checks.some(([, , threshold]) => threshold !== undefined)
+    || gate.minVerifiedGoalSamples !== undefined;
+  if (origins.size > 1 && hasThresholds) {
+    failures.push("Mixed trace origins cannot be regression-gated together; evaluate each origin separately.");
+  }
   if (gate.minVerifiedGoalSamples !== undefined) {
     if (!Number.isInteger(gate.minVerifiedGoalSamples) || gate.minVerifiedGoalSamples < 1)
       throw new Error("minVerifiedGoalSamples must be a positive integer.");
