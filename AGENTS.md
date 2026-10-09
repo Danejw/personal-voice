@@ -11,6 +11,36 @@ Read these files before changing code:
 3. the prompt for the current implementation phase
 4. `docs/PV-Phases/` if the work is a Personal Voice (PV) prompt — completed vs skipped phases are listed there
 
+The repository now includes **both** dictation and a Gemini Live Assistant with a typed/tool-use harness. For changes under `src/assistant/`, also read `src/assistant/harness/AGENTS.md` and the relevant `docs/Assistant-Phases/` reports. A phase report or spec may describe historical behavior; **the checked-in implementation, current declarations, validation/permission logic and tests are authoritative**. Never infer current tool availability solely from an old document or a remembered tool count.
+
+## Current application architecture (verify against source before editing)
+
+- One Tauri 2/React/TypeScript application with Rust Windows integration and an Android Kotlin/native boundary; shared account/device/sync services.
+- Dictation and the Assistant are different flows. Dictation uses the selected Transcribe Live provider and inserts or stores a transcript; the interactive Assistant uses the Gemini Live model configured in `src/assistant/protocol.ts` and tool declarations from `src/assistant/tools.ts`.
+- Assistant sessions, confirmations, serialized tool execution and responses live in `src/assistant/AssistantSession.ts` and `src/assistant/AssistantController.ts`. The user's current approval/auto-run settings remain authoritative.
+- The Assistant can use notes, memories, saved conversation recall, analytics/insights, screen/camera context, Windows accessibility, and explicitly supported cross-device actions. Inspect the **actual** declarations and platform adapters; do not assume every tool is available locally on Android.
+- Tool-selection intelligence, on-demand playbooks, context-aware guidance, result classification and evaluation are implemented under `src/assistant/harness/`. This is a lightweight extension of existing Gemini Live tool use—not a second planner, new provider or blanket permission system.
+- Operational design references: `docs/Assistant-Phases/16-tool-intelligence-harness.md` through `docs/Assistant-Phases/20-tool-use-evaluation-framework.md`; consult the latest relevant source as well.
+
+## Mandatory Assistant tool-change workflow
+
+**Definition of done:** A PR that creates, renames, changes, removes or changes the semantics/platform/permission of **any Assistant tool** MUST review and update every affected harness layer *in the same PR*. Do not ship a declared tool that the harness does not understand. Follow the detailed decision table and change checklist in `src/assistant/harness/AGENTS.md`.
+
+1. **Discover the existing tool and neighbors first.** Search exact names, schemas, call sites, platform handlers, tests, docs and playbooks. Check which names appear in the current `assistantFunctionDeclarations()` output; counts are derived from code and may change.
+2. **Declare and validate it together:** edit `src/assistant/tools.ts` to add/change/remove the Gemini Live name, description, JSON argument schema, `decideToolCall()` validation and typed `ToolDecision`/confirmation union where needed. Reject malformed inputs and unknown names. Make sure a real supported executor path exists in `AssistantController` plus applicable `src/app/` and Windows/Android adapters. Handle failures and preserve approval semantics.
+3. **Keep model intelligence synchronized:** edit `src/assistant/harness/toolIntelligence.ts` for one accurate entry per declared tool (`family`, platform, `when`, `avoid`, `next`, `verify`, disambiguation hint). Consider competing tools and concise Live guidance. Do not document unsupported capabilities as available.
+4. **Maintain procedures and context:** search `src/assistant/harness/playbooks/` and `contextAssembler.ts` for references and task selection, conditional prerequisites, platform/availability notes, recovery and completion evidence. Update affected playbooks and on-demand summaries; add a playbook only for a genuinely reusable multi-step workflow. Do not inflate every Live session with large instructions.
+5. **Maintain result interpretation:** update `src/assistant/harness/toolResults.ts` when evidence type or failure/completion behavior changes. An acknowledgement is not independent end-state verification. Preserve structured `result`/`error` contract.
+6. **Maintain regression coverage:** add/update/remove the `tool-<name>` scenario in `src/assistant/harness/evals/fixtures.ts` and add ambiguity, no-tool, Windows/Android, typed/voice and failure/recovery cases wherever affected. Update `tools.test.ts`, controller tests, playbook tests, context/result tests and the mock corpus when semantics change. Update explicit tool/scenario counts in tests and prose **when the real set changes**; avoid unsourced hard-coded totals.
+7. **Run and report:** `pnpm check` and `pnpm eval:tools`; review both Windows and Android GitHub Validate jobs and manually exercise the changed tool including negative and cancellation cases. CI's scripted corpus checks harness behavior, **not live model accuracy**. For high-impact routing changes, opt in to real-model trace capture, verify outcomes separately and label sample sizes.
+
+**Tool removal:** remove the declaration, decision/route/executor, affected confirmation handling, registry entry, fixtures and references *together*; replace broken workflow steps with a supported alternative or remove them. Review any persisted/historical references and plan compatibility without replaying old calls. Never remove permission protections merely to make a tool pass tests.
+
+**Tool parameter, capability or provider change:** even if the tool name stays identical, repeat the audit for argument validation, platform availability, side-effect/approval behavior, model description, playbooks and tests. Parity checks alone cannot detect semantic drift.
+
+**Unrelated PRs:** if a change impacts tool access, behaviors or context indirectly, perform the same impact check. When no harness update is appropriate, explain why in the PR description.
+
+
 ## Core rules
 
 - Preserve one Tauri 2 codebase for Windows and Android.
@@ -35,6 +65,7 @@ Read these files before changing code:
 - Keep Rust formatted and warning-free where practical.
 - Add tests for shared logic and state transitions.
 - Do not claim a phase is complete until its acceptance criteria have been tested.
+- Every PR summary must include: changes made, CI/test status, a short 3–5 step **manual test with expected results**, unresolved issues, and whether it is ready to merge. Never mark pending checks green.
 - UI is borderless: do not add CSS/HTML borders (or faux inset-ring shadows). Separate surfaces with background, spacing, radius, and soft shadows. See `.cursor/rules/no-borders.mdc`.
 
 ## Simplicity rule
@@ -127,6 +158,7 @@ For each phase:
 - report exactly what changed
 - report unresolved issues truthfully
 - do not silently continue into the next phase
+- if modifying an Assistant tool, describe which declaration/router/registry/playbook/evaluation paths changed and list Windows/Android smoke tests
 
 ## When APIs differ from this spec
 
