@@ -263,6 +263,7 @@ function reply(id: string, text: string): AssistantTurn {
 
 describe("saved assistant conversations", () => {
   it("shows loading while retrieving saved conversations and supports explicit refreshing", async () => {
+    const thread = "44444444-4444-4444-8444-000000000900";
     const api = new FakeApi();
     const gate = deferred();
     api.delayList = gate.promise;
