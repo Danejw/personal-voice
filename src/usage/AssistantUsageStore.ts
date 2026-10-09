@@ -41,6 +41,7 @@ export class AssistantUsageStore {
 
   private publish(): void { for (const listener of this.listeners) listener(); }
   getPending(): AssistantUsageEvent[] { return [...this.pending]; }
+  getScope(): AssistantUsageScope { return { ...this.scope }; }
   private storageKey(s: AssistantUsageScope): string {
     return `assistant.usage.pending.v1.${s.userId}.${s.epoch}`;
   }
