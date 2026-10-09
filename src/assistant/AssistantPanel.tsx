@@ -27,6 +27,7 @@ interface AssistantChromeProps {
   onDeleteThread?: (id: string) => void;
   onRetrySave?: () => void;
   onLoadOlder?: () => void;
+  onRefreshThreads?: () => void;
   onProduce?: () => void;
   onDismissRecovery?: (id: string) => void;
   settingsContent?: ReactNode;
@@ -81,6 +82,7 @@ export function AssistantPanel({
   onDeleteThread,
   onRetrySave,
   onLoadOlder,
+  onRefreshThreads,
   onDismissRecovery,
   onProduce,
   micBusy,
@@ -167,6 +169,8 @@ export function AssistantPanel({
           onDelete={onDeleteThread}
           onRetry={onRetrySave}
           onLoadOlder={onLoadOlder}
+          onRefresh={onRefreshThreads}
+          hasUnlinkedTranscript={!library.currentId && snapshot.turns.length > 0}
           onDismissRecovery={onDismissRecovery}
         />
       )}
