@@ -274,7 +274,10 @@ export class AssistantConversationStore {
       this.currentId = this.conversations[0]!.id;
       writeOpenConversation(this.storage, userId, this.currentId);
     }
-    if (this.currentId) await this.load(this.currentId, generation);
+    if (this.currentId) {
+      await this.load(this.currentId, generation);
+      void this.loadSessions(this.currentId);
+    }
     if (this.sameAccount(userId, generation)) void this.flush();
   }
 
@@ -285,6 +288,7 @@ export class AssistantConversationStore {
     if (this.host.getSnapshot().status !== "IDLE") this.host.end();
     this.generation += 1;
     const id = this.createId();
+    this.archivedView = false;
     this.currentId = id;
     this.titles.set(id, ASSISTANT_DEFAULT_TITLE);
     writeOpenConversation(this.storage, userId, id);
@@ -1288,7 +1292,7 @@ export class AssistantConversationStore {
 
   private publish(): void {
     const rows = this.conversations.map((row) => ({ ...row, title: this.titles.get(row.id) ?? row.title }));
-    if (this.currentId && !rows.some((row) => row.id === this.currentId)) {
+    if (!this.archivedView && this.currentId && !rows.some((row) => row.id === this.currentId)) {
       rows.unshift({ id: this.currentId, title: this.titles.get(this.currentId) ?? ASSISTANT_DEFAULT_TITLE });
     }
     this.snapshot = {
