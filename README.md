@@ -53,6 +53,7 @@ Sign in and complete the device-permission onboarding before using microphone, o
 | **Memory** | Explicit remember/edit/forget, memory learning, semantic retrieval, source indexing and a **Memory** page showing a read-only network of memories and connections |
 | **Insights & Analytics** | Usage analytics and an **Insights** page that surfaces patterns and reviewable suggestions for dictionary, snippets, transforms and memories; suggestions require acceptance |
 | **Devices & Settings** | Signed-in device management, local controls, sync preferences, Assistant auto-run/review controls, and app updates |
+| **Destructive-action confirmations** | One branded confirmation dialog before deleting dictionary terms, notes and attachments, snippets, transforms, saved conversations and memories, or dismissing handoffs and suggestions; also protects device removal, activity-history clearing, and Insights compaction |
 
 Some features require an authenticated account, a synced device, Windows OS APIs, user permission, or separately configured backend services. A declared Assistant tool is not a promise that the capability is available on every device.
 
