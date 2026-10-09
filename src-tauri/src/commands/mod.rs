@@ -4,6 +4,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 #[cfg(windows)]
 use std::sync::Mutex;
+#[cfg(windows)]
+use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE};
 
 use crate::platform;
 
@@ -48,12 +50,15 @@ static OVERLAY_FEEDBACK_STATE: Mutex<OverlayFeedbackState> = Mutex::new(OverlayF
 /// Pin independent popups to the primary monitor's *work area*, not to the
 /// dragged tray or the screen bounds under the taskbar.
 #[cfg(windows)]
-fn pin_corner_popup(app: &AppHandle, label: &str) -> Result<(), String> {
+fn pin_corner_popup(app: &AppHandle, label: &str, logical_height: Option<f64>) -> Result<(), String> {
     let popup = app.get_webview_window(label).ok_or("Popup window missing")?;
     let monitor = popup.primary_monitor().map_err(|e| e.to_string())?
         .ok_or("No primary monitor available")?;
     let area = monitor.work_area();
     let size = popup.outer_size().map_err(|e| e.to_string())?;
+    let width = size.width as i32;
+    let height = logical_height.map(|value| (value * monitor.scale_factor()).round() as i32)
+        .unwrap_or(size.height as i32);
     let shift = if label == "overlay-feedback" {
         app.get_webview_window("assistant-tool-popup")
             .filter(|other| other.is_visible().unwrap_or(false))
@@ -61,9 +66,20 @@ fn pin_corner_popup(app: &AppHandle, label: &str) -> Result<(), String> {
             .map(|size| size.height as i32 + 12)
             .unwrap_or(0)
     } else { 0 };
-    let x = area.position.x + (area.size.width as i32 - size.width as i32 - 20).max(0);
-    let y = area.position.y + (area.size.height as i32 - size.height as i32 - 16 - shift).max(0);
-    popup.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())
+    let x = area.position.x + (area.size.width as i32 - width - 20).max(0);
+    let y = area.position.y + (area.size.height as i32 - height - 16 - shift).max(0);
+    let hwnd = popup.hwnd().map_err(|e| e.to_string())?;
+    // The bounds are applied atomically so the popup never appears centered
+    // or becomes positioned using a previous (smaller) message height.
+    unsafe { SetWindowPos(hwnd, Some(HWND_TOPMOST), x, y, width, height, SWP_NOACTIVATE) }
+        .map_err(|e| e.to_string())
+}
+
+/// Conservative estimate for word-wrapped content; limits size on tiny screens.
+#[cfg(windows)]
+fn feedback_height(message: &str) -> f64 {
+    let line_count: usize = message.lines().map(|line| line.chars().count().max(1).div_ceil(48)).sum();
+    (84 + line_count.clamp(1, 25) * 20).clamp(110, 560) as f64
 }
 
 #[cfg(windows)]
@@ -74,11 +90,8 @@ fn present_overlay_feedback(app: &AppHandle, payload: OverlayFeedbackPayload) ->
     };
     // Resize the independent HWND before positioning it. Typical messages are
     // fully visible; extremely long messages stay inside the work area.
-    let line_count: usize = message.lines().map(|line| line.chars().count().max(1).div_ceil(48)).sum();
-    let logical_height = (84 + line_count.clamp(1, 25) * 20).clamp(110, 560) as f64;
-    window.set_size(tauri::LogicalSize::new(420.0, logical_height))
-        .map_err(|e| e.to_string())?;
-    pin_corner_popup(app, "overlay-feedback")?;
+    let logical_height = feedback_height(message);
+    pin_corner_popup(app, "overlay-feedback", Some(logical_height))?;
     // Suppress focus and pointer interception even over transparent pixels.
     window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
     app.emit_to("overlay-feedback", "overlay-feedback-state", payload).map_err(|e| e.to_string())?;
@@ -104,7 +117,7 @@ pub fn sync_overlay_feedback(app: AppHandle, channel: String, id: Option<String>
             if value.is_some() {
                 state.hint_id = Some(id);
                 state.hint = value;
-            } else if state.hint_id.as_deref() == Some(&id) {
+            } else if state.hint_id.as_deref() == Some(id.as_str()) {
                 state.hint_id = None;
                 state.hint = None;
             }
@@ -139,17 +152,17 @@ pub fn sync_assistant_tool_popup(app: AppHandle, snapshot: serde_json::Value) ->
         popup.hide().map_err(|e|e.to_string())?;
         if app.get_webview_window("overlay-feedback")
             .is_some_and(|feedback| feedback.is_visible().unwrap_or(false)) {
-            let _ = pin_corner_popup(&app, "overlay-feedback");
+            let _ = pin_corner_popup(&app, "overlay-feedback", None);
         }
         return Ok(());
     }
-    pin_corner_popup(&app, "assistant-tool-popup")?;
+    pin_corner_popup(&app, "assistant-tool-popup", None)?;
     app.emit_to("assistant-tool-popup", "assistant-popup-state", snapshot)
         .map_err(|e| e.to_string())?;
     platform::show_without_focus(&popup)?;
     if app.get_webview_window("overlay-feedback")
         .is_some_and(|feedback| feedback.is_visible().unwrap_or(false)) {
-        let _ = pin_corner_popup(&app, "overlay-feedback");
+        let _ = pin_corner_popup(&app, "overlay-feedback", None);
     }
     Ok(())
 }
