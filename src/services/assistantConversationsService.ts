@@ -166,6 +166,15 @@ export function createAssistantConversationsApi(
       return sessionFromPayload(unwrap(error, data, "session"));
     },
 
+    async linkMessageSession(userId, messageId, sessionId) {
+      const { error } = await getClient().rpc("link_assistant_message_session", {
+        p_user_id: assistantId(userId, "account"),
+        p_message_id: assistantId(messageId, "message"),
+        p_session_id: assistantId(sessionId, "session"),
+      });
+      if (error) throw assistantStorageError(error);
+    },
+
     async finishSession(userId, sessionId, reason) {
       const { error } = await getClient().rpc("finish_assistant_session", {
         p_user_id: assistantId(userId, "account"), p_session_id: assistantId(sessionId, "session"),
