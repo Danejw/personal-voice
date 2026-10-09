@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { formatHandoffList, formatNoteList } from "@/assistant/accountTools";
 import { buildContinuation, handoffDisplayText } from "@/assistant/continuation";
