@@ -1498,7 +1498,7 @@ export class AssistantController {
     const generation = this.generation;
     try {
       const answer = decision.kind === "conversations"
-        ? await this.actions.listPastConversations(decision.query, decision.cursor, decision.count)
+        ? await this.actions.listPastConversations(decision.query, decision.cursor, decision.count, decision.archivedOnly)
         : decision.kind === "conversationSessions"
           ? await this.actions.listPastSessions?.(decision.conversationId, decision.before, decision.count)
           : await this.actions.readPastConversation(decision.conversationId, {
