@@ -347,7 +347,7 @@ export class AssistantConversationStore {
         await this.prepareContext(userId, id, claimed.conversation.summary, claimed.conversation.contextItems);
         if (!this.sameView(userId, id, generation)) return;
         if (this.api.startSession) {
-          const sessionId = this.createId();
+          const sessionId = crypto.randomUUID();
           const session = await this.api.startSession(userId, id, deviceId, sessionId);
           if (!this.sameView(userId, id, generation)) {
             await this.api.finishSession?.(userId, session.id, "interrupted").catch(() => undefined);
