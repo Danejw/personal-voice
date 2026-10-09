@@ -811,6 +811,15 @@ export default function App() {
   }, [deviceSnapshot.devices]);
 
   useEffect(() => {
+    assistant.setDeviceContext({
+      platform: platform.platform,
+      otherDeviceCount: deviceSnapshot.status === "synced"
+        ? deviceSnapshot.devices.filter((device) => device.id !== deviceSnapshot.currentDeviceId).length
+        : null,
+    });
+  }, [deviceSnapshot.status, deviceSnapshot.devices, deviceSnapshot.currentDeviceId]);
+
+  useEffect(() => {
     if (settingsDeviceId === undefined) return;
     bindDeviceSettings(settingsDeviceId);
     const next = loadDestination();

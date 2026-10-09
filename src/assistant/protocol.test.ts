@@ -151,6 +151,18 @@ describe("assistant setup and typed turns", () => {
     });
   });
 
+  it("adds optional routing guidance before user text without altering single-tool turns", () => {
+    expect(assistantUserTurn("Open Notepad and then click Save", null, null, null, "Scoped tool hint")).toEqual({
+      clientContent: {
+        turns: [{ role: "user", parts: [{ text: "Scoped tool hint" }, { text: "Open Notepad and then click Save" }] }],
+        turnComplete: true,
+      },
+    });
+    expect(assistantUserTurn("Copy this text")).toEqual({
+      clientContent: { turns: [{ role: "user", parts: [{ text: "Copy this text" }] }], turnComplete: true },
+    });
+  });
+
   it("keeps an attached selection distinct from the instruction", () => {
     expect(assistantUserTurn("Rewrite this.", "Attached selection.\nPersyn are a application.")).toEqual({
       clientContent: {

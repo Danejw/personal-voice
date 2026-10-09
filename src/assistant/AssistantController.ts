@@ -53,6 +53,7 @@ import {
 import { decideToolCall, type ConfirmToolName, type ParsedToolCall, type ToolDecision } from "@/assistant/tools";
 import { playbookToolText } from "@/assistant/harness/playbooks";
 import { interpretToolResult, ToolFailureHistory } from "@/assistant/harness/toolResults";
+import { assembleTaskGuidance, deviceToolGuidance, UNKNOWN_DEVICE_CONTEXT, type AssistantDeviceContext } from "@/assistant/harness/contextAssembler";
 import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
 import { runComputerTask, type ComputerImage } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
@@ -69,7 +70,7 @@ import { MicrophoneLease } from "@/voice/audio/microphoneLease";
 /** The slice of a Live session the controller drives. */
 export interface AssistantSessionHandle {
   connect(): Promise<void>;
-  sendTurn(text: string, selectionText?: string | null, accountText?: string | null, personalText?: string | null): void;
+  sendTurn(text: string, selectionText?: string | null, accountText?: string | null, personalText?: string | null, toolGuidance?: string | null): void;
   sendHistory(turns: { role: "user" | "model"; text: string }[]): void;
   sendNote(text: string): void;
   sendVideo(jpegBase64: string): void;
@@ -166,6 +167,9 @@ export class AssistantController {
   private selectionItem: ContextItem | null = null;
   /** True after this socket has been told about the current attachment. */
   private selectionNoted = false;
+  private deviceContext: AssistantDeviceContext = UNKNOWN_DEVICE_CONTEXT;
+  private deviceContextNoted = false;
+  private lastDeviceContextNote: string | null = null;
   private personalText: string | null = null;
   private personalNoted = false;
   private personalWasSent = false;
@@ -317,6 +321,18 @@ export class AssistantController {
     this.onRevised = handler;
   }
 
+  /** Update trusted local capability facts without querying devices or changing permissions. */
+  setDeviceContext(context: AssistantDeviceContext): void {
+    const updated: AssistantDeviceContext = {
+      platform: context.platform,
+      otherDeviceCount: context.otherDeviceCount,
+    };
+    if (deviceToolGuidance(updated) === deviceToolGuidance(this.deviceContext)) return;
+    this.deviceContext = updated;
+    this.deviceContextNoted = false;
+    this.noteDeviceContext();
+  }
+
   /** Replaces the history a fresh session will receive once. Ignored while a session is open. */
   setSavedHistory(turns: readonly { role: "user" | "model"; text: string }[]): void {
     const status = this.snapshot.status;
@@ -358,6 +374,8 @@ export class AssistantController {
     this.resumeHandle = null;
     this.historySeeded = false;
     this.openedWithHandle = false;
+    this.deviceContextNoted = false;
+    this.lastDeviceContextNote = null;
     this.memoryNoted = false;
     this.memorySent = false;
     this.injectedFingerprint = null;
@@ -416,6 +434,12 @@ export class AssistantController {
         this.selectionItem ? selectionContextText(this.selectionItem) : null,
         accountContextText(this.notes, this.handoffItem),
         this.personalText,
+        assembleTaskGuidance(trimmed, {
+          ...this.deviceContext,
+          selectionAttached: this.selectionItem !== null,
+          screenAttached: this.screenShot !== null,
+          cameraContextActive: this.cameraDesired !== null,
+        })?.text ?? null,
       );
     } catch {
       this.failActive("Couldn't send that message. Try again.");
@@ -703,6 +727,8 @@ export class AssistantController {
     this.historyTurns = [];
     this.historySeeded = false;
     this.openedWithHandle = false;
+    this.deviceContextNoted = false;
+    this.lastDeviceContextNote = null;
     this.memoryNoted = false;
     this.memorySent = false;
     this.injectedFingerprint = null;
@@ -723,6 +749,7 @@ export class AssistantController {
     const connection = this.connection;
     this.streaming = false;
     this.selectionNoted = false;
+    this.deviceContextNoted = false;
     this.personalNoted = false;
     this.memoryNoted = false;
     this.screenNoted = false;
@@ -772,6 +799,23 @@ export class AssistantController {
     } catch {
       return false;
     }
+  }
+
+  /** Announces actual device capabilities once per session and when their inventory changes. */
+  private noteDeviceContext(): void {
+    if (this.deviceContextNoted) return;
+    const note = deviceToolGuidance(this.deviceContext);
+    if (!note) {
+      this.deviceContextNoted = true;
+      return;
+    }
+    if (this.openedWithHandle && note === this.lastDeviceContextNote) {
+      this.deviceContextNoted = true;
+      return;
+    }
+    if (!this.sendNote(note)) return;
+    this.deviceContextNoted = true;
+    this.lastDeviceContextNote = note;
   }
 
   /**
@@ -1093,6 +1137,7 @@ export class AssistantController {
         this.droppingModel = false;
         this.dispatch({ type: "ready" });
         this.seedHistory();
+        this.noteDeviceContext();
         this.noteSelection();
         this.noteAccount();
         this.notePersonal();

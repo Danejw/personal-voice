@@ -88,11 +88,13 @@ export function assistantUserTurn(
   selectionText?: string | null,
   accountText?: string | null,
   personalText?: string | null,
+  toolGuidance?: string | null,
 ) {
   const parts = [
     ...(selectionText ? [{ text: selectionText }] : []),
     ...(accountText ? [{ text: accountText }] : []),
     ...(personalText ? [{ text: personalText }] : []),
+    ...(toolGuidance ? [{ text: toolGuidance }] : []),
     { text },
   ];
   return {
