@@ -139,12 +139,6 @@ pub fn run() {
             commands::set_hotkey_capture,
             commands::set_dictation_active,
             commands::sync_overlay,
-            #[cfg(windows)]
-            commands::sync_assistant_tool_popup,
-            #[cfg(windows)]
-            commands::sync_overlay_feedback,
-            #[cfg(windows)]
-            commands::get_overlay_feedback,
             commands::resize_overlay,
             commands::resize_overlay_confirm,
             commands::peek_overlay_tip_side,
