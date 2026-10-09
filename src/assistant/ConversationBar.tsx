@@ -41,7 +41,7 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
         <div className="assistant-rail-heading-actions">
           <span className="assistant-rail-count">{library.conversations.length}</span>
           {signedIn && onRefresh && <button type="button" className="assistant-refresh-threads"
-            aria-label="Refresh conversations" title="Refresh conversations" onClick={onRefresh}>↻</button>}
+            aria-label="Refresh conversations" title="Refresh conversations" disabled={library.loadingThreads} onClick={onRefresh}>↻</button>}
         </div>
       </div>
       <button type="button" className="assistant-new-thread" disabled={!signedIn} onClick={() => { setSearch(""); onNew(); }}>
@@ -56,7 +56,7 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
       <nav className="assistant-thread-scroll hide-scrollbar" aria-label="Saved conversations">
         {!signedIn && <p className="assistant-rail-empty">Sign in to see your conversations.</p>}
         {signedIn && visible.length === 0 && <p className="assistant-rail-empty" role="status">
-          {search ? "No matching conversations." : library.error ? "Could not load saved conversations. Try Refresh." :
+          {library.loadingThreads ? "Loading saved conversations…" : search ? "No matching conversations." : library.error ? "Could not load saved conversations. Try Refresh." :
             hasUnlinkedTranscript ? "This transcript is not attached to a saved thread. Refresh or start a conversation to save new messages." :
             "No saved conversations found."}
         </p>}
@@ -111,7 +111,7 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
       </nav>
       <div className="assistant-rail-footer">
         <p className="assistant-save" role="status">
-          {library.save === "saving" ? "Saving conversation…" : library.save === "saved" ? "Conversations synced" :
+          {library.loadingThreads ? "Refreshing history…" : library.save === "saving" ? "Saving conversation…" : library.save === "saved" ? "Conversations synced" :
             library.save === "retry" ? (library.error ?? "Could not save conversation.") :
               library.offlineCopy ? "Offline saved copy" : library.error ? "Conversation list unavailable" :
               library.conversations.length ? "Saved conversations" : "No saved threads yet"}
