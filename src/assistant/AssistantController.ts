@@ -53,6 +53,7 @@ import {
 import { decideToolCall, type ConfirmToolName, type ParsedToolCall, type ToolDecision } from "@/assistant/tools";
 import { playbookToolText } from "@/assistant/harness/playbooks";
 import { interpretToolResult, ToolFailureHistory } from "@/assistant/harness/toolResults";
+import { ToolTraceRecorder, type ToolEvalTrace, type TraceMetadata } from "@/assistant/harness/evals/traceRecorder";
 import { assembleTaskGuidance, deviceToolGuidance, UNKNOWN_DEVICE_CONTEXT, type AssistantDeviceContext } from "@/assistant/harness/contextAssembler";
 import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
 import { runComputerTask, type ComputerImage } from "@/assistant/computerTask";
@@ -211,6 +212,9 @@ export class AssistantController {
   private toolQueue = Promise.resolve();
   /** Tracks only consecutive failure counts, never tool arguments or user data. */
   private readonly toolFailures = new ToolFailureHistory();
+  /** Inert by default. Captures only tool names, timing and status when explicitly enabled. */
+  private evalTrace: ToolTraceRecorder | null = null;
+  private evalTraceHandler: ((trace: ToolEvalTrace) => void) | null = null;
   /** Turn ids already handed to storage, so a reload does not append them again. */
   private published = new Set<string>();
   private onCommitted: ((turn: AssistantTurn) => void) | null = null;
@@ -309,6 +313,29 @@ export class AssistantController {
     // Compatibility with existing callers; transcript leases cannot disable local tools.
     // Validate the hook without invoking it or blocking a local action.
     if (typeof mayProduce !== "function") throw new TypeError("Expected a producer predicate.");
+  }
+
+  /**
+   * Opt-in, in-memory development/evaluation hook. Never uploads results or records
+   * arguments, text, screenshots, credentials or response payloads.
+   */
+  setToolEvalTraceHandler(handler: ((trace: ToolEvalTrace) => void) | null): void {
+    this.evalTraceHandler = handler;
+    if (!handler) this.evalTrace = null;
+  }
+
+  /** Begin a labeled evaluation case only when the caller has enabled capture. */
+  beginToolEvalCase(metadata: TraceMetadata): void {
+    if (!this.evalTraceHandler) return;
+    this.evalTrace = new ToolTraceRecorder(metadata);
+    this.evalTraceHandler(this.evalTrace.snapshot());
+  }
+
+  /** Explicitly end capture without altering Live session state. */
+  endToolEvalCase(): ToolEvalTrace | null {
+    const trace = this.evalTrace?.snapshot() ?? null;
+    this.evalTrace = null;
+    return trace;
   }
 
   /** Receives each committed turn once. Streaming text is not included. */
@@ -1196,6 +1223,8 @@ export class AssistantController {
         this.resumeOrFail();
         return;
       case "toolCalls":
+        this.evalTrace?.noteCalls(event.calls);
+        if (this.evalTrace && this.evalTraceHandler) this.evalTraceHandler(this.evalTrace.snapshot());
         this.enqueueTools(event.calls);
         return;
       case "grounding":
@@ -1962,6 +1991,8 @@ export class AssistantController {
 
   private replyTool(id: string, name: string, ok: boolean, message: string) {
     const assessment = interpretToolResult(name, ok, message, this.toolFailures.record(name, ok));
+    this.evalTrace?.noteResult(id, assessment);
+    if (this.evalTrace && this.evalTraceHandler) this.evalTraceHandler(this.evalTrace.snapshot());
     this.dispatch({ type:"toolActivity", activity:{
       id, label:name.replace(/_/g," "),
       status:ok && assessment.status !== "incomplete" ? "completed" : "failed",

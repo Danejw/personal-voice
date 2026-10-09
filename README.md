@@ -1,190 +1,185 @@
 <p align="center">
-  <img src="src-tauri/icons/icon.svg" alt="Personal Voice" width="80" height="80" />
+  <img src="src-tauri/icons/icon.svg" alt="Personal Voice icon" width="80" height="80" />
 </p>
 
-<h1 align="center">Your Personal Voice App</h1>
+<h1 align="center">Personal Voice</h1>
 
 <p align="center">
-  <strong>Hold to talk. Clean text at the cursor.</strong><br />
-  Or open Assistant for a live voice conversation.<br />
-  One app for Windows and Android.
-</p>
-
-<p align="center">
-  <code>Windows</code>
-  &nbsp;·&nbsp;
-  <code>Android</code>
-  &nbsp;·&nbsp;
-  <code>v0.3.20</code>
+  <strong>Dictate anywhere. Talk to an assistant that can use your devices.</strong><br />
+  One personal Windows + Android app for dictation, saved knowledge, and a Gemini Live assistant.
 </p>
 
 <p align="center">
-  <a href="#how-it-works">How it works</a>
-  &nbsp;·&nbsp;
-  <a href="#what-you-can-do">Features</a>
-  &nbsp;·&nbsp;
-  <a href="#privacy">Privacy</a>
-  &nbsp;·&nbsp;
-  <a href="#stack">Stack</a>
-  &nbsp;·&nbsp;
-  <a href="#development">Development</a>
+  <a href="https://github.com/Danejw/personal-voice/releases/latest">Latest release</a>
+  · <a href="#getting-started">Get started</a>
+  · <a href="#features">Features</a>
+  · <a href="#assistant-and-tool-harness">Assistant harness</a>
+  · <a href="#development">Development</a>
+  · <a href="#documentation">Documentation</a>
 </p>
 
 ---
 
-## How it works
+## What it does
 
-```text
-Press → Speak → Release → Clean text appears at the cursor
-```
+Personal Voice has two connected but independent experiences:
 
-| Platform | Default control |
+- **Dictation:** hold your chosen hotkey or floating microphone, speak, and release. Gemini finalizes the speech with punctuation and cleanup; Personal Voice inserts the result at the cursor or sends it to your chosen destination.
+- **Assistant:** start a real-time **Gemini 3.8 Live** voice conversation or send typed messages. The Assistant can draw on explicitly available account context and use bounded tools to inspect information, manage notes and memories, and carry out supported device actions.
+
+Both run from the same **Tauri 2** application, with shared TypeScript logic and platform-specific Windows/Android implementations. Dictation uses **Gemini 3.5 Transcribe Live**; Assistant uses a separate **Gemini 3.8 Live** session. They do not record microphone audio into a persistent transcript warehouse.
+
+### Basic controls
+
+| Platform | Dictation | Assistant |
+| --- | --- | --- |
+| **Windows** | Configurable global shortcut or floating control; release to insert or route the final text | Assistant page, typed messages or live microphone conversation; optional desktop inspection and approved controls |
+| **Android** | Floating microphone and supported native input integration; hold-to-talk destinations | Assistant page with voice/typed conversation, notes, camera context, and supported account/cross-device tools |
+
+Sign in and complete the device-permission onboarding before using microphone, overlay, or platform-dependent features. Windows-only accessibility and window tools do **not** run locally on Android.
+
+## Features
+
+| Area | What is available |
 | --- | --- |
-| **Windows** | Hold a global hotkey (or the floating mic) |
-| **Android** | Hold the floating microphone to dictate, or hold the Note bubble to save directly to Notes |
+| **Dictation** | Hold-to-talk, Gemini transcript cleanup, selectable destinations, per-device keybindings/controls, voice start/stop sounds, microphone selection where supported |
+| **Destinations** | Focused text field, saved Notes, and **Remote Dictation** to another selected device's focused cursor |
+| **Dictionary, Snippets & Transforms** | Personal vocabulary; deterministic trigger-to-text snippet expansion; built-in and custom text transforms |
+| **Selection & history** | Capture selected text for further use; recent local dictations with optional account sync of final text |
+| **Notes & Handoffs** | Saved, editable Notes; send items to another signed-in device's handoff inbox; continue an Assistant conversation on another device |
+| **Assistant conversation** | Live audio/typed turns; saved conversations; list, read, search or explicitly resume older threads; Google Search grounding for public information |
+| **Visual awareness** | Explicit screen snapshots, selected text, cursor/pointer inspection on Windows, accessibility-tree inspection, camera photos, and user-requested ongoing Camera Context |
+| **Device actions** | Allowlisted Windows application/window/UI Automation actions; bounded supervised screen workflows; supported remote Windows reads/actions with existing approval controls |
+| **Memory** | Explicit remember/edit/forget, opt-in memory learning, semantic retrieval, source indexing and a **Memory** page showing a read-only network of memories and their connections |
+| **Insights & Analytics** | Usage analytics and an **Insights** page that surfaces patterns and reviewable suggestions for dictionary, snippets, transforms and memories; suggestions require acceptance |
+| **Devices & Settings** | Signed-in device management, local controls, sync preferences, Assistant auto-run/review controls, and app updates |
 
-Text can go into the focused field, a voice note, or another device's active cursor via Remote Dictation.
+Some features require an authenticated account, a synced device, Windows OS APIs, user permission, or separately configured backend services. A declared Assistant tool is not a promise that the capability is available on every device.
 
----
+### Navigation
 
-## What you can do
+The app sidebar contains **Voice** (Dictations, Dictionary, Selection, Notes, Handoffs, Snippets, Transforms), **Assistant**, **Memory**, **Insights**, **Analytics**, **Devices & Controls**, and **Settings**. On Android and narrow windows this appears as a menu drawer.
 
-| Area | Capabilities |
-| --- | --- |
-| **Dictation** | Hold-to-talk · Gemini cleanup (punctuation, caps, cleanup) · personal dictionary · destinations: active field, voice note, or Remote Dictation |
-| **Cross-device** | Remote Dictation (tap to choose device, hold to speak, release to paste at the other cursor) · Handoffs inbox · shared clipboard (explicit send only) · rename, list, and remove installs |
-| **Capture & history** | Selection capture · last 75 dictations on device · optional Sync dictations |
-| **Assistant** | Separate Gemini Live chat (voice or typed) · floating control / Windows hotkey · attach selection, notes, or handoffs · optional camera photo / live Camera Context · optional Windows remote reads and confirmable desktop actions |
-| **Account & controls** | Email/password sync · device-scoped mic, hotkeys, overlay, destination · opt-in analytics · Windows updater / Android APK releases |
+## Assistant and tool harness
 
----
+The Assistant is not an unrestricted computer agent. It uses a defined set of Gemini Live function declarations, typed validation, existing confirmation settings, and real platform executors. For complex tasks, the harness supplies guidance about which supported tool to use and how to interpret its result.
 
-## Privacy
+| Layer | Implementation | Responsibility |
+| --- | --- | --- |
+| Live tools | [`src/assistant/tools.ts`](src/assistant/tools.ts) | Function declarations, schemas, argument validation and routing |
+| Execution | [`AssistantController.ts`](src/assistant/AssistantController.ts) | Tool queue, confirmation/auto-run rules, dispatch and function responses |
+| Tool intelligence | [`toolIntelligence.ts`](src/assistant/harness/toolIntelligence.ts) | Intent, platform, alternatives, next steps and verification hints |
+| On-demand playbooks | [`playbooks/`](src/assistant/harness/playbooks/) | Seven reference workflows for screen, Windows, notes, memory, cross-device, content and camera tasks |
+| Context guidance | [`contextAssembler.ts`](src/assistant/harness/contextAssembler.ts) | Trusted Windows/Android capability notes and brief guidance for complex typed requests |
+| Result interpretation | [`toolResults.ts`](src/assistant/harness/toolResults.ts) | Separate observed information, action acknowledgements, incomplete tasks, errors and bounded recovery guidance |
+| Evaluation | [`evals/`](src/assistant/harness/evals/) | Tool-route fixtures, catalog drift checks, offline regressions, optional sanitized live traces and independent goal scoring |
 
-| Default | Behavior |
-| --- | --- |
-| Microphone audio | Client → Gemini only. Never proxied through our backend. |
-| Storage | Audio is not permanently stored by the app. |
-| Sync | Notes and handoffs sync only when you choose those destinations. |
-| History | Local by default. Cloud only if Sync dictations is on. Selection stays in memory. |
-| Analytics | Opt-in daily counters. No transcript or audio warehouse. |
+**At the PR #26 baseline:** the catalog contains **54 declared tools** and **81 evaluation scenarios** (54 tool-specific, 20 disambiguation, seven no-tool). These numbers change when tools are added or retired; the source code, not this snapshot, is authoritative.
 
----
+Important boundaries:
 
-## Stack
+- A tool reporting success does **not** by itself prove that the requested goal was reached. The harness distinguishes an acknowledgement from an observed end state.
+- Playbooks load **on demand**, not before every simple command. No extra planner/model call is required by the harness.
+- Context guidance uses known platform/device information; it does not assume a registered remote device is online. Spoken requests use device capability context; short deterministic task hints currently apply to *typed* multi-step requests.
+- Tool selection does **not** expand permissions. User confirmation, auto-run preferences, platform capability checks and action allowlists still apply.
+- Evaluations are offline by default. Scripted/mock passing scores measure regression mechanics, **not actual Gemini success rates**. Real model evaluation requires opt-in trace capture and independent observation.
 
-| Layer | Tech |
-| --- | --- |
-| App shell | Tauri 2 · React · TypeScript · Rust |
-| Android native | Kotlin platform plugin |
-| Transcription | Gemini Live (dictation) |
-| Assistant | Gemini Live (conversation) |
-| Backend | Supabase (auth, sync, short-lived tokens) |
+See [Assistant phase reports](docs/Assistant-Phases/), including [tool registry](docs/Assistant-Phases/16-tool-intelligence-harness.md), [playbooks](docs/Assistant-Phases/17-tool-playbooks.md), [result intelligence](docs/Assistant-Phases/18-tool-result-intelligence.md), [context routing](docs/Assistant-Phases/19-context-aware-tool-guidance.md), and [evaluation framework](docs/Assistant-Phases/20-tool-use-evaluation-framework.md).
 
-Gemini API keys stay on the server. The client gets short-lived tokens only.
+## Privacy and safety
 
----
+- **Microphone audio** connects directly from the device to Gemini for the active session; Personal Voice does not proxy or permanently store it.
+- **Camera Context** is user-initiated, uses device permissions, sends frames to Gemini Live and does not save frames in the Personal Voice backend. See [Camera Context](docs/Camera-Context-Phases/README.md).
+- **Cloud storage is selective:** saved account content such as Notes, Handoffs, conversations and explicit memories may sync. Recent dictation **text** sync is an opt-in setting.
+- **Insights/analytics:** event and usage metrics are distinct from storing raw microphone audio. Inspect and control what context is shared with Assistant in Settings.
+- **Remote actions and desktop controls** require the supported platform, a permitted target and applicable approvals. There is no general-purpose shell tool.
+- **Evaluation capture** is off by default, available in development only, and records tool names/timing/outcome categories rather than text, arguments, audio, screenshots or credentials.
+- Permanent Gemini credentials remain on the secure backend; clients receive short-lived tokens. Never commit API keys or Supabase service-role secrets.
 
-## Development
+## Getting started
 
-> Before changing code: [`AGENTS.md`](AGENTS.md) · [`docs/SPEC.md`](docs/SPEC.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
->
-> Also: [`WINDOWS.md`](docs/WINDOWS.md) · [`ANDROID.md`](docs/ANDROID.md) · [`BACKEND_SYNC.md`](docs/BACKEND_SYNC.md) · [`RELEASING.md`](docs/RELEASING.md)
+### Install a release
 
-### Quick start (Windows)
+See the [latest GitHub release](https://github.com/Danejw/personal-voice/releases/latest) for Windows installers and Android APKs. Windows uses the built-in signed updater after installation; Android updates are installed from the published APK. Release versions are defined in [`package.json`](package.json) and must agree with the Rust crate version—do not rely on a version number hard-coded in this README.
 
-**Needs:** Node 22.12+ · pnpm 11.25.0 · MSVC Build Tools · WebView2 · Rust (via rustup; see `rust-toolchain.toml`)
+Full installation, signing, updater and release procedures: [`docs/RELEASING.md`](docs/RELEASING.md).
+
+### Development — Windows
+
+**Prerequisites:** Node.js **22.12+**, **pnpm 11.25.0**, Rust toolchain, MSVC Build Tools and WebView2. See [Windows setup](docs/WINDOWS.md) and the pinned toolchain/config files for native requirements.
 
 ```powershell
-# Client env: copy .env.example → .env.local (URL + publishable key only)
+# Copy .env.example to .env.local and enter only your public Supabase client settings.
 pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
 
-```powershell
-# If rustc is missing from PATH after a fresh install:
-$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-```
+`pnpm dev` runs the Vite frontend **without** the native Tauri shell; use `pnpm tauri dev` when testing actual microphone, overlay, window and OS integration.
 
-### Validate
+Client `.env.local` values:
 
-```powershell
-pnpm check          # lint + typecheck + test
-pnpm build          # frontend assets only
-pnpm tauri build --debug --no-bundle
-cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-cargo check --locked --manifest-path src-tauri/Cargo.toml
-cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
-```
-
-`pnpm dev` is Vite only (not the native app). Releases: [`docs/RELEASING.md`](docs/RELEASING.md).
-
-<details>
-<summary><strong>Client config</strong></summary>
-
-```text
+```dotenv
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-Never put a Gemini API key or Supabase service-role key in the client.
+A configured Supabase project and its expected functions/migrations are required for login, tokens and cloud-backed features. Do **not** put permanent Gemini keys or a Supabase service-role key in client variables.
 
-</details>
+### Development — Android
 
-<details>
-<summary><strong>Android setup</strong></summary>
-
-Install Android Studio (JDK, SDK, Platform-Tools, Build-Tools, Command-line Tools, NDK). Enable Windows Developer Mode if Tauri asks for symlinks.
+Requires Android Studio, Java/Android SDK, appropriate NDK, a configured emulator or device, and the Rust Android target. Detailed environment setup is in [`docs/ANDROID.md`](docs/ANDROID.md).
 
 ```powershell
-$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
-$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
-$env:NDK_HOME = "$env:ANDROID_HOME\ndk\28.2.13676358"
 rustup target add aarch64-linux-android
-pnpm tauri android init
-pnpm tauri android build --debug --target aarch64 --apk
-pnpm tauri android dev   # device or emulator
+pnpm tauri android dev
+# Or make a local debug APK:
+pnpm tauri android build --debug --apk --target aarch64
 ```
 
-APKs: `src-tauri/gen/android/app/build/outputs/`. Details: [`docs/ANDROID.md`](docs/ANDROID.md).
+For Android native builds from Windows, use a **filesystem with symlink support** (such as an NTFS checkout). An exFAT checkout can fail at Tauri's native-library symlink stage. Release builds are normally produced by GitHub Actions.
 
-</details>
+## Development and quality
 
-<details>
-<summary><strong>Repo layout</strong></summary>
+### Checks
 
-```text
-src/
-├── app/                   Settings shell, nav, dictation wiring
-├── voice/                 Provider boundary, session, audio, destinations
-├── assistant/             Gemini Live Assistant session and tools
-├── platform/              Windows / Android adapters + capture
-├── overlay/               Floating control
-├── onboarding/            First-run setup
-├── auth/ settings/ sync/  Account, device prefs, dictionary
-├── notes/ handoffs/ …     Notes, handoffs, history, devices, usage, updates
-└── services/              Supabase and Edge Function clients
-
-src-tauri/
-├── src/
-│   ├── commands/          Tauri IPC
-│   ├── platform/          OS-specific Rust
-│   └── voice/
-└── gen/android/           Generated host + Kotlin platform code
-
-supabase/
-└── functions/             gemini-token and related Edge Functions
+```powershell
+pnpm check        # ESLint + TypeScript + Vitest
+pnpm eval:tools   # Offline Assistant tool-use and catalog-drift regression tests
+pnpm build        # Frontend typecheck + production Vite bundle
+cargo check --locked --manifest-path src-tauri/Cargo.toml
+cargo test --locked --manifest-path src-tauri/Cargo.toml
 ```
 
-Shared logic stays in TypeScript. Platform behavior stays behind `PlatformAdapter`. Dictation uses `VoiceProvider` / `TranscriptionSession`. Assistant uses `AssistantController`. Camera Context uses `CameraCapture` (`createCamera()`): Windows webcams via WebView `getUserMedia`, Android via CameraX in the Kotlin plugin. Frames go to Gemini Live only (≤ 1 FPS); Personal Voice does not store them. See [`docs/Camera-Context-Phases/`](docs/Camera-Context-Phases/README.md).
+The GitHub **Validate** workflow runs Windows TypeScript/tests, the offline harness suite and Rust checks/tests, as well as an Android debug APK build and native tests. A green scripted eval does not substitute for actual on-device behavior or independently verified Assistant task completion.
 
-</details>
+For optional *real* Assistant evaluation, see [`docs/Assistant-Phases/20-tool-use-evaluation-framework.md`](docs/Assistant-Phases/20-tool-use-evaluation-framework.md). It describes the development-only `window.__pvToolEval` interface, sanitized JSON import, modality/platform breakdowns and explicit observed-goal checks. No real model calls or credits are used by the offline CI suite.
 
-<details>
-<summary><strong>Filesystem note (exFAT)</strong></summary>
+### Contributing and keeping tool guidance current
 
-This workspace uses exFAT. pnpm 11's `nodeLinker` is hoisted in `pnpm-workspace.yaml` because exFAT cannot create dependency symlinks.
+**Read the agent instructions before editing:**
 
-Android APK builds from this exFAT workspace stop when Tauri links the native library. Use an NTFS checkout with symlink support for Android builds. The generated host targets SDK 37.
+- [Root `AGENTS.md`](AGENTS.md) — repository boundaries, feature architecture, security, PR acceptance and manual QA.
+- [`src/assistant/harness/AGENTS.md`](src/assistant/harness/AGENTS.md) — mandatory **same-PR tool lifecycle checklist** for adding, changing, renaming or retiring any Assistant tool.
+- [`docs/SPEC.md`](docs/SPEC.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — product and architecture references; when a historical document conflicts, verify the live implementation.
 
-</details>
+Every Assistant tool change must consider the **Live declaration → typed validation → platform executor/permissions → intelligence profile → playbooks/context → result interpretation → evaluation fixtures/tests** chain. The automated drift guard checks that tool declarations, router cases, intelligence profiles and base scenarios stay aligned. It cannot detect all semantic or platform regressions, so update targeted tests and manually verify real behavior.
+
+Before merging a PR: run `pnpm check` and `pnpm eval:tools`, review **both** Windows and Android CI results, and provide a brief manual test procedure with expected outcomes.
+
+## Documentation
+
+| Topic | Reference |
+| --- | --- |
+| Product specification and architecture | [SPEC](docs/SPEC.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) |
+| Dictation and personal-voice features | [PV phase reports](docs/PV-Phases/README.md) |
+| Assistant and the tool harness | [Assistant phase reports](docs/Assistant-Phases/) · [Tool evals](docs/Assistant-Phases/20-tool-use-evaluation-framework.md) |
+| Cross-device insertion | [Remote Dictation](docs/Remote-Dictation-Phases/README.md) |
+| Camera context | [Camera Context](docs/Camera-Context-Phases/README.md) |
+| Windows/Android platform notes | [WINDOWS](docs/WINDOWS.md) · [ANDROID](docs/ANDROID.md) |
+| Notes, handoffs, authentication and syncing | [Backend & Sync](docs/BACKEND_SYNC.md) |
+| Snippet expansion | [SNIPPETS](docs/SNIPPETS.md) |
+| Tests, installers and app updates | [TESTING_RELEASES](docs/TESTING_RELEASES.md) · [RELEASING](docs/RELEASING.md) |
+
+---
+
+This repository is a personal app under active development. GitHub release availability, platform requirements and feature readiness may differ from the current development branch; verify release notes before installing.

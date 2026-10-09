@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
+    "eval:tools": "vitest run src/assistant/harness/evals --reporter=verbose",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "preview": "vite preview",
     "tauri": "tauri"
