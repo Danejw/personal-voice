@@ -2,10 +2,121 @@
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
+#[cfg(windows)]
+use std::sync::Mutex;
 
 use crate::platform;
 
 pub const INDICATOR_WINDOW: &str = "indicator";
+
+/// The tray and its feedback are independent HWNDs. No window-local tooltip can
+/// extend past its own HWND bounds, regardless of z-index or CSS overflow.
+#[cfg(windows)]
+#[derive(Default)]
+struct OverlayFeedbackState {
+    notice: Option<String>,
+    hint: Option<String>,
+    hint_id: Option<String>,
+}
+
+#[cfg(windows)]
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayFeedbackPayload {
+    pub kind: Option<&'static str>,
+    pub message: Option<String>,
+}
+
+#[cfg(windows)]
+impl OverlayFeedbackState {
+    fn current(&self) -> OverlayFeedbackPayload {
+        if let Some(ref notice) = self.notice {
+            return OverlayFeedbackPayload { kind: Some("notice"), message: Some(notice.clone()) };
+        }
+        if let Some(ref hint) = self.hint {
+            return OverlayFeedbackPayload { kind: Some("hint"), message: Some(hint.clone()) };
+        }
+        OverlayFeedbackPayload { kind: None, message: None }
+    }
+}
+
+#[cfg(windows)]
+static OVERLAY_FEEDBACK_STATE: Mutex<OverlayFeedbackState> = Mutex::new(OverlayFeedbackState {
+    notice: None, hint: None, hint_id: None,
+});
+
+/// Pin independent popups to the primary monitor's *work area*, not to the
+/// dragged tray or the screen bounds under the taskbar.
+#[cfg(windows)]
+fn pin_corner_popup(app: &AppHandle, label: &str) -> Result<(), String> {
+    let popup = app.get_webview_window(label).ok_or("Popup window missing")?;
+    let monitor = popup.primary_monitor().map_err(|e| e.to_string())?
+        .ok_or("No primary monitor available")?;
+    let area = monitor.work_area();
+    let size = popup.outer_size().map_err(|e| e.to_string())?;
+    let shift = if label == "overlay-feedback" {
+        app.get_webview_window("assistant-tool-popup")
+            .filter(|other| other.is_visible().unwrap_or(false))
+            .and_then(|other| other.outer_size().ok())
+            .map(|size| size.height as i32 + 12)
+            .unwrap_or(0)
+    } else { 0 };
+    let x = area.position.x + (area.size.width as i32 - size.width as i32 - 20).max(0);
+    let y = area.position.y + (area.size.height as i32 - size.height as i32 - 16 - shift).max(0);
+    popup.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())
+}
+
+#[cfg(windows)]
+fn present_overlay_feedback(app: &AppHandle, payload: OverlayFeedbackPayload) -> Result<(), String> {
+    let window = app.get_webview_window("overlay-feedback").ok_or("Feedback window missing")?;
+    if payload.message.is_none() {
+        return platform::hide_window(&window);
+    }
+    pin_corner_popup(app, "overlay-feedback")?;
+    // Suppress focus and pointer interception even over transparent pixels.
+    window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
+    app.emit_to("overlay-feedback", "overlay-feedback-state", payload).map_err(|e| e.to_string())?;
+    platform::show_without_focus(&window)
+}
+
+/// One source-specific update. A delayed hover-leave cannot hide a new hover,
+/// and a notice always takes precedence over lower-priority hints.
+#[cfg(windows)]
+#[tauri::command]
+pub fn sync_overlay_feedback(app: AppHandle, channel: String, id: Option<String>, message: Option<String>) -> Result<(), String> {
+    let mut state = OVERLAY_FEEDBACK_STATE.lock().map_err(|e| e.to_string())?;
+    let value = message.and_then(|text| {
+        let text: String = text.chars().take(1800).collect();
+        (!text.trim().is_empty()).then_some(text)
+    });
+    match channel.as_str() {
+        "notice" => state.notice = value,
+        "hint" => {
+            let id = id.filter(|id| !id.is_empty() && id.len() <= 100)
+                .ok_or("Hint id is required")?;
+            if value.is_some() {
+                state.hint_id = Some(id);
+                state.hint = value;
+            } else if state.hint_id.as_deref() == Some(&id) {
+                state.hint_id = None;
+                state.hint = None;
+            }
+        }
+        _ => return Err("Unknown feedback channel".into()),
+    }
+    let current = state.current();
+    drop(state);
+    present_overlay_feedback(&app, current)
+}
+
+/// Initial state recovery if the native command shows the window before its
+/// WebView has attached an event listener.
+#[cfg(windows)]
+#[tauri::command]
+pub fn get_overlay_feedback() -> Result<OverlayFeedbackPayload, String> {
+    OVERLAY_FEEDBACK_STATE.lock().map(|state| state.current()).map_err(|e| e.to_string())
+}
+
 
 /// Sync one actionable popup for tool progress or a pending user approval.
 /// Only the local main webview may call this command.
@@ -19,20 +130,21 @@ pub fn sync_assistant_tool_popup(app: AppHandle, snapshot: serde_json::Value) ->
         || snapshot.get("computerRunning").and_then(|v| v.as_bool()) == Some(true);
     if !active {
         popup.hide().map_err(|e|e.to_string())?;
+        if app.get_webview_window("overlay-feedback")
+            .is_some_and(|feedback| feedback.is_visible().unwrap_or(false)) {
+            let _ = pin_corner_popup(&app, "overlay-feedback");
+        }
         return Ok(());
     }
-    if let Ok(Some(monitor)) = popup.primary_monitor() {
-        if let Ok(size) = popup.outer_size() {
-            let pos = monitor.position();
-            let screen = monitor.size();
-            let x = pos.x + (screen.width as i32 - size.width as i32 - 24).max(0);
-            let y = pos.y + (screen.height as i32 - size.height as i32 - 75).max(0);
-            let _ = popup.set_position(tauri::PhysicalPosition::new(x,y));
-        }
-    }
+    pin_corner_popup(&app, "assistant-tool-popup")?;
     app.emit_to("assistant-tool-popup", "assistant-popup-state", snapshot)
         .map_err(|e| e.to_string())?;
-    platform::show_without_focus(&popup)
+    platform::show_without_focus(&popup)?;
+    if app.get_webview_window("overlay-feedback")
+        .is_some_and(|feedback| feedback.is_visible().unwrap_or(false)) {
+        let _ = pin_corner_popup(&app, "overlay-feedback");
+    }
+    Ok(())
 }
 
 
