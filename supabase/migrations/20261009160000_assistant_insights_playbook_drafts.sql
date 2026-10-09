@@ -72,7 +72,7 @@ create index if not exists assistant_messages_insight_sample_idx
 create function public.list_assistant_insight_samples(p_limit integer default 80)
 returns table(message_id uuid, conversation_id uuid, created_at timestamptz, text text)
 language plpgsql security definer set search_path = ''
-as $
+as $assistant_insights$
 declare uid uuid := auth.uid();
 begin
   if uid is null then
@@ -95,7 +95,7 @@ begin
       order by m.created_at desc,m.id desc
       limit p_limit;
 end;
-$;
+$assistant_insights$;
 revoke all on function public.list_assistant_insight_samples(integer) from public,anon;
 grant execute on function public.list_assistant_insight_samples(integer) to authenticated;
 
