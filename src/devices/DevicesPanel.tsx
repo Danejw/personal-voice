@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Tooltip } from "@/components/Tooltip";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import type { DeviceSnapshot, DeviceStatus, DeviceStore } from "@/devices/DeviceStore";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import { MAX_DEVICE_NAME } from "@/services/deviceService";
@@ -100,6 +101,7 @@ function DeviceRow({ device, current, connected, busy, onRename, onRemove }: Dev
 export function DevicesPanel({ store, snapshot, onChanged }: DevicesPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const connected = snapshot.status === "synced";
 
   async function run(key: string, action: () => Promise<void>) {
@@ -145,13 +147,19 @@ export function DevicesPanel({ store, snapshot, onChanged }: DevicesPanelProps) 
               connected={connected}
               busy={busy !== null}
               onRename={(name) => void run(`rename:${device.id}`, () => store.rename(device.id, name))}
-              onRemove={() => void run(`remove:${device.id}`, () => store.remove(device.id))}
+              onRemove={() => confirm.ask({
+                title: "Remove connected device?",
+                description: `“${device.name}” will be removed from your device list. This does not delete synced notes, handoffs, or conversations.`,
+                confirmLabel: "Remove device",
+                onConfirm: () => run(`remove:${device.id}`, () => store.remove(device.id)),
+              })}
             />
           ))}
         </ul>
       ) : (
         <p className="placeholder">{snapshot.status === "signed-out" ? "Sign in to see your devices." : "No devices yet."}</p>
       )}
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </>
   );
 }
