@@ -47,7 +47,7 @@ Sign in and complete the device-permission onboarding before using microphone, o
 | **Dictionary, Snippets & Transforms** | Personal vocabulary; deterministic trigger-to-text snippet expansion; built-in and custom text transforms |
 | **Selection & history** | Capture selected text for further use; recent local dictations with optional account sync of final text |
 | **Notes & Handoffs** | Saved, editable Notes with private file attachments; Assistant can attach its current captured screenshot or camera still while creating/updating a note or to an existing note; handoffs and continuation across devices |
-| **Assistant conversation** | Chat-first workspace with a searchable thread rail, new conversation, resume/rename/delete, full-height transcript, typed/voice turns and Google Search grounding |
+| **Assistant conversation** | Continuous saved threads with individually dated session IDs, reversible archive/restore, complete paginated historical-message tools, typed/voice turns and Google Search grounding |
 | **Visual awareness** | Explicit screen snapshots, selected text, cursor/pointer inspection on Windows, accessibility-tree inspection, camera photos, and user-requested ongoing Camera Context |
 | **Device actions** | Allowlisted Windows application/window/UI Automation actions; bounded supervised screen workflows; supported remote Windows reads/actions with existing approval controls |
 | **Memory** | Explicit remember/edit/forget, memory learning, semantic retrieval, source indexing and a **Memory** page showing a read-only network of memories and connections |
@@ -61,7 +61,7 @@ Some features require an authenticated account, a synced device, Windows OS APIs
 
 The app sidebar contains **Voice** (Dictations, Dictionary, Selection, Notes, Handoffs, Snippets, Transforms), **Assistant**, **Memory**, **Insights**, **Analytics**, **Devices & Controls**, and **Settings**. On Android and narrow windows this appears as a menu drawer.
 
-The **Assistant** page opens on the Conversation view, with a searchable left thread rail on desktop and a collapsible history drawer on narrow screens. Select a saved thread and press **Continue conversation** to resume it. **New conversation** starts an independent thread. **Settings** contains memory learning, semantic search, notes/dictation recall and saved-memory management; **Advanced tools** contains optional screen, camera and accessibility controls. When a session is idle, the composer is disabled until you start/continue it.
+The **Assistant** page opens on the Conversation view, with a searchable left thread rail on desktop and a collapsible history drawer on narrow screens. Select a saved thread and press **Continue conversation** to resume it. **New conversation** starts an independent thread. Each Live activation creates a separately identifiable session inside that thread; use the compact **Sessions** menu to copy a session ID. **Archive** hides an old thread without deleting its messages, while **View archived** allows restoration. Permanent deletion is only available through an explicit confirmation in archived history. **Settings** contains memory learning, semantic search, notes/dictation recall and saved-memory management; **Advanced tools** contains optional screen, camera and accessibility controls. When a session is idle, the composer is disabled until you start/continue it.
 
 ## Assistant and tool harness
 
@@ -126,7 +126,7 @@ VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-A configured Supabase project and its expected functions/migrations are required for login, tokens and cloud-backed features. Do **not** put permanent Gemini keys or a Supabase service-role key in client variables.
+A configured Supabase project and its expected functions/migrations are required for login, tokens and cloud-backed features. Session tracking and reversible conversation archiving require the additive migration `20261009160000_assistant_session_archive.sql` before running a client built from this branch. That migration does **not** clean up old records or invent session boundaries for messages saved before session tracking. The Assistant can retrieve complete message text using `read_past_conversation` with `count` and `after_seq`; use `list_conversation_sessions` for session IDs and time ranges. The local recovery cache remains deliberately bounded and is not a replacement for the account's Supabase archive. Do **not** put permanent Gemini keys or a Supabase service-role key in client variables.
 
 ### Development — Android
 
