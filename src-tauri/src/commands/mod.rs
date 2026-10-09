@@ -91,6 +91,7 @@ pub fn sync_overlay_feedback(app: AppHandle, channel: String, id: Option<String>
     });
     match channel.as_str() {
         "notice" => state.notice = value,
+        "clear-hints" => { state.hint = None; state.hint_id = None; },
         "hint" => {
             let id = id.filter(|id| !id.is_empty() && id.len() <= 100)
                 .ok_or("Hint id is required")?;
