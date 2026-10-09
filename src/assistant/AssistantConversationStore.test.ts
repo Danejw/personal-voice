@@ -358,6 +358,7 @@ describe("saved assistant conversations", () => {
   });
 
   it("keeps messages and session boundaries when archiving and restoring", async () => {
+    const thread = "44444444-4444-4444-8444-000000000980";
     const api=new FakeApi(); const host=new FakeHost(); const store=new AssistantConversationStore(host,api,memory(),()=>thread,()=>DEVICE);
     await store.setUser(USER_A);
     await store.produce();
