@@ -1759,7 +1759,7 @@ section.page-panel.assistant-workspace-section { padding: 0; overflow: hidden; }
   color: #e9edf4; font: inherit; font-size: 12px; padding: 8px 0; outline: none; box-shadow: none;
 }
 .assistant-search input::placeholder { color: #80909f; }
-.assistant-search:focus-within, .assistant-search input:focus, .assistant-search input:focus-visible { outline: none; box-shadow: none; border-color: transparent; }
+.assistant-search:focus-within, .assistant-search input:focus, .assistant-search input:focus-visible { outline: none !important; box-shadow: none !important; border-color: transparent; }
 /* Avoid a second heading competing with the conversation list. */
 .assistant-thread-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .assistant-thread-list { display: flex; flex-direction: column; gap: 1px; padding: 0; margin: 0; list-style: none; overflow: visible; max-width: none; }
@@ -1861,6 +1861,7 @@ section.page-panel.assistant-workspace-section { padding: 0; overflow: hidden; }
 .assistant-composer textarea { width: 100%; min-height: 28px; max-height: 140px; resize: vertical; border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; line-height: 1.45; color: #e9edf4; padding: 4px 0; }
 .assistant-composer textarea::placeholder { color: #8da0ae; }
 .assistant-composer textarea:disabled { cursor: not-allowed; }
+.assistant-composer textarea:focus, .assistant-composer textarea:focus-visible { outline: none !important; box-shadow: none !important; }
 .assistant-send { border: 0; border-radius: 9px; min-width: 34px; height: 34px; background: var(--pv-primary); color: #10241e; font-size: 17px; cursor: pointer; }
 .assistant-send:disabled { opacity: .38; cursor: not-allowed; }
 .assistant-settings-pane, .assistant-tools-pane {
