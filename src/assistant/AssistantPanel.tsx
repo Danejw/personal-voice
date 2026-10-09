@@ -133,13 +133,13 @@ export function AssistantPanel({
   const [continuing, setContinuing] = useState(false);
   const [continueNotice, setContinueNotice] = useState<string | null>(null);
   const [continueError, setContinueError] = useState<string | null>(null);
-  const logRef = useRef<HTMLUListElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const canSend = signedIn && snapshot.status === "READY";
 
   useEffect(() => {
-    const log = logRef.current;
-    if (log) log.scrollTop = log.scrollHeight;
-  }, [snapshot.turns, snapshot.liveText, snapshot.liveUser]);
+    const scroll = scrollRef.current;
+    if (scroll) scroll.scrollTop = scroll.scrollHeight;
+  }, [library?.currentId, snapshot.turns, snapshot.liveText, snapshot.liveUser]);
 
   function send() {
     const text = draft.trim();
@@ -185,13 +185,13 @@ export function AssistantPanel({
             </button>
           ))}
         </nav>
-        <div className="assistant-chat-scroll hide-scrollbar" hidden={view !== "chat"}>
+        <div ref={scrollRef} className="assistant-chat-scroll hide-scrollbar" hidden={view !== "chat"}>
       {showEchoNote && (
         <p className="assistant-echo" role="note">
           This phone can't cancel speaker echo, so the microphone pauses while a reply plays and for a short moment after the sound ends. Stop and listen cuts the reply off. Talking over it will not interrupt. Noise reduction lowers background noise. It does not pick out your voice or remove other people.
         </p>
       )}
-      <ul ref={logRef} className="assistant-log hide-scrollbar" aria-live="polite">
+      <ul className="assistant-log" aria-live="polite">
         {snapshot.turns.map((turn) => (
           <li key={turn.id} className={turn.role === "user" ? "assistant-turn is-user" : "assistant-turn"}>
             <span className="assistant-role">
