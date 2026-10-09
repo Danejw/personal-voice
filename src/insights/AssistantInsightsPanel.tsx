@@ -250,7 +250,7 @@ export function AssistantInsightsPanel({active,userId,refreshToken,view,usageEpo
 
       <section aria-label="Measured Assistant usage, last 30 days">
         <p className="insights-eyebrow">Assistant usage · Last 30 days</p>
-        {!!facts.turns?(
+        {facts.turns>0?(
           <>
             <div className="stat-row insights-stat-row">
               <div className="stat-cell">
