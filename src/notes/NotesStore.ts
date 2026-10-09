@@ -110,7 +110,7 @@ export class NotesStore {
         try {
           await this.addAttachments(note.id, files);
         } catch (error) {
-          throw new Error(`Note saved, but attaching its image failed. Find the note in Notes before retrying: ${error instanceof Error ? error.message : String(error)}`);
+          throw new Error(`Note saved, but attaching its image failed. Find the note in Notes before retrying: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
         }
       }
     } catch (reason) {
