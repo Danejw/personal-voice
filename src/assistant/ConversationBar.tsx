@@ -120,7 +120,12 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
         )}
         {library.recovery.map((line) => (
           <p key={line.id} className="note-meta">Unsynced message: {line.text.slice(0, 100)}
-            <button type="button" className="secondary" onClick={() => onDismissRecovery?.(line.id)}>Dismiss</button>
+            <button type="button" className="secondary" onClick={() => confirm.ask({
+              title: "Discard unsynced message?",
+              description: "This message has not been saved to your account. Dismissing this recovery copy may permanently lose its text.",
+              confirmLabel: "Discard message",
+              onConfirm: () => onDismissRecovery?.(line.id),
+            })}>Dismiss</button>
           </p>
         ))}
         {library.summaryNote && <p className="note-meta">{library.summaryNote}</p>}
