@@ -1,5 +1,5 @@
 import type { ToolFailureKind, ToolOutcomeStatus } from "@/assistant/harness/toolResults";
-import type { AssistantToolFamily } from "@/assistant/harness/toolIntelligence";
+import type { ToolFamily } from "@/assistant/harness/toolIntelligence";
 
 /** No prompts, arguments, outputs, account IDs, window titles or raw error text. */
 export interface AssistantToolAttempt {
@@ -9,7 +9,7 @@ export interface AssistantToolAttempt {
   occurredAt: string;
   localDay: string;
   tool: string;
-  family: AssistantToolFamily | "unknown";
+  family: ToolFamily | "unknown";
   outcome: ToolOutcomeStatus;
   failureKind: ToolFailureKind;
   /** Elapsed time including any time waiting for user confirmation. */
