@@ -78,7 +78,7 @@ Optionally set `ASSISTANT_EVAL_MIN_VERIFIED_GOAL_RATE` after real manual/device 
 | Platform/modality cohorts | Windows / Android, typed / voice / unknown; never pool them without their sample sizes |
 | Coverage | Unique scenario IDs recorded divided by the 81 defined scenarios |
 
-**Limitations:** A correct tool path is not the same as successful task completion; a viable alternate sequence might need an allowed path added to fixtures. Voice calls may not include the same typed task hints as PR25. The offline corpus is a deliberately synthetic regression of evaluation behavior, not an LLM benchmark.
+**Multiple trials:** You may record repeated attempts of the same scenario, platform and modality. They count as separate samples, but unique scenario coverage counts each scenario once. Reports explicitly separate `liveModel` and `byOrigin` cohorts; a mixture of mocks and real-model traces cannot pass a single pooled regression gate. Imported traces of unknown provenance are not assumed to be real model runs.\n\n**Limitations:** A correct tool path is not the same as successful task completion; a viable alternate sequence might need an allowed path added to fixtures. Voice calls may not include the same typed task hints as PR25. The offline corpus is a deliberately synthetic regression of evaluation behavior, not an LLM benchmark.
 
 ## Quick manual smoke tests
 
