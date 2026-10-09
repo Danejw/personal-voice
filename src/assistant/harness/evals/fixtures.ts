@@ -1,0 +1,102 @@
+import type { ToolSelectionScenario } from "@/assistant/harness/evals/traceScore";
+
+/**
+ * PR22 golden tool-path fixture set (53 tool coverage + 20 disambiguation + 7 no-tool).
+ * These are expected tool sequences, NOT measured model outcomes.
+ * Some examples assume identified/available targets in the mock environment.
+ * Real model quality and final-state success require separate live evaluation.
+ */
+const BASE_TOOL_SCENARIOS = [
+  { id: "tool-copy_text", request: "Copy the following address to my clipboard.", expected: ["copy_text"], successCriterion: "Exact address is copied" },
+  { id: "tool-insert_text", request: "Type this sentence into my current app.", expected: ["insert_text"], successCriterion: "Text appears in focused input" },
+  { id: "tool-create_voice_note", request: "Save 'ask Jordan about Friday' as a new note.", expected: ["create_voice_note"], successCriterion: "New note is stored" },
+  { id: "tool-list_voice_notes", request: "What notes are in my inbox?", expected: ["list_voice_notes"], successCriterion: "Current notes are listed" },
+  { id: "tool-archive_voice_note", request: "Archive the note called 'chores'.", expected: ["list_voice_notes","archive_voice_note"], successCriterion: "Correct note is archived" },
+  { id: "tool-restore_voice_note", request: "Bring my archived 'ideas' note back to the inbox.", expected: ["list_voice_notes","restore_voice_note"], successCriterion: "Correct note returns to inbox" },
+  { id: "tool-delete_voice_note", request: "Delete the note named 'temporary' permanently.", expected: ["list_voice_notes","delete_voice_note"], successCriterion: "Correct note is deleted" },
+  { id: "tool-send_handoff", request: "Send these instructions to my laptop's handoff inbox.", expected: ["send_handoff"], successCriterion: "Handoff exists on laptop" },
+  { id: "tool-list_handoffs", request: "What did my desktop send me?", expected: ["list_handoffs"], successCriterion: "Received handoffs are listed" },
+  { id: "tool-dismiss_handoff", request: "Dismiss the handoff containing 'meet at six'.", expected: ["list_handoffs","dismiss_handoff"], successCriterion: "Correct received handoff dismissed" },
+  { id: "tool-capture_screen", request: "Look at my screen and tell me what is visible.", expected: ["capture_screen"], successCriterion: "Answer grounded in fresh screenshot" },
+  { id: "tool-end_assistant_session", request: "End the assistant session now.", expected: ["end_assistant_session"], successCriterion: "Session and microphone end" },
+  { id: "tool-paste_camera_photo", request: "Take a camera photo and paste it into my open ChatGPT window.", expected: ["capture_camera_photo","list_windows","paste_camera_photo"], successCriterion: "Photo pasted into intended window, not sent" },
+  { id: "tool-capture_camera_photo", request: "Take a picture with the front camera.", expected: ["capture_camera_photo"], successCriterion: "One photo captured" },
+  { id: "tool-start_camera_context", request: "Turn on my rear camera and look continuously.", expected: ["start_camera_context"], successCriterion: "Camera context stays active" },
+  { id: "tool-stop_camera_context", request: "Turn the camera off but keep talking.", expected: ["stop_camera_context"], successCriterion: "Camera off, assistant still active" },
+  { id: "tool-capture_pointer_target", request: "Look at this graph beneath my cursor.", expected: ["inspect_pointer_context","capture_pointer_target"], successCriterion: "Marked screenshot shows intended graphic" },
+  { id: "tool-inspect_pointer_context", request: "What is this button I'm pointing at?", expected: ["inspect_pointer_context"], successCriterion: "Observed target described" },
+  { id: "tool-inspect_active_app", request: "Read the accessible text in the current Windows app.", expected: ["inspect_active_app"], successCriterion: "Foreground accessible text read" },
+  { id: "tool-send_remote_dictation", request: "Type these words into the focused field on my office PC.", expected: ["send_remote_dictation"], successCriterion: "Remote insertion acknowledged" },
+  { id: "tool-edit_voice_note", request: "Replace the full text of my 'groceries' note.", expected: ["list_voice_notes","edit_voice_note"], successCriterion: "Intended note text updated" },
+  { id: "tool-create_transform", request: "Save a new reusable transform named 'formal email'.", expected: ["create_transform"], successCriterion: "Transform saved" },
+  { id: "tool-add_dictionary_word", request: "Add the spelling 'Kuma' to my dictionary.", expected: ["add_dictionary_word"], successCriterion: "Dictionary term saved" },
+  { id: "tool-read_usage_analytics", request: "How many words have I dictated this week?", expected: ["read_usage_analytics"], successCriterion: "Usage count from recorded stats" },
+  { id: "tool-read_insights", request: "What does my dictation insights page recommend?", expected: ["read_insights"], successCriterion: "Insights are read" },
+  { id: "tool-capture_selection", request: "Explain the text I currently highlighted.", expected: ["capture_selection"], successCriterion: "Selected exact text captured" },
+  { id: "tool-read_remote_device", request: "What window is open on my laptop?", expected: ["read_remote_device"], successCriterion: "Target device returns window observation" },
+  { id: "tool-inspect_accessibility_tree", request: "Find the exact UI Automation path to the Save button.", expected: ["inspect_accessibility_tree"], successCriterion: "Target control path and metadata found" },
+  { id: "tool-accessibility_pattern_action", request: "Set this inspected Windows edit field to 'hello'.", expected: ["inspect_accessibility_tree","accessibility_pattern_action"], successCriterion: "Exact inspected UIA field set" },
+  { id: "tool-start_accessibility_watch", request: "Watch which Windows control gets focus while we work.", expected: ["start_accessibility_watch"], successCriterion: "Accessibility watcher running" },
+  { id: "tool-stop_accessibility_watch", request: "Stop watching Windows focus changes.", expected: ["stop_accessibility_watch"], successCriterion: "Watch stopped" },
+  { id: "tool-inspect_accessible_elements", request: "What controls are accessible in the foreground application?", expected: ["inspect_accessible_elements"], successCriterion: "Accessible elements listed" },
+  { id: "tool-list_windows", request: "List my open Windows app windows.", expected: ["list_windows"], successCriterion: "Visible window titles returned" },
+  { id: "tool-navigate_window", request: "Switch to my already-open Notepad window.", expected: ["list_windows","navigate_window"], successCriterion: "Existing target window activated" },
+  { id: "tool-uia_control_action", request: "Select the previously inspected control in this app.", expected: ["inspect_accessible_elements","uia_control_action"], successCriterion: "Inspected control selected" },
+  { id: "tool-list_installed_apps", request: "What apps can you launch on my PC?", expected: ["list_installed_apps"], successCriterion: "Installed shortcut names returned" },
+  { id: "tool-focus_accessible_control", request: "Focus the inspected search field.", expected: ["inspect_accessible_elements","focus_accessible_control"], successCriterion: "Search control gains focus" },
+  { id: "tool-invoke_accessible_control", request: "Activate the inspected Refresh control.", expected: ["inspect_accessible_elements","invoke_accessible_control"], successCriterion: "Refresh invoked" },
+  { id: "tool-list_snippets", request: "Show me my saved voice snippets.", expected: ["list_snippets"], successCriterion: "Snippets are listed" },
+  { id: "tool-create_snippet", request: "Create a snippet trigger 'my address' with the expansion text.", expected: ["create_snippet"], successCriterion: "Expansion snippet saved" },
+  { id: "tool-update_snippet", request: "Change my existing email-signature snippet.", expected: ["list_snippets","update_snippet"], successCriterion: "Existing snippet updated" },
+  { id: "tool-open_app", request: "Launch Calculator on my Windows desktop.", expected: ["open_app"], successCriterion: "Calculator launched" },
+  { id: "tool-press_shortcut", request: "Press undo in the focused app.", expected: ["press_shortcut"], successCriterion: "Undo shortcut sent" },
+  { id: "tool-supervise_screen", request: "Work through these three screens and set the requested options.", expected: ["supervise_screen"], successCriterion: "Multi-step on-screen goal reached" },
+  { id: "tool-list_past_conversations", request: "Which were my last five conversations?", expected: ["list_past_conversations"], successCriterion: "Five most recent threads listed" },
+  { id: "tool-read_past_conversation", request: "Read our conversation from yesterday about keyboards.", expected: ["list_past_conversations","read_past_conversation"], successCriterion: "Exact historical thread excerpt returned" },
+  { id: "tool-continue_past_conversation", request: "Continue the second-most-recent conversation, not this one.", expected: ["list_past_conversations","continue_past_conversation"], successCriterion: "Existing conversation becomes active" },
+  { id: "tool-list_memories", request: "What preferences do you explicitly remember about me?", expected: ["list_memories"], successCriterion: "Saved memory entries listed" },
+  { id: "tool-search_memory", request: "What did I previously say about my purpose across my notes?", expected: ["search_memory"], successCriterion: "Relevant provenance-backed saved evidence returned" },
+  { id: "tool-remember_memory", request: "Remember that I prefer terse confirmations.", expected: ["remember_memory"], successCriterion: "Explicit preference saved" },
+  { id: "tool-change_memory", request: "Update my remembered answer-length preference to detailed.", expected: ["list_memories","change_memory"], successCriterion: "Existing memory corrected" },
+  { id: "tool-forget_memory", request: "Forget my saved preference for responses.", expected: ["list_memories","forget_memory"], successCriterion: "Memory deactivated" },
+  { id: "tool-remote_action", request: "Open Calculator on my paired home Windows PC.", expected: ["remote_action"], successCriterion: "Remote device reports app opened" },
+] as const satisfies readonly ToolSelectionScenario[];
+
+const DISAMBIGUATION_SCENARIOS = [
+  { id: "choice-pointer-over-screen", request: "What does this icon under my pointer mean?", expected: ["inspect_pointer_context"], forbidden: ["capture_screen"], successCriterion: "Uses pointer target rather than full-screen guess" },
+  { id: "choice-pointer-graphic", request: "Tell me what this unlabeled chart under the mouse shows.", expected: ["inspect_pointer_context","capture_pointer_target"], forbidden: ["inspect_active_app"], successCriterion: "Obtains image when accessibility target is inadequate" },
+  { id: "choice-selection-v-pointer", request: "What does my highlighted paragraph say?", expected: ["capture_selection"], forbidden: ["inspect_pointer_context"], successCriterion: "Uses selection not pointer" },
+  { id: "choice-screen-v-camera", request: "What's currently on my monitor?", expected: ["capture_screen"], forbidden: ["capture_camera_photo"], successCriterion: "Captures screen not camera" },
+  { id: "choice-camera-v-screen", request: "Please take a selfie.", expected: ["capture_camera_photo"], forbidden: ["capture_screen"], successCriterion: "Captures one still from front camera" },
+  { id: "choice-live-camera-v-photo", request: "Keep using my camera as I talk.", expected: ["start_camera_context"], forbidden: ["capture_camera_photo"], successCriterion: "Enables continuous context" },
+  { id: "choice-switch-window-v-launch", request: "Bring my open spreadsheet window to the front.", expected: ["list_windows","navigate_window"], forbidden: ["open_app"], successCriterion: "Existing window activated" },
+  { id: "choice-launch-v-focus", request: "Launch my text editor application.", expected: ["open_app"], forbidden: ["navigate_window"], successCriterion: "Installed application opened" },
+  { id: "choice-find-controls-v-screenshot", request: "Locate the exact automation ID of the Export button.", expected: ["inspect_accessibility_tree"], forbidden: ["capture_screen"], successCriterion: "Structured target metadata returned" },
+  { id: "choice-computer-v-uia", request: "Click through multiple visually complex dialog screens.", expected: ["supervise_screen"], forbidden: ["press_shortcut"], successCriterion: "Task delegated to supervised Computer Use" },
+  { id: "choice-copy-v-insert", request: "Copy these words but do not type anything.", expected: ["copy_text"], forbidden: ["insert_text"], successCriterion: "Only clipboard changes" },
+  { id: "choice-insert-v-copy", request: "Insert this into the text cursor now.", expected: ["insert_text"], forbidden: ["copy_text"], successCriterion: "Focused field changes" },
+  { id: "choice-handoff-v-insert", request: "Leave this text for me to pick up later on my phone.", expected: ["send_handoff"], forbidden: ["send_remote_dictation"], successCriterion: "Handoff inbox receives text" },
+  { id: "choice-remote-type-v-handoff", request: "Type the final message directly into my paired PC field.", expected: ["send_remote_dictation"], forbidden: ["send_handoff"], successCriterion: "Remote focused field receives text" },
+  { id: "choice-history-v-memory", request: "List the previous three conversations by most recent activity.", expected: ["list_past_conversations"], forbidden: ["search_memory"], successCriterion: "Ordered prior threads returned" },
+  { id: "choice-memory-v-history", request: "Find a note where I wrote about workspace habits.", expected: ["search_memory"], forbidden: ["list_past_conversations"], successCriterion: "Saved source evidence retrieved" },
+  { id: "choice-read-v-resume", request: "Read the previous conversation but don't switch threads.", expected: ["list_past_conversations","read_past_conversation"], forbidden: ["continue_past_conversation"], successCriterion: "Conversation stays unchanged" },
+  { id: "choice-resume-v-read", request: "Switch us into the thread about hiking and continue there.", expected: ["list_past_conversations","continue_past_conversation"], forbidden: ["read_past_conversation"], successCriterion: "Exact older conversation is now active" },
+  { id: "choice-note-v-memory", request: "List all my current notes in the inbox.", expected: ["list_voice_notes"], forbidden: ["list_memories"], successCriterion: "Note inbox returned" },
+  { id: "choice-count-v-insight", request: "Give me the exact word count I've dictated.", expected: ["read_usage_analytics"], forbidden: ["read_insights"], successCriterion: "Reports numeric usage count" },
+] as const satisfies readonly ToolSelectionScenario[];
+
+const NO_TOOL_SCENARIOS = [
+  { id: "none-chat-only", request: "Thanks, that's all.", expected: [], successCriterion: "Acknowledges without tool use" },
+  { id: "none-math-only", request: "What is 14 times 3?", expected: [], successCriterion: "Answers arithmetic without tool" },
+  { id: "none-rewrite-only", request: "Rewrite: 'Please give me sometime'.", expected: [], successCriterion: "Rewrites supplied text without tools" },
+  { id: "none-idea-only", request: "Suggest two concise names for a fictional app.", expected: [], successCriterion: "Brainstorms without tools" },
+  { id: "none-conversation-only", request: "What does asynchronous mean in programming?", expected: [], successCriterion: "Explains common term without tool" },
+  { id: "none-clarify-only", request: "What is the difference between an archive and deletion?", expected: [], successCriterion: "Explains general concept without tools" },
+  { id: "none-unknown-device", request: "Send this to the other device, but I have not told you which one and multiple are available.", expected: [], successCriterion: "Clarifies target before modifying any device" },
+] as const satisfies readonly ToolSelectionScenario[];
+
+export const TOOL_SELECTION_SCENARIOS: readonly ToolSelectionScenario[] = [
+  ...BASE_TOOL_SCENARIOS,
+  ...DISAMBIGUATION_SCENARIOS,
+  ...NO_TOOL_SCENARIOS,
+];
