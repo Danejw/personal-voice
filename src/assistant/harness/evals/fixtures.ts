@@ -92,7 +92,7 @@ const NO_TOOL_SCENARIOS = [
   { id: "none-idea-only", request: "Suggest two concise names for a fictional app.", expected: [], successCriterion: "Brainstorms without tools" },
   { id: "none-conversation-only", request: "What does asynchronous mean in programming?", expected: [], successCriterion: "Explains common term without tool" },
   { id: "none-clarify-only", request: "What is the difference between an archive and deletion?", expected: [], successCriterion: "Explains general concept without tools" },
-  { id: "none-unknown-device", request: "Send this to the other device, but I have not told you which one and multiple are available.", expected: [], successCriterion: "Clarifies target before modifying any device" },
+  { id: "none-unknown-device", request: "What should you ask if I say send it to the other device but several devices are available?", expected: [], successCriterion: "Clarifies target before modifying any device" },
 ] as const satisfies readonly ToolSelectionScenario[];
 
 export const TOOL_SELECTION_SCENARIOS: readonly ToolSelectionScenario[] = [
