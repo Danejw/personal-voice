@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ASSISTANT_SEARCH_GUIDANCE } from "@/assistant/grounding";
+import { ASSISTANT_TOOL_SELECTION_GUIDANCE } from "@/assistant/harness/toolIntelligence";
 import { assistantFunctionDeclarations as declaredTools } from "@/assistant/tools";
 import {
   ASSISTANT_INPUT_MIME,
@@ -38,7 +39,7 @@ describe("assistant setup and typed turns", () => {
           { functionDeclarations: declaredTools() },
           { googleSearch: {} },
         ],
-        systemInstruction: { parts: [{ text: ASSISTANT_SEARCH_GUIDANCE }] },
+        systemInstruction: { parts: [{ text: `${ASSISTANT_SEARCH_GUIDANCE}\n\n${ASSISTANT_TOOL_SELECTION_GUIDANCE}` }] },
       },
     });
     const setup = JSON.stringify(assistantSetupMessage());
