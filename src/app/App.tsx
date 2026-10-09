@@ -635,6 +635,7 @@ export default function App() {
   const [dictationTransformId, setDictationTransformId] = useState<string | null>(() => loadTransformProfileId());
   const [section, setSection] = useState<AppSection>("dictation");
   const insightsSnapshot = useInsights(insightsStore, auth.userId, section === "insights");
+  const [assistantInsightsRefreshToken, setAssistantInsightsRefreshToken] = useState(0);
   useHandoffAlerts(
     handoffs,
     auth.userId,
@@ -1116,7 +1117,7 @@ export default function App() {
           {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
           {section === "snippets" && <SnippetToolbar store={snippetStore} snapshot={snippets} />}
           {section === "transforms" && <TransformToolbar store={transformStore} snapshot={transforms} />}
-          {section === "insights" && <InsightsToolbar store={insightsStore} snapshot={insightsSnapshot} />}
+          {section === "insights" && <InsightsToolbar store={insightsStore} snapshot={insightsSnapshot} onRefreshAssistant={() => setAssistantInsightsRefreshToken(n => n + 1)} />}
           <div id="page-header-actions" className="page-header-actions" hidden={section !== "capture"} />
         </header>
         {computerSnapshot.approval && (
@@ -1469,6 +1470,9 @@ export default function App() {
         <div className="panel-stack is-scroll" hidden={section !== "insights"}>
           <section aria-labelledby="page-title" className="page-panel">
             <InsightsPanel
+              active={section === "insights"}
+              assistantInsightsRefreshToken={assistantInsightsRefreshToken}
+              userId={auth.userId}
               store={insightsStore}
               snapshot={insightsSnapshot}
               knowledge={{
@@ -1501,18 +1505,7 @@ export default function App() {
             assistantUsage={assistantUsage}
             toolStore={assistantToolMetrics}
             assistantUsageEnabled={sync.data.settings.usageIntelligence && (sync.status === "synced" || sync.status === "offline")}
-            onClearAnalytics={async () => {
-              await usage.clearAnalytics();
-              // Invalidate any stale Assistant events immediately, even if
-              // settings refresh is temporarily offline.
-              const clearedScope = {
-                userId: auth.userId, deviceId: settingsDeviceId ?? null,
-                epoch: usage.getSnapshot().epoch, enabled: false,
-              };
-              assistantUsage.setScope(clearedScope);
-              assistantToolMetrics.setScope(clearedScope);
-              await personalSync.reload();
-            }}
+
           />
         </div>
       </main>
