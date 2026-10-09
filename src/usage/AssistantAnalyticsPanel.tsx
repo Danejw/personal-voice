@@ -25,6 +25,7 @@ function formatDuration(ms: number): string {
 export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, devices, store }: Props) {
   const [days, setDays] = useState<(typeof DAYS)[number]>(14);
   const [remote, setRemote] = useState<AssistantUsageEvent[]>([]);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [pending, setPending] = useState(store.getPending());
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -34,6 +35,7 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
   useEffect(() => {
     if (!active || !userId || !enabled) {
       setRemote([]);
+      setLoadedKey(null);
       setError(null);
       return;
     }
@@ -43,6 +45,7 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
     void assistantUsageApi.list(epoch, userId).then((data) => {
       if (cancelled) return;
       setRemote(data);
+      setLoadedKey(`${userId}:${epoch}`);
       setError(null);
       setLoading(false);
     }, (cause: unknown) => {
@@ -53,11 +56,14 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
     return () => { cancelled = true; };
   }, [active, userId, enabled, epoch, refresh, store]);
 
+  const scope = store.getScope();
+  const sameAccount = scope.userId === userId && scope.epoch === epoch;
   const merged = useMemo(() => {
-    const byId = new Map(remote.filter(e => e.epoch === epoch).map(e => [e.id, e]));
-    for (const event of pending) if (event.epoch === epoch) byId.set(event.id, event);
+    const currentRemote = loadedKey === `${userId}:${epoch}` ? remote : [];
+    const byId = new Map(currentRemote.filter(e => e.epoch === epoch).map(e => [e.id, e]));
+    if (sameAccount) for (const event of pending) if (event.epoch === epoch) byId.set(event.id, event);
     return [...byId.values()];
-  }, [remote, pending, epoch]);
+  }, [remote, pending, epoch, loadedKey, userId, sameAccount]);
   const now = new Date();
   const to = localUsageDay(now);
   const from = dayBefore(now, days - 1);
