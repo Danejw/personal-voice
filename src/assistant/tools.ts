@@ -1,4 +1,5 @@
 import { selectionPreview } from "@/assistant/selectionContext";
+import type { NoteImageSource } from "@/assistant/noteAttachment";
 import { parseMemoryCommand, type MemoryCommand } from "@/assistant/memory";
 import { isRemoteKind, type RemoteKind } from "@/assistant/remoteContext";
 import {
@@ -50,8 +51,8 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "create_voice_note",
-      description: "Save text as a note on the user's account. Call this when the user asks to save a note. Do not ask them to click. Do not say notes are unavailable.",
-      parameters: { type: "object", properties: { text: TEXT }, required: ["text"] },
+      description: "Save text as a new note. When the user explicitly asks to attach an image, first call capture_screen or capture_camera_photo, then set attachment_source to screenshot or camera_photo. Never assume an image was captured; the current still is uploaded privately only after confirmation.",
+      parameters: { type: "object", properties: { text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo"], description: "Optional current captured still to attach. Omit for text-only notes." } }, required: ["text"] },
     },
     {
       name: "list_voice_notes",
@@ -162,8 +163,16 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "edit_voice_note",
-      description: "Edit an existing note by id obtained from list_voice_notes. Replaces its full text, with confirmation.",
-      parameters: { type: "object", properties: { id: { type: "string" }, text: TEXT }, required: ["id", "text"] },
+      description: "Replace full text of a note selected from list_voice_notes. Optionally attach the currently captured screenshot or camera photo when the user requests it; capture first. The existing note attachments remain intact. Requires confirmation.",
+      parameters: { type: "object", properties: { id: { type: "string" }, text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo"] } }, required: ["id", "text"] },
+    },
+    {
+      name: "attach_image_to_voice_note",
+      description: "Attach a captured screenshot or camera still to an existing saved note without changing its text. First capture_screen or capture_camera_photo, then list_voice_notes to select the note id. Requires confirmation. Cannot read arbitrary disk paths.",
+      parameters: { type: "object", properties: {
+        id: { type: "string", description: "Existing note id from list_voice_notes." },
+        attachment_source: { type: "string", enum: ["screenshot", "camera_photo"] },
+      }, required: ["id", "attachment_source"] },
     },
     {
       name: "create_transform",
@@ -415,6 +424,7 @@ export type ConfirmToolName =
   | "update_snippet"
   | "send_remote_dictation"
   | "edit_voice_note"
+  | "attach_image_to_voice_note"
   | "create_transform"
   | "add_dictionary_word"
   | "send_handoff"
@@ -691,8 +701,24 @@ export function decideToolCall(
     case "edit_voice_note": {
       const id = readId(args);
       const body = readText(args);
-      if ("error" in id || "error" in body) return { kind: "reject", id: call.id, name: call.name, message: "error" in id ? id.error : "error" in body ? body.error : "Invalid note." };
-      return confirm(call.id, "edit_voice_note", JSON.stringify({ id: id.id, text: body.text }), "Edit this note", null, null);
+      const attachment = readNoteImageSource(args, false);
+      if ("error" in id || "error" in body || "error" in attachment) {
+        return { kind: "reject", id: call.id, name: call.name,
+          message: "error" in id ? id.error : "error" in body ? body.error : attachment.error };
+      }
+      return confirm(call.id, "edit_voice_note",
+        JSON.stringify({ id: id.id, text: body.text, attachment_source: attachment.source }),
+        attachment.source ? "Edit note and attach captured image" : "Edit this note", null, null);
+    }
+    case "attach_image_to_voice_note": {
+      const id = readId(args);
+      const attachment = readNoteImageSource(args, true);
+      if ("error" in id || "error" in attachment) {
+        return { kind: "reject", id: call.id, name: call.name, message: "error" in id ? id.error : attachment.error };
+      }
+      return confirm(call.id, "attach_image_to_voice_note",
+        JSON.stringify({ id: id.id, attachment_source: attachment.source }),
+        "Attach captured image to note", null, null);
     }
     case "create_transform": {
       if (typeof args.name !== "string" || !args.name.trim() || args.name.length > 80 || typeof args.instruction !== "string" || !args.instruction.trim() || args.instruction.length > 4000) {
@@ -757,7 +783,11 @@ export function decideToolCall(
     return confirm(call.id, "insert_text", text.text, "Insert this text into the focused app", null, null);
   }
   if (call.name === "create_voice_note") {
-    return confirm(call.id, "create_voice_note", text.text, "Save this note", null, null);
+    const attachment = readNoteImageSource(args, false);
+    if ("error" in attachment) return { kind: "reject", id: call.id, name: call.name, message: attachment.error };
+    return confirm(call.id, "create_voice_note",
+      attachment.source ? JSON.stringify({ text: text.text, attachment_source: attachment.source }) : text.text,
+      attachment.source ? "Save note with captured image" : "Save this note", null, null);
   }
   const device = readDevice(args);
   if ("error" in device) return { kind: "reject", id: call.id, name: call.name, message: device.error };
@@ -801,6 +831,14 @@ function plainArgs(value: unknown): Record<string, unknown> | null {
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+export function readNoteImageSource(args: Record<string, unknown>, required: boolean):
+  { source: NoteImageSource | null } | { error: string } {
+  const input = args.attachment_source;
+  if (input === undefined && !required) return { source: null };
+  if (input === "screenshot" || input === "camera_photo") return { source: input };
+  return { error: "Choose attachment_source screenshot or camera_photo from an already captured image." };
 }
 
 function readId(args: Record<string, unknown>): { id: string } | { error: string } {
