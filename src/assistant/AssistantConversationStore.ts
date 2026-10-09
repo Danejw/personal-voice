@@ -59,6 +59,7 @@ export interface AssistantLibrarySnapshot {
   unavailableScreenshots: { source: string; capturedAt: string }[];
   hasOlder: boolean;
   loadingOlder: boolean;
+  loadingThreads: boolean;
 }
 
 /** The Assistant screen methods this store is allowed to drive. */
@@ -94,6 +95,7 @@ const EMPTY: AssistantLibrarySnapshot = {
   unavailableScreenshots: [],
   hasOlder: false,
   loadingOlder: false,
+  loadingThreads: false,
 };
 
 function messageOf(error: unknown): string {
@@ -119,6 +121,7 @@ export class AssistantConversationStore {
   private conversations: AssistantLibraryConversation[] = [];
   private olderCursor: { updatedAt: string; id: string } | null = null;
   private loadingOlder = false;
+  private loadingThreads = false;
   private titles = new Map<string, string>();
   private pending: PendingAssistantWrite[] = [];
   private deleted = new Set<string>();
@@ -215,6 +218,7 @@ export class AssistantConversationStore {
     this.ensured.clear();
     this.olderCursor = null;
     this.loadingOlder = false;
+    this.loadingThreads = false;
     this.titles.clear();
     this.error = null;
     this.stopFeed();
@@ -611,6 +615,9 @@ export class AssistantConversationStore {
   }
 
   private async reloadList(userId: string, generation: number): Promise<void> {
+    if (!this.sameAccount(userId, generation)) return;
+    this.loadingThreads = true;
+    this.publish();
     try {
       const rows = await this.api.list(userId, { limit: ASSISTANT_PAGE_SIZE });
       if (!this.sameAccount(userId, generation)) return;
@@ -637,6 +644,11 @@ export class AssistantConversationStore {
           if (this.currentId) this.restoreCachedThread(userId, this.currentId);
         }
         this.error = this.offlineCopy ? null : messageOf(error);
+        this.publish();
+      }
+    } finally {
+      if (this.sameAccount(userId, generation)) {
+        this.loadingThreads = false;
         this.publish();
       }
     }
@@ -1193,6 +1205,7 @@ export class AssistantConversationStore {
       unavailableScreenshots: this.unavailableScreenshots,
       hasOlder: Boolean(this.olderCursor) && !this.offlineCopy,
       loadingOlder: this.loadingOlder,
+      loadingThreads: this.loadingThreads,
     };
     for (const listener of this.listeners) listener();
   }
