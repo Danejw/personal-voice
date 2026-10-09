@@ -22,6 +22,7 @@ import { ASSISTANT_SEARCH_GUIDANCE, sourcesFromGrounding, type AssistantSource }
 import { assistantFunctionDeclarations, parseToolCallList, type ParsedToolCall } from "@/assistant/tools";
 import { ASSISTANT_TOOL_SELECTION_GUIDANCE } from "@/assistant/harness/toolIntelligence";
 import { ASSISTANT_PLAYBOOK_GUIDANCE } from "@/assistant/harness/playbooks";
+import { ASSISTANT_RESULT_GUIDANCE, type ToolResultAssessment } from "@/assistant/harness/toolResults";
 
 export const ASSISTANT_MODEL = "gemini-3.8-live";
 /** Microphone audio sent to Live: little-endian PCM16 mono. Capture already emits this at 16 kHz. */
@@ -58,7 +59,7 @@ export function assistantSetupMessage(
         { functionDeclarations: assistantFunctionDeclarations() },
         ...(search ? [{ googleSearch: {} }] : []),
       ],
-      systemInstruction: { parts: [{ text: `${ASSISTANT_SEARCH_GUIDANCE}\n\n${ASSISTANT_TOOL_SELECTION_GUIDANCE}\n\n${ASSISTANT_PLAYBOOK_GUIDANCE}` }] },
+      systemInstruction: { parts: [{ text: `${ASSISTANT_SEARCH_GUIDANCE}\n\n${ASSISTANT_TOOL_SELECTION_GUIDANCE}\n\n${ASSISTANT_PLAYBOOK_GUIDANCE}\n\n${ASSISTANT_RESULT_GUIDANCE}` }] },
     },
   };
 }
@@ -103,13 +104,16 @@ export function assistantUserTurn(
 }
 
 /** Returns a real result. `ok` false uses `error` and does not include `result`. */
-export function assistantToolResponse(items: { id: string; name: string; ok: boolean; message: string }[]) {
+export function assistantToolResponse(items: { id: string; name: string; ok: boolean; message: string; interpretation?: ToolResultAssessment }[]) {
   return {
     toolResponse: {
       functionResponses: items.map((item) => ({
         id: item.id,
         name: item.name,
-        response: item.ok ? { result: item.message } : { error: item.message },
+        response: {
+          ...(item.ok ? { result: item.message } : { error: item.message }),
+          ...(item.interpretation ? { interpretation: item.interpretation } : {}),
+        },
       })),
     },
   };
