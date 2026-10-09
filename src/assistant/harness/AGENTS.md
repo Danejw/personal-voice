@@ -12,7 +12,7 @@ Applies to all code under `src/assistant/harness/`. Read the root `AGENTS.md` fi
 6. `toolResults.ts` interprets `observed`, `acknowledged`, `reference`, `incomplete`, `failed`, `cancelled` and `blocked` outcomes, with bounded recovery hints. Preserve legacy result/error fields. A tool ACK is **never** independent goal verification.
 7. `evals/` defines golden tool-selection scenarios, a pure trace scorer, bounded mock model probing, opt-in sanitized trace recording, real-trace import and independent objective scoring. CI is **offline**. Never misrepresent mock route accuracy as live Gemini accuracy.
 
-The catalog and fixture counts evolve. At this revision there are 55 declared functions and 81 scenarios (54 base / 20 disambiguation / 7 no-tool). **These are descriptive, not constants to maintain blindly.** Determine the current numbers from the declarations and the fixtures every time.
+The catalog and fixture counts evolve. At this revision there are 56 declared functions and 81 scenarios (54 base / 20 disambiguation / 7 no-tool). **These are descriptive, not constants to maintain blindly.** Determine the current numbers from the declarations and the fixtures every time.
 
 ## Tool lifecycle — mandatory in a single PR
 
