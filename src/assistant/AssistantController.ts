@@ -218,6 +218,9 @@ export class AssistantController {
   /** Turn ids already handed to storage, so a reload does not append them again. */
   private published = new Set<string>();
   private onCommitted: ((turn: AssistantTurn) => void) | null = null;
+  private onUsageTurn: ((turn: { id: string; role: "user" | "assistant"; modality: "voice" | "typed" | "unknown" }) => void) | null = null;
+  private typedUsageIds = new Set<string>();
+  private voiceUsageIds = new Set<string>();
   private onRevised: ((turn: AssistantTurn) => void) | null = null;
   private computerStopped = false;
   private computerConfirm: ((allowed: boolean) => void) | null = null;
@@ -338,6 +341,11 @@ export class AssistantController {
     return trace;
   }
 
+  /** Independent metadata-only observer; restored/saved messages are never re-counted. */
+  setUsageTurnHandler(handler: typeof this.onUsageTurn): void {
+    this.onUsageTurn = handler;
+  }
+
   /** Receives each committed turn once. Streaming text is not included. */
   setCommittedTurnHandler(handler: ((turn: AssistantTurn) => void) | null): void {
     this.onCommitted = handler;
@@ -451,7 +459,9 @@ export class AssistantController {
   send(text: string): void {
     const trimmed = text.trim();
     if (!trimmed || this.snapshot.status !== "READY" || !this.session) return;
-    this.dispatch({ type: "send", id: this.nextId(), text: trimmed });
+    const id = this.nextId();
+    this.typedUsageIds.add(id);
+    this.dispatch({ type: "send", id, text: trimmed });
     try {
       // The current socket already has the still image. A later question does not send it again.
       this.noteSnapshot();
@@ -1181,6 +1191,7 @@ export class AssistantController {
         if (event.partial) this.dispatch({ type: "userPartial", text: event.text });
         else {
           const id = this.nextId();
+          this.voiceUsageIds.add(id);
           const spokenId = this.snapshot.status === "RESPONDING" ? this.nextId() : undefined;
           this.dispatch({
             type: "userFinal",
@@ -2077,6 +2088,14 @@ export class AssistantController {
         if (this.published.has(turn.id)) continue;
         this.published.add(turn.id);
         this.onCommitted?.(turn);
+        if (turn.text.trim() && turn.status !== "interrupted") {
+          const modality = turn.role === "user"
+            ? this.typedUsageIds.has(turn.id) ? "typed" : this.voiceUsageIds.has(turn.id) ? "voice" : "unknown"
+            : "unknown";
+          this.onUsageTurn?.({ id: turn.id, role: turn.role, modality });
+        }
+        this.typedUsageIds.delete(turn.id);
+        this.voiceUsageIds.delete(turn.id);
         continue;
       }
       if (sourcesChanged(prior, turn)) this.onRevised?.(turn);
