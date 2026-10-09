@@ -10,6 +10,7 @@ interface ConversationBarProps {
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onRetry: () => void;
+  onLoadOlder?: () => void;
   onDismissRecovery?: (id: string) => void;
 }
 
@@ -25,7 +26,7 @@ export function threadTime(value?: string | null): string | null {
 }
 
 /** The conversation rail owns thread navigation, not the main transcript. */
-export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen, onRename, onDelete, onRetry, onDismissRecovery }: ConversationBarProps) {
+export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen, onRename, onDelete, onRetry, onLoadOlder, onDismissRecovery }: ConversationBarProps) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -96,6 +97,11 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
             </li>
           ))}
         </ul>}
+        {signedIn && library.hasOlder && onLoadOlder && (
+          <button type="button" className="assistant-load-older" disabled={library.loadingOlder} onClick={onLoadOlder}>
+            {library.loadingOlder ? "Loading…" : "Load older conversations"}
+          </button>
+        )}
       </nav>
       <div className="assistant-rail-footer">
         <p className="assistant-save" role="status">
