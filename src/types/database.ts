@@ -949,6 +949,10 @@ export type Database = {
         Args: { p_user_id: string; p_session_id: string; p_reason: string }
         Returns: undefined
       }
+      link_assistant_message_session: {
+        Args: {p_user_id:string; p_message_id:string; p_session_id:string}
+        Returns: undefined
+      }
       list_assistant_sessions: {
         Args: { p_user_id: string; p_conversation_id: string; p_limit: number; p_before_started_at: string | null; p_before_id: string | null }
         Returns: Database["public"]["Tables"]["assistant_sessions"]["Row"][]
