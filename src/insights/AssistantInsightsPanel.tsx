@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { assistantInsightReadiness, ASSISTANT_FIRST_MIN_MESSAGES, ASSISTANT_FIRST_MIN_DAYS, ASSISTANT_REFRESH_NEW_MESSAGES, ASSISTANT_REFRESH_DAYS, ASSISTANT_REFRESH_MIN_AFTER_WEEK, type AssistantInsightReadiness } from "@/insights/assistantInsightReadiness";
 import {
   analyzeAssistantUsage,listAssistantInsightData,loadAssistantInsightSamples,
   savePersonalPlaybookDraft,setAssistantCandidateStatus,
@@ -19,7 +20,7 @@ const KINDS=["workflow","adaptation","goal"] as const;
 export function AssistantInsightsPanel({active,userId}:Props) {
   const [snapshot,setSnapshot]=useState<Snapshot>(EMPTY);
   const [loadedFor,setLoadedFor]=useState<string|null>(null);
-  const [allowModel,setAllowModel]=useState(false);
+  const [readiness,setReadiness]=useState<AssistantInsightReadiness|null>(null);
   const [loading,setLoading]=useState(false);
   const [analyzing,setAnalyzing]=useState(false);
   const [busy,setBusy]=useState<string|null>(null);
@@ -30,30 +31,37 @@ export function AssistantInsightsPanel({active,userId}:Props) {
   const [evidence,setEvidence]=useState<{id:string;items:AssistantInsightSample[]}|null>(null);
 
   useEffect(()=>{
-    setSnapshot(EMPTY);setLoadedFor(null);setAllowModel(false);
+    setSnapshot(EMPTY);setLoadedFor(null);setReadiness(null);
     setEvidence(null);setEditing(null);setError(null);setNotice(null);
   },[userId]);
   useEffect(()=>{
     if(!active||!userId)return;
     let cancelled=false;
     setLoading(true);
-    void listAssistantInsightData(userId).then(data=>{
+    void Promise.all([listAssistantInsightData(userId),loadAssistantInsightSamples(userId)]).then(([data,samples])=>{
       if(cancelled)return;
-      setSnapshot(data);setLoadedFor(userId);setLoading(false);setError(null);
+      setSnapshot(data);setReadiness(assistantInsightReadiness(samples,data.lastRun));
+      setLoadedFor(userId);setLoading(false);setError(null);
     },reason=>{
       if(cancelled)return;
       setLoading(false);setError(reason instanceof Error?reason.message:"Could not load Assistant Insights.");
     });
     return ()=>{cancelled=true;};
   },[active,userId,refresh]);
+  useEffect(()=>{
+    if(!active||!userId)return;
+    const update=()=>setRefresh(count=>count+1);
+    window.addEventListener("focus",update);
+    window.addEventListener("online",update);
+    return ()=>{window.removeEventListener("focus",update);window.removeEventListener("online",update);};
+  },[active,userId]);
 
   async function analyze() {
-    if(!userId||!allowModel)return;
+    if(!userId||!readiness?.ready||loading||analyzing)return;
     setAnalyzing(true);setError(null);setNotice(null);
     try{
       const result=await analyzeAssistantUsage(userId);
       setNotice(`Reviewed ${result.reviewed} saved user messages. ${result.proposed} supported suggestions identified; existing review decisions are preserved.`);
-      setAllowModel(false);
       setRefresh(n=>n+1);
     }catch(e){setError(e instanceof Error?e.message:"Assistant analysis failed.");}
     finally{setAnalyzing(false);}
@@ -98,6 +106,14 @@ export function AssistantInsightsPanel({active,userId}:Props) {
   const display=loadedFor===userId?snapshot:EMPTY;
   const pending=display.candidates.filter(c=>c.status==="pending");
   const saved=display.candidates.filter(c=>c.status==="saved");
+  const showingReadiness=loadedFor===userId?readiness:null;
+  const current=showingReadiness?.newSinceLastRun??0;
+  const latest=display.lastRun;
+  const activityTarget=latest?ASSISTANT_REFRESH_NEW_MESSAGES:ASSISTANT_FIRST_MIN_MESSAGES;
+  const activityPercent=Math.min(100,Math.round(current/activityTarget*100));
+  const dayCount=latest?Math.min(ASSISTANT_REFRESH_DAYS,Math.floor(showingReadiness?.daysSinceLastRun??0)):(showingReadiness?.activeDays??0);
+  const dayTarget=latest?ASSISTANT_REFRESH_DAYS:ASSISTANT_FIRST_MIN_DAYS;
+  const dayPercent=Math.min(100,Math.round(dayCount/dayTarget*100));
   return (
     <div className="insights-stack">
       <section className="insights-voice-hero">
@@ -107,19 +123,39 @@ export function AssistantInsightsPanel({active,userId}:Props) {
             <h2>Understand how you work</h2>
             <p className="hint">Suggestions for reusable personal workflows, explicit preferences and goals.</p>
           </div>
-          <button type="button" className="secondary" onClick={()=>setRefresh(n=>n+1)}
-            disabled={loading||analyzing}>Refresh</button>
+          <button type="button" className="secondary insights-refresh"
+            disabled={loading||analyzing||!showingReadiness?.ready}
+            onClick={()=>void analyze()}>
+            {analyzing?"Analyzing…":latest?"Refresh insights":"Analyze my Assistant"}
+          </button>
         </div>
-        <label style={{display:"flex",gap:8,alignItems:"start"}}>
-          <input type="checkbox" checked={allowModel} disabled={analyzing}
-            onChange={event=>setAllowModel(event.currentTarget.checked)}/>
-          I agree to analyze the selected saved Assistant user messages for this run.
-        </label>
-        <button type="button" disabled={!allowModel||analyzing||loading} onClick={()=>void analyze()}>
-          {analyzing?"Analyzing saved messages…":"Analyze my Assistant use"}
-        </button>
-        {display.lastRun&&<p className="hint">Last analysis: {new Date(display.lastRun.createdAt).toLocaleString()} · {display.lastRun.userMessageCount} user messages · {display.lastRun.conversationCount} conversations.</p>}
+        <p className="hint">{showingReadiness?.reason??"Loading recent Assistant activity…"}</p>
+        {latest&&<p className="insights-hero-meta">Last analysis: {new Date(latest.createdAt).toLocaleDateString()} · {latest.userMessageCount} user messages reviewed</p>}
+        <p className="hint">Analyzing sends recent saved user messages to Gemini when you click the button.</p>
       </section>
+      <div className="analytics-visual-row insights-visual-row">
+        <section className="insights-progress-card">
+          <div className="insights-heading-row">
+            <div>
+              <p className="insights-eyebrow">{latest?"Next Insights refresh":"First Assistant analysis"}</p>
+              <h2>{current} / {activityTarget} messages</h2>
+            </div>
+            <span className="progress-percent">{activityPercent}%</span>
+          </div>
+          <div className="insights-progress-rail" aria-hidden="true"><span style={{width:`${activityPercent}%`}} /></div>
+        </section>
+        <section className="insights-progress-card">
+          <div className="insights-heading-row">
+            <div>
+              <p className="insights-eyebrow">{latest?"Time-based refresh":"Active days"}</p>
+              <h2>{dayCount} / {dayTarget} days</h2>
+            </div>
+            <span className="progress-percent">{dayPercent}%</span>
+          </div>
+          <div className="insights-progress-rail is-secondary" aria-hidden="true"><span style={{width:`${dayPercent}%`}} /></div>
+          {latest&&<p className="hint">Time-based refresh requires {ASSISTANT_REFRESH_MIN_AFTER_WEEK} new messages.</p>}
+        </section>
+      </div>
       {loading&&<p className="hint">Loading saved Assistant suggestions…</p>}
       {error&&<p className="error" role="alert">{error}</p>}
       {notice&&<p className="insights-notice" role="status">{notice}</p>}
