@@ -353,8 +353,8 @@ describe("AssistantController", () => {
       { id: "history-read", name: "read_past_conversation", args: { conversation_id: id } },
     ] });
     await vi.waitFor(() => expect(session.responses).toHaveLength(2));
-    expect(actions.readPastConversation).toHaveBeenCalledWith(id);
-    expect(actions.listPastConversations).toHaveBeenCalledWith("earlier", null, 20);
+    expect(actions.readPastConversation).toHaveBeenCalledWith(id, { afterSeq: 0, count: 5, sessionId: null, from: null, to: null });
+    expect(actions.listPastConversations).toHaveBeenCalledWith("earlier", null, 20, false);
     expect(JSON.stringify(session.responses)).toContain("Earlier talk");
     created.end();
   });
