@@ -92,6 +92,7 @@ export function AssistantPanel({
   const [view, setView] = useState<"chat" | "settings" | "tools">("chat");
   const [showThreads, setShowThreads] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const [narrowWindow, setNarrowWindow] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 780px)").matches);
   const [accessibility, setAccessibility] = useState<{windowTitle: string | null; focusedName: string | null; focusedClass: string | null; text: string | null; status: string} | null>(null);
   const [accessibilityError, setAccessibilityError] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -139,6 +140,12 @@ export function AssistantPanel({
   const [continueNotice, setContinueNotice] = useState<string | null>(null);
   const [continueError, setContinueError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 780px)");
+    const update = () => { setNarrowWindow(media.matches); setShowThreads(false); };
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const canSend = signedIn && snapshot.status === "READY";
 
   useEffect(() => {
@@ -174,12 +181,15 @@ export function AssistantPanel({
           onDismissRecovery={onDismissRecovery}
         />
       )}
+      {showThreads && narrowWindow && <button type="button" className="assistant-rail-scrim"
+        aria-label="Close conversation history" onClick={() => setShowThreads(false)} />}
       <section className="assistant-main-panel" aria-label="Assistant workspace">
         <header className="assistant-chat-header">
           <button type="button" className="assistant-rail-toggle secondary"
-            onClick={() => { if (window.matchMedia("(max-width: 780px)").matches) setShowThreads((open) => !open); else setRailCollapsed((collapsed) => !collapsed); }}
-            aria-expanded={showThreads || !railCollapsed} aria-controls="assistant-threads" aria-label={showThreads || !railCollapsed ? "Collapse conversations" : "Show conversations"}
-            title={showThreads || !railCollapsed ? "Collapse conversations" : "Show conversations"}>☰</button>
+            onClick={() => { if (narrowWindow) setShowThreads((open) => !open); else setRailCollapsed((collapsed) => !collapsed); }}
+            aria-expanded={narrowWindow ? showThreads : !railCollapsed} aria-controls="assistant-threads"
+            aria-label={(narrowWindow ? showThreads : !railCollapsed) ? "Collapse conversations" : "Show conversations"}
+            title={(narrowWindow ? showThreads : !railCollapsed) ? "Collapse conversations" : "Show conversations"}>☰</button>
           <div className="assistant-conversation-heading">
             <h3 title={selected?.title ?? "New conversation"}>{selected?.title ?? "New conversation"}</h3>
           </div>
