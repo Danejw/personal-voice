@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ConversationBar } from "@/assistant/ConversationBar";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import { SelectField } from "@/components/SelectField";
 import type { AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 import { selectionPreview } from "@/assistant/selectionContext";
@@ -104,6 +105,7 @@ export function AssistantPanel({
   const [photoNotice, setPhotoNotice] = useState<string | null>(null);
   const [computerHistory, setComputerHistory] = useState<Array<{ label: string; phase: string; at: string }>>([]);
   const [accessibilityWatch, setAccessibilityWatch] = useState(false);
+  const confirm = useConfirmAction();
   const [treeReport, setTreeReport] = useState<{
     windowTitle:string;truncated:boolean;
     nodes:Array<{path:string;name:string;automationId:string;controlType:number;
@@ -486,10 +488,12 @@ export function AssistantPanel({
                 .then(() => setAccessibilityWatch(enabled))
                 .catch((error:unknown) => setAccessibilityWatchError(String(error)));
             }}>{accessibilityWatch ? "Stop live UI awareness" : "Start live UI awareness"}</button>
-            <button type="button" className="secondary" onClick={() => {
-              setAccessibilityEvents([]);
-              setComputerHistory([]);
-            }}>Clear history</button>
+            <button type="button" className="secondary" onClick={() => confirm.ask({
+              title: "Clear computer activity?",
+              description: "This clears the locally displayed accessibility and computer activity history. Saved Assistant conversations are unaffected.",
+              confirmLabel: "Clear history",
+              onConfirm: () => { setAccessibilityEvents([]); setComputerHistory([]); },
+            })}>Clear history</button>
           </div>
           <p className="note-meta">{accessibilityWatch
             ? "Windows accessibility monitoring active. Focus, selection, and UI changes are visible locally; no text is continuously sent to Gemini."
@@ -607,6 +611,7 @@ export function AssistantPanel({
         </label>
         <button type="submit" className="assistant-send" disabled={!canSend || !draft.trim()} aria-label="Send message">➤</button>
       </form>
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
       </section>
     </div>
   );
