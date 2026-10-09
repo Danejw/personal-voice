@@ -3,6 +3,7 @@ import { getSupabase } from "@/services/supabase";
 import { attachFileToMemory, indexNextMemoryBatch } from "@/services/personalMemoryService";
 import { SelectField } from "@/components/SelectField";
 import { Toggle } from "@/components/Toggle";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import type { AssistantMemory, MemoryKind } from "@/assistant/memory";
 import type { AssistantMemoryStore, MemorySnapshot } from "@/assistant/AssistantMemoryStore";
 
@@ -23,6 +24,7 @@ export function MemoryPanel({ store, snapshot, signedIn, userId, learning, onLea
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const [semanticEnabled, setSemanticEnabled] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [semanticBusy, setSemanticBusy] = useState(false);
@@ -261,7 +263,12 @@ export function MemoryPanel({ store, snapshot, signedIn, userId, learning, onLea
               ) : (
                 <button type="button" className="secondary" disabled={snapshot.saving} onClick={() => { setEditing(row.key); setDraft(row.value); }}>Edit</button>
               )}
-              <button type="button" className="secondary" disabled={snapshot.saving} onClick={() => { void forget(row); }}>Forget</button>
+              <button type="button" className="secondary" disabled={snapshot.saving} onClick={() => confirm.ask({
+                 title: "Forget saved memory?",
+                 description: `The memory “${row.key}” will stop being included in new Assistant sessions. The original conversation is not deleted.`,
+                 confirmLabel: "Forget memory",
+                 onConfirm: () => forget(row),
+               })}>Forget</button>
             </li>
           ))}
         </ul>
@@ -274,7 +281,12 @@ export function MemoryPanel({ store, snapshot, signedIn, userId, learning, onLea
               <p>{row.value}</p>
               <p>Suggested from an Assistant message. It is not used until you keep it.</p>
               <button type="button" className="secondary" disabled={snapshot.saving} onClick={() => { void keep(row); }}>Keep</button>
-              <button type="button" className="secondary" disabled={snapshot.saving} onClick={() => { void remove(row); }}>Remove</button>
+              <button type="button" className="secondary" disabled={snapshot.saving} onClick={() => confirm.ask({
+                 title: "Remove memory suggestion?",
+                 description: `The suggested memory “${row.key}” will be dismissed without being saved.`,
+                 confirmLabel: "Remove suggestion",
+                 onConfirm: () => remove(row),
+               })}>Remove</button>
             </li>
           ))}
         </ul>
@@ -286,6 +298,7 @@ export function MemoryPanel({ store, snapshot, signedIn, userId, learning, onLea
       {notice && <p>{notice}</p>}
       {snapshot.error && <p className="error" role="alert">{snapshot.error}</p>}
       </details>
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </section>
   );
 }
