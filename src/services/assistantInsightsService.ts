@@ -1,4 +1,3 @@
-import { assistantConversationsApi } from "@/services/assistantConversationsService";
 import { getSupabase, supabaseConfig } from "@/services/supabase";
 import {
   parseAssistantCandidate,parseAssistantProposals,parsePersonalDraft,
@@ -6,7 +5,7 @@ import {
   type AssistantInsightSample,type PersonalPlaybookDraft,
 } from "@/insights/assistantInsights";
 
-const MAX_THREADS=8,MAX_PAGES=8,PAGE_SIZE=100,MAX_SAMPLES=80;
+const MAX_SAMPLES=80;
 const unsafeSource=/(?:api[_ -]?key|password|secret|bearer |sk-proj-|authorization:|credit card)/i;
 async function accountToken(userId:string):Promise<string> {
   const session=(await getSupabase()?.auth.getSession())?.data.session;
@@ -24,7 +23,7 @@ async function rest(userId:string,path:string,init?:RequestInit):Promise<unknown
     },
   });
   if(!response.ok)throw new Error(`Assistant Insights storage returned ${response.status}.`);
-  return response.status===204?null:response.json();
+  return response.status===204||!response.headers.get("content-type")?.includes("json")?null:response.json();
 }
 const json=(body:unknown,preferences="return=minimal"):RequestInit=>({
   method:"POST",headers:{"Content-Type":"application/json",Prefer:preferences},
@@ -34,29 +33,21 @@ function rows<T>(value:unknown,parse:(value:unknown)=>T|null):T[] {
   return Array.isArray(value)?value.flatMap(v=>{const r=parse(v);return r?[r]:[];}):[];
 }
 export async function loadAssistantInsightSamples(userId:string):Promise<AssistantInsightSample[]> {
-  await accountToken(userId);
-  const conversations=await assistantConversationsApi.list(userId,{limit:MAX_THREADS});
-  const sampled:AssistantInsightSample[]=[];
-  for(const conversation of conversations.slice(0,MAX_THREADS)) {
-    let cursor=0;
-    for(let page=0;page<MAX_PAGES;page++) {
-      const messages=await assistantConversationsApi.listMessages(userId,conversation.id,{afterSeq:cursor,limit:PAGE_SIZE});
-      for(const message of messages) {
-        if(message.role!=="user"||message.status!=="final"||!message.body.trim())continue;
-        if(unsafeSource.test(message.body))continue;
-        // Truncate before sending any data to the model; never include tools or assistant replies.
-        sampled.push({messageId:message.id,conversationId:conversation.id,
-          createdAt:message.createdAt,text:message.body.trim().slice(0,500)});
-      }
-      if(messages.length<PAGE_SIZE)break;
-      const last=messages[messages.length-1]?.seq;
-      if(typeof last!=="number"||last<=cursor)break;
-      cursor=last;
-    }
+  const raw=await rest(userId,"rpc/list_assistant_insight_samples",json({p_limit:MAX_SAMPLES}));
+  if(!Array.isArray(raw))throw new Error("Assistant Insights could not load recent saved user messages.");
+  const samples:AssistantInsightSample[]=[];
+  for(const value of raw){
+    if(!value||typeof value!=="object"||Array.isArray(value))continue;
+    const row=value as Record<string,unknown>;
+    if(typeof row.message_id!=="string"||typeof row.conversation_id!=="string"||
+      typeof row.created_at!=="string"||typeof row.text!=="string"||!row.text.trim())continue;
+    if(unsafeSource.test(row.text))continue;
+    samples.push({
+      messageId:row.message_id,conversationId:row.conversation_id,
+      createdAt:row.created_at,text:row.text.trim().slice(0,500),
+    });
   }
-  // Deterministic newest sample, not an exhaustive review of entire conversation history.
-  return sampled.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||
-    b.messageId.localeCompare(a.messageId)).slice(0,MAX_SAMPLES);
+  return samples;
 }
 
 async function modelProposals(userId:string,samples:readonly AssistantInsightSample[]):Promise<AssistantInsightProposal[]> {
