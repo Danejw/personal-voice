@@ -1,4 +1,5 @@
 import { getSupabase, supabaseConfig } from "@/services/supabase";
+import { assistantInsightReadiness } from "@/insights/assistantInsightReadiness";
 import {
   parseAssistantCandidate,parseAssistantProposals,parsePersonalDraft,
   type AssistantInsightCandidate,type AssistantInsightProposal,type AssistantInsightRun,
@@ -88,10 +89,12 @@ export async function listAssistantInsightData(userId:string):Promise<{
   return {candidates:rows(suggestions,parseAssistantCandidate),drafts:rows(drafts,parsePersonalDraft),lastRun:run};
 }
 
-/** Explicit action only. No background model use, automatic edits or executable playbooks. */
+/** A user-triggered, readiness-gated refresh. No background inference or executable playbooks. */
 export async function analyzeAssistantUsage(userId:string):Promise<{reviewed:number;proposed:number}> {
   const samples=await loadAssistantInsightSamples(userId);
-  if(samples.length<6)throw new Error("Use the Assistant for at least six saved user messages before analyzing.");
+  const {lastRun}=await listAssistantInsightData(userId);
+  const readiness=assistantInsightReadiness(samples,lastRun);
+  if(!readiness.ready)throw new Error(readiness.reason);
   const proposals=await modelProposals(userId,samples);
   await accountToken(userId); // Fence against user switching during model inference.
   if(proposals.length){
