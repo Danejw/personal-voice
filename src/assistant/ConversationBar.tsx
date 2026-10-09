@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import type { AssistantLibraryConversation, AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 
 interface ConversationBarProps {
@@ -32,7 +33,7 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const visible = filterConversations(library.conversations, search);
   return (
     <aside id="assistant-threads" className="assistant-threads" aria-label="Conversation history">
@@ -78,7 +79,7 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
               ) : (
                 <>
                   <button type="button" className="assistant-thread" aria-current={row.id === library.currentId ? "page" : undefined}
-                    onClick={() => { setConfirming(null); onOpen(row.id); }}>
+                    onClick={() => onOpen(row.id)}>
                     <span className="assistant-thread-icon" aria-hidden="true">▤</span>
                     <span className="assistant-thread-content">
                       <span className="assistant-thread-title">{row.title}</span>
@@ -86,17 +87,13 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
                     </span>
                   </button>
                   <div className="assistant-thread-actions">
-                    {confirming === row.id ? (
-                      <>
-                        <button type="button" className="is-danger" onClick={() => { onDelete(row.id); setConfirming(null); }}>Delete</button>
-                        <button type="button" onClick={() => setConfirming(null)}>Cancel</button>
-                      </>
-                    ) : (
-                      <>
-                        <button type="button" aria-label={`Rename ${row.title}`} onClick={() => { setEditing(row.id); setTitle(row.title); setConfirming(null); }}>✎</button>
-                        <button type="button" aria-label={`Delete ${row.title}`} onClick={() => { setConfirming(row.id); setEditing(null); }}>×</button>
-                      </>
-                    )}
+                    <button type="button" aria-label={`Rename ${row.title}`} onClick={() => { setEditing(row.id); setTitle(row.title); }}>✎</button>
+                    <button type="button" aria-label={`Delete ${row.title}`} onClick={() => confirm.ask({
+                      title: "Delete conversation?",
+                      description: `“${row.title}” and its saved messages will be permanently deleted. Separately saved memories are unaffected.`,
+                      confirmLabel: "Delete conversation",
+                      onConfirm: () => onDelete(row.id),
+                    })}>×</button>
                   </div>
                 </>
               )}
@@ -130,6 +127,7 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
         {library.unavailableScreenshots.length > 0 && <p className="note-meta">Some screenshots are unavailable on this device.</p>}
         {library.error && library.save !== "retry" && <p className="error" role="alert">{library.error}</p>}
       </div>
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </aside>
   );
 }
