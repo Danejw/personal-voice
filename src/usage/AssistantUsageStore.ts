@@ -25,6 +25,7 @@ export class AssistantUsageStore {
   private pending: AssistantUsageEvent[] = [];
   private flushing = false;
   private listeners = new Set<() => void>();
+  private observedTurnIds = new Set<string>();
 
   constructor(
     private readonly api: AssistantUsageApi,
@@ -39,6 +40,7 @@ export class AssistantUsageStore {
   };
 
   private publish(): void { for (const listener of this.listeners) listener(); }
+  getPending(): AssistantUsageEvent[] { return [...this.pending]; }
   private storageKey(s: AssistantUsageScope): string {
     return `assistant.usage.pending.v1.${s.userId}.${s.epoch}`;
   }
@@ -52,6 +54,7 @@ export class AssistantUsageStore {
     if (changed) {
       this.active = null;
       this.pending = [];
+      this.observedTurnIds.clear();
       if (previous.userId && (!next.enabled || previous.userId !== next.userId || previous.epoch !== next.epoch)) {
         this.storage.removeItem(this.storageKey(previous));
       }
@@ -100,7 +103,9 @@ export class AssistantUsageStore {
   }
 
   recordTurn(input: { id: string; role: "user" | "assistant"; modality?: AssistantUsageModality }, conversationId: string | null): void {
-    if (!this.scope.enabled) return;
+    if (!this.scope.enabled || this.observedTurnIds.has(input.id)) return;
+    this.observedTurnIds.add(input.id);
+    if (this.observedTurnIds.size > 2000) this.observedTurnIds.clear();
     const at = this.now();
     if (!this.active && input.role !== "user") return;
     if (this.active && at - this.active.lastAt > INACTIVITY_MS) {
@@ -158,7 +163,10 @@ export class AssistantUsageStore {
           this.publish();
         }
       } catch { /* kept for retry when the account reconnects or Analytics opens */ }
-      finally { this.flushing = false; }
+      finally {
+        this.flushing = false;
+        if (JSON.stringify(scope) !== JSON.stringify(this.scope) && this.pending.length) this.flush();
+      }
     })();
   }
 }
