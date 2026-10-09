@@ -1,4 +1,5 @@
-import type { ToolEvalTrace } from "@/assistant/harness/evals/traceRecorder";
+import type { ToolEvalTrace, ToolEvalAttempt, EvalOrigin, EvalModality, EvalPlatform, GoalObservation } from "@/assistant/harness/evals/traceRecorder";
+import type { ToolFailureKind, ToolOutcomeStatus } from "@/assistant/harness/toolResults";
 import { MAX_EVAL_TOOL_ATTEMPTS } from "@/assistant/harness/evals/traceRecorder";
 
 const origins = new Set(["live", "fixture", "mock", "imported"]);
@@ -36,7 +37,7 @@ export function parseEvalTraces(input: unknown): ToolEvalTrace[] {
       throw new Error("Invalid evaluation trace header.");
     if (!Array.isArray(t.attempts) || t.attempts.length > MAX_EVAL_TOOL_ATTEMPTS)
       throw new Error("Invalid tool attempt count.");
-    const attempts = t.attempts.map((rawAttempt: unknown) => {
+    const attempts: ToolEvalAttempt[] = t.attempts.map((rawAttempt: unknown) => {
       const a = record(rawAttempt);
       only(a, ALLOWED_ATTEMPT);
       if (typeof a.tool !== "string" || !SAFE_TOOL.test(a.tool)
@@ -49,8 +50,8 @@ export function parseEvalTraces(input: unknown): ToolEvalTrace[] {
         tool: a.tool,
         startMs: a.startMs,
         durationMs: a.durationMs,
-        status: a.status,
-        failureKind: a.failureKind,
+        status: a.status as ToolOutcomeStatus | "pending",
+        failureKind: a.failureKind as ToolFailureKind,
       };
     });
     const goal = record(t.goal);
@@ -66,11 +67,11 @@ export function parseEvalTraces(input: unknown): ToolEvalTrace[] {
     return {
       version: 1,
       scenarioId: t.scenarioId,
-      origin: t.origin,
-      modality: t.modality,
-      platform: t.platform,
+      origin: t.origin as EvalOrigin,
+      modality: t.modality as EvalModality,
+      platform: t.platform as EvalPlatform,
       attempts,
-      goal,
-    } as ToolEvalTrace;
+      goal: { passed: goal.passed as boolean | null, source: goal.source as GoalObservation["source"] },
+    } satisfies ToolEvalTrace;
   });
 }
