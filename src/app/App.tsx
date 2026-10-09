@@ -332,7 +332,7 @@ assistant.setActions({
       try {
         await notesStore.addAttachments(id, [file]);
       } catch (error) {
-        throw new Error(`Note text updated, but attaching the image failed: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Note text updated, but attaching the image failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
       }
     }
   },
