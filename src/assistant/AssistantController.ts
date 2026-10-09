@@ -1963,7 +1963,8 @@ export class AssistantController {
       }
       case "edit_voice_note": {
         const input = JSON.parse(pending.text) as {id: string; text: string};
-        await this.actions.editVoiceNote(input.id, input.text, pending.noteImage ?? undefined);
+        if (pending.noteImage) await this.actions.editVoiceNote(input.id, input.text, pending.noteImage);
+        else await this.actions.editVoiceNote(input.id, input.text);
         return pending.noteImage ? "Updated the note and attached the captured image." : "Updated the note.";
       }
       case "attach_image_to_voice_note": {
@@ -1982,7 +1983,8 @@ export class AssistantController {
         return "Added the dictionary word.";
       case "create_voice_note": {
         const input = pending.noteImage ? (JSON.parse(pending.text) as {text: string}).text : pending.text;
-        await this.actions.createVoiceNote(input, pending.noteImage ?? undefined);
+        if (pending.noteImage) await this.actions.createVoiceNote(input, pending.noteImage);
+        else await this.actions.createVoiceNote(input);
         return pending.noteImage ? "Saved the note and its captured image." : "Saved the note.";
       }
       case "archive_voice_note":
