@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { classifyHandoffText } from "@/assistant/continuation";
 import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
 import { buildOverlaySnapshot, clipOverlayText, overlayAssistantFrom, overlayAssistantIntent, overlayAssistantInterrupt, overlayDictateIntent } from "@/overlay/overlay";
@@ -187,20 +186,6 @@ export function useOverlay({
   useEffect(() => {
     quietly(platform.syncOverlay(snapshot));
   }, [platform, snapshot]);
-
-  // Popups are independent of the draggable tray HWND. Android retains its
-  // native overlay notifications; only Windows uses the desktop feedback window.
-  useEffect(() => {
-    if (platform.platform !== "windows") return;
-    quietly(invoke("sync_overlay_feedback", {
-      channel: "notice", id: null, message: snapshot.notice,
-    }));
-  }, [platform.platform, snapshot.notice]);
-  useEffect(() => () => {
-    if (platform.platform === "windows") quietly(invoke("sync_overlay_feedback", {
-      channel: "notice", id: null, message: null,
-    }));
-  }, [platform.platform]);
 
   const releasedHolds = useRef(new Set<string>());
   const activeNoteHold = useRef<number | null>(null);
