@@ -46,7 +46,7 @@ Sign in and complete the device-permission onboarding before using microphone, o
 | **Destinations** | Focused text field, saved Notes, and **Remote Dictation** to another selected device's focused cursor |
 | **Dictionary, Snippets & Transforms** | Personal vocabulary; deterministic trigger-to-text snippet expansion; built-in and custom text transforms |
 | **Selection & history** | Capture selected text for further use; recent local dictations with optional account sync of final text |
-| **Notes & Handoffs** | Saved, editable Notes; send items to another signed-in device's handoff inbox; continue an Assistant conversation on another device |
+| **Notes & Handoffs** | Saved, editable Notes with private file attachments; Assistant can attach its current captured screenshot or camera still while creating/updating a note or to an existing note; handoffs and continuation across devices |
 | **Assistant conversation** | Chat-first workspace with a searchable thread rail, new conversation, resume/rename/delete, full-height transcript, typed/voice turns and Google Search grounding |
 | **Visual awareness** | Explicit screen snapshots, selected text, cursor/pointer inspection on Windows, accessibility-tree inspection, camera photos, and user-requested ongoing Camera Context |
 | **Device actions** | Allowlisted Windows application/window/UI Automation actions; bounded supervised screen workflows; supported remote Windows reads/actions with existing approval controls |
@@ -92,7 +92,7 @@ See [Assistant phase reports](docs/Assistant-Phases/), including [tool registry]
 ## Privacy and safety
 
 - **Microphone audio** connects directly from the device to Gemini for the active session; Personal Voice does not proxy or permanently store it.
-- **Camera Context** is user-initiated, uses device permissions, sends frames to Gemini Live and does not save frames in the Personal Voice backend. See [Camera Context](docs/Camera-Context-Phases/README.md).
+- **Camera Context** is user-initiated, uses device permissions and streams frames to Gemini Live without persisting them. An explicitly captured still or screenshot may be saved in the private `note-attachments` bucket only when the user requests it and confirms the Assistant's note action; existing Notes attachment limits and account permissions apply. The Assistant cannot browse arbitrary local file paths. See [Camera Context](docs/Camera-Context-Phases/README.md).
 - **Cloud storage is selective:** saved account content such as Notes, Handoffs, conversations and explicit memories may sync. Recent dictation **text** sync remains an independent opt-in setting. For newly created accounts, the four Assistant memory/recall settings default on: learning from newly saved Assistant user messages, semantic search, saved notes retrieval and synced dictation retrieval. Existing account settings, including prior opt-outs, are not overwritten. Turning on dictation retrieval alone never uploads local-only dictations.
 - **Insights/analytics:** event and usage metrics are distinct from storing raw microphone audio. Inspect and control what context is shared with Assistant in Settings.
 - **Remote actions and desktop controls** require the supported platform, a permitted target and applicable approvals. There is no general-purpose shell tool.
