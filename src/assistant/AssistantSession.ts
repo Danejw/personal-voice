@@ -78,9 +78,9 @@ export class AssistantSession {
   }
 
   /** Sends one completed typed turn. A selection, when present, is a separate part. */
-  sendTurn(text: string, selectionText?: string | null, accountText?: string | null, personalText?: string | null): void {
+  sendTurn(text: string, selectionText?: string | null, accountText?: string | null, personalText?: string | null, toolGuidance?: string | null): void {
     if (this.phase !== "ready") throw new Error("Assistant is not ready.");
-    this.send(assistantUserTurn(text, selectionText, accountText, personalText));
+    this.send(assistantUserTurn(text, selectionText, accountText, personalText, toolGuidance));
   }
 
   /** Sends one still JPEG. This is not a repeating video stream. */
