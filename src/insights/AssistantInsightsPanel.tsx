@@ -1,4 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { assistantUsageApi } from "@/services/assistantUsageService";
+import { assistantToolMetricsApi } from "@/services/assistantToolMetricsService";
+import { assistantUsageFacts } from "@/insights/assistantUsageFacts";
+import { formatHour } from "@/insights/insights";
+import { localUsageDay, type AssistantUsageEvent } from "@/usage/assistantUsage";
+import type { AssistantToolAttempt } from "@/usage/assistantToolMetrics";
+import { DeviceSplitBar, HorizontalShareBars } from "@/usage/HorizontalShareBars";
 import { assistantInsightReadiness, ASSISTANT_FIRST_MIN_MESSAGES, ASSISTANT_FIRST_MIN_DAYS, ASSISTANT_REFRESH_NEW_MESSAGES, ASSISTANT_REFRESH_DAYS, ASSISTANT_REFRESH_MIN_AFTER_WEEK, type AssistantInsightReadiness } from "@/insights/assistantInsightReadiness";
 import {
   analyzeAssistantUsage,listAssistantInsightData,loadAssistantInsightSamples,
@@ -10,6 +17,8 @@ import type {
 
 interface Props {
   active:boolean; userId:string|null; refreshToken:number;
+  usageEpoch:number;
+  devices:readonly {id:string;name:string;platform:string}[];
   view:"profile"|"suggestions";
   onPendingChange:(userId:string,count:number)=>void;
   onOpenSuggestions:()=>void;
@@ -22,7 +31,7 @@ const EMPTY:Snapshot={candidates:[],drafts:[],lastRun:null};
 const LABELS={workflow:"Personal workflow",adaptation:"Assistant adaptation",goal:"Goal / productivity"} as const;
 const KINDS=["workflow","adaptation","goal"] as const;
 
-export function AssistantInsightsPanel({active,userId,refreshToken,view,onPendingChange,onOpenSuggestions}:Props) {
+export function AssistantInsightsPanel({active,userId,refreshToken,view,usageEpoch,devices,onPendingChange,onOpenSuggestions}:Props) {
   const [snapshot,setSnapshot]=useState<Snapshot>(EMPTY);
   const [loadedFor,setLoadedFor]=useState<string|null>(null);
   const [readiness,setReadiness]=useState<AssistantInsightReadiness|null>(null);
@@ -34,6 +43,8 @@ export function AssistantInsightsPanel({active,userId,refreshToken,view,onPendin
   const [refresh,setRefresh]=useState(0);
   const [editing,setEditing]=useState<{id:string;title:string;steps:string}|null>(null);
   const [evidence,setEvidence]=useState<{id:string;items:AssistantInsightSample[]}|null>(null);
+  const [usageRows,setUsageRows]=useState<{key:string;events:AssistantUsageEvent[];tools:AssistantToolAttempt[]}|null>(null);
+  const [usageError,setUsageError]=useState<string|null>(null);
 
   useEffect(()=>{
     setSnapshot(EMPTY);setLoadedFor(null);setReadiness(null);
@@ -60,6 +71,34 @@ export function AssistantInsightsPanel({active,userId,refreshToken,view,onPendin
     window.addEventListener("online",update);
     return ()=>{window.removeEventListener("focus",update);window.removeEventListener("online",update);};
   },[active,userId]);
+
+  const usageKey=`${userId??""}:${usageEpoch}`;
+  useEffect(()=>{
+    setUsageRows(null);
+    setUsageError(null);
+  },[userId,usageEpoch]);
+  useEffect(()=>{
+    if(!active||!userId||view!=="profile")return;
+    let cancelled=false;
+    const now=new Date();
+    const fromDay=localUsageDay(new Date(now.getFullYear(),now.getMonth(),now.getDate()-29));
+    void Promise.allSettled([
+      assistantUsageApi.list(usageEpoch,userId),
+      assistantToolMetricsApi.list(usageEpoch,userId,fromDay),
+    ]).then(([turns,tools])=>{
+      if(cancelled)return;
+      setUsageRows({
+        key:`${userId}:${usageEpoch}`,
+        events:turns.status==="fulfilled"?turns.value:[],
+        tools:tools.status==="fulfilled"?tools.value:[],
+      });
+      setUsageError(turns.status==="rejected"
+        ?"Assistant activity could not be loaded. Check usage tracking and the Phase A migration."
+        :tools.status==="rejected"
+          ?"Tool activity could not be loaded. Device and time metrics remain available.":null);
+    });
+    return ()=>{cancelled=true;};
+  },[active,userId,usageEpoch,view,refresh,refreshToken]);
 
   useEffect(()=>{
     if(userId&&loadedFor===userId) onPendingChange(userId,snapshot.candidates.filter(c=>c.status==="pending").length);
@@ -124,34 +163,148 @@ export function AssistantInsightsPanel({active,userId,refreshToken,view,onPendin
   const dayCount=latest?Math.min(ASSISTANT_REFRESH_DAYS,Math.floor(showingReadiness?.daysSinceLastRun??0)):(showingReadiness?.activeDays??0);
   const dayTarget=latest?ASSISTANT_REFRESH_DAYS:ASSISTANT_FIRST_MIN_DAYS;
   const dayPercent=Math.min(100,Math.round(dayCount/dayTarget*100));
+  const measured=usageRows?.key===usageKey?usageRows:null;
+  const fromDay=localUsageDay(new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()-29));
+  const recentEvents=useMemo(()=>measured?.events.filter(event=>event.localDay>=fromDay)??[],[measured,fromDay]);
+  const facts=useMemo(()=>assistantUsageFacts(recentEvents),[recentEvents]);
+  const deviceNames=new Map(devices.map(device=>[device.id,device.name]));
+  const knownDevices=facts.deviceCounts.map(device=>({
+    id:device.deviceId,label:deviceNames.get(device.deviceId)??"Unknown device",
+    count:device.count,share:Math.round(device.count/Math.max(1,facts.turns)*100),
+  }));
+  const weekdayNames=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const weekdayRows=facts.dayCounts.map((count,index)=>({
+    id:weekdayNames[index]??String(index),label:weekdayNames[index]??String(index),
+    count,
+  })).filter(row=>row.count>0).sort((a,b)=>b.count-a.count).map(row=>({
+    id:row.id,label:row.label,share:Math.round(row.count/Math.max(1,facts.turns)*100),
+    detail:row.count.toLocaleString(),
+  }));
+  const timeRows=Array.from({length:8},(_,index)=>{
+    const start=index*3;
+    const count=(facts.hourCounts[start]??0)+(facts.hourCounts[start+1]??0)+(facts.hourCounts[start+2]??0);
+    return {start,count};
+  }).filter(row=>row.count>0).sort((a,b)=>b.count-a.count).map(row=>({
+    id:String(row.start),label:`${formatHour(row.start)}–${formatHour((row.start+3)%24)}`,
+    share:Math.round(row.count/Math.max(1,facts.turns)*100),
+    detail:row.count.toLocaleString(),
+  }));
+  const modalityRows=[
+    {id:"voice",label:"Voice",count:facts.voiceTurns},
+    {id:"typed",label:"Typed",count:facts.typedTurns},
+    {id:"unknown",label:"Unclassified",count:facts.unknownTurns},
+  ].filter(row=>row.count>0).map(row=>({
+    ...row,share:Math.round(row.count/Math.max(1,facts.turns)*100),detail:row.count.toLocaleString(),
+  }));
+  const toolMap=new Map<string,number>();
+  for(const attempt of measured?.tools??[]){
+    if(attempt.localDay<fromDay)continue;
+    const family=attempt.family;
+    toolMap.set(family,(toolMap.get(family)??0)+1);
+  }
+  const toolTotal=[...toolMap.values()].reduce((sum,count)=>sum+count,0);
+  const toolRows=[...toolMap].map(([id,count])=>({
+    id,label:id.replace(/_/g," "),share:Math.round(count/Math.max(1,toolTotal)*100),
+    detail:count.toLocaleString(),count,
+  })).sort((a,b)=>b.count-a.count).slice(0,5);
+
   if(view==="profile")return (
     <div className="insights-stack">
       <section className="insights-voice-hero">
         <div className="insights-heading-row">
           <div>
-            <p className="insights-eyebrow">Your Assistant</p>
-            <h2>Understand how you work</h2>
+            <p className="insights-eyebrow">Your Assistant communication profile</p>
             <p className="insights-hero-meta">
-              {latest?`Based on ${latest.userMessageCount} user messages across ${latest.conversationCount} conversations`
-                :"A profile of recurring workflows and preferences appears after enough saved conversations accumulate."}
+              {latest
+                ? `Based on ${latest.userMessageCount.toLocaleString()} saved user messages across ${latest.conversationCount} conversations`
+                : "A communication-style profile appears after enough saved Assistant conversations accumulate."}
             </p>
           </div>
           <button type="button" className="secondary insights-refresh"
             disabled={loading||analyzing||!showingReadiness?.ready}
             onClick={()=>void analyze()}>
-            {analyzing?"Analyzing…":latest?"Refresh insights":"Analyze my Assistant"}
+            {analyzing?"Analyzing…":latest&&!latest.voiceProfile?"Generate my profile":latest?"Refresh insights":"Analyze my Assistant"}
           </button>
         </div>
-        <p className="hint">{showingReadiness?.reason??"Loading recent Assistant activity…"}</p>
-        {latest&&<p className="insights-hero-meta">Last analysis: {new Date(latest.createdAt).toLocaleDateString()}</p>}
-        {!!pending.length&&<button type="button" className="secondary insights-refresh"
+        {latest?.voiceProfile?(
+          <p className="voice-profile">{latest.voiceProfile}</p>
+        ):(
+          <p className="placeholder">
+            {latest
+              ?"Your earlier analysis generated suggestions but did not save a communication profile. Generate your profile to fill this section."
+              :showingReadiness?.reason??"Loading recent Assistant conversations…"}
+          </p>
+        )}
+        {!showingReadiness?.ready&&latest&&<p className="insights-next-refresh">{showingReadiness?.reason}</p>}
+        {!!pending.length&&<button type="button" className="secondary"
           onClick={onOpenSuggestions}>Review {pending.length} suggestion{pending.length===1?"":"s"}</button>}
+        {!!latest?.communicationTips.length&&(
+          <div className="assistant-communication-guidance">
+            <h3>Communicating effectively with your Assistant</h3>
+            <ul>{latest.communicationTips.map((tip,index)=><li key={index}>{tip}</li>)}</ul>
+          </div>
+        )}
+        {error&&<p className="error" role="alert">{error}</p>}
+        {notice&&<p className="insights-notice" role="status">{notice}</p>}
+      </section>
+
+      <section aria-label="Measured Assistant usage, last 30 days">
+        <p className="insights-eyebrow">Assistant usage · Last 30 days</p>
+        {!!facts.turns?(
+          <>
+            <div className="stat-row insights-stat-row">
+              <div className="stat-cell">
+                <p className="stat-value">{facts.peakDay??"–"}</p>
+                <p className="stat-label">Peak day</p>
+              </div>
+              <div className="stat-cell">
+                <p className="stat-value">{facts.peakHourStart===null?"–":`${formatHour(facts.peakHourStart)}–${formatHour(facts.peakHourEnd)}`}</p>
+                <p className="stat-label">Peak time</p>
+              </div>
+              <div className="stat-cell">
+                <p className="stat-value">{facts.peakDeviceId?deviceNames.get(facts.peakDeviceId)??"Unknown device":"–"}</p>
+                <p className="stat-label">{facts.peakDeviceShare===null?"Peak device":`${facts.peakDeviceShare}% during peak time`}</p>
+              </div>
+              <div className="stat-cell">
+                <p className="stat-value">{facts.turns.toLocaleString()}</p>
+                <p className="stat-label">Assistant requests</p>
+              </div>
+              <div className="stat-cell">
+                <p className="stat-value">{facts.turns?Math.round(facts.voiceTurns/facts.turns*100)+"%":"–"}</p>
+                <p className="stat-label">Voice interactions</p>
+              </div>
+            </div>
+            <div className="analytics-visual-row insights-visual-row">
+              <HorizontalShareBars headingId="assistant-insights-days" title="When you use the Assistant"
+                items={weekdayRows} empty="No weekday activity measured yet."/>
+              <div className="analytics-split-stack">
+                <DeviceSplitBar devices={knownDevices} headingId="assistant-insights-devices" unitLabel="Assistant requests"/>
+                <HorizontalShareBars headingId="assistant-insights-modes" title="Voice vs typed"
+                  items={modalityRows} empty="No input modes have been classified yet."/>
+              </div>
+            </div>
+            <div className="analytics-visual-row insights-visual-row">
+              <HorizontalShareBars headingId="assistant-insights-hours" title="Time of day"
+                items={timeRows} empty="No time distribution measured yet."/>
+              <HorizontalShareBars headingId="assistant-insights-tools" title="Tool activity"
+                items={toolRows} empty="No Assistant tool categories measured in this period."/>
+            </div>
+            <p className="hint">Device and interaction data come from measured Assistant events. Time of day is shown in this device's time zone. Application targets are not collected for Assistant interactions.</p>
+          </>
+        ):(
+          <p className="hint">
+            {measured
+              ?"No measured Assistant interactions in the last 30 days. Earlier saved conversations can still inform your communication profile."
+              :"Loading measured Assistant activity…"}
+          </p>
+        )}
+        {usageError&&<p className="hint">{usageError}</p>}
       </section>
       <div className="analytics-visual-row insights-visual-row">
         <section className="insights-progress-card">
           <div className="insights-heading-row">
             <div>
-              <p className="insights-eyebrow">{latest?"Next Insights refresh":"First Assistant analysis"}</p>
+              <p className="insights-eyebrow">{latest?"Next insights refresh":"First Assistant analysis"}</p>
               <h2>{current} / {activityTarget} messages</h2>
             </div>
             <span className="progress-percent">{activityPercent}%</span>
@@ -170,9 +323,6 @@ export function AssistantInsightsPanel({active,userId,refreshToken,view,onPendin
           {latest&&<p className="hint">Refresh after {ASSISTANT_REFRESH_MIN_AFTER_WEEK} new messages and 7 days.</p>}
         </section>
       </div>
-      {loading&&<p className="hint">Loading Assistant Insights…</p>}
-      {error&&<p className="error" role="alert">{error}</p>}
-      {notice&&<p className="insights-notice" role="status">{notice}</p>}
     </div>
   );
 
