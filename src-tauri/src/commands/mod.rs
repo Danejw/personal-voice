@@ -106,8 +106,9 @@ fn present_overlay_feedback(app: &AppHandle, payload: OverlayFeedbackPayload) ->
         return platform::hide_window(&window);
     }
     pin_corner_popup(app, "overlay-feedback")?;
-    // Suppress focus and pointer interception even over transparent pixels.
-    window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
+    // The card is deliberately scrollable for longer notices. It remains
+    // non-focusable and separate from the draggable tray.
+    window.set_ignore_cursor_events(false).map_err(|e| e.to_string())?;
     app.emit_to("overlay-feedback", "overlay-feedback-state", payload).map_err(|e| e.to_string())?;
     platform::show_without_focus(&window)
 }
