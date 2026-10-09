@@ -72,6 +72,7 @@ describe("assistant setup and typed turns", () => {
       "inspect_active_app",
       "send_remote_dictation",
       "edit_voice_note",
+      "attach_image_to_voice_note",
       "create_transform",
       "add_dictionary_word",
       "read_usage_analytics",
