@@ -49,6 +49,17 @@ static OVERLAY_FEEDBACK_STATE: Mutex<OverlayFeedbackState> = Mutex::new(OverlayF
 
 /// Pin independent popups to the primary monitor's *work area*, not to the
 /// dragged tray or the screen bounds under the taskbar.
+/// Position relative to the monitor WORK AREA, never to the floating tray.
+#[cfg(windows)]
+fn popup_corner_position(
+    area_x: i32, area_y: i32, area_width: i32, area_height: i32,
+    width: i32, height: i32, shift_above: i32,
+) -> (i32, i32) {
+    let x = area_x + (area_width - width - 20).max(0);
+    let y = area_y + (area_height - height - 16 - shift_above).max(0);
+    (x, y)
+}
+
 #[cfg(windows)]
 fn pin_corner_popup(app: &AppHandle, label: &str, logical_height: Option<f64>) -> Result<(), String> {
     let popup = app.get_webview_window(label).ok_or("Popup window missing")?;
@@ -58,7 +69,8 @@ fn pin_corner_popup(app: &AppHandle, label: &str, logical_height: Option<f64>) -
     let size = popup.outer_size().map_err(|e| e.to_string())?;
     let width = size.width as i32;
     let height = logical_height.map(|value| (value * monitor.scale_factor()).round() as i32)
-        .unwrap_or(size.height as i32);
+        .unwrap_or(size.height as i32)
+        .min((area.size.height as i32 - 32).max(80));
     let shift = if label == "overlay-feedback" {
         app.get_webview_window("assistant-tool-popup")
             .filter(|other| other.is_visible().unwrap_or(false))
@@ -66,8 +78,10 @@ fn pin_corner_popup(app: &AppHandle, label: &str, logical_height: Option<f64>) -
             .map(|size| size.height as i32 + 12)
             .unwrap_or(0)
     } else { 0 };
-    let x = area.position.x + (area.size.width as i32 - width - 20).max(0);
-    let y = area.position.y + (area.size.height as i32 - height - 16 - shift).max(0);
+    let (x, y) = popup_corner_position(
+        area.position.x, area.position.y, area.size.width as i32, area.size.height as i32,
+        width, height, shift,
+    );
     let hwnd = popup.hwnd().map_err(|e| e.to_string())?;
     // The bounds are applied atomically so the popup never appears centered
     // or becomes positioned using a previous (smaller) message height.
@@ -740,4 +754,34 @@ pub fn show_settings(app: AppHandle) {
     crate::tray::show_main(&app);
     #[cfg(not(desktop))]
     let _ = app;
+}
+
+#[cfg(all(test, windows))]
+mod overlay_feedback_tests {
+    use super::{feedback_height, popup_corner_position, OverlayFeedbackState};
+
+    #[test]
+    fn corner_does_not_depend_on_indicator_position_or_taskbar_bounds() {
+        assert_eq!(popup_corner_position(0, 0, 1920, 1040, 420, 140, 0), (1480, 884));
+        assert_eq!(popup_corner_position(-1920, 20, 1920, 980, 420, 140, 0), (-440, 844));
+        assert_eq!(popup_corner_position(0, 0, 1920, 1040, 420, 140, 272), (1480, 612));
+    }
+
+    #[test]
+    fn tool_action_and_notification_remain_independent() {
+        let mut state = OverlayFeedbackState::default();
+        state.hint = Some("Start Assistant".into());
+        assert_eq!(state.current().message.as_deref(), Some("Start Assistant"));
+        state.notice = Some("File system is unavailable".into());
+        assert_eq!(state.current().kind, Some("notice"));
+        state.notice = None;
+        assert_eq!(state.current().kind, Some("hint"));
+    }
+
+    #[test]
+    fn longer_messages_receive_more_space_but_bounds_remain_finite() {
+        assert_eq!(feedback_height("Small"), 110.0);
+        assert!(feedback_height(&"Long message. ".repeat(50)) > feedback_height("Small"));
+        assert_eq!(feedback_height(&"x".repeat(5000)), 560.0);
+    }
 }
