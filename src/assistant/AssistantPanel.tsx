@@ -26,6 +26,8 @@ interface AssistantChromeProps {
   onOpenThread?: (id: string) => void;
   onRenameThread?: (id: string, title: string) => void;
   onDeleteThread?: (id: string) => void;
+  onArchiveThread?: (id: string, archived: boolean) => void;
+  onShowArchived?: (archived: boolean) => void;
   onRetrySave?: () => void;
   onLoadOlder?: () => void;
   onRefreshThreads?: () => void;
@@ -81,6 +83,8 @@ export function AssistantPanel({
   onOpenThread,
   onRenameThread,
   onDeleteThread,
+  onArchiveThread,
+  onShowArchived,
   onRetrySave,
   onLoadOlder,
   onRefreshThreads,
@@ -178,6 +182,8 @@ export function AssistantPanel({
           onOpen={(id) => { onOpenThread(id); setView("chat"); setShowThreads(false); }}
           onRename={onRenameThread}
           onDelete={onDeleteThread}
+          onArchive={onArchiveThread}
+          onShowArchived={onShowArchived}
           onRetry={onRetrySave}
           onLoadOlder={onLoadOlder}
           onRefresh={onRefreshThreads}
@@ -197,6 +203,23 @@ export function AssistantPanel({
           <div className="assistant-conversation-heading">
             <h3 title={displayTitle}>{displayTitle}</h3>
           </div>
+          {library?.currentId && <details className="assistant-session-dropdown">
+            <summary title="View individual sessions inside this continuous thread">
+              {library.sessions.length} session{library.sessions.length === 1 ? "" : "s"}
+            </summary>
+            <div className="assistant-session-popover" role="group" aria-label="Saved sessions">
+              {library.sessions.length === 0 && <p>No session boundaries recorded yet. Older messages remain in the thread.</p>}
+              {library.sessions.map((session) => (
+                <div className="assistant-session-entry" key={session.id}>
+                  <span>{new Date(session.startedAt).toLocaleString()} · {session.endReason ?? "Active"}</span>
+                  <button type="button" className="secondary" title="Copy full session ID"
+                    onClick={() => { void navigator.clipboard.writeText(session.id); }}>
+                    Copy ID {session.id.slice(0, 8)}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>}
           <AssistantHeader controller={controller} snapshot={snapshot} signedIn={signedIn}
             micBusy={micBusy} library={library} onProduce={onProduce} />
         </header>
