@@ -11,6 +11,12 @@ use crate::platform;
 
 pub const INDICATOR_WINDOW: &str = "indicator";
 
+// These fixed logical dimensions match tauri.conf.json on Windows.
+#[cfg(windows)]
+const POPUP_WIDTH: f64 = 440.0;
+#[cfg(windows)]
+const POPUP_HEIGHT: f64 = 300.0;
+
 /// The tray and its feedback are independent HWNDs. No window-local tooltip can
 /// extend past its own HWND bounds, regardless of z-index or CSS overflow.
 #[cfg(windows)]
@@ -63,15 +69,14 @@ fn popup_corner_position(
 }
 
 #[cfg(windows)]
-fn pin_corner_popup(app: &AppHandle, label: &str, logical_height: Option<f64>) -> Result<(), String> {
+fn pin_corner_popup(app: &AppHandle, label: &str) -> Result<(), String> {
     let popup = app.get_webview_window(label).ok_or("Popup window missing")?;
     let monitor = popup.primary_monitor().map_err(|e| e.to_string())?
         .ok_or("No primary monitor available")?;
     let area = monitor.work_area();
-    let size = popup.outer_size().map_err(|e| e.to_string())?;
-    let width = size.width as i32;
-    let desired_height = logical_height.map(|value| (value * monitor.scale_factor()).round() as i32)
-        .unwrap_or(size.height as i32);
+    let scale = monitor.scale_factor().max(1.0);
+    let desired_width = (POPUP_WIDTH * scale).round() as i32;
+    let desired_height = (POPUP_HEIGHT * scale).round() as i32;
     let shift = if label == "overlay-feedback" {
         app.get_webview_window("assistant-tool-popup")
             .filter(|other| other.is_visible().unwrap_or(false))
@@ -79,9 +84,10 @@ fn pin_corner_popup(app: &AppHandle, label: &str, logical_height: Option<f64>) -
             .map(|size| size.height as i32 + 12)
             .unwrap_or(0)
     } else { 0 };
-    // Leave sufficient space for the actionable Assistant card on smaller
-    // monitors instead of letting two independent popups overlap each other.
-    let height = desired_height.min((area.size.height as i32 - 32 - shift).max(80));
+    // Fixed dimensions in ordinary work areas; shrink only if the monitor
+    // cannot accommodate them (including two vertically stacked popups).
+    let width = desired_width.min((area.size.width as i32 - 100).max(120));
+    let height = desired_height.min((area.size.height as i32 - 32 - shift).max(90));
     let (x, y) = popup_corner_position(
         area.position.x, area.position.y, area.size.width as i32, area.size.height as i32,
         width, height, shift,
@@ -93,23 +99,13 @@ fn pin_corner_popup(app: &AppHandle, label: &str, logical_height: Option<f64>) -
         .map_err(|e| e.to_string())
 }
 
-/// Conservative estimate for word-wrapped content; limits size on tiny screens.
-#[cfg(windows)]
-fn feedback_height(message: &str) -> f64 {
-    let line_count: usize = message.lines().map(|line| line.chars().count().max(1).div_ceil(48)).sum();
-    (84 + line_count.clamp(1, 25) * 20).clamp(110, 560) as f64
-}
-
 #[cfg(windows)]
 fn present_overlay_feedback(app: &AppHandle, payload: OverlayFeedbackPayload) -> Result<(), String> {
     let window = app.get_webview_window("overlay-feedback").ok_or("Feedback window missing")?;
-    let Some(ref message) = payload.message else {
+    if payload.message.is_none() {
         return platform::hide_window(&window);
-    };
-    // Resize the independent HWND before positioning it. Typical messages are
-    // fully visible; extremely long messages stay inside the work area.
-    let logical_height = feedback_height(message);
-    pin_corner_popup(app, "overlay-feedback", Some(logical_height))?;
+    }
+    pin_corner_popup(app, "overlay-feedback")?;
     // Suppress focus and pointer interception even over transparent pixels.
     window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
     app.emit_to("overlay-feedback", "overlay-feedback-state", payload).map_err(|e| e.to_string())?;
@@ -170,17 +166,17 @@ pub fn sync_assistant_tool_popup(app: AppHandle, snapshot: serde_json::Value) ->
         popup.hide().map_err(|e|e.to_string())?;
         if app.get_webview_window("overlay-feedback")
             .is_some_and(|feedback| feedback.is_visible().unwrap_or(false)) {
-            let _ = pin_corner_popup(&app, "overlay-feedback", None);
+            let _ = pin_corner_popup(&app, "overlay-feedback");
         }
         return Ok(());
     }
-    pin_corner_popup(&app, "assistant-tool-popup", None)?;
+    pin_corner_popup(&app, "assistant-tool-popup")?;
     app.emit_to("assistant-tool-popup", "assistant-popup-state", snapshot)
         .map_err(|e| e.to_string())?;
     platform::show_without_focus(&popup)?;
     if app.get_webview_window("overlay-feedback")
         .is_some_and(|feedback| feedback.is_visible().unwrap_or(false)) {
-        let _ = pin_corner_popup(&app, "overlay-feedback", None);
+        let _ = pin_corner_popup(&app, "overlay-feedback");
     }
     Ok(())
 }
@@ -762,7 +758,7 @@ pub fn show_settings(app: AppHandle) {
 
 #[cfg(all(test, windows))]
 mod overlay_feedback_tests {
-    use super::{feedback_height, popup_corner_position, OverlayFeedbackState};
+    use super::{popup_corner_position, OverlayFeedbackState};
 
     #[test]
     fn corner_does_not_depend_on_indicator_position_or_taskbar_bounds() {
@@ -783,9 +779,9 @@ mod overlay_feedback_tests {
     }
 
     #[test]
-    fn longer_messages_receive_more_space_but_bounds_remain_finite() {
-        assert_eq!(feedback_height("Small"), 110.0);
-        assert!(feedback_height(&"Long message. ".repeat(50)) > feedback_height("Small"));
-        assert_eq!(feedback_height(&"x".repeat(5000)), 560.0);
+    fn popup_window_dimensions_are_fixed_and_not_based_on_message_length() {
+        assert_eq!(super::POPUP_WIDTH, 440.0);
+        assert_eq!(super::POPUP_HEIGHT, 300.0);
+        assert_eq!(popup_corner_position(0, 0, 1920, 1040, 440, 300, 0), (1398, 724));
     }
 }
