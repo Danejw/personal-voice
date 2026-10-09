@@ -44,6 +44,9 @@ export interface AssistantToolSummary {
   resolvedRate: number | null;
   medianMs: number | null;
   p95Ms: number | null;
+  /** Same device/tool re-attempted within 2 minutes of a failed/blocked response; heuristic only. */
+  postFailureFollowUps: number;
+  postFailureAccepted: number;
   failures: { key: string; count: number }[];
   tools: ToolMetric[];
   categories: ToolMetric[];
@@ -95,6 +98,19 @@ export function summarizeToolReliability(rows: readonly AssistantToolAttempt[], 
       .sort((a,b) => b.calls - a.calls || a.key.localeCompare(b.key));
   };
   const failMap = new Map<string,number>(), daily = new Map<string, {day:string;calls:number;failed:number}>();
+  let postFailureFollowUps=0, postFailureAccepted=0;
+  const previousFailure=new Map<string,number>();
+  for (const row of [...period].sort((a,b)=>a.occurredAt.localeCompare(b.occurredAt))) {
+    const key = `${row.deviceId}:${row.tool}`;
+    const at=Date.parse(row.occurredAt);
+    const last=previousFailure.get(key);
+    if(last!==undefined && Number.isFinite(at) && at>=last && at-last<=120_000) {
+      postFailureFollowUps++;
+      if(row.outcome==="acknowledged"||row.outcome==="observed")postFailureAccepted++;
+      previousFailure.delete(key);
+    }
+    if((row.outcome==="failed"||row.outcome==="blocked")&&Number.isFinite(at))previousFailure.set(key,at);
+  }
   for(const e of period) {
     if (e.failureKind) failMap.set(e.failureKind, (failMap.get(e.failureKind) ?? 0)+1);
     const value = daily.get(e.localDay) ?? { day:e.localDay, calls:0, failed:0 };
@@ -106,6 +122,7 @@ export function summarizeToolReliability(rows: readonly AssistantToolAttempt[], 
     ...total, resolvedRate: eligible ? (total.acknowledged + total.observed) / eligible : null,
     medianMs: period.length ? total.medianMs : null,
     p95Ms: period.length ? total.p95Ms : null,
+    postFailureFollowUps,postFailureAccepted,
     tools: groups(e=>e.tool), categories: groups(e=>e.family),
     failures: [...failMap].map(([key,count])=>({key,count})).sort((a,b)=>b.count-a.count),
     byDay: [...daily.values()].sort((a,b)=>a.day.localeCompare(b.day)),
