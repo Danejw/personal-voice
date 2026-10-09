@@ -1821,6 +1821,7 @@ section.page-panel.assistant-workspace-section { padding: 0; overflow: hidden; }
 .assistant-view-tabs button.is-active::after { content: ""; position: absolute; height: 2px; left: 0; right: 0; bottom: 0; background: var(--pv-primary); border-radius: 9px; }
 .assistant-rail-toggle { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; padding: 0; font-size: 15px; flex: none; }
 .assistant-workspace.is-rail-collapsed .assistant-threads { display: none; }
+.assistant-rail-scrim { display: none; }
 .assistant-chat-scroll {
   flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 10px clamp(12px,2%,28px) 95px;
   display: flex; flex-direction: column; gap: 8px;
@@ -1900,6 +1901,7 @@ section.page-panel.assistant-workspace-section { padding: 0; overflow: hidden; }
   .assistant-workspace .assistant-threads { display: none; position: absolute; z-index: 8; inset: 0 auto 0 0; width: min(275px, 80vw); box-shadow: 16px 0 24px rgba(0,0,0,.36); }
   .assistant-workspace { position: relative; }
   .assistant-workspace.show-thread-rail .assistant-threads { display: flex; }
+  .assistant-rail-scrim { display: block; position: absolute; inset: 0; z-index: 7; border: 0; padding: 0; background: rgba(0,0,0,.35); cursor: pointer; }
   .assistant-rail-toggle { display: inline-flex; min-width: 28px; flex: none; align-items: center; justify-content: center; }
   .assistant-chat-header { min-height: 44px; }
   .assistant-conversation-heading h3 { font-size: 16px; }
