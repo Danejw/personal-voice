@@ -9,6 +9,7 @@ import {
   type RemoteComputerAction,
 } from "@/assistant/computerActions";
 import { cameraFacingFromArgs, type CameraFacing } from "@/platform/camera";
+import { enrichToolDescription } from "@/assistant/harness/toolIntelligence";
 
 /**
  * Gemini 3.8 Live function calls, checked against the Live tools guide on 2026-09-15:
@@ -376,7 +377,7 @@ export function assistantFunctionDeclarations() {
         required: ["device", "action", "argument"],
       },
     },
-  ];
+  ].map((tool) => ({ ...tool, description: enrichToolDescription(tool.name, tool.description) }));
 }
 
 export interface ParsedToolCall {
