@@ -24,6 +24,7 @@ export interface PendingAssistantMessage {
   citations: AssistantCitation[];
   /** Set when the line needs the producer's fence. User lines leave this empty. */
   fence: number | null;
+  sessionId?: string | null;
 }
 
 /** One append that must survive a crash between the server commit and the local ack. */
