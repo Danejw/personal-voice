@@ -911,6 +911,69 @@ describe("AssistantController", () => {
     expect(created.getSnapshot().pendingAction).toBeNull();
   });
 
+  it("blocks image note saving without a captured still and pins approved screenshots", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setActions(used);
+    created.setAutoRun(true); // Image persistence must still require explicit consent.
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+
+    session.emit({ type: "toolCalls", calls: [{ id: "no-image", name: "create_voice_note",
+      args: { text: "Missing screenshot", attachment_source: "screenshot" } }] });
+    await settle();
+    expect(used.createVoiceNote).not.toHaveBeenCalled();
+    expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
+      id: "no-image", response: { error: expect.stringContaining("Capture a screenshot first") },
+    }] } });
+
+    created.attachSnapshot({ source: "screen", width: 1280, height: 720,
+      capturedAt: "2026-10-09T01:00:00Z", jpeg: "first-image" });
+    session.emit({ type: "toolCalls", calls: [{ id: "save-image", name: "create_voice_note",
+      args: { text: "My bug report", attachment_source: "screenshot" } }] });
+    await settle();
+    expect(created.getSnapshot().pendingAction?.title).toBe("Save note with captured image");
+    expect(JSON.stringify(created.getSnapshot().pendingAction)).not.toContain("first-image");
+    expect(used.createVoiceNote).not.toHaveBeenCalled();
+
+    created.attachSnapshot({ source: "screen", width: 1280, height: 720,
+      capturedAt: "2026-10-09T02:00:00Z", jpeg: "second-image" });
+    created.confirmPending();
+    await settle();
+    expect(used.createVoiceNote).toHaveBeenCalledWith("My bug report", {
+      source: "screenshot", capturedAt: "2026-10-09T01:00:00Z", jpeg: "first-image",
+    });
+    expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
+      id: "save-image", response: { result: "Saved the note and its captured image." },
+    }] } });
+    created.end();
+  });
+
+  it("cancels image attachment without editing a note, then attaches to an existing note", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setActions(used);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    created.attachSnapshot({ source: "window", width: 800, height: 600,
+      capturedAt: "2026-10-09T03:00:00Z", jpeg: "image-data" });
+    const args = { id: "n1", attachment_source: "screenshot" };
+
+    session.emit({ type: "toolCalls", calls: [{ id: "cancel", name: "attach_image_to_voice_note", args }] });
+    await settle();
+    created.cancelPending();
+    expect(used.attachImageToVoiceNote).not.toHaveBeenCalled();
+    session.emit({ type: "toolCalls", calls: [{ id: "attach", name: "attach_image_to_voice_note", args }] });
+    await settle();
+    created.confirmPending();
+    await settle();
+    expect(used.attachImageToVoiceNote).toHaveBeenCalledWith("n1", {
+      source: "screenshot", capturedAt: "2026-10-09T03:00:00Z", jpeg: "image-data",
+    });
+    expect(used.editVoiceNote).not.toHaveBeenCalled();
+    created.end();
+  });
+
   it("waits to delete a note until the user confirms", async () => {
     const { created } = controller();
     const used = toolActions();
