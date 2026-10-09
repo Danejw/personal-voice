@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { BrandMark } from "@/app/BrandMark";
-import { OverlayHint } from "@/overlay/OverlayHint";
 import type { OverlayAction, OverlayAssistant, OverlayDictation, OverlayHoldDestination, OverlaySnapshot } from "@/overlay/overlay";
 import { setOverlayConfirmSpace } from "@/overlay/overlayConfirmSpace";
 import {
@@ -75,9 +73,6 @@ function tone(dictation: OverlayDictation, owns: boolean, showError: boolean): B
 export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   const [held, setHeld] = useState<OverlayHoldDestination | "remote" | null>(null);
   const [draggingTray, setDraggingTray] = useState(false);
-  /** Side tip after a Remote Dictation tap-cycle (matches Android floating tip). */
-  const [cycleTip, setCycleTip] = useState<string | null>(null);
-  const lastTipEpoch = useRef(0);
   const heldRef = useRef<OverlayHoldDestination | "remote" | null>(null);
   const holdId = useRef(0);
   const remoteHold = useRef<{
@@ -96,12 +91,6 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
       ? snapshot.remoteTargetLabel
       : `${snapshot.remoteTargetLabel} offline`
     : "No device online";
-  const remoteHoverTitle = snapshot.remoteDictationActive || held === "remote"
-    ? `Remote Dictation → ${remoteLabel}`
-    : remoteUnavailable
-      ? "Tap to choose a device, hold to Remote Dictate"
-      : `Tap to cycle · Hold for ${remoteLabel}`;
-  const remoteTipContent = cycleTip ?? remoteHoverTitle;
   const remoteAria = remoteUnavailable
     ? "No other device is online for Remote Dictation"
     : `Remote Dictation to ${remoteLabel}. Tap to cycle, hold to dictate.`;
@@ -131,31 +120,6 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   useEffect(() => {
     if (snapshot.dictation === "idle" || snapshot.dictation === "error") setHeld(null);
   }, [snapshot.dictation]);
-
-  // After a tap-cycle, show the device name in the fixed bottom-right feedback window.
-  useEffect(() => {
-    if (snapshot.remoteTipEpoch <= 0 || snapshot.remoteTipEpoch === lastTipEpoch.current) return;
-    lastTipEpoch.current = snapshot.remoteTipEpoch;
-    const tip = snapshot.notice
-      ?? (snapshot.remoteTargetOnline && snapshot.remoteTargetLabel
-        ? snapshot.remoteTargetLabel
-        : "No other device is online.");
-    setCycleTip(tip);
-    const hide = window.setTimeout(() => setCycleTip(null), 2200);
-    return () => window.clearTimeout(hide);
-  }, [
-    snapshot.remoteTipEpoch,
-    snapshot.notice,
-    snapshot.remoteTargetId,
-    snapshot.remoteTargetLabel,
-    snapshot.remoteTargetOnline,
-  ]);
-
-  useEffect(() => {
-    if (draggingTray) void invoke("sync_overlay_feedback", {
-      channel: "clear-hints", id: null, message: null,
-    }).catch(() => undefined);
-  }, [draggingTray]);
 
   // After OS drag, pointerup may not reach the button. Commit once movement settles.
   useEffect(() => {
@@ -318,7 +282,6 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
         snapshot.pendingTitle ? "has-confirmation" : "",
       ].filter(Boolean).join(" ")}
     >
-      <OverlayHint content={dictateTitle} delayMs={280}>
         <button
           type="button"
           className={`overlay-btn ${tone(snapshot.dictation, held === null, true)}`}
@@ -328,8 +291,6 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
         >
           <MicIcon />
         </button>
-      </OverlayHint>
-      <OverlayHint content="Hold for a note" delayMs={280}>
         <button
           type="button"
           className={`overlay-btn ${tone(snapshot.dictation, held === "voice-note", false)}`}
@@ -341,8 +302,6 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
         >
           <NoteIcon />
         </button>
-      </OverlayHint>
-      <OverlayHint content={remoteTipContent} delayMs={cycleTip ? 0 : 280} forceOpen={Boolean(cycleTip)}>
         <button
           type="button"
           className={`overlay-btn ${tone(snapshot.dictation, held === "remote" || snapshot.remoteDictationActive, false)}${remoteUnavailable ? " is-dim" : ""}`}
@@ -354,8 +313,6 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
         >
           <RemoteDeviceIcon kind={remoteUnavailable ? "unknown" : snapshot.remoteTargetKind} />
         </button>
-      </OverlayHint>
-      <OverlayHint content={assistantTitle} delayMs={280}>
         <button
           type="button"
           className={`overlay-btn ${snapshot.computerActive ? "overlay-busy" : assistantTone(snapshot.assistant)}${snapshot.cameraOn ? " overlay-camera-on" : ""}`}
@@ -367,10 +324,8 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           {snapshot.cameraOn && <span className="overlay-camera-dot" aria-label="Camera is active" />}
           {snapshot.computerActive && <span className="overlay-camera-dot" title="Assistant is controlling the screen" aria-label="Computer task active" />}
         </button>
-      </OverlayHint>
       {snapshot.pendingTitle && (
         <>
-          <OverlayHint content={snapshot.pendingWorking ? "Working…" : snapshot.pendingTitle} delayMs={280}>
             <button
               type="button"
               className="overlay-btn"
@@ -380,9 +335,7 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
             >
               <CheckIcon />
             </button>
-          </OverlayHint>
-          <OverlayHint content="Cancel" delayMs={280}>
-            <button
+                <button
               type="button"
               className="overlay-btn"
               aria-label="Cancel"
@@ -391,10 +344,8 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
             >
               <CrossIcon />
             </button>
-          </OverlayHint>
-        </>
+            </>
       )}
-      <OverlayHint content="Open Personal Voice" delayMs={280}>
         <button
           type="button"
           className="overlay-btn overlay-logo"
@@ -406,7 +357,6 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
         >
           <BrandMark />
         </button>
-      </OverlayHint>
     </div>
   );
 }
