@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
+import type { AssistantLibraryConversation, AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 
 interface ConversationBarProps {
   library: AssistantLibrarySnapshot;
@@ -13,123 +13,110 @@ interface ConversationBarProps {
   onDismissRecovery?: (id: string) => void;
 }
 
-/** Compact thread list. Surfaces are fill and radius, with no strokes. */
-export function ConversationBar({
-  library,
-  signedIn,
-  sessionIdle,
-  onNew,
-  onOpen,
-  onRename,
-  onDelete,
-  onRetry,
-  onDismissRecovery,
-}: ConversationBarProps) {
+export function filterConversations(rows: readonly AssistantLibraryConversation[], search: string) {
+  const term = search.trim().toLocaleLowerCase();
+  return term ? rows.filter((row) => row.title.toLocaleLowerCase().includes(term)) : rows;
+}
+
+export function threadTime(value?: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? null : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** The conversation rail owns thread navigation, not the main transcript. */
+export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen, onRename, onDelete, onRetry, onDismissRecovery }: ConversationBarProps) {
+  const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
-  if (!signedIn) return null;
-
+  const visible = filterConversations(library.conversations, search);
   return (
-    <div className="assistant-threads">
-      <div className="assistant-thread-bar">
-        <button type="button" className="secondary" onClick={onNew}>New</button>
-        <p className="assistant-save" role="status">
-          {library.save === "saving" && "Saving…"}
-          {library.save === "saved" && "Saved"}
-          {library.save === "retry" && (
-            <>
-              {library.error ?? "Couldn't save."}{" "}
-              <button type="button" className="secondary" onClick={onRetry}>Retry</button>
-            </>
-          )}
-        </p>
+    <aside className="assistant-threads" aria-label="Conversation history">
+      <div className="assistant-rail-heading">
+        <div>
+          <span className="assistant-eyebrow">YOUR SPACE</span>
+          <h3>Conversations</h3>
+        </div>
+        <span className="assistant-rail-count">{library.conversations.length}</span>
       </div>
-      {library.conversations.length > 0 && (
-        <ul className="assistant-thread-list hide-scrollbar" aria-label="Saved conversations">
-          {library.conversations.map((row) => (
-            <li key={row.id} className={row.id === library.currentId ? "is-current" : undefined}>
+      <button type="button" className="assistant-new-thread" disabled={!signedIn} onClick={() => { setSearch(""); onNew(); }}>
+        <span aria-hidden="true">＋</span> New conversation
+      </button>
+      <label className="assistant-search">
+        <span className="visually-hidden">Search conversations by title</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"/><path d="m16 16 4 4"/></svg>
+        <input type="search" value={search} onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search conversations" disabled={!signedIn} />
+      </label>
+      <div className="assistant-rail-subhead">Recent threads</div>
+      <nav className="assistant-thread-scroll hide-scrollbar" aria-label="Saved conversations">
+        {!signedIn && <p className="assistant-rail-empty">Sign in to see your conversations.</p>}
+        {signedIn && visible.length === 0 && <p className="assistant-rail-empty">{search ? "No matching conversations." : "Your conversations will appear here."}</p>}
+        {signedIn && <ul className="assistant-thread-list">
+          {visible.map((row) => (
+            <li key={row.id} className={row.id === library.currentId ? "is-current" : ""}>
               {editing === row.id ? (
-                <form
-                  className="assistant-thread-rename"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    onRename(row.id, title);
-                    setEditing(null);
-                  }}
-                >
-                  <input
-                    value={title}
-                    aria-label="Conversation title"
-                    onChange={(event) => setTitle(event.target.value)}
-                  />
-                  <button type="submit" className="secondary">Save</button>
-                  <button type="button" className="secondary" onClick={() => setEditing(null)}>Cancel</button>
+                <form className="assistant-thread-rename" onSubmit={(event) => {
+                  event.preventDefault();
+                  if (title.trim()) onRename(row.id, title.trim());
+                  setEditing(null);
+                }}>
+                  <input autoFocus value={title} aria-label="Conversation title" onChange={(event) => setTitle(event.target.value)} />
+                  <div className="assistant-rename-actions">
+                    <button type="submit" disabled={!title.trim()}>Save</button>
+                    <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+                  </div>
                 </form>
               ) : (
                 <>
-                  <button type="button" className="assistant-thread" onClick={() => onOpen(row.id)}>{row.title}</button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => {
-                      setConfirming(null);
-                      setEditing(row.id);
-                      setTitle(row.title);
-                    }}
-                  >
-                    Rename
+                  <button type="button" className="assistant-thread" aria-current={row.id === library.currentId ? "page" : undefined}
+                    onClick={() => { setConfirming(null); onOpen(row.id); }}>
+                    <span className="assistant-thread-icon" aria-hidden="true">▤</span>
+                    <span className="assistant-thread-content">
+                      <span className="assistant-thread-title">{row.title}</span>
+                      <span className="assistant-thread-meta">{row.updatedAt ? `Updated ${threadTime(row.updatedAt)}` : row.id === library.currentId ? "Selected thread" : "Saved conversation"}</span>
+                    </span>
                   </button>
-                  {confirming === row.id ? (
-                    <>
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => {
-                          onDelete(row.id);
-                          setConfirming(null);
-                        }}
-                      >
-                        Delete
-                      </button>
-                      <button type="button" className="secondary" onClick={() => setConfirming(null)}>Cancel</button>
-                    </>
-                  ) : (
-                    <button type="button" className="secondary" onClick={() => { setEditing(null); setConfirming(row.id); }}>
-                      Delete
-                    </button>
-                  )}
+                  <div className="assistant-thread-actions">
+                    {confirming === row.id ? (
+                      <>
+                        <button type="button" className="is-danger" onClick={() => { onDelete(row.id); setConfirming(null); }}>Delete</button>
+                        <button type="button" onClick={() => setConfirming(null)}>Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" aria-label={`Rename ${row.title}`} onClick={() => { setEditing(row.id); setTitle(row.title); setConfirming(null); }}>✎</button>
+                        <button type="button" aria-label={`Delete ${row.title}`} onClick={() => { setConfirming(row.id); setEditing(null); }}>×</button>
+                      </>
+                    )}
+                  </div>
                 </>
               )}
             </li>
           ))}
-        </ul>
-      )}
-      {library.holding && (
-        <p className="note-meta">{sessionIdle ? "This device can continue." : "Continuing on this device."}</p>
-      )}
-      {!library.holding && library.activeLabel && library.activeLabel !== "this device" && (
-        <p className="note-meta">Active on {library.activeLabel}. This device is only viewing.</p>
-      )}
-      {library.offlineCopy && (
-        <p className="note-meta">Showing the saved copy on this device. Assistant needs a connection to continue.</p>
-      )}
-      {library.recovery.map((line) => (
-        <p key={line.id} className="note-meta">
-          Not shared. Another device continued. {line.text.length > 160 ? `${line.text.slice(0, 160)}…` : line.text}{" "}
-          <button type="button" className="secondary" onClick={() => onDismissRecovery?.(line.id)}>Dismiss</button>
+        </ul>}
+      </nav>
+      <div className="assistant-rail-footer">
+        <p className="assistant-save" role="status">
+          {library.save === "saving" ? "Saving conversation…" : library.save === "saved" ? "Conversations synced" :
+            library.save === "retry" ? (library.error ?? "Could not save conversation.") :
+              library.offlineCopy ? "Offline saved copy" : "Synced across your devices"}
         </p>
-      ))}
-      {library.summaryNote && <p className="note-meta">{library.summaryNote}</p>}
-      {library.unavailableScreenshots.map((shot) => (
-        <p key={`${shot.capturedAt}-${shot.source}`} className="note-meta">
-          A screenshot from {shot.source} at {shot.capturedAt} isn't available. This device can't see that image.
-        </p>
-      ))}
-      {library.error && library.save !== "retry" && <p className="error" role="alert">{library.error}</p>}
-      {sessionIdle && library.currentId && (
-        <p className="note-meta">Saved on this account. Starting Assistant sends this conversation as earlier context. It does not run old actions again.</p>
-      )}
-    </div>
+        {library.save === "retry" && <button type="button" className="secondary" onClick={onRetry}>Retry save</button>}
+        {library.holding && !sessionIdle && <p className="note-meta">Active on this device</p>}
+        {!library.holding && library.activeLabel && library.activeLabel !== "this device" && (
+          <p className="note-meta">Active on {library.activeLabel}. Continue here to take over.</p>
+        )}
+        {library.recovery.map((line) => (
+          <p key={line.id} className="note-meta">Unsynced message: {line.text.slice(0, 100)}
+            <button type="button" className="secondary" onClick={() => onDismissRecovery?.(line.id)}>Dismiss</button>
+          </p>
+        ))}
+        {library.summaryNote && <p className="note-meta">{library.summaryNote}</p>}
+        {library.unavailableScreenshots.length > 0 && <p className="note-meta">Some screenshots are unavailable on this device.</p>}
+        {library.error && library.save !== "retry" && <p className="error" role="alert">{library.error}</p>}
+      </div>
+    </aside>
   );
 }
