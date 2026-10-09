@@ -50,6 +50,17 @@ export function assistantInsightReadiness(
           : `Use your Assistant across at least ${ASSISTANT_FIRST_MIN_DAYS} active days.`,
     };
   }
+  // Existing Phase C analyses predate the communication-profile migration. A
+  // user may generate that missing profile once without waiting for 30 new turns.
+  if(!lastRun.voiceProfile){
+    const ready=sampledMessages>=ASSISTANT_FIRST_MIN_MESSAGES && activeDays>=ASSISTANT_FIRST_MIN_DAYS;
+    return {
+      ready,sampledMessages,activeDays,newSinceLastRun,daysSinceLastRun,
+      reason:ready
+        ? "Your Assistant communication profile is ready to generate from saved messages."
+        : "More saved conversations are needed to generate your first Assistant communication profile.",
+    };
+  }
   const ready=newSinceLastRun>=ASSISTANT_REFRESH_NEW_MESSAGES ||
     (daysSinceLastRun>=ASSISTANT_REFRESH_DAYS&&newSinceLastRun>=ASSISTANT_REFRESH_MIN_AFTER_WEEK);
   return {
