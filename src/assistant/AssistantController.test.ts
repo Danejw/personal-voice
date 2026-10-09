@@ -1568,6 +1568,7 @@ function toolActions() {
     insertText: vi.fn(async () => {}),
     createVoiceNote: vi.fn(async () => {}),
     editVoiceNote: vi.fn(async () => {}),
+    attachImageToVoiceNote: vi.fn(async () => {}),
     listSnippets: vi.fn(async () => "[]"),
     createSnippet: vi.fn(async () => {}),
     updateSnippet: vi.fn(async () => {}),
