@@ -61,7 +61,7 @@ export function AssistantHeader({ controller, snapshot, signedIn, micBusy = fals
           else controller.start();
         }}
       >
-        {running ? "End Assistant" : viewingElsewhere ? "Continue here" : snapshot.turns.length ? "Continue conversation" : "Start Assistant"}
+        {running ? "End Assistant" : viewingElsewhere ? "Continue here" : library?.currentId && snapshot.turns.length ? "Continue conversation" : "Start Assistant"}
       </button>
     </div>
   );
@@ -163,6 +163,7 @@ export function AssistantPanel({
   const showEchoNote = snapshot.echoFallback && (snapshot.status === "CONNECTING" || snapshot.status === "READY" || snapshot.status === "RESPONDING");
   const sessionIdle = snapshot.status === "IDLE" || snapshot.status === "ERROR";
   const selected = library?.conversations.find((item) => item.id === library.currentId);
+  const displayTitle = selected?.title ?? (snapshot.turns.length && !library?.currentId ? "Unlinked session" : "New conversation");
   return (
     <div className={`assistant-workspace${showThreads ? " show-thread-rail" : ""}${railCollapsed ? " is-rail-collapsed" : ""}`}>
       {library && onNewThread && onOpenThread && onRenameThread && onDeleteThread && onRetrySave && (
@@ -191,7 +192,7 @@ export function AssistantPanel({
             aria-label={(narrowWindow ? showThreads : !railCollapsed) ? "Collapse conversations" : "Show conversations"}
             title={(narrowWindow ? showThreads : !railCollapsed) ? "Collapse conversations" : "Show conversations"}>☰</button>
           <div className="assistant-conversation-heading">
-            <h3 title={selected?.title ?? "New conversation"}>{selected?.title ?? "New conversation"}</h3>
+            <h3 title={displayTitle}>{displayTitle}</h3>
           </div>
           <AssistantHeader controller={controller} snapshot={snapshot} signedIn={signedIn}
             micBusy={micBusy} library={library} onProduce={onProduce} />
