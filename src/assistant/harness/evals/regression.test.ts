@@ -8,6 +8,8 @@ describe("independent tool-use regression corpus", () => {
 
   it("scores hardcoded candidate paths instead of grading expected routes against themselves", () => {
     expect(report.overall.samples).toBe(13);
+    expect(report.byOrigin.mock.samples).toBe(13);
+    expect(report.liveModel.samples).toBe(0);
     expect(report.overall.passedPaths).toBe(9);
     expect(report.overall.independentlyVerifiedGoals).toBe(12);
     expect(report.overall.passedGoals).toBe(7);
@@ -67,7 +69,13 @@ describe("independent tool-use regression corpus", () => {
     expect(() => evaluateTrace({ ...good, goal: { passed: true, source: "unverified" } }, scenario)).toThrow();
     expect(() => evaluateTrace({ ...good, origin: "live", goal: { passed: true, source: "mock" } }, scenario)).toThrow();
     expect(() => evaluateBatch([{ ...good, scenarioId: "nonexistent" }])).toThrow();
-    expect(() => evaluateBatch([good, good])).toThrow();
+    const repeated = evaluateBatch([good, good]);
+    expect(repeated.overall.samples).toBe(2);
+    expect(repeated.scenarioCoverage).toBe(0.0123);
+    const mixed = evaluateBatch([good, { ...good, origin: "live", goal: { passed: null, source: "unverified" } }]);
+    expect(mixed.liveModel.samples).toBe(1);
+    expect(mixed.warnings.some((warning) => warning.includes("Mixed trace origins"))).toBe(true);
+    expect(checkRegression(mixed, { minPathRate: 0.5 }).passed).toBe(false);
     expect(() => evaluateTrace(good, TOOL_SELECTION_SCENARIOS[1]!)).toThrow();
   });
 
