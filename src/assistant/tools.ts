@@ -702,10 +702,9 @@ export function decideToolCall(
       const id = readId(args);
       const body = readText(args);
       const attachment = readNoteImageSource(args, false);
-      if ("error" in id || "error" in body || "error" in attachment) {
-        return { kind: "reject", id: call.id, name: call.name,
-          message: "error" in id ? id.error : "error" in body ? body.error : attachment.error };
-      }
+      if ("error" in id) return { kind: "reject", id: call.id, name: call.name, message: id.error };
+      if ("error" in body) return { kind: "reject", id: call.id, name: call.name, message: body.error };
+      if ("error" in attachment) return { kind: "reject", id: call.id, name: call.name, message: attachment.error };
       return confirm(call.id, "edit_voice_note",
         JSON.stringify({ id: id.id, text: body.text, attachment_source: attachment.source }),
         attachment.source ? "Edit note and attach captured image" : "Edit this note", null, null);
@@ -713,9 +712,8 @@ export function decideToolCall(
     case "attach_image_to_voice_note": {
       const id = readId(args);
       const attachment = readNoteImageSource(args, true);
-      if ("error" in id || "error" in attachment) {
-        return { kind: "reject", id: call.id, name: call.name, message: "error" in id ? id.error : attachment.error };
-      }
+      if ("error" in id) return { kind: "reject", id: call.id, name: call.name, message: id.error };
+      if ("error" in attachment) return { kind: "reject", id: call.id, name: call.name, message: attachment.error };
       return confirm(call.id, "attach_image_to_voice_note",
         JSON.stringify({ id: id.id, attachment_source: attachment.source }),
         "Attach captured image to note", null, null);
