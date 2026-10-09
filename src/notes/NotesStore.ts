@@ -80,7 +80,7 @@ export class NotesStore {
   }
 
   /** Saves immediately. Title/group enrichment is best-effort and never blocks the save. */
-  async create(text: string, sourceType: NoteSourceType = "manual", details: NewNoteDetails = {}): Promise<void> {
+  async create(text: string, sourceType: NoteSourceType = "manual", details: NewNoteDetails = {}, files: readonly File[] = []): Promise<void> {
     const userId = this.requireConnected();
     const body = text.trim();
     if (!body) throw new Error("An empty note cannot be saved.");
@@ -105,6 +105,13 @@ export class NotesStore {
           organizationError: null,
         });
         this.queueOrganization();
+      }
+      if (files.length) {
+        try {
+          await this.addAttachments(note.id, files);
+        } catch (error) {
+          throw new Error(`Note saved, but attaching its image failed. Find the note in Notes before retrying: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
     } catch (reason) {
       this.reportMutationFailure(generation, reason);
