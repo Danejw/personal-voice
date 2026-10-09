@@ -98,6 +98,7 @@ describe("assistant setup and typed turns", () => {
       "supervise_screen",
       "list_past_conversations",
       "read_past_conversation",
+      "list_conversation_sessions",
       "continue_past_conversation",
       "list_memories",
       "search_memory",
