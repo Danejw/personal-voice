@@ -70,6 +70,7 @@ describe("assistant tool schema", () => {
       "supervise_screen",
       "list_past_conversations",
       "read_past_conversation",
+      "list_conversation_sessions",
       "continue_past_conversation",
       "list_memories",
       "search_memory",
@@ -128,7 +129,8 @@ describe("assistant tool schema", () => {
     expect(decideToolCall({ id: "bad-count", name: "list_past_conversations", args: { count: 21 } }, plan).kind)
       .toBe("reject");
     expect(decideToolCall({ id: "read", name: "read_past_conversation", args: { conversation_id: id } }, plan))
-      .toEqual({ kind: "conversationRead", id: "read", name: "read_past_conversation", conversationId: id });
+      .toEqual({ kind: "conversationRead", id: "read", name: "read_past_conversation", conversationId: id,
+        afterSeq: 0, count: 5, sessionId: null, from: null, to: null });
     expect(decideToolCall({ id: "resume", name: "continue_past_conversation", args: { conversation_id: id } }, plan))
       .toEqual({ kind: "conversationContinue", id: "resume", name: "continue_past_conversation", conversationId: id });
     expect(decideToolCall({ id: "wrong", name: "continue_past_conversation", args: { conversation_id: "invalid" } }, plan).kind)
