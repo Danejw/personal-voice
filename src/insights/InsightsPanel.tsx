@@ -23,6 +23,7 @@ type InsightsTab = "voice" | "assistant" | "suggestions" | "compaction";
 interface InsightsPanelProps {
   active: boolean;
   userId: string | null;
+  assistantInsightsRefreshToken: number;
   store: InsightsStore;
   snapshot: InsightsSnapshot;
   knowledge: InsightsKnowledgeInput;
@@ -58,7 +59,7 @@ function statusLabel(status: InsightsStatus): string {
   }
 }
 
-export function InsightsToolbar({ store, snapshot }: Pick<InsightsPanelProps, "store" | "snapshot">) {
+export function InsightsToolbar({ store, snapshot, onRefreshAssistant }: Pick<InsightsPanelProps, "store" | "snapshot"> & {onRefreshAssistant: () => void}) {
   return (
     <div className="page-header-actions">
       <p role="status">{statusLabel(snapshot.status)}</p>
@@ -67,7 +68,7 @@ export function InsightsToolbar({ store, snapshot }: Pick<InsightsPanelProps, "s
           type="button"
           className="secondary"
           disabled={snapshot.status === "loading" || snapshot.status === "analyzing" || snapshot.status === "compacting"}
-          onClick={() => void store.reload()}
+          onClick={() => { void store.reload(); onRefreshAssistant(); }}
         >
           Refresh
         </button>
@@ -181,6 +182,7 @@ function daysSince(iso: string): number {
 export function InsightsPanel({
   active,
   userId,
+  assistantInsightsRefreshToken,
   store,
   snapshot,
   knowledge,
@@ -318,7 +320,7 @@ export function InsightsPanel({
       {notice && <div className="insights-notice" role="status">{notice}</div>}
       {snapshot.progress && <div className="insights-progress-note" role="status">{snapshot.progress}</div>}
 
-      {tab === "assistant" && <AssistantInsightsPanel active={active} userId={userId} />}
+      {tab === "assistant" && <AssistantInsightsPanel active={active} userId={userId} refreshToken={assistantInsightsRefreshToken} />}
 
       {tab === "voice" && (
         <div className="insights-stack">
