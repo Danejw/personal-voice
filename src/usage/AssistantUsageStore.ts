@@ -157,6 +157,13 @@ export class AssistantUsageStore {
       try {
         while (this.pending.length && JSON.stringify(scope) === JSON.stringify(this.scope)) {
           const event = this.pending[0]!;
+          // The backend rejects very old clock/offline events. Drop only expired
+          // metadata, otherwise it could permanently block fresh queued events.
+          if (Date.parse(event.occurredAt) < this.now() - 13 * 86_400_000) {
+            this.pending.shift();
+            this.persist();
+            continue;
+          }
           await this.api.write(event, scope.userId!);
           if (JSON.stringify(scope) !== JSON.stringify(this.scope)) break;
           if (this.pending[0]?.id === event.id) this.pending.shift();
