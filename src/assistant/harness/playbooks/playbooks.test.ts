@@ -40,8 +40,8 @@ describe("assistant on-demand tool playbooks", () => {
       expect(payload).not.toContain("run_shell");
       expect(payload).not.toContain("replace_selection");
     }
-    expect(declared.size).toBe(54);
-    expect(ASSISTANT_TOOL_NAMES).toHaveLength(54);
+    expect(declared.size).toBe(ASSISTANT_TOOL_NAMES.length);
+    expect(new Set(ASSISTANT_TOOL_NAMES).size).toBe(ASSISTANT_TOOL_NAMES.length);
   });
 
   it("requires exact IDs and rejects guesses before any playbook retrieval", () => {
