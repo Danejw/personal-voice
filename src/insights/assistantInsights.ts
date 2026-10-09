@@ -32,7 +32,7 @@ export interface AssistantInsightRun {
   userMessageCount: number;
   conversationCount: number;
 }
-export interface AssistantInsightProposal extends Omit<AssistantInsightCandidate, "id" | "status" | "createdAt"> {}
+export type AssistantInsightProposal = Omit<AssistantInsightCandidate, "id" | "status" | "createdAt">;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const kinds = ["workflow","adaptation","goal"] as const;
