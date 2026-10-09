@@ -325,9 +325,9 @@ export function InsightsPanel({
       {notice && <div className="insights-notice" role="status">{notice}</div>}
       {snapshot.progress && <div className="insights-progress-note" role="status">{snapshot.progress}</div>}
 
-      {(tab==="assistant"||tab==="suggestions") && <AssistantInsightsPanel
+      {tab==="assistant" && <AssistantInsightsPanel
         active={active} userId={userId} refreshToken={assistantInsightsRefreshToken}
-        view={tab==="assistant"?"profile":"suggestions"} onPendingChange={reportAssistantPending}
+        view="profile" onPendingChange={reportAssistantPending}
         onOpenSuggestions={()=>setTab("suggestions")}
       />}
 
@@ -519,13 +519,18 @@ export function InsightsPanel({
                 </div>
               </section>
             );
-          }) : !assistantCount ? (
+          }) : !assistantCount && (assistantPending?.userId===userId) ? (
             <div className="insights-empty-state">
               <p className="insights-empty-value">0</p>
               <h2>No new suggestions</h2>
               <p className="hint">Analyze new dictation or Assistant activity when its next refresh becomes ready.</p>
             </div>
-          )}
+          ) : null}
+          <AssistantInsightsPanel
+            active={active} userId={userId} refreshToken={assistantInsightsRefreshToken}
+            view="suggestions" onPendingChange={reportAssistantPending}
+            onOpenSuggestions={()=>setTab("suggestions")}
+          />
         </div>
       )}
 
