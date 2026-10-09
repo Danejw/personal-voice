@@ -12,31 +12,44 @@ export function OverlayHint({ content, children, delayMs = DEFAULT_DELAY, forceO
 }) {
   const id = useId();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hovered = useRef(false);
+  const pending = useRef<Promise<unknown>>(Promise.resolve());
+  // An older async show must never arrive after its own hide request.
+  const publish = (message: string | null) => {
+    pending.current = pending.current
+      .then(() => invoke("sync_overlay_feedback", { channel: "hint", id, message }))
+      .catch(() => undefined);
+  };
   const show = () => {
+    hovered.current = true;
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     if (!content.trim()) return;
     timer.current = setTimeout(() => {
       timer.current = null;
-      void invoke("sync_overlay_feedback", { channel: "hint", id, message: content }).catch(() => undefined);
+      publish(content);
     }, delayMs);
   };
   const hide = () => {
+    hovered.current = false;
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-    if (!forceOpen) void invoke("sync_overlay_feedback", { channel: "hint", id, message: null }).catch(() => undefined);
+    if (!forceOpen) publish(null);
   };
   useEffect(() => {
     if (forceOpen) {
       if (timer.current) clearTimeout(timer.current);
-      void invoke("sync_overlay_feedback", { channel: "hint", id, message: content }).catch(() => undefined);
-    } else {
-      void invoke("sync_overlay_feedback", { channel: "hint", id, message: null }).catch(() => undefined);
+      timer.current = null;
+      publish(content);
+    } else if (hovered.current && timer.current === null) {
+      publish(content);
+    } else if (!hovered.current) {
+      publish(null);
     }
   }, [forceOpen, content, id]);
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
-    void invoke("sync_overlay_feedback", { channel: "hint", id, message: null }).catch(() => undefined);
+    publish(null);
   }, [id]);
   return (
     <span className="overlay-hint-trigger" onPointerEnter={show} onPointerLeave={hide}
