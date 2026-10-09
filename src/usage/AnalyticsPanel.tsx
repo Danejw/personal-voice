@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AssistantAnalyticsPanel } from "@/usage/AssistantAnalyticsPanel";
 import type { AssistantUsageStore } from "@/usage/AssistantUsageStore";
+import type { AssistantToolMetricsStore } from "@/usage/AssistantToolMetricsStore";
 import { fetchUsageDays } from "@/services/usageService";
 import type { DictionaryTerm } from "@/sync/personalData";
 import { buildAnalytics, mergeUsageDays, panelRanges } from "@/usage/analytics";
@@ -19,6 +20,7 @@ interface AnalyticsPanelProps {
   usage: UsageSnapshot;
   userId: string | null;
   assistantUsage: AssistantUsageStore;
+  toolStore: AssistantToolMetricsStore;
   assistantUsageEnabled: boolean;
   onClearAnalytics(): Promise<void>;
 }
@@ -34,7 +36,7 @@ function termShare(uses: number, terms: readonly { uses: number }[]): number {
 }
 
 /** Compact personal dashboard. Numbers come from merged usage days, not a second observer. */
-export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary, usage, userId, assistantUsage, assistantUsageEnabled, onClearAnalytics }: AnalyticsPanelProps) {
+export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary, usage, userId, assistantUsage, toolStore, assistantUsageEnabled, onClearAnalytics }: AnalyticsPanelProps) {
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearError, setClearError] = useState<string | null>(null);
@@ -95,7 +97,7 @@ export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary
   );
   if (mode === "assistant") return <div className="analytics">{selector}{clearControl}<AssistantAnalyticsPanel
     active={active} userId={userId} epoch={usage.epoch} enabled={assistantUsageEnabled}
-    devices={devices} store={assistantUsage}
+    devices={devices} store={assistantUsage} toolStore={toolStore}
   /></div>;
 
   const id = deviceId ?? "";
