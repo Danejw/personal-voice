@@ -31,7 +31,10 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => store.subscribe(() => setPending(store.getPending())), [store]);
+  useEffect(() => {
+    const unsubscribe = store.subscribe(() => setPending(store.getPending()));
+    return () => { unsubscribe(); };
+  }, [store]);
   useEffect(() => {
     if (!active || !userId || !enabled) {
       setRemote([]);
