@@ -20,6 +20,7 @@
 
 import { ASSISTANT_SEARCH_GUIDANCE, sourcesFromGrounding, type AssistantSource } from "@/assistant/grounding";
 import { assistantFunctionDeclarations, parseToolCallList, type ParsedToolCall } from "@/assistant/tools";
+import { ASSISTANT_TOOL_SELECTION_GUIDANCE } from "@/assistant/harness/toolIntelligence";
 
 export const ASSISTANT_MODEL = "gemini-3.8-live";
 /** Microphone audio sent to Live: little-endian PCM16 mono. Capture already emits this at 16 kHz. */
@@ -56,7 +57,7 @@ export function assistantSetupMessage(
         { functionDeclarations: assistantFunctionDeclarations() },
         ...(search ? [{ googleSearch: {} }] : []),
       ],
-      systemInstruction: { parts: [{ text: ASSISTANT_SEARCH_GUIDANCE }] },
+      systemInstruction: { parts: [{ text: `${ASSISTANT_SEARCH_GUIDANCE}\n\n${ASSISTANT_TOOL_SELECTION_GUIDANCE}` }] },
     },
   };
 }
