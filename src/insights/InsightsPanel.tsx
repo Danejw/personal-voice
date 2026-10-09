@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AssistantInsightsPanel } from "@/insights/AssistantInsightsPanel";
 import type { InsightCandidate, InsightCandidateKind, InsightUsageFacts } from "@/insights/insights";
 import {
@@ -198,6 +198,11 @@ export function InsightsPanel({
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmCompact, setConfirmCompact] = useState(false);
+  const [assistantPending, setAssistantPending] = useState<{userId:string;count:number}|null>(null);
+  const reportAssistantPending = useCallback((forUser:string,count:number)=>{
+    setAssistantPending(previous=>previous?.userId===forUser&&previous.count===count?previous:{userId:forUser,count});
+  },[]);
+  const assistantCount = assistantPending?.userId===userId?assistantPending.count:0;
   const latest = snapshot.runs[0] ?? null;
   const pending = snapshot.candidates.filter((candidate) => candidate.status === "pending");
   const accepted = snapshot.candidates.filter((candidate) => candidate.status === "accepted").length;
@@ -300,7 +305,7 @@ export function InsightsPanel({
         {([
           ["voice", "Your Voice"],
           ["assistant", "Your Assistant"],
-          ["suggestions", `Suggestions${pending.length ? ` (${pending.length})` : ""}`],
+          ["suggestions", `Suggestions${pending.length+assistantCount ? ` (${pending.length+assistantCount})` : ""}`],
           ["compaction", "Compaction"],
         ] as const).map(([id, label]) => (
           <button
@@ -320,7 +325,11 @@ export function InsightsPanel({
       {notice && <div className="insights-notice" role="status">{notice}</div>}
       {snapshot.progress && <div className="insights-progress-note" role="status">{snapshot.progress}</div>}
 
-      {tab === "assistant" && <AssistantInsightsPanel active={active} userId={userId} refreshToken={assistantInsightsRefreshToken} />}
+      {(tab==="assistant"||tab==="suggestions") && <AssistantInsightsPanel
+        active={active} userId={userId} refreshToken={assistantInsightsRefreshToken}
+        view={tab==="assistant"?"profile":"suggestions"} onPendingChange={reportAssistantPending}
+        onOpenSuggestions={()=>setTab("suggestions")}
+      />}
 
       {tab === "voice" && (
         <div className="insights-stack">
@@ -434,21 +443,21 @@ export function InsightsPanel({
             <div className="insights-heading-row">
               <div>
                 <p className="insights-eyebrow">Improve Personal Voice</p>
-                <h2>{pending.length} new suggestion{pending.length === 1 ? "" : "s"}</h2>
-                <p className="hint">Everything here is checked against what already exists before it is shown and again before it is added.</p>
+                <h2>{pending.length+assistantCount} new suggestion{pending.length+assistantCount === 1 ? "" : "s"}</h2>
+                <p className="hint">{pending.length} from Dictation · {assistantCount} from Assistant. Review each suggestion before saving.</p>
               </div>
               {(accepted > 0 || dismissed > 0) && (
                 <p className="hint">{accepted} accepted · {dismissed} dismissed</p>
               )}
             </div>
-            <div className="stat-row insights-suggestion-stats">
+            {!!pending.length && <div className="stat-row insights-suggestion-stats">
               {CANDIDATE_ORDER.map((kind) => (
                 <div key={kind} className="stat-cell">
                   <p className="stat-value">{candidateCount(pending, kind)}</p>
                   <p className="stat-label">{CANDIDATE_LABELS[kind]}</p>
                 </div>
               ))}
-            </div>
+            </div>}
           </section>
 
           {pending.length ? CANDIDATE_ORDER.map((kind) => {
@@ -510,11 +519,11 @@ export function InsightsPanel({
                 </div>
               </section>
             );
-          }) : (
+          }) : !assistantCount ? (
             <div className="insights-empty-state">
               <p className="insights-empty-value">0</p>
               <h2>No new suggestions</h2>
-              <p className="hint">Analyze more dictations when the next refresh becomes ready.</p>
+              <p className="hint">Analyze new dictation or Assistant activity when its next refresh becomes ready.</p>
             </div>
           )}
         </div>
