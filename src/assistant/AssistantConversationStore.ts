@@ -1165,6 +1165,9 @@ export class AssistantConversationStore {
       this.activeSession = null;
       if (session) {
         const reason = status === "IDLE" ? "ended" : "interrupted";
+        this.sessions = this.sessions.map(row => row.id === session.id
+          ? {...row, endedAt: new Date(this.now()).toISOString(), endReason: reason} : row);
+        this.publish();
         void this.api.finishSession?.(session.userId, session.id, reason).catch((error) => {
           if (this.userId === session.userId) {
             this.error = "Session boundary could not sync: " + messageOf(error);
