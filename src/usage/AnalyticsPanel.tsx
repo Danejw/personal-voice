@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { AssistantAnalyticsPanel } from "@/usage/AssistantAnalyticsPanel";
+import type { AssistantUsageStore } from "@/usage/AssistantUsageStore";
 import { fetchUsageDays } from "@/services/usageService";
 import type { DictionaryTerm } from "@/sync/personalData";
 import { buildAnalytics, mergeUsageDays, panelRanges } from "@/usage/analytics";
@@ -15,6 +17,9 @@ interface AnalyticsPanelProps {
   devices: readonly { id: string; name: string; platform: string }[];
   dictionary: readonly DictionaryTerm[];
   usage: UsageSnapshot;
+  userId: string | null;
+  assistantUsage: AssistantUsageStore;
+  assistantUsageEnabled: boolean;
 }
 
 function formatWpm(value: number | null): string {
@@ -28,12 +33,13 @@ function termShare(uses: number, terms: readonly { uses: number }[]): number {
 }
 
 /** Compact personal dashboard. Numbers come from merged usage days, not a second observer. */
-export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary, usage }: AnalyticsPanelProps) {
+export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary, usage, userId, assistantUsage, assistantUsageEnabled }: AnalyticsPanelProps) {
+  const [mode, setMode] = useState<"dictation" | "assistant">("dictation");
   const [ranges, setRanges] = useState<{ month: RemoteUsageDay[]; recent: RemoteUsageDay[]; weeks: RemoteUsageDay[] } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!active || !signedIn) return;
+    if (!active || !signedIn || mode !== "dictation") return;
     let cancelled = false;
     const windows = panelRanges(new Date());
     void Promise.all([
@@ -52,9 +58,19 @@ export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary
       },
     );
     return () => { cancelled = true; };
-  }, [active, signedIn, usage.days, usage.remote, usage.epoch]);
+  }, [active, signedIn, mode, usage.days, usage.remote, usage.epoch]);
 
   if (!signedIn) return <p className="hint">Sign in to see analytics across your devices.</p>;
+  const selector = (
+    <div className="insights-tabs" role="tablist" aria-label="Analytics source">
+      <button type="button" role="tab" aria-selected={mode === "dictation"} className={mode === "dictation" ? "insights-tab is-active" : "insights-tab"} onClick={() => setMode("dictation")}>Dictation</button>
+      <button type="button" role="tab" aria-selected={mode === "assistant"} className={mode === "assistant" ? "insights-tab is-active" : "insights-tab"} onClick={() => setMode("assistant")}>Assistant</button>
+    </div>
+  );
+  if (mode === "assistant") return <div className="analytics">{selector}<AssistantAnalyticsPanel
+    active={active} userId={userId} epoch={usage.epoch} enabled={assistantUsageEnabled}
+    devices={devices} store={assistantUsage}
+  /></div>;
 
   const id = deviceId ?? "";
   const windows = panelRanges(new Date());
@@ -73,6 +89,7 @@ export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary
 
   return (
     <div className="analytics">
+      {selector}
       {problem && <p className="error" role="alert">{problem}</p>}
       {usage.error && <p className="error" role="alert">{usage.error}</p>}
       {!model && <p className="hint">Loading analytics…</p>}
