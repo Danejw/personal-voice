@@ -1469,6 +1469,8 @@ export default function App() {
         <div className="panel-stack is-scroll" hidden={section !== "insights"}>
           <section aria-labelledby="page-title" className="page-panel">
             <InsightsPanel
+              active={section === "insights"}
+              userId={auth.userId}
               store={insightsStore}
               snapshot={insightsSnapshot}
               knowledge={{
