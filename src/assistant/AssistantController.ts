@@ -1916,14 +1916,17 @@ export class AssistantController {
   }
 
   private replyTool(id: string, name: string, ok: boolean, message: string) {
-    this.dispatch({ type:"toolActivity", activity:{ id, label:name.replace(/_/g," "), status:ok?"completed":"failed" } });
+    const assessment = interpretToolResult(name, ok, message, this.toolFailures.record(name, ok));
+    this.dispatch({ type:"toolActivity", activity:{
+      id, label:name.replace(/_/g," "),
+      status:ok && assessment.status !== "incomplete" ? "completed" : "failed",
+    } });
     const completedId=id;
     setTimeout(() => {
       if (this.snapshot.toolActivity?.id === completedId && this.snapshot.toolActivity.status !== "running") {
         this.dispatch({type:"toolActivity",activity:null});
       }
     }, 2200);
-    const assessment = interpretToolResult(name, ok, message, this.toolFailures.record(name, ok));
     if (ok && assessment.status !== "reference") {
       this.onToolRecord?.({ name, outcome: assessment.status === "incomplete" ? `Incomplete tool attempt: ${message}` : message });
     }
