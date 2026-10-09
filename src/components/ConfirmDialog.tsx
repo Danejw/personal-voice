@@ -66,6 +66,8 @@ export function ConfirmDialog({ request, onClose }: {
     <dialog
       ref={ref}
       className="confirm-dialog"
+      role="alertdialog"
+      aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       onCancel={(event) => {
