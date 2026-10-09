@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import { HoverActionItem } from "@/components/HoverActionItem";
 import { BUILT_IN_TRANSFORMS, MAX_TRANSFORM_INSTRUCTION_LENGTH, MAX_TRANSFORM_NAME_LENGTH } from "@/transforms/transformProfile";
 import type { TransformProfile } from "@/transforms/transformProfile";
@@ -37,6 +38,7 @@ export function TransformPanel({ store, snapshot }: { store: TransformStore; sna
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const editable = snapshot.status === "synced";
 
   function clearForm() {
@@ -70,15 +72,26 @@ export function TransformPanel({ store, snapshot }: { store: TransformStore; sna
   }
 
   function remove(profile: TransformProfile) {
-    setBusy(`delete:${profile.id}`);
-    setProblem(null);
-    setNotice(null);
-    void store.remove(profile.id).then(() => {
-      if (editingId === profile.id) clearForm();
-      setNotice("Transform deleted.");
-    }).catch((reason: unknown) => {
-      setProblem(reason instanceof Error ? reason.message : String(reason));
-    }).finally(() => setBusy(null));
+    confirm.ask({
+      title: "Delete transform?",
+      description: `“${profile.name}” and its saved instructions will be removed. Built-in transforms are not affected.`,
+      confirmLabel: "Delete transform",
+      onConfirm: async () => {
+        setBusy(`delete:${profile.id}`);
+        setProblem(null);
+        setNotice(null);
+        try {
+          await store.remove(profile.id);
+          if (editingId === profile.id) clearForm();
+          setNotice("Transform deleted.");
+        } catch (reason) {
+          setProblem(reason instanceof Error ? reason.message : String(reason));
+          throw reason;
+        } finally {
+          setBusy(null);
+        }
+      },
+    });
   }
 
   return (
@@ -152,6 +165,7 @@ export function TransformPanel({ store, snapshot }: { store: TransformStore; sna
           )}
         </section>
       </div>
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </>
   );
 }
