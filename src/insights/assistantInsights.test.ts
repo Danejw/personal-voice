@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  candidateFingerprint,parseAssistantProposals,parseAssistantCandidate,
+  candidateFingerprint,parseAssistantProposals,parseAssistantAnalysis,parseAssistantCandidate,
   parsePersonalDraft,type AssistantInsightSample,
 } from "@/insights/assistantInsights";
 
@@ -59,6 +59,17 @@ describe("Phase C Assistant insights evidence gates",()=>{
       id:id(202),source_candidate_id:id(201),title:"Review saved progress",
       steps:["Open relevant notes","Summarize changes"],created_at:"2026-10-09T12:00:00Z",
     })?.steps).toHaveLength(2);
+  });
+  it("validates a durable narrative profile and bounded actionable communication tips",()=>{
+    const profile="The sampled requests repeatedly include direct instructions, explicit next steps, and follow-up questions. When work is complex, the user tends to specify which artifacts and outcomes are needed rather than leave the sequence implicit.";
+    const analysis=parseAssistantAnalysis({
+      voiceProfile:profile,communicationTips:["For complex tasks, lead with the intended result and constraints.","Specify how to verify completion.",...Array(5).fill("Use examples of desired outputs.")],
+      candidates:[],
+    },messages);
+    expect(analysis.voiceProfile).toBe(profile);
+    expect(analysis.communicationTips).toHaveLength(4);
+    expect(analysis.candidates).toEqual([]);
+    expect(()=>parseAssistantAnalysis({candidates:[]},messages)).toThrow(/profile/i);
   });
   it("returns no unsupported suggestions for malformed model output",()=>{
     expect(()=>parseAssistantProposals({wrong:[]},messages)).toThrow();
