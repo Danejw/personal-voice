@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ConversationBar } from "@/assistant/ConversationBar";
@@ -26,8 +26,11 @@ interface AssistantChromeProps {
   onRenameThread?: (id: string, title: string) => void;
   onDeleteThread?: (id: string) => void;
   onRetrySave?: () => void;
+  onLoadOlder?: () => void;
+  onRefreshThreads?: () => void;
   onProduce?: () => void;
   onDismissRecovery?: (id: string) => void;
+  settingsContent?: ReactNode;
 }
 
 /** Header status and the Start / End control. Continue here is the only way a second device takes the microphone. */
@@ -58,7 +61,7 @@ export function AssistantHeader({ controller, snapshot, signedIn, micBusy = fals
           else controller.start();
         }}
       >
-        {running ? "End Assistant" : viewingElsewhere ? "Continue here" : snapshot.turns.length ? "Continue conversation" : "Start Assistant"}
+        {running ? "End Assistant" : viewingElsewhere ? "Continue here" : library?.currentId && snapshot.turns.length ? "Continue conversation" : "Start Assistant"}
       </button>
     </div>
   );
@@ -78,9 +81,18 @@ export function AssistantPanel({
   onRenameThread,
   onDeleteThread,
   onRetrySave,
+  onLoadOlder,
+  onRefreshThreads,
   onDismissRecovery,
+  onProduce,
+  micBusy,
+  settingsContent,
 }: AssistantChromeProps) {
   const [draft, setDraft] = useState("");
+  const [view, setView] = useState<"chat" | "settings" | "tools">("chat");
+  const [showThreads, setShowThreads] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [narrowWindow, setNarrowWindow] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 780px)").matches);
   const [accessibility, setAccessibility] = useState<{windowTitle: string | null; focusedName: string | null; focusedClass: string | null; text: string | null; status: string} | null>(null);
   const [accessibilityError, setAccessibilityError] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -127,13 +139,20 @@ export function AssistantPanel({
   const [continuing, setContinuing] = useState(false);
   const [continueNotice, setContinueNotice] = useState<string | null>(null);
   const [continueError, setContinueError] = useState<string | null>(null);
-  const logRef = useRef<HTMLUListElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(max-width: 780px)");
+    const update = () => { setNarrowWindow(media.matches); setShowThreads(false); };
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const canSend = signedIn && snapshot.status === "READY";
 
   useEffect(() => {
-    const log = logRef.current;
-    if (log) log.scrollTop = log.scrollHeight;
-  }, [snapshot.turns, snapshot.liveText, snapshot.liveUser]);
+    const scroll = scrollRef.current;
+    if (scroll) scroll.scrollTop = scroll.scrollHeight;
+  }, [library?.currentId, snapshot.turns, snapshot.liveText, snapshot.liveUser]);
 
   function send() {
     const text = draft.trim();
@@ -144,47 +163,72 @@ export function AssistantPanel({
 
   const showEchoNote = snapshot.echoFallback && (snapshot.status === "CONNECTING" || snapshot.status === "READY" || snapshot.status === "RESPONDING");
   const sessionIdle = snapshot.status === "IDLE" || snapshot.status === "ERROR";
+  const selected = library?.conversations.find((item) => item.id === library.currentId);
+  const displayTitle = selected?.title ?? (snapshot.turns.length && !library?.currentId ? "Unlinked session" : "New conversation");
   return (
-    <>
+    <div className={`assistant-workspace${showThreads ? " show-thread-rail" : ""}${railCollapsed ? " is-rail-collapsed" : ""}`}>
       {library && onNewThread && onOpenThread && onRenameThread && onDeleteThread && onRetrySave && (
         <ConversationBar
           library={library}
           signedIn={signedIn}
           sessionIdle={sessionIdle}
-          onNew={onNewThread}
-          onOpen={onOpenThread}
+          onNew={() => { onNewThread(); setView("chat"); setShowThreads(false); }}
+          onOpen={(id) => { onOpenThread(id); setView("chat"); setShowThreads(false); }}
           onRename={onRenameThread}
           onDelete={onDeleteThread}
           onRetry={onRetrySave}
+          onLoadOlder={onLoadOlder}
+          onRefresh={onRefreshThreads}
+          hasUnlinkedTranscript={!library.currentId && snapshot.turns.length > 0}
           onDismissRecovery={onDismissRecovery}
         />
       )}
+      {showThreads && narrowWindow && <button type="button" className="assistant-rail-scrim"
+        aria-label="Close conversation history" onClick={() => setShowThreads(false)} />}
+      <section className="assistant-main-panel" aria-label="Assistant workspace">
+        <header className="assistant-chat-header">
+          <button type="button" className="assistant-rail-toggle secondary"
+            onClick={() => { if (narrowWindow) setShowThreads((open) => !open); else setRailCollapsed((collapsed) => !collapsed); }}
+            aria-expanded={narrowWindow ? showThreads : !railCollapsed} aria-controls="assistant-threads"
+            aria-label={(narrowWindow ? showThreads : !railCollapsed) ? "Collapse conversations" : "Show conversations"}
+            title={(narrowWindow ? showThreads : !railCollapsed) ? "Collapse conversations" : "Show conversations"}>☰</button>
+          <div className="assistant-conversation-heading">
+            <h3 title={displayTitle}>{displayTitle}</h3>
+          </div>
+          <AssistantHeader controller={controller} snapshot={snapshot} signedIn={signedIn}
+            micBusy={micBusy} library={library} onProduce={onProduce} />
+        </header>
+        <nav className="assistant-view-tabs" aria-label="Assistant views">
+          {(["chat", "settings", "tools"] as const).map((tab) => (
+            <button key={tab} type="button" className={view === tab ? "is-active" : ""}
+              aria-current={view === tab ? "page" : undefined}
+              onClick={() => setView(tab)}>
+              {tab === "chat" ? "Conversation" : tab === "settings" ? "Settings" : "Advanced tools"}
+            </button>
+          ))}
+        </nav>
+        <div ref={scrollRef} className="assistant-chat-scroll hide-scrollbar" hidden={view !== "chat"}>
       {showEchoNote && (
         <p className="assistant-echo" role="note">
           This phone can't cancel speaker echo, so the microphone pauses while a reply plays and for a short moment after the sound ends. Stop and listen cuts the reply off. Talking over it will not interrupt. Noise reduction lowers background noise. It does not pick out your voice or remove other people.
         </p>
       )}
-      <ul ref={logRef} className="assistant-log hide-scrollbar" aria-live="polite">
+      <ul className="assistant-log" aria-live="polite">
         {snapshot.turns.map((turn) => (
           <li key={turn.id} className={turn.role === "user" ? "assistant-turn is-user" : "assistant-turn"}>
-            <span className="assistant-role">
-              {turn.role === "user" ? "You" : "Assistant"}
-              {turn.status === "interrupted" ? " · interrupted" : ""}
-            </span>
-            <p>{turn.text}</p>
+            <div className="assistant-bubble-copy">
+              <span className="assistant-role">{turn.role === "user" ? "You" : "Assistant"}{turn.status === "interrupted" ? " · interrupted" : ""}</span>{" "}
+              <p>{turn.text}</p>
+            </div>
             {turn.role === "assistant" && turn.sources && <SourceList sources={turn.sources} />}
           </li>
         ))}
         {snapshot.liveUser && (
-          <li className="assistant-turn is-user">
-            <span className="assistant-role">You</span>
-            <p className="partial">{snapshot.liveUser}</p>
-          </li>
+          <li className="assistant-turn is-user"><div className="assistant-bubble-copy"><span className="assistant-role">You</span>{" "}<p className="partial">{snapshot.liveUser}</p></div></li>
         )}
         {snapshot.liveText && (
           <li className="assistant-turn">
-            <span className="assistant-role">Assistant</span>
-            <p className="partial">{snapshot.liveText}</p>
+            <div className="assistant-bubble-copy"><span className="assistant-role">Assistant</span>{" "}<p className="partial">{snapshot.liveText}</p></div>
             <SourceList sources={snapshot.liveSources} />
           </li>
         )}
@@ -222,6 +266,12 @@ export function AssistantPanel({
         </div>
       )}
       {snapshot.accountError && <p className="error" role="alert">{snapshot.accountError}</p>}
+        </div>
+        <div className="assistant-settings-pane hide-scrollbar" hidden={view !== "settings"} role="region" aria-label="Assistant settings">
+          {settingsContent}
+        </div>
+        <div className="assistant-tools-pane hide-scrollbar" hidden={view !== "tools"} role="region" aria-label="Advanced Assistant tools">
+          <div className="assistant-pane-intro"><h4>Advanced tools</h4><p>Screen, camera and computer diagnostics. These tools are available whenever you need them.</p></div>
       {navigator.userAgent.includes("Windows") && (
         <div className="assistant-selection" role="region" aria-label="Windows accessibility inspection">
           <p className="note-meta">Windows accessibility · read-only · manual</p>
@@ -468,6 +518,8 @@ export function AssistantPanel({
 
         </div>
       )}
+        </div>
+        <div className="assistant-chat-actions" hidden={view !== "chat"}>
       {(snapshot.computerRunning || snapshot.computerPrompt) && (
         <div className="assistant-action" role="region" aria-label="Supervised screen task">
           <p>{snapshot.computerPrompt ?? "A supervised screen task is running."}</p>
@@ -505,6 +557,8 @@ export function AssistantPanel({
         </div>
       )}
       {snapshot.actionNotice && <p className="status" role="status">{snapshot.actionNotice}</p>}
+        </div>
+        <div className="assistant-tools-transfer" hidden={view !== "tools"}>
       {onContinueTask && (
         <button
           type="button"
@@ -525,23 +579,36 @@ export function AssistantPanel({
       )}
       {continueNotice && <p className="status" role="status">{continueNotice}</p>}
       {continueError && <p className="error" role="alert">{continueError}</p>}
+        </div>
       <form
         className="assistant-composer"
+        hidden={view !== "chat"}
         onSubmit={(event) => {
           event.preventDefault();
           send();
         }}
       >
-        <input
-          value={draft}
-          placeholder="Type a message..."
-          aria-label="Message"
-          disabled={!canSend}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        <button type="submit" className="secondary" disabled={!canSend || !draft.trim()}>Send</button>
+        <label className="assistant-composer-field">
+          <span className="visually-hidden">Message</span>
+          <textarea
+            value={draft}
+            rows={1}
+            placeholder={canSend ? "Message your Assistant…" : "Start or continue a conversation to send a message"}
+            aria-label="Message"
+            disabled={!canSend}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                send();
+              }
+            }}
+          />
+        </label>
+        <button type="submit" className="assistant-send" disabled={!canSend || !draft.trim()} aria-label="Send message">➤</button>
       </form>
-    </>
+      </section>
+    </div>
   );
 }
 

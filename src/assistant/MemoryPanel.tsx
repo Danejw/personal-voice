@@ -10,12 +10,13 @@ interface MemoryPanelProps {
   store: AssistantMemoryStore;
   snapshot: MemorySnapshot;
   signedIn: boolean;
+  userId: string | null;
   learning: boolean;
   onLearningChange(enabled: boolean): void;
 }
 
 /** What this account asked Assistant to remember. Edit and Forget stay on the account. */
-export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningChange }: MemoryPanelProps) {
+export function MemoryPanel({ store, snapshot, signedIn, userId, learning, onLearningChange }: MemoryPanelProps) {
   const [kind, setKind] = useState<MemoryKind>("preference");
   const [key, setKey] = useState("answer_length");
   const [value, setValue] = useState("");
@@ -23,27 +24,28 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [semanticEnabled, setSemanticEnabled] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [semanticBusy, setSemanticBusy] = useState(false);
   const [notesSearch, setNotesSearch] = useState(false);
   const [dictationSearch, setDictationSearch] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    if (!signedIn) { return; }
+    setSettingsLoaded(false);
+    if (!signedIn || !userId) return;
     const client = getSupabase();
     if (!client) return;
     void (async () => {
-      const { data: { user } } = await client.auth.getUser();
-      if (!user) return;
-      const { data } = await client.from("settings").select("assistant_semantic_search, assistant_recall_notes, assistant_recall_dictations").eq("user_id", user.id).maybeSingle();
+      const { data } = await client.from("settings").select("assistant_semantic_search, assistant_recall_notes, assistant_recall_dictations").eq("user_id", userId).maybeSingle();
       if (!cancelled) {
         setSemanticEnabled(data?.assistant_semantic_search ?? false);
         setNotesSearch(data?.assistant_recall_notes ?? false);
         setDictationSearch(data?.assistant_recall_dictations ?? false);
+        setSettingsLoaded(Boolean(data));
       }
     })();
     return () => { cancelled = true; };
-  }, [signedIn]);
+  }, [signedIn, userId]);
 
   async function toggleSemantic(enabled: boolean): Promise<void> {
     const client = getSupabase();
@@ -81,6 +83,32 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not change source preferences.");
     } finally { setSemanticBusy(false); }
+  }
+
+  async function enableAll(): Promise<void> {
+    const client = getSupabase();
+    if (!client) return;
+    setSemanticBusy(true);
+    try {
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) throw new Error("Sign in to update memory preferences.");
+      const { data, error } = await client.from("settings").update({
+        assistant_semantic_search: true,
+        assistant_recall_notes: true,
+        assistant_recall_dictations: true,
+      }).eq("user_id", user.id).select("user_id").maybeSingle();
+      if (error || !data) throw new Error(error?.message ?? "Could not enable memory recall.");
+      setSemanticEnabled(true);
+      setNotesSearch(true);
+      setDictationSearch(true);
+      if (!learning) onLearningChange(true);
+      setNotice("Memory and recall are enabled. Synced dictation search still requires cloud dictation history.");
+      void indexNextMemoryBatch().catch(() => undefined);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not update memory preferences.");
+    } finally {
+      setSemanticBusy(false);
+    }
   }
 
   async function attachMemoryFile(memoryId: string, file: File): Promise<void> {
@@ -155,36 +183,49 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
   }
 
   return (
-    <details className="fold">
-      <summary>Remembered{active.length ? ` · ${active.length}` : ""}</summary>
-      <p>These follow the account onto every device. A new Assistant session hears the active ones. Forgetting one does not delete the conversation it came from.</p>
-      {signedIn && (
+    <section className="assistant-memory-settings" aria-label="Memory and recall settings">
+      <div className="assistant-settings-card">
+        <div className="assistant-settings-card-head">
+          <div><span className="assistant-eyebrow">MEMORY</span><h5>Learning & recall</h5></div>
+          <span className="assistant-settings-count">4 preferences</span>
+        </div>
+        <p className="assistant-settings-description">Choose what your Assistant can learn and search. Changes sync with your account.</p>
+        {!settingsLoaded && signedIn && <p className="note-meta" role="status">Loading saved recall preferences…</p>}
+        {signedIn && settingsLoaded && !(learning && semanticEnabled && notesSearch && dictationSearch) && (
+          <button type="button" className="secondary assistant-enable-all" disabled={semanticBusy || snapshot.saving}
+            onClick={() => { void enableAll(); }}>Enable all four preferences</button>
+        )}
+      {signedIn && settingsLoaded && (
         <Toggle
           label="Learn from Assistant"
           description="Only saved Assistant messages after this is turned on. This does not read voice notes or dictations."
           checked={learning}
-          disabled={snapshot.saving}
+          disabled={snapshot.saving || !settingsLoaded}
           onChange={onLearningChange}
         />
       )}
-      {signedIn && <Toggle
+      {signedIn && settingsLoaded && <Toggle
         label="Semantic search across saved content"
         description="Optional. Search eligible notes and saved Assistant conversations in addition to explicit memories. Other source permissions still apply."
         checked={semanticEnabled}
-        disabled={semanticBusy}
+        disabled={semanticBusy || !settingsLoaded}
         onChange={(enabled) => { void toggleSemantic(enabled); }}
       />}
-      {signedIn && <Toggle label="Include saved Notes in search"
+      {signedIn && settingsLoaded && <Toggle label="Include saved Notes in search"
         description="Notes stay separate from permanent Assistant memories."
-        checked={notesSearch} disabled={semanticBusy}
+        checked={notesSearch} disabled={semanticBusy || !settingsLoaded}
         onChange={(enabled) => { void toggleSource("notes", enabled); }} />}
-      {signedIn && <Toggle label="Include synced Dictations in search"
+      {signedIn && settingsLoaded && <Toggle label="Include synced Dictations in search"
         description="Requires the separate Sync recent dictations setting. Never uploads local-only history."
-        checked={dictationSearch} disabled={semanticBusy}
+        checked={dictationSearch} disabled={semanticBusy || !settingsLoaded}
         onChange={(enabled) => { void toggleSource("dictations", enabled); }} />}
-      {signedIn && <p>Multimodal Gemini Embedding 2 · 1536 dimensions. Files are private and saved only when attached explicitly.</p>}
-      {signedIn && <button type="button" className="secondary" disabled={semanticBusy} onClick={() => { void indexPending(); }}>Index next three memories</button>}
-      {snapshot.offline && <p>Showing the saved copy on this device. Assistant will not use it until it reconnects.</p>}
+      </div>
+      <details className="fold assistant-stored-memories">
+        <summary>Saved memories{active.length ? ` · ${active.length}` : ""} and advanced indexing</summary>
+        <p>These follow your account across devices. Existing memories aren't changed when you toggle search settings.</p>
+        {signedIn && <p className="note-meta">Private memory attachments use Gemini Embedding 2. Indexing happens only for eligible saved content.</p>}
+        {signedIn && <button type="button" className="secondary" disabled={semanticBusy} onClick={() => { void indexPending(); }}>Index next three memories</button>}
+        {snapshot.offline && <p>Showing the saved copy on this device. Assistant will not use it until it reconnects.</p>}
       {signedIn && (
         <form className="field stack" onSubmit={(event) => { event.preventDefault(); void remember(); }}>
           <span>Remember</span>
@@ -244,7 +285,8 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
       <p>A session that already heard a preference keeps it until that session restarts. Deleting the database row is not the same as the live session forgetting it.</p>
       {notice && <p>{notice}</p>}
       {snapshot.error && <p className="error" role="alert">{snapshot.error}</p>}
-    </details>
+      </details>
+    </section>
   );
 }
 

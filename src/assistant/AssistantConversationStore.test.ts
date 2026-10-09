@@ -96,6 +96,7 @@ class FakeApi implements AssistantConversationsApi {
   gets = 0;
   delayAppend: Promise<void> | null = null;
   delayGet: Promise<void> | null = null;
+  delayList: Promise<void> | null = null;
   failNextAppend = false;
   failReads = false;
 
@@ -149,6 +150,7 @@ class FakeApi implements AssistantConversationsApi {
   }
 
   async list(userId: string) {
+    if (this.delayList) await this.delayList;
     if (this.failReads) throw new AssistantStorageError("unavailable", "Couldn't reach conversation storage. Check your connection.");
     return [...this.conversations.values()].filter((conversation) => conversation.userId === userId && !conversation.deleted);
   }
@@ -260,6 +262,25 @@ function reply(id: string, text: string): AssistantTurn {
 }
 
 describe("saved assistant conversations", () => {
+  it("shows loading while retrieving saved conversations and supports explicit refreshing", async () => {
+    const thread = "44444444-4444-4444-8444-000000000900";
+    const api = new FakeApi();
+    const gate = deferred();
+    api.delayList = gate.promise;
+    const store = new AssistantConversationStore(new FakeHost(), api, memory(), () => thread, () => DEVICE);
+    const opening = store.setUser(USER_A);
+    expect(store.getSnapshot().loadingThreads).toBe(true);
+    expect(store.getSnapshot().conversations).toEqual([]);
+    gate.resolve();
+    await opening;
+    expect(store.getSnapshot().loadingThreads).toBe(false);
+    expect(store.getSnapshot().conversations).toEqual([]);
+    await api.create(USER_A, { id: thread, title: "Recovered thread" });
+    await store.catchUp();
+    expect(store.getSnapshot().conversations).toMatchObject([{ id: thread, title: "Recovered thread" }]);
+    expect(store.getSnapshot().loadingThreads).toBe(false);
+  });
+
   it("saves a turn, survives a restart, and retries without a second row", async () => {
     const storage = memory();
     const api = new FakeApi();

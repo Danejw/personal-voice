@@ -16,7 +16,7 @@ import { useAssistantMemory } from "@/assistant/useAssistantMemory";
 import { AssistantController } from "@/assistant/AssistantController";
 import { inspectAssistantPointer, trackAssistantPointer } from "@/assistant/pointerAwareness";
 import { bindAssistantCues } from "@/assistant/assistantCues";
-import { AssistantHeader, AssistantPanel } from "@/assistant/AssistantPanel";
+import { AssistantPanel } from "@/assistant/AssistantPanel";
 import { PersonalContextPanel } from "@/assistant/PersonalContextPanel";
 import { personalContextBody, profileFacts } from "@/assistant/personalContext";
 import { AssistantSession } from "@/assistant/AssistantSession";
@@ -1067,8 +1067,8 @@ export default function App() {
             }
           : undefined}
       />
-      <main className="app-main hide-scrollbar" aria-labelledby="page-title">
-        <header className="page-header">
+      <main className={section === "assistant" ? "app-main hide-scrollbar is-assistant-page" : "app-main hide-scrollbar"} aria-labelledby="page-title">
+        <header className={section === "assistant" ? "page-header assistant-page-header" : "page-header"}>
           <h2 id={mobileNav ? "page-title-desktop" : "page-title"} className="page-title">{page.label}</h2>
           {section === "dictation" && (
             <div className="page-header-actions">
@@ -1081,16 +1081,6 @@ export default function App() {
           {section === "snippets" && <SnippetToolbar store={snippetStore} snapshot={snippets} />}
           {section === "transforms" && <TransformToolbar store={transformStore} snapshot={transforms} />}
           {section === "insights" && <InsightsToolbar store={insightsStore} snapshot={insightsSnapshot} />}
-          {section === "assistant" && (
-            <AssistantHeader
-              controller={assistant}
-              snapshot={assistantSnapshot}
-              signedIn={signedIn}
-              micBusy={dictationLive}
-              library={assistantLibrarySnapshot}
-              onProduce={() => { void assistantLibrary.produce(); }}
-            />
-          )}
           <div id="page-header-actions" className="page-header-actions" hidden={section !== "capture"} />
         </header>
         {computerSnapshot.approval && (
@@ -1232,21 +1222,30 @@ export default function App() {
           </div>
         )}
 
-        <div className="panel-stack" hidden={section !== "assistant"}>
-          <section aria-labelledby="page-title" className="page-panel">
-            <PersonalContextPanel
-              enabled={profileEnabled}
-              deviceLine={personalDeviceLine}
-              facts={personalFacts}
-            />
-            <MemoryPanel
-              store={assistantMemory}
-              snapshot={assistantMemorySnapshot}
-              signedIn={signedIn}
-              learning={sync.data.settings.assistantMemoryLearning}
-              onLearningChange={(enabled) => { personalSync.updateSettings({ assistantMemoryLearning: enabled }); }}
-            />
+        <div className="panel-stack assistant-workspace-stack" hidden={section !== "assistant"}>
+          <section aria-label="Assistant conversations" className="page-panel assistant-workspace-section">
             <AssistantPanel
+              micBusy={dictationLive}
+              onProduce={() => { void assistantLibrary.produce(); }}
+              settingsContent={
+                <div className="assistant-settings-content">
+                  <div className="assistant-pane-intro">
+                    <span className="assistant-eyebrow">PERSONALIZATION</span>
+                    <h4>Assistant settings</h4>
+                    <p>Control how your Assistant learns, searches saved content and uses context across devices.</p>
+                  </div>
+                  <MemoryPanel
+                    store={assistantMemory}
+                    snapshot={assistantMemorySnapshot}
+                    signedIn={signedIn}
+                    userId={auth.userId}
+                    learning={sync.data.settings.assistantMemoryLearning}
+                    onLearningChange={(enabled) => { personalSync.updateSettings({ assistantMemoryLearning: enabled }); }}
+                  />
+                  <PersonalContextPanel enabled={profileEnabled} deviceLine={personalDeviceLine} facts={personalFacts} />
+                </div>
+              }
+
               controller={assistant}
               snapshot={assistantSnapshot}
               signedIn={signedIn}
@@ -1256,6 +1255,8 @@ export default function App() {
               onRenameThread={(id, title) => { void assistantLibrary.rename(id, title); }}
               onDeleteThread={(id) => { void assistantLibrary.delete(id); }}
               onRetrySave={() => assistantLibrary.retry()}
+              onLoadOlder={() => { void assistantLibrary.loadOlder(); }}
+              onRefreshThreads={() => { void assistantLibrary.catchUp(); }}
               onDismissRecovery={(id) => assistantLibrary.dismissRecovery(id)}
               onContinueTask={async () => {
                 const current = deviceSnapshot.devices.find((device) => device.id === deviceSnapshot.currentDeviceId);

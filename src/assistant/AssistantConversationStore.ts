@@ -42,6 +42,8 @@ export type AssistantSaveState = "idle" | "saving" | "saved" | "retry";
 export interface AssistantLibraryConversation {
   id: string;
   title: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AssistantLibrarySnapshot {
@@ -55,6 +57,9 @@ export interface AssistantLibrarySnapshot {
   recovery: RecoveredAssistantLine[];
   summaryNote: string | null;
   unavailableScreenshots: { source: string; capturedAt: string }[];
+  hasOlder: boolean;
+  loadingOlder: boolean;
+  loadingThreads: boolean;
 }
 
 /** The Assistant screen methods this store is allowed to drive. */
@@ -88,6 +93,9 @@ const EMPTY: AssistantLibrarySnapshot = {
   recovery: [],
   summaryNote: null,
   unavailableScreenshots: [],
+  hasOlder: false,
+  loadingOlder: false,
+  loadingThreads: false,
 };
 
 function messageOf(error: unknown): string {
@@ -111,6 +119,9 @@ export class AssistantConversationStore {
   private generation = 0;
   private currentId: string | null = null;
   private conversations: AssistantLibraryConversation[] = [];
+  private olderCursor: { updatedAt: string; id: string } | null = null;
+  private loadingOlder = false;
+  private loadingThreads = false;
   private titles = new Map<string, string>();
   private pending: PendingAssistantWrite[] = [];
   private deleted = new Set<string>();
@@ -205,6 +216,9 @@ export class AssistantConversationStore {
     this.userId = userId;
     this.deleted.clear();
     this.ensured.clear();
+    this.olderCursor = null;
+    this.loadingOlder = false;
+    this.loadingThreads = false;
     this.titles.clear();
     this.error = null;
     this.stopFeed();
@@ -601,13 +615,18 @@ export class AssistantConversationStore {
   }
 
   private async reloadList(userId: string, generation: number): Promise<void> {
+    if (!this.sameAccount(userId, generation)) return;
+    this.loadingThreads = true;
+    this.publish();
     try {
       const rows = await this.api.list(userId, { limit: ASSISTANT_PAGE_SIZE });
       if (!this.sameAccount(userId, generation)) return;
+      this.olderCursor = rows.length === ASSISTANT_PAGE_SIZE && rows.at(-1)
+        ? { id: rows[rows.length - 1]!.id, updatedAt: rows[rows.length - 1]!.updatedAt } : null;
       this.conversations = rows.map((row) => {
         this.ensured.add(row.id);
         if (!this.titles.has(row.id)) this.titles.set(row.id, row.title);
-        return { id: row.id, title: this.titles.get(row.id) ?? row.title };
+        return { id: row.id, title: this.titles.get(row.id) ?? row.title, createdAt: row.createdAt, updatedAt: row.updatedAt };
       });
       this.offlineCopy = false;
       this.rememberCache(userId);
@@ -625,6 +644,47 @@ export class AssistantConversationStore {
           if (this.currentId) this.restoreCachedThread(userId, this.currentId);
         }
         this.error = this.offlineCopy ? null : messageOf(error);
+        this.publish();
+      }
+    } finally {
+      if (this.sameAccount(userId, generation)) {
+        this.loadingThreads = false;
+        this.publish();
+      }
+    }
+  }
+
+  /** Loads older saved conversations without resetting the currently selected thread. */
+  async loadOlder(): Promise<void> {
+    const userId = this.userId;
+    const before = this.olderCursor;
+    if (!userId || !before || this.loadingOlder || this.offlineCopy) return;
+    const generation = this.generation;
+    this.loadingOlder = true;
+    this.publish();
+    try {
+      const rows = await this.api.list(userId, { limit: ASSISTANT_PAGE_SIZE, before });
+      if (!this.sameAccount(userId, generation)) return;
+      const existing = new Set(this.conversations.map((item) => item.id));
+      for (const row of rows) {
+        this.ensured.add(row.id);
+        if (!this.titles.has(row.id)) this.titles.set(row.id, row.title);
+        if (!existing.has(row.id)) {
+          this.conversations.push({
+            id: row.id, title: this.titles.get(row.id) ?? row.title,
+            createdAt: row.createdAt, updatedAt: row.updatedAt,
+          });
+          existing.add(row.id);
+        }
+      }
+      this.olderCursor = rows.length === ASSISTANT_PAGE_SIZE && rows.at(-1)
+        ? { id: rows[rows.length - 1]!.id, updatedAt: rows[rows.length - 1]!.updatedAt } : null;
+      this.rememberCache(userId);
+    } catch (error) {
+      if (this.sameAccount(userId, generation)) this.error = messageOf(error);
+    } finally {
+      if (this.sameAccount(userId, generation)) {
+        this.loadingOlder = false;
         this.publish();
       }
     }
@@ -1128,7 +1188,7 @@ export class AssistantConversationStore {
   }
 
   private publish(): void {
-    const rows = this.conversations.map((row) => ({ id: row.id, title: this.titles.get(row.id) ?? row.title }));
+    const rows = this.conversations.map((row) => ({ ...row, title: this.titles.get(row.id) ?? row.title }));
     if (this.currentId && !rows.some((row) => row.id === this.currentId)) {
       rows.unshift({ id: this.currentId, title: this.titles.get(this.currentId) ?? ASSISTANT_DEFAULT_TITLE });
     }
@@ -1143,6 +1203,9 @@ export class AssistantConversationStore {
       recovery: this.recovery,
       summaryNote: this.summaryNote,
       unavailableScreenshots: this.unavailableScreenshots,
+      hasOlder: Boolean(this.olderCursor) && !this.offlineCopy,
+      loadingOlder: this.loadingOlder,
+      loadingThreads: this.loadingThreads,
     };
     for (const listener of this.listeners) listener();
   }
