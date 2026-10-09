@@ -55,7 +55,9 @@ fn popup_corner_position(
     area_x: i32, area_y: i32, area_width: i32, area_height: i32,
     width: i32, height: i32, shift_above: i32,
 ) -> (i32, i32) {
-    let x = area_x + (area_width - width - 20).max(0);
+    // Fixed gutter leaves the default tray's 44px button column unobscured.
+    // This never follows the tray when the user drags it elsewhere.
+    let x = area_x + (area_width - width - 82).max(0);
     let y = area_y + (area_height - height - 16 - shift_above).max(0);
     (x, y)
 }
@@ -762,9 +764,9 @@ mod overlay_feedback_tests {
 
     #[test]
     fn corner_does_not_depend_on_indicator_position_or_taskbar_bounds() {
-        assert_eq!(popup_corner_position(0, 0, 1920, 1040, 420, 140, 0), (1480, 884));
-        assert_eq!(popup_corner_position(-1920, 20, 1920, 980, 420, 140, 0), (-440, 844));
-        assert_eq!(popup_corner_position(0, 0, 1920, 1040, 420, 140, 272), (1480, 612));
+        assert_eq!(popup_corner_position(0, 0, 1920, 1040, 420, 140, 0), (1418, 884));
+        assert_eq!(popup_corner_position(-1920, 20, 1920, 980, 420, 140, 0), (-502, 844));
+        assert_eq!(popup_corner_position(0, 0, 1920, 1040, 420, 140, 272), (1418, 612));
     }
 
     #[test]
