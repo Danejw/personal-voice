@@ -75,7 +75,6 @@ export function AssistantToolReliabilityPanel({active,userId,epoch,enabled,store
       </div>
       {loading&&<p className="hint">Loading tool metrics…</p>}
       {error&&<p className="error" role="alert">{error} Locally buffered metrics may still appear.</p>}
-      <p className="hint">Reliability measures tool responses, not whether the Assistant achieved your goal. No prompts or tool inputs are stored.</p>
       <div className="stat-row">
         {([
           [summary.calls.toLocaleString(),"Tool attempts"],
@@ -117,7 +116,6 @@ export function AssistantToolReliabilityPanel({active,userId,epoch,enabled,store
           </div>
         </>
       )}
-      <p className="hint">Verified goal completion: not measured. Tool acknowledgement cannot independently establish task success. Personalized workflow recommendations belong in Insights (Phase C).</p>
     </div>
   );
 }

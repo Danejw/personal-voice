@@ -105,13 +105,11 @@ export function AssistantInsightsPanel({active,userId}:Props) {
           <div>
             <p className="insights-eyebrow">Your Assistant</p>
             <h2>Understand how you work</h2>
-            <p className="hint">Suggestions for reusable personal workflows, explicit preferences and goals. Tool performance and reliability remain in Analytics.</p>
+            <p className="hint">Suggestions for reusable personal workflows, explicit preferences and goals.</p>
           </div>
           <button type="button" className="secondary" onClick={()=>setRefresh(n=>n+1)}
             disabled={loading||analyzing}>Refresh</button>
         </div>
-        <p>Assistant conversations are only analyzed when you request it. We sample up to 80 recent finalized user messages from up to 12 saved conversations; the model does not receive tool outputs or Assistant replies.</p>
-        <p className="hint">Analysis sends the sampled message text to the configured Gemini service and may incur API costs. Results are suggestions, not facts about your personality or evidence that goals were completed. This is separate from Usage Intelligence.</p>
         <label style={{display:"flex",gap:8,alignItems:"start"}}>
           <input type="checkbox" checked={allowModel} disabled={analyzing}
             onChange={event=>setAllowModel(event.currentTarget.checked)}/>
@@ -127,7 +125,6 @@ export function AssistantInsightsPanel({active,userId}:Props) {
       {notice&&<p className="insights-notice" role="status">{notice}</p>}
       <section className="insights-suggestion-summary">
         <h2>{pending.length} suggestion{pending.length===1?"":"s"} to review</h2>
-        <p className="hint">Each suggestion cites saved user messages. Review and edit proposed workflow steps before saving a draft. Nothing runs or changes Assistant preferences automatically.</p>
         <div className="stat-row">
           {KINDS.map(kind=><div className="stat-cell" key={kind}>
             <p className="stat-value">{pending.filter(c=>c.kind===kind).length}</p>
@@ -137,7 +134,7 @@ export function AssistantInsightsPanel({active,userId}:Props) {
       </section>
 
       {!pending.length&&!loading&&(
-        <p className="hint">No pending Assistant suggestions. Analyze saved conversations to look for grounded patterns. A small sample or no recurring behaviors can legitimately produce no suggestions.</p>
+        <p className="hint">No pending Assistant suggestions. Analyze saved conversations to look for grounded patterns.</p>
       )}
       {KINDS.map(kind=>{
         const group=pending.filter(c=>c.kind===kind);

@@ -95,7 +95,6 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
         {DAYS.map(count => <button key={count} type="button" className={days === count ? "insights-tab is-active" : "insights-tab"} onClick={() => setDays(count)}>{count} days</button>)}
         <button type="button" className="secondary" onClick={() => setRefresh(i => i + 1)}>Refresh</button>
       </div>
-      <p className="hint">Measured from Assistant activity after Phase A was enabled. Saved history before that date is not counted as measured usage.</p>
       {loading && <p className="hint">Loading Assistant activity…</p>}
       {error && <p className="error" role="alert">{error} Unsynced local activity may still be shown.</p>}
       <div className="stat-row">
@@ -136,7 +135,6 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
           </section>
         </>
       )}
-      <p className="hint">Tool performance and reliability is in Tools &amp; Reliability. Personalized recommendations belong in Insights (Phase C).</p>
     </div>
   );
 }
