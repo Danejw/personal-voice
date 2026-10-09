@@ -65,6 +65,28 @@ function controller() {
 afterEach(() => { FakeSession.opened = []; vi.useRealTimers(); });
 
 describe("AssistantController", () => {
+  it("returns an on-demand playbook as a tool response without invoking device actions", async () => {
+    const { created } = controller();
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [
+      { id: "guide-one", name: "get_tool_playbook", args: { id: "windows_control" } },
+    ] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(1));
+    const response = JSON.stringify(session.responses[0]);
+    expect(response).toContain("tool_playbook");
+    expect(response).toContain("windows_control");
+    expect(response).toContain("inspect_accessibility_tree");
+    expect(created.getSnapshot().status).toBe("READY");
+
+    session.emit({ type: "toolCalls", calls: [
+      { id: "bad-guide", name: "get_tool_playbook", args: { id: "not_real" } },
+    ] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(2));
+    expect(JSON.stringify(session.responses[1])).toContain("Choose one listed playbook ID");
+    created.end();
+  });
+
   it("plays the same ready/done cues when Assistant starts and stops, honoring the existing sound preference", () => {
     const { created } = controller();
     const playDictationCue = vi.fn().mockResolvedValue(undefined);
