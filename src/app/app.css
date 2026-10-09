@@ -1789,6 +1789,8 @@ section.page-panel.assistant-workspace-section { padding: 0; overflow: hidden; }
 .assistant-thread-rename input { width: 100%; background: #111820; padding: 8px 9px; font-size: 12px; }
 .assistant-rename-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .assistant-rail-empty { padding: 10px; font-size: 12px; line-height: 1.5; color: #92a4b1; }
+.assistant-load-older { width: 100%; margin: 10px 0; padding: 10px; color: var(--pv-primary); font: inherit; font-size: 12px; border: 0; border-radius: 9px; background: #1b2a31; cursor: pointer; }
+.assistant-load-older:disabled { opacity: .6; cursor: wait; }
 .assistant-rail-footer { margin-top: auto; padding: 17px 7px 0; display: grid; gap: 5px; }
 .assistant-rail-footer .note-meta { margin: 0; line-height: 1.5; }
 .assistant-save { margin: 0; color: #95b9b0; font-size: 11px; }
