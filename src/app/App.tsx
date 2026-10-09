@@ -1503,18 +1503,7 @@ export default function App() {
             assistantUsage={assistantUsage}
             toolStore={assistantToolMetrics}
             assistantUsageEnabled={sync.data.settings.usageIntelligence && (sync.status === "synced" || sync.status === "offline")}
-            onClearAnalytics={async () => {
-              await usage.clearAnalytics();
-              // Invalidate any stale Assistant events immediately, even if
-              // settings refresh is temporarily offline.
-              const clearedScope = {
-                userId: auth.userId, deviceId: settingsDeviceId ?? null,
-                epoch: usage.getSnapshot().epoch, enabled: false,
-              };
-              assistantUsage.setScope(clearedScope);
-              assistantToolMetrics.setScope(clearedScope);
-              await personalSync.reload();
-            }}
+
           />
         </div>
       </main>
