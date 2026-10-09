@@ -14,6 +14,7 @@ class FakeSession implements AssistantSessionHandle {
   selections: Array<string | null> = [];
   accounts: Array<string | null> = [];
   personals: Array<string | null> = [];
+  toolGuidances: Array<string | null> = [];
   histories: Array<Array<{ role: string; text: string }>> = [];
   audio: ArrayBuffer[] = [];
   closed = false;
@@ -27,11 +28,12 @@ class FakeSession implements AssistantSessionHandle {
     return Promise.resolve();
   }
 
-  sendTurn(text: string, selectionText?: string | null, accountText?: string | null, personalText?: string | null) {
+  sendTurn(text: string, selectionText?: string | null, accountText?: string | null, personalText?: string | null, toolGuidance?: string | null) {
     this.turns.push(text);
     this.selections.push(selectionText ?? null);
     this.accounts.push(accountText ?? null);
     this.personals.push(personalText ?? null);
+    this.toolGuidances.push(toolGuidance ?? null);
   }
   sendHistory(turns: { role: "user" | "model"; text: string }[]) { this.histories.push(turns); }
   sendNote(text: string) { this.notes.push(text); }
