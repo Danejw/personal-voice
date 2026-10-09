@@ -41,7 +41,7 @@ export interface AssistantCitation {
 /** One saved thread. Tombstones are not returned. Lease fields stay empty until a later phase. */
 export interface AssistantConversation {
   id: string;
-  archivedAt: string | null;
+  archivedAt?: string | null;
   title: string;
   revision: number;
   createdAt: string;
@@ -55,7 +55,7 @@ export interface AssistantConversation {
 
 export interface AssistantStoredMessage {
   id: string;
-  sessionId: string | null;
+  sessionId?: string | null;
   conversationId: string;
   role: AssistantMessageRole;
   status: AssistantMessageStatus;
