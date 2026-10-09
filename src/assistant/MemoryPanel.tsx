@@ -155,9 +155,13 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
   }
 
   return (
-    <details className="fold">
-      <summary>Remembered{active.length ? ` · ${active.length}` : ""}</summary>
-      <p>These follow the account onto every device. A new Assistant session hears the active ones. Forgetting one does not delete the conversation it came from.</p>
+    <section className="assistant-memory-settings" aria-label="Memory and recall settings">
+      <div className="assistant-settings-card">
+        <div className="assistant-settings-card-head">
+          <div><span className="assistant-eyebrow">MEMORY</span><h5>Learning & recall</h5></div>
+          <span className="assistant-settings-count">4 preferences</span>
+        </div>
+        <p className="assistant-settings-description">Choose what your Assistant can learn and search. Changes sync with your account.</p>
       {signedIn && (
         <Toggle
           label="Learn from Assistant"
@@ -182,9 +186,13 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
         description="Requires the separate Sync recent dictations setting. Never uploads local-only history."
         checked={dictationSearch} disabled={semanticBusy}
         onChange={(enabled) => { void toggleSource("dictations", enabled); }} />}
-      {signedIn && <p>Multimodal Gemini Embedding 2 · 1536 dimensions. Files are private and saved only when attached explicitly.</p>}
-      {signedIn && <button type="button" className="secondary" disabled={semanticBusy} onClick={() => { void indexPending(); }}>Index next three memories</button>}
-      {snapshot.offline && <p>Showing the saved copy on this device. Assistant will not use it until it reconnects.</p>}
+      </div>
+      <details className="fold assistant-stored-memories">
+        <summary>Saved memories{active.length ? ` · ${active.length}` : ""} and advanced indexing</summary>
+        <p>These follow your account across devices. Existing memories aren't changed when you toggle search settings.</p>
+        {signedIn && <p className="note-meta">Private memory attachments use Gemini Embedding 2. Indexing happens only for eligible saved content.</p>}
+        {signedIn && <button type="button" className="secondary" disabled={semanticBusy} onClick={() => { void indexPending(); }}>Index next three memories</button>}
+        {snapshot.offline && <p>Showing the saved copy on this device. Assistant will not use it until it reconnects.</p>}
       {signedIn && (
         <form className="field stack" onSubmit={(event) => { event.preventDefault(); void remember(); }}>
           <span>Remember</span>
@@ -244,7 +252,8 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
       <p>A session that already heard a preference keeps it until that session restarts. Deleting the database row is not the same as the live session forgetting it.</p>
       {notice && <p>{notice}</p>}
       {snapshot.error && <p className="error" role="alert">{snapshot.error}</p>}
-    </details>
+      </details>
+    </section>
   );
 }
 
