@@ -930,6 +930,56 @@ textarea:focus {
 .assistant-sources a { color: #88d8c1; text-decoration: none; }
 .assistant-shot { width: 160px; height: auto; border-radius: 8px; background: #111820; }
 
+/* Independent bottom-right desktop feedback HWND: no tray-relative portals. */
+html.overlay-feedback-view,
+html.overlay-feedback-view body,
+html.overlay-feedback-view #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  background: transparent;
+  overflow: hidden;
+}
+.overlay-feedback-shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 8px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.overlay-feedback-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 16px;
+  border-radius: 13px;
+  background: rgba(22, 25, 33, .97);
+  border: 1px solid rgba(255, 255, 255, .16);
+  color: #f4f6fa;
+  font-family: system-ui, "Segoe UI", sans-serif;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
+}
+.overlay-feedback-label { margin-bottom: 7px; font-size: 11px; opacity: .7; }
+.overlay-feedback-message {
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.overlay-hint-trigger {
+  display: flex;
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+
 /* Floating buttons only: no page background, no minimum window width. */
 html.indicator-view,
 html.indicator-view body,
