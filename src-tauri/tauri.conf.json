@@ -42,8 +42,8 @@
       {
         "label": "overlay-feedback",
         "title": "Personal Voice Feedback",
-        "width": 420,
-        "height": 240,
+        "width": 440,
+        "height": 300,
         "visible": false,
         "focus": false,
         "focusable": false,
@@ -59,8 +59,8 @@
       {
         "label": "assistant-tool-popup",
         "title": "Personal Voice Assistant Actions",
-        "width": 380,
-        "height": 260,
+        "width": 440,
+        "height": 300,
         "visible": false,
         "focus": false,
         "focusable": true,
