@@ -70,9 +70,8 @@ fn pin_corner_popup(app: &AppHandle, label: &str, logical_height: Option<f64>) -
     let area = monitor.work_area();
     let size = popup.outer_size().map_err(|e| e.to_string())?;
     let width = size.width as i32;
-    let height = logical_height.map(|value| (value * monitor.scale_factor()).round() as i32)
-        .unwrap_or(size.height as i32)
-        .min((area.size.height as i32 - 32).max(80));
+    let desired_height = logical_height.map(|value| (value * monitor.scale_factor()).round() as i32)
+        .unwrap_or(size.height as i32);
     let shift = if label == "overlay-feedback" {
         app.get_webview_window("assistant-tool-popup")
             .filter(|other| other.is_visible().unwrap_or(false))
@@ -80,6 +79,9 @@ fn pin_corner_popup(app: &AppHandle, label: &str, logical_height: Option<f64>) -
             .map(|size| size.height as i32 + 12)
             .unwrap_or(0)
     } else { 0 };
+    // Leave sufficient space for the actionable Assistant card on smaller
+    // monitors instead of letting two independent popups overlap each other.
+    let height = desired_height.min((area.size.height as i32 - 32 - shift).max(80));
     let (x, y) = popup_corner_position(
         area.position.x, area.position.y, area.size.width as i32, area.size.height as i32,
         width, height, shift,
