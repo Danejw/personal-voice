@@ -123,7 +123,7 @@ describe("assistant tool schema", () => {
   it("validates read-only, account-scoped prior conversation tool calls", () => {
     const id = "33333333-3333-4333-8333-333333333333";
     expect(decideToolCall({ id: "list", name: "list_past_conversations", args: { query: "bike" } }, plan))
-      .toEqual({ kind: "conversations", id: "list", name: "list_past_conversations", query: "bike", cursor: null, count: 20 });
+      .toEqual({ kind: "conversations", id: "list", name: "list_past_conversations", query: "bike", cursor: null, count: 20, archivedOnly: false });
     expect(decideToolCall({ id: "last-five", name: "list_past_conversations", args: { count: 5 } }, plan))
       .toMatchObject({ kind: "conversations", count: 5, query: "" });
     expect(decideToolCall({ id: "bad-count", name: "list_past_conversations", args: { count: 21 } }, plan).kind)
