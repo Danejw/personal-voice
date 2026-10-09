@@ -220,3 +220,32 @@ grant execute on function public.list_assistant_sessions(uuid,uuid,integer,times
 grant execute on function public.list_assistant_session_messages(uuid,uuid,uuid,bigint,integer) to authenticated;
 grant execute on function public.set_assistant_conversation_archived(uuid,uuid,boolean) to authenticated;
 grant execute on function public.list_archived_assistant_conversations(uuid,integer,timestamptz,uuid) to authenticated;
+
+
+-- A queued message may reach Supabase after its Live session has ended.
+-- Associate its original session id idempotently, even after a retry or crash.
+create function public.link_assistant_message_session(
+  p_user_id uuid,p_message_id uuid,p_session_id uuid
+) returns void language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid;
+  entry public.assistant_messages;
+  sess public.assistant_sessions;
+begin
+  uid := public.assistant_require_account(p_user_id);
+  select * into entry from public.assistant_messages
+    where id=p_message_id and user_id=uid for update;
+  if not found then raise exception 'ASSISTANT_MESSAGE_REJECTED' using errcode='23514'; end if;
+  select * into sess from public.assistant_sessions
+    where id=p_session_id and user_id=uid;
+  if not found or sess.conversation_id is distinct from entry.conversation_id or
+     sess.device_id is distinct from entry.source_device_id then
+    raise exception 'ASSISTANT_SESSION_REJECTED' using errcode='23514';
+  end if;
+  if entry.session_id is not null and entry.session_id is distinct from p_session_id then
+    raise exception 'ASSISTANT_SESSION_CONFLICT' using errcode='23514';
+  end if;
+  update public.assistant_messages set session_id=p_session_id where id=p_message_id;
+end; $$;
+revoke all on function public.link_assistant_message_session(uuid,uuid,uuid) from public,anon;
+grant execute on function public.link_assistant_message_session(uuid,uuid,uuid) to authenticated;
