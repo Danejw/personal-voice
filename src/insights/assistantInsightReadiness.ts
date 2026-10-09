@@ -33,7 +33,11 @@ export function assistantInsightReadiness(
 ): AssistantInsightReadiness {
   const sampledMessages=samples.length;
   const activeDays=new Set(samples.map(s=>day(s.createdAt)).filter(Boolean)).size;
-  const newSinceLastRun=lastRun ? samples.filter(s=>s.createdAt > lastRun.createdAt).length : sampledMessages;
+  const priorAt=lastRun ? Date.parse(lastRun.createdAt) : NaN;
+  const newSinceLastRun=lastRun ? samples.filter(s=>{
+    const time=Date.parse(s.createdAt);
+    return Number.isFinite(time) && Number.isFinite(priorAt) && time>priorAt;
+  }).length : sampledMessages;
   const elapsed=lastRun ? (now.getTime()-Date.parse(lastRun.createdAt)) / 86_400_000 : 0;
   const daysSinceLastRun=Number.isFinite(elapsed)?Math.max(0,elapsed):0;
   if(!lastRun){
