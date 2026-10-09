@@ -69,9 +69,15 @@ fn pin_corner_popup(app: &AppHandle, label: &str) -> Result<(), String> {
 #[cfg(windows)]
 fn present_overlay_feedback(app: &AppHandle, payload: OverlayFeedbackPayload) -> Result<(), String> {
     let window = app.get_webview_window("overlay-feedback").ok_or("Feedback window missing")?;
-    if payload.message.is_none() {
+    let Some(ref message) = payload.message else {
         return platform::hide_window(&window);
-    }
+    };
+    // Resize the independent HWND before positioning it. Typical messages are
+    // fully visible; extremely long messages stay inside the work area.
+    let line_count: usize = message.lines().map(|line| line.chars().count().max(1).div_ceil(48)).sum();
+    let logical_height = (84 + line_count.clamp(1, 25) * 20).clamp(110, 560) as f64;
+    window.set_size(tauri::LogicalSize::new(420.0, logical_height))
+        .map_err(|e| e.to_string())?;
     pin_corner_popup(app, "overlay-feedback")?;
     // Suppress focus and pointer interception even over transparent pixels.
     window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
