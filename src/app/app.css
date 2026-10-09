@@ -1968,3 +1968,15 @@ section.page-panel.assistant-workspace-section { padding: 0; overflow: hidden; }
   .confirm-dialog { padding: 18px 18px 16px; }
   .confirm-dialog-actions button { flex: 1 1 auto; }
 }
+
+
+/* Session history is secondary to the transcript, reachable from its compact header. */
+.assistant-session-dropdown { position: relative; flex: none; font-size: 11px; color: #9cbaae; }
+.assistant-session-dropdown > summary { cursor: pointer; white-space: nowrap; padding: 5px 7px; border-radius: 8px; background: #1b2b30; }
+.assistant-session-popover { position: absolute; z-index: 12; top: 31px; right: 0; width: min(390px, 70vw); max-height: 50vh; overflow: auto;
+  border-radius: 12px; background: #1b2730; padding: 12px; box-shadow: 0 12px 30px rgba(0,0,0,.38); }
+.assistant-session-popover p { font-size: 12px; line-height: 1.5; }
+.assistant-session-entry { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 2px; }
+.assistant-session-entry > span { min-width: 0; overflow-wrap: anywhere; }
+.assistant-session-entry button { font-size: 10px; flex: none; padding: 5px 7px; }
+.assistant-archive-switch { font-size: 11px; width: 100%; margin: 6px 0 0; padding: 6px 8px; border: 0; border-radius: 8px; text-align: left; }
