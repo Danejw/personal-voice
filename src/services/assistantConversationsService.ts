@@ -49,6 +49,7 @@ export interface AssistantConversationsApi {
   listMessages(userId: string, conversationId: string, page?: AssistantMessagePage): Promise<AssistantStoredMessage[]>;
   /** Session APIs are additive so old in-memory test adapters remain compatible. */
   startSession?(userId: string, conversationId: string, deviceId: string, sessionId: string): Promise<AssistantSession>;
+  linkMessageSession?(userId: string, messageId: string, sessionId: string): Promise<void>;
   finishSession?(userId: string, sessionId: string, reason: "ended" | "interrupted" | "lost"): Promise<void>;
   listSessions?(userId: string, conversationId: string, page?: { limit?: number; before?: { startedAt: string; id: string } | null }): Promise<AssistantSession[]>;
   listSessionMessages?(userId: string, conversationId: string, sessionId: string, page?: AssistantMessagePage): Promise<AssistantStoredMessage[]>;
