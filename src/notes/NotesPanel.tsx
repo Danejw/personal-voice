@@ -8,6 +8,7 @@ import {
 import { HoverActionItem } from "@/components/HoverActionItem";
 import { SelectField } from "@/components/SelectField";
 import type { NotesSnapshot, NotesStatus, NotesStore } from "@/notes/NotesStore";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import type { Note } from "@/notes/note";
 import type { NoteGroup } from "@/notes/noteGroup";
 import { attachmentKind, formatAttachmentSize } from "@/notes/noteAttachment";
@@ -472,6 +473,7 @@ export function NotesPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const [composing, setComposing] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [newNoteTitle, setNewNoteTitle] = useState("");
@@ -575,9 +577,14 @@ export function NotesPanel({
   }
 
   function removeAttachment(note: Note, attachment: NoteAttachment) {
-    void run(`attachment:${note.id}:${attachment.id}`, async () => {
-      await store.removeAttachment(note.id, attachment);
-      setNotice("Attachment removed.");
+    confirm.ask({
+      title: "Remove note attachment?",
+      description: `The attachment “${attachment.fileName}” will be removed from “${displayTitle(note)}”.`,
+      confirmLabel: "Remove attachment",
+      onConfirm: () => run(`attachment:${note.id}:${attachment.id}`, async () => {
+        await store.removeAttachment(note.id, attachment);
+        setNotice("Attachment removed.");
+      }),
     });
   }
 
@@ -593,9 +600,17 @@ export function NotesPanel({
   }
 
   function remove(note: Note) {
-    if (editingId === note.id) cancelEdit();
-    if (transformingId === note.id) setTransformingId(null);
-    void run(`delete:${note.id}`, () => store.remove(note.id));
+    confirm.ask({
+      title: "Delete note?",
+      description: `“${displayTitle(note)}” and its saved attachments will be deleted.`,
+      confirmLabel: "Delete note",
+      onConfirm: () => run(`delete:${note.id}`, async () => {
+        await store.remove(note.id);
+        if (editingId === note.id) cancelEdit();
+        if (transformingId === note.id) setTransformingId(null);
+        setNotice("Note deleted.");
+      }),
+    });
   }
 
   function attach(note: Note) {
@@ -771,6 +786,7 @@ export function NotesPanel({
           ? <NoteCardGrid notes={archived} className="archived-note-grid" {...cardProps} />
           : <p className="placeholder">No archived notes</p>}
       </details>
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </>
   );
 }
