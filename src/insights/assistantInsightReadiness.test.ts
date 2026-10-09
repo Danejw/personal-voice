@@ -33,6 +33,16 @@ describe("Assistant Insights uses a dictation-style readiness cadence",()=>{
     expect(info.newSinceLastRun).toBe(4);
     expect(info.ready).toBe(false);
   });
+  it("lets existing users backfill their missing communication profile without 30 new turns",()=>{
+    const oldRun={...previous,voiceProfile:null};
+    const samples=add(3,20,new Date("2026-09-01T09:00:00Z"));
+    const result=assistantInsightReadiness(samples,oldRun,new Date("2026-10-09T09:00:00Z"));
+    expect(result).toMatchObject({ready:true,newSinceLastRun:0});
+    expect(result.reason).toMatch(/profile/);
+    expect(assistantInsightReadiness(samples.slice(0,5),oldRun).ready).toBe(false);
+    const withProfile={...previous,voiceProfile:"A sustained communication style profile spanning many observed user messages."};
+    expect(assistantInsightReadiness(samples,withProfile,new Date("2026-10-09T09:00:00Z")).ready).toBe(false);
+  });
   it("never models success, reanalysis eligibility or duration from Assistant tool calls",()=>{
     const readiness=assistantInsightReadiness([],previous,new Date("2026-10-20T09:00:00Z"));
     expect(readiness).toMatchObject({ready:false,newSinceLastRun:0,sampledMessages:0});
