@@ -365,7 +365,16 @@ export class AssistantConversationStore {
     await this.initializing;
     if (this.userId !== userId) throw new Error("The signed-in account changed.");
     const startingGeneration = this.generation;
-    const conversation = await this.api.get(userId, id);
+    let conversation: AssistantConversation;
+    try {
+      conversation = await this.api.get(userId, id);
+    } catch (error) {
+      if (this.sameAccount(userId, startingGeneration)) {
+        this.error = messageOf(error);
+        this.publish();
+      }
+      throw error;
+    }
     if (!this.sameAccount(userId, startingGeneration)) {
       throw new Error("Conversation changed before it could be opened. Try again.");
     }
