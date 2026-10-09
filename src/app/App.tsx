@@ -86,6 +86,8 @@ import { handoffApi } from "@/services/handoffService";
 import { remoteDictationApi } from "@/services/remoteDictationService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
+import { assistantUsageApi } from "@/services/assistantUsageService";
+import { AssistantUsageStore } from "@/usage/AssistantUsageStore";
 import { notesApi } from "@/services/notesService";
 import { insightsApi } from "@/services/insightsService";
 import { insightsAnalyzer } from "@/services/insightsAnalysisService";
@@ -230,6 +232,9 @@ assistantLibrary.setOnUserSaved(() => {
 assistantMemory.setRemoteLearn(() => requestMemoryLearn());
 assistant.setProducer(() => assistantLibrary.holdingLease());
 const usage = new UsageStore(localStorage, platform.platform, () => new Date(), usageApi);
+const assistantUsage = new AssistantUsageStore(assistantUsageApi, localStorage);
+assistant.setUsageTurnHandler((turn) => assistantUsage.recordTurn(turn, assistantLibrary.getSnapshot().currentId));
+assistant.subscribe((snapshot) => assistantUsage.onStatus(snapshot.status));
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
 const snippetStore = new SnippetStore(snippetsApi, localStorage);
 const transformStore = new TransformStore(transformProfilesApi);
@@ -897,7 +902,13 @@ export default function App() {
 
   useEffect(() => {
     usage.setEnabled(sync.data.settings.usageIntelligence);
-  }, [sync.data.settings.usageIntelligence]);
+    assistantUsage.setScope({
+      userId: auth.userId,
+      deviceId: settingsDeviceId ?? null,
+      epoch: sync.data.settings.usageEpoch,
+      enabled: sync.data.settings.usageIntelligence && (sync.status === "synced" || sync.status === "offline"),
+    });
+  }, [auth.userId, settingsDeviceId, sync.status, sync.data.settings.usageEpoch, sync.data.settings.usageIntelligence]);
 
   useEffect(() => {
     assistantMemory.setLearning(sync.data.settings.assistantMemoryLearning);
@@ -1461,6 +1472,9 @@ export default function App() {
             devices={deviceSnapshot.devices}
             dictionary={sync.data.terms}
             usage={usageSnapshot}
+            userId={auth.userId}
+            assistantUsage={assistantUsage}
+            assistantUsageEnabled={sync.data.settings.usageIntelligence && (sync.status === "synced" || sync.status === "offline")}
           />
         </div>
       </main>
