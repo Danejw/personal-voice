@@ -1256,6 +1256,7 @@ export default function App() {
               onDeleteThread={(id) => { void assistantLibrary.delete(id); }}
               onRetrySave={() => assistantLibrary.retry()}
               onLoadOlder={() => { void assistantLibrary.loadOlder(); }}
+              onRefreshThreads={() => { void assistantLibrary.catchUp(); }}
               onDismissRecovery={(id) => assistantLibrary.dismissRecovery(id)}
               onContinueTask={async () => {
                 const current = deviceSnapshot.devices.find((device) => device.id === deviceSnapshot.currentDeviceId);
