@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { assistantUsageApi } from "@/services/assistantUsageService";
 import { assistantToolMetricsApi } from "@/services/assistantToolMetricsService";
 import { assistantUsageFacts } from "@/insights/assistantUsageFacts";
@@ -165,8 +165,8 @@ export function AssistantInsightsPanel({active,userId,refreshToken,view,usageEpo
   const dayPercent=Math.min(100,Math.round(dayCount/dayTarget*100));
   const measured=usageRows?.key===usageKey?usageRows:null;
   const fromDay=localUsageDay(new Date(new Date().getFullYear(),new Date().getMonth(),new Date().getDate()-29));
-  const recentEvents=useMemo(()=>measured?.events.filter(event=>event.localDay>=fromDay)??[],[measured,fromDay]);
-  const facts=useMemo(()=>assistantUsageFacts(recentEvents),[recentEvents]);
+  const recentEvents=measured?.events.filter(event=>event.localDay>=fromDay)??[];
+  const facts=assistantUsageFacts(recentEvents);
   const deviceNames=new Map(devices.map(device=>[device.id,device.name]));
   const knownDevices=facts.deviceCounts.map(device=>({
     id:device.deviceId,label:deviceNames.get(device.deviceId)??"Unknown device",
