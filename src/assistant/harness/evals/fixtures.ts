@@ -1,7 +1,7 @@
 import type { ToolSelectionScenario } from "@/assistant/harness/evals/traceScore";
 
 /**
- * PR22 golden tool-path fixture set (53 tool coverage + 20 disambiguation + 7 no-tool).
+ * PR22 golden tool-path fixture set (54 tool coverage + 20 disambiguation + 7 no-tool).
  * These are expected tool sequences, NOT measured model outcomes.
  * Some examples assume identified/available targets in the mock environment.
  * Real model quality and final-state success require separate live evaluation.
@@ -59,6 +59,7 @@ const BASE_TOOL_SCENARIOS = [
   { id: "tool-remember_memory", request: "Remember that I prefer terse confirmations.", expected: ["remember_memory"], successCriterion: "Explicit preference saved" },
   { id: "tool-change_memory", request: "Update my remembered answer-length preference to detailed.", expected: ["list_memories","change_memory"], successCriterion: "Existing memory corrected" },
   { id: "tool-forget_memory", request: "Forget my saved preference for responses.", expected: ["list_memories","forget_memory"], successCriterion: "Memory deactivated" },
+  { id: "tool-get_tool_playbook", request: "Retrieve the Windows control workflow before a multi-step UI task.", expected: ["get_tool_playbook"], successCriterion: "Named workflow guidance returned without device action" },
   { id: "tool-remote_action", request: "Open Calculator on my paired home Windows PC.", expected: ["remote_action"], successCriterion: "Remote device reports app opened" },
 ] as const satisfies readonly ToolSelectionScenario[];
 
