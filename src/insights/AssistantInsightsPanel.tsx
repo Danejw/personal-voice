@@ -110,7 +110,7 @@ export function AssistantInsightsPanel({active,userId}:Props) {
           <button type="button" className="secondary" onClick={()=>setRefresh(n=>n+1)}
             disabled={loading||analyzing}>Refresh</button>
         </div>
-        <p>Assistant conversations are only analyzed when you request it. We sample up to 80 recent finalized user messages from up to 8 saved conversations; the model does not receive tool outputs or Assistant replies.</p>
+        <p>Assistant conversations are only analyzed when you request it. We sample up to 80 recent finalized user messages from up to 12 saved conversations; the model does not receive tool outputs or Assistant replies.</p>
         <p className="hint">Analysis sends the sampled message text to the configured Gemini service and may incur API costs. Results are suggestions, not facts about your personality or evidence that goals were completed. This is separate from Usage Intelligence.</p>
         <label style={{display:"flex",gap:8,alignItems:"start"}}>
           <input type="checkbox" checked={allowModel} disabled={analyzing}
