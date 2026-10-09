@@ -22,8 +22,8 @@ describe("independent tool-use regression corpus", () => {
     expect(report.overall.rates.independentlyVerifiedGoalRate).toBe(0.5833);
     expect(report.overall.rates.avoidableLookupRate).toBe(0.0667);
     expect(report.warnings).toContain("No recorded real-model traces. Synthetic/mocked results are NOT model accuracy.");
-    expect(report.scenarioCount).toBe(81);
-    expect(report.scenarioCoverage).toBe(0.1605);
+    expect(report.scenarioCount).toBe(TOOL_SELECTION_SCENARIOS.length);
+    expect(report.scenarioCoverage).toBe(Number((13 / TOOL_SELECTION_SCENARIOS.length).toFixed(4)));
     expect(report.byModality.voice.samples).toBe(5);
     expect(report.byPlatform.android.samples).toBe(6);
   });
@@ -71,7 +71,7 @@ describe("independent tool-use regression corpus", () => {
     expect(() => evaluateBatch([{ ...good, scenarioId: "nonexistent" }])).toThrow();
     const repeated = evaluateBatch([good, good]);
     expect(repeated.overall.samples).toBe(2);
-    expect(repeated.scenarioCoverage).toBe(0.0123);
+    expect(repeated.scenarioCoverage).toBe(Number((1 / TOOL_SELECTION_SCENARIOS.length).toFixed(4)));
     const mixed = evaluateBatch([good, { ...good, origin: "live", goal: { passed: null, source: "unverified" } }]);
     expect(mixed.liveModel.samples).toBe(1);
     expect(mixed.warnings.some((warning) => warning.includes("Mixed trace origins"))).toBe(true);
