@@ -1,7 +1,26 @@
 // Explicit on-demand analysis of saved Assistant USER messages only.
 // No background jobs. No raw source text or model prompt is persisted here.
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@6.2.12";
-import { INSIGHTS_MODEL, parseGeminiJson } from "../dictation-insights/model.ts";
+// Keep this deployment self-contained; it must not depend on a sibling function bundle.
+const INSIGHTS_MODEL = "gemini-3.5-flash-lite";
+function parseGeminiJson(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid model response");
+  const candidates = (body as Record<string, unknown>).candidates;
+  if (!Array.isArray(candidates) || !candidates.length) throw new Error("Model response empty");
+  const first = candidates[0];
+  if (!first || typeof first !== "object" || Array.isArray(first)) throw new Error("Invalid candidate");
+  const content = (first as Record<string, unknown>).content;
+  if (!content || typeof content !== "object" || Array.isArray(content)) throw new Error("Invalid content");
+  const parts = (content as Record<string, unknown>).parts;
+  if (!Array.isArray(parts)) throw new Error("Invalid parts");
+  const text = parts.map(part => {
+    if (!part || typeof part !== "object" || Array.isArray(part)) return "";
+    const value = part as Record<string, unknown>;
+    return value.thought === true ? "" : typeof value.text === "string" ? value.text : "";
+  }).join("").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  if (!text || text.length > 65_000) throw new Error("Invalid model output length");
+  return JSON.parse(text);
+}
 
 const origin = Deno.env.get("SUPABASE_URL") ?? "";
 const jwks = createRemoteJWKSet(new URL(`${origin}/auth/v1/.well-known/jwks.json`));
