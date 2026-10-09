@@ -110,6 +110,12 @@ pub fn run() {
             #[cfg(windows)]
             commands::inspect_accessibility_tree,
             #[cfg(windows)]
+            commands::pointer_position,
+            #[cfg(windows)]
+            commands::inspect_pointer_context,
+            #[cfg(windows)]
+            commands::capture_pointer_snapshot,
+            #[cfg(windows)]
             commands::accessibility_pattern_action,
             #[cfg(windows)]
             commands::accessibility_watch,
@@ -133,8 +139,6 @@ pub fn run() {
             commands::set_hotkey_capture,
             commands::set_dictation_active,
             commands::sync_overlay,
-            #[cfg(windows)]
-            commands::sync_assistant_tool_popup,
             commands::resize_overlay,
             commands::resize_overlay_confirm,
             commands::peek_overlay_tip_side,

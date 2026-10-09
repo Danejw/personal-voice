@@ -41,6 +41,8 @@ export interface OverlayBindings {
   canDictate?(): boolean;
   assistant: AssistantSnapshot;
   assistantController: AssistantController;
+  /** Start through the transcript store so prior conversation is restored first. */
+  onAssistantStart(): Promise<void>;
   remoteTargetId: string | null;
   remoteTargetLabel: string | null;
   remoteTargetPlatform: string | null;
@@ -88,6 +90,7 @@ export function useOverlay({
   canDictate,
   assistant,
   assistantController,
+  onAssistantStart,
   remoteTargetId,
   remoteTargetLabel,
   remoteTargetPlatform,
@@ -107,11 +110,13 @@ export function useOverlay({
   const canDictateRef = useRef(canDictate);
   const cycleRef = useRef(onCycleRemoteTarget);
   const lockRef = useRef(onLockRemoteTarget);
+  const startAssistantRef = useRef(onAssistantStart);
   useEffect(() => { providerRef.current = getProvider; }, [getProvider]);
   armRef.current = onArmDictation;
   canDictateRef.current = canDictate;
   cycleRef.current = onCycleRemoteTarget;
   lockRef.current = onLockRemoteTarget;
+  startAssistantRef.current = onAssistantStart;
 
   const snapshot = useMemo(() => buildOverlaySnapshot({
     visible,
@@ -380,7 +385,7 @@ export function useOverlay({
           const intent = overlayAssistantIntent(snapshotRef.current.assistant);
           if (intent === "start") {
             if (snapshotRef.current.paused || !snapshotRef.current.signedIn) return;
-            assistantController.start();
+            void startAssistantRef.current().catch((error) => flash(error instanceof Error ? error.message : String(error)));
             return;
           }
           assistantController.end();

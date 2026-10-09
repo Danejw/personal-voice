@@ -70,11 +70,6 @@ h1 { font-size: 15px; line-height: 1.2; font-weight: 600; margin: 0; }
   font-weight: 500; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
   pointer-events: none; white-space: normal; text-wrap: pretty;
 }
-/* Indicator window is tiny until tip-space expands; keep tips readable. */
-html.indicator-view .app-tooltip {
-  max-width: 200px;
-  white-space: nowrap;
-}
 .app-tooltip.is-left::after,
 .app-tooltip.is-right::after {
   content: ""; position: absolute; top: var(--tooltip-arrow, 50%);
@@ -662,9 +657,11 @@ textarea:focus {
 .hotkey-remove:hover:not(:disabled) { color: #f3a7a7; }
 .hotkey-remove:disabled { opacity: 0.35; cursor: default; }
 .hotkey-add { flex: none; }
-.hotkey-long-press select {
-  font: inherit; font-size: 11px; color: #e9edf4; background: #19232e;
-  border: 0; border-radius: 6px; padding: 3px 6px; cursor: pointer;
+.hotkey-long-press .select-field { width: 112px; }
+.hotkey-long-press .select-trigger { background: #19232e; padding: 5px 8px; font-size: 11px; }
+.hotkey-long-press .select-field-label {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 .record { font: inherit; font-size: 13px; font-weight: 600; color: #111820; background: #88d8c1; border: 0; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
 .record:hover:not(:disabled) { background: #a3e4d2; }
@@ -702,13 +699,19 @@ textarea:focus {
 .term-delete { font: inherit; font-size: 18px; line-height: 1; color: #a2adbc; background: transparent; border: 0; padding: 2px 6px; border-radius: 6px; cursor: pointer; }
 .term-delete:hover:not(:disabled) { color: #f3a7a7; }
 .term-delete:disabled, .toggle:has(input:disabled) { opacity: 0.5; cursor: default; }
-.note-compose { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.note-compose-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.note-compose {
+  display: grid; gap: 10px; margin-bottom: 14px; padding: 12px;
+  background: #0d141b; border: 1px solid #253342; border-radius: 10px;
+}
+.note-compose-fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr); gap: 10px; }
 .note-compose textarea,
 .note-edit textarea {
   width: 100%; min-height: 64px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.45;
   color: inherit; background: #111820; border: 0; border-radius: 8px; padding: 8px 10px;
 }
-.note-compose textarea { flex: 1; }
+.note-compose textarea { min-height: 130px; }
+.app-shell.is-mobile .note-compose-fields { grid-template-columns: 1fr; }
 .note-compose .record { flex: none; }
 .note-edit { display: grid; gap: 8px; }
 .note-edit-actions { display: flex; align-items: center; gap: 6px; }
@@ -931,7 +934,11 @@ html.indicator-view #root {
 .overlay-dock {
   box-sizing: border-box;
   width: 100%;
-  height: 100%;
+  /* Keep the buttons anchored as the HWND adds transparent room above them for tips. */
+  height: 194px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -939,11 +946,7 @@ html.indicator-view #root {
   padding-right: 6px;
   gap: 6px;
 }
-.overlay-dock.is-tip-right {
-  align-items: flex-start;
-  padding-right: 0;
-  padding-left: 6px;
-}
+.overlay-dock.has-confirmation { height: 270px; }
 .overlay-btn {
   position: relative;
   width: 32px;

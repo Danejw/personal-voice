@@ -96,6 +96,8 @@ export interface AssistantActions {
   readRemote(kind: RemoteKind, deviceName: string | null): Promise<{ text: string; screenshot: ScreenSnapshot | null }>;
   /** One still of this device's screen. Does not click or type. */
   captureScreen(): Promise<ScreenSnapshot>;
+  inspectPointer(): Promise<string>;
+  capturePointerTarget(): Promise<ScreenSnapshot>;
   /** Highlighted text in the other app. */
   captureSelection(): Promise<ContextItem>;
   /** Inbox notes, or every note when archived ones are included. */
@@ -110,6 +112,10 @@ export interface AssistantActions {
   /** Active and forgotten memories for this account. */
   listMemories(): Promise<string>;
   searchMemory(query: string): Promise<string>;
+  listPastConversations(query: string, cursor: string | null, count: number): Promise<string>;
+  readPastConversation(conversationId: string): Promise<string>;
+  checkPastConversation(conversationId: string): Promise<string>;
+  continuePastConversation(conversationId: string): Promise<void>;
   rememberMemory(input: { key: string; kind: "preference" | "fact"; value: string }): Promise<string>;
   changeMemory(input: { key: string; value: string }): Promise<string>;
   forgetMemory(key: string): Promise<string>;
@@ -237,6 +243,8 @@ export class AssistantController {
       readRemote: async () => { throw new Error("Assistant actions are not available."); },
       captureScreen: async () => { throw new Error("Assistant actions are not available."); },
       captureSelection: async () => { throw new Error("Assistant actions are not available."); },
+      inspectPointer: async () => { throw new Error("Pointer inspection is Windows-only."); },
+      capturePointerTarget: async () => { throw new Error("Pointed screenshot capture is Windows-only."); },
       listVoiceNotes: async () => { throw new Error("Assistant actions are not available."); },
       listHandoffs: async () => { throw new Error("Assistant actions are not available."); },
       describeItem: () => { throw new Error("Assistant actions are not available."); },
@@ -245,6 +253,10 @@ export class AssistantController {
       dismissHandoff: unavailable,
       listMemories: async () => { throw new Error("Assistant actions are not available."); },
       searchMemory: async () => { throw new Error("Memory search is not configured."); },
+      listPastConversations: async () => { throw new Error("Conversation history is unavailable."); },
+      readPastConversation: async () => { throw new Error("Conversation history is unavailable."); },
+      checkPastConversation: async () => { throw new Error("Conversation history is unavailable."); },
+      continuePastConversation: async () => { throw new Error("Conversation continuation is unavailable."); },
       rememberMemory: async () => { throw new Error("Assistant actions are not available."); },
       changeMemory: async () => { throw new Error("Assistant actions are not available."); },
       forgetMemory: async () => { throw new Error("Assistant actions are not available."); },
@@ -1234,6 +1246,14 @@ export class AssistantController {
           await this.runAccessibility(decision);
           continue;
         }
+        if (decision.kind === "pointerSnapshot") {
+          await this.runPointerSnapshot(decision);
+          continue;
+        }
+        if (decision.kind === "pointer") {
+          await this.runPointer(decision);
+          continue;
+        }
         if (decision.kind === "selection") {
           await this.runSelection(decision);
           continue;
@@ -1268,6 +1288,14 @@ export class AssistantController {
         }
         if (decision.kind === "notes") {
           await this.runNotes(decision);
+          continue;
+        }
+        if (decision.kind === "conversationContinue") {
+          await this.runConversationContinue(decision);
+          return;
+        }
+        if (decision.kind === "conversations" || decision.kind === "conversationRead") {
+          await this.runConversationHistory(decision);
           continue;
         }
         if (decision.kind === "memories") {
@@ -1341,6 +1369,45 @@ export class AssistantController {
       } catch { return false; }
     }
     return true;
+  }
+
+  private async runConversationContinue(decision: Extract<ToolDecision, { kind: "conversationContinue" }>) {
+    const epoch = this.toolEpoch;
+    const connection = this.connection;
+    try {
+      // Check ownership before acknowledging a switch. Do not close this session
+      // on an invalid or deleted conversation id.
+      const title = await this.actions.checkPastConversation(decision.conversationId);
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
+      this.replyTool(decision.id, decision.name, true,
+        `Opening saved conversation "${title}". Further messages will be written to that same thread. The Assistant session is restarting to restore its history.`);
+      // Give Gemini's current socket time to receive the tool response before
+      // the store ends it and opens a new, context-seeded session.
+      setTimeout(() => {
+        if (epoch !== this.toolEpoch || connection !== this.connection || this.snapshot.status === "IDLE") return;
+        void this.actions.continuePastConversation(decision.conversationId).catch(() => {
+          // The conversation store publishes any load/start errors in the UI.
+        });
+      }, 150);
+    } catch (error) {
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runConversationHistory(decision: Extract<ToolDecision, { kind: "conversations" | "conversationRead" }>) {
+    const epoch = this.toolEpoch;
+    const generation = this.generation;
+    try {
+      const answer = decision.kind === "conversations"
+        ? await this.actions.listPastConversations(decision.query, decision.cursor, decision.count)
+        : await this.actions.readPastConversation(decision.conversationId);
+      if (epoch !== this.toolEpoch || generation !== this.generation) return;
+      this.replyTool(decision.id, decision.name, true, answer);
+    } catch (error) {
+      if (epoch !== this.toolEpoch || generation !== this.generation) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
   }
 
   private async runRemote(decision: Extract<ToolDecision, { kind: "remote" }>) {
@@ -1434,6 +1501,34 @@ export class AssistantController {
       this.replyTool(decision.id, decision.name, true, text || "No accessible text was available.");
     } catch (error) {
       if (epoch !== this.toolEpoch) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runPointerSnapshot(decision: Extract<ToolDecision, { kind: "pointerSnapshot" }>) {
+    const epoch = this.toolEpoch;
+    const connection = this.connection;
+    try {
+      const snapshot = await this.actions.capturePointerTarget();
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
+      this.attachSnapshot(snapshot);
+      this.replyTool(decision.id, decision.name, true,
+        "Captured one fresh screenshot of the pointed-at window with a yellow crosshair showing the mouse position.");
+    } catch (error) {
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
+      this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
+  private async runPointer(decision: Extract<ToolDecision, { kind: "pointer" }>) {
+    const epoch = this.toolEpoch;
+    const connection = this.connection;
+    try {
+      const result = await this.actions.inspectPointer();
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
+      this.replyTool(decision.id, decision.name, true, result);
+    } catch (error) {
+      if (epoch !== this.toolEpoch || connection !== this.connection) return;
       this.replyTool(decision.id, decision.name, false, toolFailure(error));
     }
   }

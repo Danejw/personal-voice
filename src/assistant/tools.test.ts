@@ -20,7 +20,7 @@ function plan(deviceName: string | null): HandoffPlan {
 }
 
 describe("assistant tool schema", () => {
-  it("declares the four safe actions and no replace or search", () => {
+  it("declares bounded tools without shell execution or selection replacement", () => {
     const names = assistantFunctionDeclarations().map((tool) => tool.name);
     expect(names).toEqual([
       "copy_text",
@@ -39,6 +39,8 @@ describe("assistant tool schema", () => {
       "capture_camera_photo",
       "start_camera_context",
       "stop_camera_context",
+      "capture_pointer_target",
+      "inspect_pointer_context",
       "inspect_active_app",
       "send_remote_dictation",
       "edit_voice_note",
@@ -65,6 +67,9 @@ describe("assistant tool schema", () => {
       "open_app",
       "press_shortcut",
       "supervise_screen",
+      "list_past_conversations",
+      "read_past_conversation",
+      "continue_past_conversation",
       "list_memories",
       "search_memory",
       "remember_memory",
@@ -75,6 +80,35 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("replace_selection");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
+  });
+
+  it("routes mouse pointer inspection read-only, rejecting missing tool ids", () => {
+    expect(decideToolCall({ id: "pointer-1", name: "inspect_pointer_context", args: {} }, plan))
+      .toEqual({ kind: "pointer", id: "pointer-1", name: "inspect_pointer_context" });
+    expect(decideToolCall({ id: "picture-1", name: "capture_pointer_target", args: {} }, plan))
+      .toEqual({ kind: "pointerSnapshot", id: "picture-1", name: "capture_pointer_target" });
+    expect(decideToolCall({ id: null, name: "inspect_pointer_context", args: {} }, plan).kind)
+      .toBe("ignore");
+  });
+
+  it("validates read-only, account-scoped prior conversation tool calls", () => {
+    const id = "33333333-3333-4333-8333-333333333333";
+    expect(decideToolCall({ id: "list", name: "list_past_conversations", args: { query: "bike" } }, plan))
+      .toEqual({ kind: "conversations", id: "list", name: "list_past_conversations", query: "bike", cursor: null, count: 20 });
+    expect(decideToolCall({ id: "last-five", name: "list_past_conversations", args: { count: 5 } }, plan))
+      .toMatchObject({ kind: "conversations", count: 5, query: "" });
+    expect(decideToolCall({ id: "bad-count", name: "list_past_conversations", args: { count: 21 } }, plan).kind)
+      .toBe("reject");
+    expect(decideToolCall({ id: "read", name: "read_past_conversation", args: { conversation_id: id } }, plan))
+      .toEqual({ kind: "conversationRead", id: "read", name: "read_past_conversation", conversationId: id });
+    expect(decideToolCall({ id: "resume", name: "continue_past_conversation", args: { conversation_id: id } }, plan))
+      .toEqual({ kind: "conversationContinue", id: "resume", name: "continue_past_conversation", conversationId: id });
+    expect(decideToolCall({ id: "wrong", name: "continue_past_conversation", args: { conversation_id: "invalid" } }, plan).kind)
+      .toBe("reject");
+    expect(decideToolCall({ id: "bad", name: "read_past_conversation", args: { conversation_id: "invalid" } }, plan).kind)
+      .toBe("reject");
+    expect(decideToolCall({ id: "bad-search", name: "list_past_conversations", args: { query: "x".repeat(161) } }, plan).kind)
+      .toBe("reject");
   });
 
   it("validates and routes bounded semantic memory search", () => {

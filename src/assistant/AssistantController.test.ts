@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildContinuation } from "@/assistant/continuation";
 import { AssistantController, type AssistantSessionHandle } from "@/assistant/AssistantController";
+import { assistantCueTransition, bindAssistantCues } from "@/assistant/assistantCues";
 import type { AssistantEvent } from "@/assistant/events";
 import type { AudioCapture } from "@/voice/audio/AudioCapture";
 import { MicrophoneLease } from "@/voice/audio/microphoneLease";
@@ -64,6 +65,160 @@ function controller() {
 afterEach(() => { FakeSession.opened = []; vi.useRealTimers(); });
 
 describe("AssistantController", () => {
+  it("plays the same ready/done cues when Assistant starts and stops, honoring the existing sound preference", () => {
+    const { created } = controller();
+    const playDictationCue = vi.fn().mockResolvedValue(undefined);
+    let enabled = true;
+    const unbind = bindAssistantCues(created, { playDictationCue }, () => enabled);
+
+    created.start();
+    expect(playDictationCue).toHaveBeenCalledTimes(1);
+    expect(playDictationCue).toHaveBeenCalledWith("ready");
+    created.send("Hello");
+    (FakeSession.opened[0] as FakeSession).emit({ type: "outputTranscription", text: "Hi!" });
+    (FakeSession.opened[0] as FakeSession).emit({ type: "turnComplete" });
+    expect(playDictationCue).toHaveBeenCalledTimes(1);
+    created.end();
+    expect(playDictationCue).toHaveBeenNthCalledWith(2, "done");
+    created.end();
+    expect(playDictationCue).toHaveBeenCalledTimes(2);
+
+    enabled = false;
+    created.start();
+    created.end();
+    expect(playDictationCue).toHaveBeenCalledTimes(2);
+    enabled = true;
+    created.start();
+    expect(playDictationCue).toHaveBeenNthCalledWith(3, "ready");
+    unbind();
+    created.end();
+    expect(playDictationCue).toHaveBeenCalledTimes(3);
+  });
+
+  it("ignores audio playback errors without interrupting Assistant", async () => {
+    const { created } = controller();
+    const playDictationCue = vi.fn().mockRejectedValue(new Error("No output device"));
+    const unbind = bindAssistantCues(created, { playDictationCue }, () => true);
+    created.start();
+    expect(created.getSnapshot().status).toBe("READY");
+    created.end();
+    await Promise.resolve();
+    expect(created.getSnapshot().status).toBe("IDLE");
+    expect(playDictationCue).toHaveBeenCalledTimes(2);
+    unbind();
+  });
+
+  it("never replays the ready cue on reconnect or during Assistant replies", () => {
+    const idle = { status: "IDLE" as const, resuming: false };
+    const connecting = { status: "CONNECTING" as const, resuming: false };
+    const ready = { status: "READY" as const, resuming: false };
+    const responding = { status: "RESPONDING" as const, resuming: false };
+    const reconnecting = { status: "CONNECTING" as const, resuming: true };
+    expect(assistantCueTransition(idle, connecting, false)).toEqual({ cue: null, readySeen: false });
+    expect(assistantCueTransition(connecting, ready, false)).toEqual({ cue: "ready", readySeen: true });
+    expect(assistantCueTransition(ready, responding, true).cue).toBeNull();
+    expect(assistantCueTransition(responding, ready, true).cue).toBeNull();
+    expect(assistantCueTransition(ready, reconnecting, true).cue).toBeNull();
+    expect(assistantCueTransition(reconnecting, ready, true)).toEqual({ cue: null, readySeen: true });
+    expect(assistantCueTransition(ready, idle, true)).toEqual({ cue: "done", readySeen: false });
+    expect(assistantCueTransition({ status: "ERROR", resuming: false }, idle, false).cue).toBeNull();
+  });
+
+  it("reads the element under the Windows cursor only on a pointer tool call", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    expect(actions.inspectPointer).not.toHaveBeenCalled();
+    session.emit({ type: "toolCalls", calls: [{ id: "where", name: "inspect_pointer_context", args: {} }] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(1));
+    expect(actions.inspectPointer).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(session.responses[0])).toContain("Browser");
+    created.end();
+  });
+
+  it("attaches a cursor-marked screenshot only when requested", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    expect(actions.capturePointerTarget).not.toHaveBeenCalled();
+    session.emit({ type: "toolCalls", calls: [{ id: "picture", name: "capture_pointer_target", args: {} }] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(1));
+    expect(actions.capturePointerTarget).toHaveBeenCalledTimes(1);
+    expect(session.frames).toContain("/9j/marker");
+    expect(JSON.stringify(session.responses)).toContain("crosshair");
+    created.end();
+  });
+
+  it("drops delayed pointer inspection results after ending Assistant", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    let answer: (value: string) => void = () => {};
+    actions.inspectPointer.mockImplementation(() => new Promise<string>((resolve) => { answer = resolve; }));
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{ id: "old", name: "inspect_pointer_context", args: {} }] });
+    await vi.waitFor(() => expect(actions.inspectPointer).toHaveBeenCalledTimes(1));
+    created.end();
+    answer("stale pointer context");
+    await Promise.resolve();
+    expect(session.responses).toHaveLength(0);
+  });
+
+  it("lets the Assistant retrieve earlier transcripts without modifying them", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    const id = "33333333-3333-4333-8333-333333333333";
+    session.emit({ type: "toolCalls", calls: [
+      { id: "history-list", name: "list_past_conversations", args: { query: "earlier" } },
+      { id: "history-read", name: "read_past_conversation", args: { conversation_id: id } },
+    ] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(2));
+    expect(actions.readPastConversation).toHaveBeenCalledWith(id);
+    expect(actions.listPastConversations).toHaveBeenCalledWith("earlier", null, 20);
+    expect(JSON.stringify(session.responses)).toContain("Earlier talk");
+    created.end();
+  });
+
+  it("acknowledges a valid past thread then switches the writable session", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    const id = "33333333-3333-4333-8333-333333333333";
+    session.emit({ type: "toolCalls", calls: [{ id: "switch", name: "continue_past_conversation", args: { conversation_id: id } }] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(1));
+    expect(actions.checkPastConversation).toHaveBeenCalledWith(id);
+    expect(JSON.stringify(session.responses)).toContain("Existing project");
+    await vi.waitFor(() => expect(actions.continuePastConversation).toHaveBeenCalledWith(id), { timeout: 1000 });
+    created.end();
+  });
+
+  it("rejects unowned past conversations without changing threads", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    actions.checkPastConversation.mockRejectedValue(new Error("Not owned"));
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{ id: "blocked", name: "continue_past_conversation", args: {
+      conversation_id: "33333333-3333-4333-8333-333333333333",
+    } }] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(1));
+    expect(JSON.stringify(session.responses)).toContain("Not owned");
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    expect(actions.continuePastConversation).not.toHaveBeenCalled();
+    created.end();
+  });
+
   it("plays a reply, returns to ready, and sends a second turn on the same session", () => {
     const { created, playback } = controller();
     created.start();
@@ -1270,9 +1425,21 @@ function toolActions() {
     dismissHandoff: vi.fn(async () => {}),
     listMemories: vi.fn(async () => "No memories are remembered."),
     searchMemory: vi.fn(async (query: string) => `Search evidence for ${query}`),
+    listPastConversations: vi.fn(async () => '{"results":[{"id":"33333333-3333-4333-8333-333333333333","title":"Earlier talk"}]}'),
+    readPastConversation: vi.fn(async () => '{"messages":[{"role":"user","text":"Earlier talk"}]}'),
+    checkPastConversation: vi.fn(async () => "Existing project"),
+    continuePastConversation: vi.fn(async () => {}),
     rememberMemory: vi.fn(async () => "Remembered answer_length: Prefer short answers."),
     changeMemory: vi.fn(async () => "Changed answer_length."),
     forgetMemory: vi.fn(async () => "Forgot answer_length."),
+    capturePointerTarget: vi.fn(async () => ({
+      source: "window" as const, sourceApp: "Browser", width: 1280, height: 720,
+      capturedAt: "2026-10-08T20:00:00Z", jpeg: "/9j/marker",
+    })),
+    inspectPointer: vi.fn(async () => JSON.stringify({
+      position: { x: -160, y: 350 }, windowTitle: "Browser",
+      name: "Submit", status: "element-available", selectedText: null,
+    })),
     captureScreen: vi.fn(async () => ({
       source: "screen" as const,
       capturedAt: "2026-09-28T12:00:00.000Z",

@@ -23,10 +23,15 @@ export interface NotePresentationUpdate {
   organizedAt?: string | null;
 }
 
+export interface NewNoteDetails {
+  title?: string;
+  groupId?: string;
+}
+
 export interface NotesApi {
   list(userId: string): Promise<Note[]>;
   listGroups(userId: string): Promise<NoteGroup[]>;
-  create(userId: string, text: string, sourceDeviceId: string, sourceType: NoteSourceType): Promise<Note>;
+  create(userId: string, text: string, sourceDeviceId: string, sourceType: NoteSourceType, details?: NewNoteDetails): Promise<Note>;
   createGroup(userId: string, name: string): Promise<NoteGroup>;
   renameGroup(id: string, name: string): Promise<NoteGroup>;
   updateText(id: string, text: string): Promise<Note>;
@@ -115,10 +120,21 @@ export const notesApi: NotesApi = {
     return (data ?? []).map(noteGroupFromRow);
   },
 
-  async create(userId, text, sourceDeviceId, sourceType) {
+  async create(userId, text, sourceDeviceId, sourceType, details = {}) {
+    const title = details.title?.trim();
+    const groupId = details.groupId || null;
+    const insert: Database["public"]["Tables"]["notes"]["Insert"] = {
+      user_id: userId,
+      text,
+      source_device_id: sourceDeviceId,
+      source_type: sourceType,
+      ...(title ? { title, title_source: "manual" as const } : {}),
+      ...(groupId ? { group_id: groupId, group_source: "manual" as const } : {}),
+      ...(title && groupId ? { organized_at: new Date().toISOString() } : {}),
+    };
     const { data, error } = await requireClient()
       .from("notes")
-      .insert({ user_id: userId, text, source_device_id: sourceDeviceId, source_type: sourceType })
+      .insert(insert)
       .select(NOTE_COLUMNS)
       .single();
     check(error);

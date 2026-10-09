@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Tooltip } from "@/components/Tooltip";
+import { SelectField } from "@/components/SelectField";
 import type { HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
 import {
   type CapturedKey,
@@ -453,15 +454,15 @@ function LongPressField({
               {bindings.map((binding) => (
                 <li key={binding.shortcut} className="hotkey-long-press">
                   <span>{hotkeyListLabel([binding.shortcut])}</span>
-                  <select
-                    aria-label={`Hold time for ${hotkeyListLabel([binding.shortcut])}`}
-                    value={binding.holdMs}
-                    onChange={(event) => onDelay(binding.shortcut, Number(event.target.value))}
-                  >
-                    {LONG_PRESS_MS_OPTIONS.map((milliseconds) => (
-                      <option key={milliseconds} value={milliseconds}>{milliseconds} ms</option>
-                    ))}
-                  </select>
+                  <SelectField
+                    label={`Hold time for ${hotkeyListLabel([binding.shortcut])}`}
+                    value={String(binding.holdMs)}
+                    options={LONG_PRESS_MS_OPTIONS.map((milliseconds) => ({
+                      value: String(milliseconds),
+                      label: `${milliseconds} ms`,
+                    }))}
+                    onChange={(value) => onDelay(binding.shortcut, Number(value))}
+                  />
                   <button
                     type="button"
                     className="hotkey-remove"

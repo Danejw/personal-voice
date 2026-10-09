@@ -9,6 +9,7 @@ mod insert;
 mod installed_apps;
 mod live_text;
 mod push_to_talk;
+mod pointer_context;
 mod snapshot;
 mod windows_info;
 
@@ -33,7 +34,8 @@ pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
 pub use hook::{set_active as set_dictation_active, set_paused};
 pub use insert::{capture_selection, finish_pending_restore, insert_text, insert_camera_image};
 pub use live_text::live_dictation_text;
-pub use snapshot::capture_snapshot;
+pub use snapshot::{capture_snapshot, capture_pointer_snapshot};
+pub use pointer_context::{pointer_position, inspect_pointer_context, PointerPosition, PointerContext};
 pub use windows_info::{describe_windows, activate_window};
 
 use push_to_talk::{DestOverride, LongPressShortcut, PttEvent, Shortcut};
@@ -120,6 +122,8 @@ const OVERLAY_W: f64 = 44.0;
 const OVERLAY_H: f64 = 194.0;
 /// Extra width beside the buttons while a tooltip is open.
 const OVERLAY_TIP_EXTRA: f64 = 220.0;
+/// Multiline tooltips need extra space above the dock without moving the buttons.
+const OVERLAY_TIP_HEIGHT_EXTRA: f64 = 192.0;
 /// Extra height for Confirm and Cancel while an Assistant action is waiting.
 const OVERLAY_CONFIRM_EXTRA: f64 = 76.0;
 /// Inset from the work-area corner, in device-independent pixels.
@@ -189,11 +193,9 @@ pub fn overlay_place(
         OVERLAY_W
     };
     let width = (logical_w * scale).round() as i32;
-    let logical_h = if confirm_expanded {
-        OVERLAY_H + OVERLAY_CONFIRM_EXTRA
-    } else {
-        OVERLAY_H
-    };
+    let logical_h = OVERLAY_H
+        + if confirm_expanded { OVERLAY_CONFIRM_EXTRA } else { 0.0 }
+        + if tip_expanded { OVERLAY_TIP_HEIGHT_EXTRA } else { 0.0 };
     let height = (logical_h * scale).round() as i32;
     let margin = (OVERLAY_MARGIN_DIP * scale).round() as i32;
     let area_right = area_x + area_w as i32;
@@ -439,7 +441,7 @@ mod overlay_place_tests {
         let tip = overlay_place(0, 0, 1920, 1040, 1.0, true, OverlayTipSide::Left, false, Some((1800, 900)));
         assert_eq!(tip.width, 44 + 220);
         assert_eq!(tip.x, 1800 - tip.width);
-        assert_eq!(tip.y, collapsed.y);
+        assert_eq!(tip.y + tip.height, collapsed.y + collapsed.height);
     }
 
     #[test]
@@ -449,7 +451,7 @@ mod overlay_place_tests {
         assert_eq!(tip_left.x + tip_left.width, collapsed.x + collapsed.width);
         let tip_right = overlay_place(0, 0, 1920, 1040, 1.0, true, OverlayTipSide::Right, false, Some((200, 900)));
         assert_eq!(tip_right.x, collapsed.x);
-        assert_eq!(tip_right.y, collapsed.y);
+        assert_eq!(tip_right.y + tip_right.height, collapsed.y + collapsed.height);
     }
 
     #[test]
@@ -459,7 +461,27 @@ mod overlay_place_tests {
         let tip = overlay_place(0, 0, 1920, 1040, 1.0, true, OverlayTipSide::Right, false, Some((200, 900)));
         assert_eq!(tip.width, 44 + 220);
         assert_eq!(tip.x, collapsed.x);
-        assert_eq!(tip.y, collapsed.y);
+        assert_eq!(tip.y + tip.height, collapsed.y + collapsed.height);
+    }
+
+    #[test]
+    fn tip_window_reserves_height_for_multiline_assistant_messages() {
+        let collapsed = overlay_place(0, 0, 1920, 1040, 1.25, false, OverlayTipSide::Left, false, None);
+        let expanded = overlay_place(0, 0, 1920, 1040, 1.25, true, OverlayTipSide::Left, false, None);
+        assert_eq!(expanded.width, (264.0_f64 * 1.25).round() as i32);
+        assert_eq!(expanded.height, (386.0_f64 * 1.25).round() as i32);
+        assert_eq!(expanded.x + expanded.width, collapsed.x + collapsed.width);
+        assert_eq!(expanded.y + expanded.height, collapsed.y + collapsed.height);
+    }
+
+    #[test]
+    fn tip_and_confirmation_keep_button_stack_at_same_bottom_anchor() {
+        let collapsed = overlay_place(0, 0, 1920, 1040, 1.0, false, OverlayTipSide::Left, true, Some((1800, 900)));
+        let expanded = overlay_place(0, 0, 1920, 1040, 1.0, true, OverlayTipSide::Left, true, Some((1800, 900)));
+        assert_eq!(collapsed.height, 270);
+        assert_eq!(expanded.height, 462);
+        assert_eq!(expanded.x + expanded.width, collapsed.x + collapsed.width);
+        assert_eq!(expanded.y + expanded.height, collapsed.y + collapsed.height);
     }
 
     #[test]

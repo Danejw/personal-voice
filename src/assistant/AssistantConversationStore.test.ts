@@ -497,6 +497,93 @@ describe("one producer across devices", () => {
     await vi.waitFor(() => expect(hostB.turns.map((item) => item.text)).toEqual(["Caught up"]));
   });
 
+  it("auto-selects the latest saved account conversation on another device and restores its context", async () => {
+    const api = new FakeApi();
+    const threadId = "44444444-4444-4444-8444-000000000510";
+    await api.create(USER_A, { id: threadId, title: "Cross device project" });
+    await api.append(USER_A, {
+      id: "44444444-4444-4444-8444-000000000511",
+      conversationId: threadId, role: "user", status: "final",
+      body: "Continue planning the voice workflow.", sourceDeviceId: DEVICE,
+    });
+    const host = new FakeHost();
+    const phone = new AssistantConversationStore(host, api, memory(),
+      () => "44444444-4444-4444-8444-000000000512", () => DEVICE_B);
+    await phone.setUser(USER_A);
+    expect(phone.getSnapshot().currentId).toBe(threadId);
+    expect(host.turns.map((item) => item.text)).toContain("Continue planning the voice workflow.");
+    await phone.produce();
+    expect(host.seeded.map((item) => item.text).join(" ")).toContain("Continue planning the voice workflow.");
+  });
+
+  it("waits for initial transcript hydration and deduplicates simultaneous start requests", async () => {
+    const api = new FakeApi();
+    const threadId = "44444444-4444-4444-8444-000000000520";
+    await api.create(USER_A, { id: threadId, title: "Recover me" });
+    await api.append(USER_A, {
+      id: "44444444-4444-4444-8444-000000000521",
+      conversationId: threadId, role: "user", status: "final",
+      body: "This conversation must resume.", sourceDeviceId: DEVICE,
+    });
+    const wait = deferred();
+    api.delayGet = wait.promise;
+    const host = new FakeHost();
+    const store = new AssistantConversationStore(host, api, memory(),
+      () => "44444444-4444-4444-8444-000000000522", () => DEVICE);
+    const loading = store.setUser(USER_A);
+    const first = store.produce();
+    const second = store.produce();
+    expect(first).toBe(second);
+    expect(host.starts).toBe(0);
+    wait.resolve();
+    await Promise.all([loading, first, second]);
+    expect(host.starts).toBe(1);
+    expect(host.seeded.map((item) => item.text).join(" ")).toContain("This conversation must resume.");
+  });
+
+  it("continues an older saved thread and appends new turns there, not to the previous thread", async () => {
+    const api = new FakeApi();
+    const firstId = "44444444-4444-4444-8444-000000000610";
+    const olderId = "44444444-4444-4444-8444-000000000611";
+    await api.create(USER_A, { id: firstId, title: "Current chat" });
+    await api.create(USER_A, { id: olderId, title: "Older chat" });
+    await api.append(USER_A, { id: "44444444-4444-4444-8444-000000000612",
+      conversationId: olderId, role: "user", status: "final",
+      body: "Original project details", sourceDeviceId: DEVICE });
+    const host = new FakeHost();
+    const store = new AssistantConversationStore(host, api, memory(),
+      () => "44444444-4444-4444-8444-000000000615", () => DEVICE);
+    await store.setUser(USER_A);
+    await store.produce();
+    expect(store.getSnapshot().currentId).toBe(firstId);
+    await store.continueThread(olderId);
+    expect(store.getSnapshot().currentId).toBe(olderId);
+    expect(host.starts).toBe(2);
+    expect(host.seeded.map((item) => item.text).join(" ")).toContain("Original project details");
+    host.emit(turn("44444444-4444-4444-8444-000000000616", "Add this to our older project."));
+    await vi.waitFor(() => expect(api.messages.some((item) => item.body === "Add this to our older project.")).toBe(true));
+    expect(api.messages.find((item) => item.body === "Add this to our older project.")?.conversationId).toBe(olderId);
+    expect(api.messages.filter((item) => item.conversationId === firstId)).toHaveLength(0);
+  });
+
+  it("cannot switch to a different account's conversation or mutate the active thread", async () => {
+    const api = new FakeApi();
+    const own = "44444444-4444-4444-8444-000000000620";
+    const foreign = "44444444-4444-4444-8444-000000000621";
+    await api.create(USER_A, { id: own, title: "Own chat" });
+    await api.create(USER_B, { id: foreign, title: "Private chat" });
+    const host = new FakeHost();
+    const store = new AssistantConversationStore(host, api, memory(),
+      () => "44444444-4444-4444-8444-000000000622", () => DEVICE);
+    await store.setUser(USER_A);
+    await store.produce();
+    const initialStarts = host.starts;
+    await expect(store.continueThread(foreign)).rejects.toThrow();
+    expect(store.getSnapshot().currentId).toBe(own);
+    expect(host.starts).toBe(initialStarts);
+    expect(host.status).toBe("READY");
+  });
+
   it("seeds the next fresh session from the saved line", async () => {
     const { api, hostA, laptop } = pair();
     await laptop.setUser(USER_A);

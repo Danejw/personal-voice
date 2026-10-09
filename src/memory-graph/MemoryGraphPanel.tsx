@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import { SelectField } from "@/components/SelectField";
 import { filterGraph, graphCanvasState, graphColor, kindLabel, layoutGraph, type GraphNode, type GraphPoint, type GraphSnapshot } from "@/memory-graph/graph";
 import { loadMemoryGraph } from "@/memory-graph/graphService";
 import "./memoryGraph.css";
@@ -190,13 +191,17 @@ export function MemoryGraphPanel({ userId, active, onNavigate }: MemoryGraphPane
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
           <input type="search" placeholder="Find a memory, project, or source…" value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
-        <label className="memory-graph-filter">
-          <span className="visually-hidden">Filter graph by node type</span>
-          <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="all">All node types</option>
-            {kinds.map((item) => <option key={item} value={item}>{kindLabel(item)} ({counts.get(item) ?? 0})</option>)}
-          </select>
-        </label>
+        <div className="memory-graph-filter">
+          <SelectField
+            label="Filter graph by node type"
+            value={kind}
+            options={[
+              { value: "all", label: "All node types" },
+              ...kinds.map((item) => ({ value: item, label: `${kindLabel(item)} (${counts.get(item) ?? 0})` })),
+            ]}
+            onChange={setKind}
+          />
+        </div>
         <label className="memory-graph-toggle"><input type="checkbox" checked={connectedOnly} onChange={(e) => setConnectedOnly(e.target.checked)} /> Connected only</label>
         <label className="memory-graph-toggle"><input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} /> Auto-refresh</label>
       </div>

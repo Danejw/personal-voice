@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import { formatHandoffList, formatNoteList } from "@/assistant/accountTools";
 import { buildContinuation, handoffDisplayText } from "@/assistant/continuation";
@@ -7,6 +6,7 @@ import { selectionPreview } from "@/assistant/selectionContext";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { AssistantConversationStore } from "@/assistant/AssistantConversationStore";
+import { listPastConversations, readPastConversation } from "@/assistant/assistantConversationRecall";
 import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
 import { MemoryPanel } from "@/assistant/MemoryPanel";
@@ -14,6 +14,8 @@ import { MemoryGraphPanel } from "@/memory-graph/MemoryGraphPanel";
 import { MemoryGraphErrorBoundary } from "@/memory-graph/MemoryGraphErrorBoundary";
 import { useAssistantMemory } from "@/assistant/useAssistantMemory";
 import { AssistantController } from "@/assistant/AssistantController";
+import { inspectAssistantPointer, trackAssistantPointer } from "@/assistant/pointerAwareness";
+import { bindAssistantCues } from "@/assistant/assistantCues";
 import { AssistantHeader, AssistantPanel } from "@/assistant/AssistantPanel";
 import { PersonalContextPanel } from "@/assistant/PersonalContextPanel";
 import { personalContextBody, profileFacts } from "@/assistant/personalContext";
@@ -388,6 +390,14 @@ assistant.setActions({
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
   searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
+  listPastConversations: (query, cursor, count) => listPastConversations(assistantConversationsApi, accountUserId ?? "", query, cursor, count),
+  readPastConversation: (conversationId) => readPastConversation(assistantConversationsApi, accountUserId ?? "", conversationId),
+  checkPastConversation: async (conversationId) => {
+    if (!accountUserId) throw new Error("Sign in to continue a conversation.");
+    const conversation = await assistantConversationsApi.get(accountUserId, conversationId);
+    return conversation.title;
+  },
+  continuePastConversation: (conversationId) => assistantLibrary.continueThread(conversationId),
   rememberMemory: (input) => assistantMemory.remember(input.kind, input.key, input.value),
   changeMemory: (input) => assistantMemory.change(input.key, input.value),
   forgetMemory: (key) => assistantMemory.forget(key),
@@ -396,6 +406,14 @@ assistant.setActions({
     return remoteReads.ask(accountUserId, kind, deviceName);
   },
   captureScreen: async () => snapshotFromNative(await platform.captureSnapshot(), encodeSnapshotJpeg),
+  inspectPointer: () => {
+    if (platform.platform !== "windows" || !accountUserId) throw new Error("Pointer inspection is available only on signed-in Windows Assistant sessions.");
+    return inspectAssistantPointer();
+  },
+  capturePointerTarget: async () => {
+    if (platform.platform !== "windows" || !accountUserId) throw new Error("Pointed screenshots are available only on signed-in Windows Assistant sessions.");
+    return snapshotFromNative(await invoke("capture_pointer_snapshot"), encodeSnapshotJpeg);
+  },
   computer: {
     openApp: (id) => computerActions.openApp(id),
     pressShortcut: (id) => computerActions.pressShortcut(id),
@@ -590,42 +608,6 @@ export default function App() {
   const computerSnapshot = useComputerActions(computerActions, auth.userId);
   const remoteDictationSnapshot = useRemoteDictation(remoteDictation, auth.userId);
   const assistantSnapshot = useAssistant(assistant);
-  useEffect(() => {
-    if (platform.platform !== "windows") return;
-    const ready=listen("assistant-popup-ready",()=>{
-      const state=assistant.getSnapshot();
-      void invoke("sync_assistant_tool_popup",{snapshot:{
-        pending:state.pendingAction,activity:state.toolActivity,
-        computerPrompt:state.computerPrompt,computerRunning:state.computerRunning,
-      }}).catch(()=>undefined);
-    });
-    const listener = listen<{kind:"tool"|"computer";id:string|null;computerPrompt?:string|null;allow:boolean}>("assistant-popup-answer",(event)=>{
-      const value=event.payload;
-      if(value.kind==="tool") {
-        const pending=assistant.getSnapshot().pendingAction;
-        if(!pending || pending.working || pending.id!==value.id) return;
-        if(value.allow) assistant.confirmPending();
-        else assistant.cancelPending();
-      } else if (value.computerPrompt && value.computerPrompt === assistant.getSnapshot().computerPrompt) {
-        if(value.allow) assistant.confirmComputer();
-        else assistant.stopComputer();
-      }
-    });
-    return ()=>{void listener.then(unlisten=>unlisten());void ready.then(unlisten=>unlisten());};
-  },[assistant,platform.platform]);
-
-  useEffect(() => {
-    if (platform.platform !== "windows") return;
-    const popup={
-      pending:assistantSnapshot.pendingAction,
-      activity:assistantSnapshot.toolActivity,
-      computerPrompt:assistantSnapshot.computerPrompt,
-      computerRunning:assistantSnapshot.computerRunning,
-    };
-    void invoke("sync_assistant_tool_popup",{snapshot:popup}).catch(()=>undefined);
-  },[platform.platform,assistantSnapshot.pendingAction,assistantSnapshot.toolActivity,
-      assistantSnapshot.computerPrompt,assistantSnapshot.computerRunning]);
-
   const assistantLibrarySnapshot = useAssistantLibrary(assistantLibrary);
   const assistantMemorySnapshot = useAssistantMemory(assistantMemory);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -637,6 +619,9 @@ export default function App() {
   const [routineAutoRun, setRoutineAutoRun] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(() => loadAutoUpdate());
   const [dictationSounds, setDictationSounds] = useState(() => loadDictationSounds());
+  const voiceSoundsRef = useRef(dictationSounds);
+  voiceSoundsRef.current = dictationSounds;
+  useEffect(() => bindAssistantCues(assistant, platform, () => voiceSoundsRef.current), []);
   const { snapshot, controller, paused } = useDictation(platform, createProvider, destinations, usage, () => {
     const data = personalSync.getSnapshot().data;
     return {
@@ -665,6 +650,10 @@ export default function App() {
   const updates = useUpdates(platform, { autoUpdate, busy: !idle });
   const assistantLive = assistantSnapshot.status === "CONNECTING" || assistantSnapshot.status === "READY" || assistantSnapshot.status === "RESPONDING";
   const dictationLive = state === "CONNECTING" || state === "LISTENING";
+  useEffect(() => {
+    if (!signedIn || platform.platform !== "windows" || !assistantLive) return;
+    return trackAssistantPointer();
+  }, [assistantLive, platform.platform, signedIn]);
   const availableTransforms = transformOptions(transforms.profiles);
   const selectedDictationTransform = transformById(transforms.profiles, dictationTransformId);
   const dictationTransformOptions: readonly SelectOption[] = [
@@ -762,6 +751,7 @@ export default function App() {
     canDictate: () => microphone.heldBy() !== "assistant",
     assistant: assistantSnapshot,
     assistantController: assistant,
+    onAssistantStart: () => assistantLibrary.produce(),
     remoteTargetId: remoteDictationSnapshot.targetDeviceId,
     remoteTargetLabel: remoteDictationSnapshot.targetLabel,
     remoteTargetPlatform: remoteDictationSnapshot.targetPlatform,
@@ -930,7 +920,7 @@ export default function App() {
       if (event.event !== "toggle-assistant") return;
       const intent = overlayAssistantIntent(overlayAssistantFrom(assistant.getSnapshot().status));
       if (intent === "end") assistant.end();
-      else if (signedInRef.current) assistant.start();
+      else if (signedInRef.current) void assistantLibrary.produce();
     }).then((unlisten) => { stop = unlisten; });
     return () => stop();
   }, []);
@@ -1346,8 +1336,8 @@ export default function App() {
             <h2 id="transcription-heading">Transcription</h2>
             <TranscriptionSettingsPanel store={personalSync} sync={sync} />
             <Toggle
-              label="Dictation sounds"
-              description="Plays a subtle ready cue when this device starts listening and a slightly different cue when recording stops."
+              label="Voice sounds"
+              description="Play the same subtle start and stop sounds for both Dictation and Assistant on this device."
               checked={dictationSounds}
               onChange={(enabled) => {
                 saveDictationSounds(enabled);

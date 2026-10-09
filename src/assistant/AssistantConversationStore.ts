@@ -106,6 +106,8 @@ export class AssistantConversationStore {
   private snapshot: AssistantLibrarySnapshot = EMPTY;
   private listeners = new Set<() => void>();
   private userId: string | null = null;
+  private initializing: Promise<void> = Promise.resolve();
+  private producing: Promise<void> | null = null;
   private generation = 0;
   private currentId: string | null = null;
   private conversations: AssistantLibraryConversation[] = [];
@@ -191,7 +193,13 @@ export class AssistantConversationStore {
    * Follows the signed-in account. Call this after the live session has already ended,
    * so the last unfinished line is saved on the account that spoke it.
    */
-  async setUser(userId: string | null): Promise<void> {
+  setUser(userId: string | null): Promise<void> {
+    const task = this.hydrateUser(userId);
+    this.initializing = task;
+    return task;
+  }
+
+  private async hydrateUser(userId: string | null): Promise<void> {
     this.generation += 1;
     const generation = this.generation;
     this.userId = userId;
@@ -233,6 +241,12 @@ export class AssistantConversationStore {
     this.feedStop = this.feed.subscribe(userId, () => this.scheduleCatchUp());
     await this.reloadList(userId, generation);
     if (!this.sameAccount(userId, generation)) return;
+    // A different device may have the most recent thread. Prefer it only when this
+    // device has not already saved an explicit selection or new-thread intent.
+    if (!this.currentId && this.conversations.length) {
+      this.currentId = this.conversations[0]!.id;
+      writeOpenConversation(this.storage, userId, this.currentId);
+    }
     if (this.currentId) await this.load(this.currentId, generation);
     if (this.sameAccount(userId, generation)) void this.flush();
   }
@@ -257,9 +271,19 @@ export class AssistantConversationStore {
    * Claims the conversation and then starts the microphone.
    * Opening a thread does not call this. Continue here is the explicit takeover.
    */
-  async produce(): Promise<void> {
-    const userId = this.userId;
-    if (!userId) return;
+  produce(): Promise<void> {
+    if (this.producing) return this.producing;
+    const task = this.produceLoaded(this.userId, this.initializing);
+    this.producing = task;
+    void task.finally(() => { if (this.producing === task) this.producing = null; }).catch(() => undefined);
+    return task;
+  }
+
+  private async produceLoaded(expectedUser: string | null, loading: Promise<void>): Promise<void> {
+    await loading;
+    // Ignore a delayed Start from an account that signed out while history loaded.
+    if (!expectedUser || this.userId !== expectedUser) return;
+    const userId = expectedUser;
     if (!this.currentId) this.startThread();
     const id = this.currentId;
     if (!id || this.userId !== userId) return;
@@ -328,6 +352,62 @@ export class AssistantConversationStore {
     this.host.setSavedHistory([]);
     this.publish();
     void this.load(id, generation);
+  }
+
+  /**
+   * Continue a saved thread as the active writable conversation. The server
+   * ownership check runs before ending the current session or changing its id.
+   * Subsequent typed and dictated turns use the existing append/fence pipeline.
+   */
+  async continueThread(id: string): Promise<void> {
+    const userId = this.userId;
+    if (!userId) throw new Error("Sign in to continue a conversation.");
+    await this.initializing;
+    if (this.userId !== userId) throw new Error("The signed-in account changed.");
+    const startingGeneration = this.generation;
+    let conversation: AssistantConversation;
+    try {
+      conversation = await this.api.get(userId, id);
+    } catch (error) {
+      if (this.sameAccount(userId, startingGeneration)) {
+        this.error = messageOf(error);
+        this.publish();
+      }
+      throw error;
+    }
+    if (!this.sameAccount(userId, startingGeneration)) {
+      throw new Error("Conversation changed before it could be opened. Try again.");
+    }
+    if (this.currentId !== conversation.id) {
+      if (this.host.getSnapshot().status !== "IDLE") this.host.end();
+      this.generation += 1;
+      const generation = this.generation;
+      this.currentId = conversation.id;
+      this.titles.set(conversation.id, conversation.title);
+      writeOpenConversation(this.storage, userId, conversation.id);
+      this.host.showSaved([]);
+      this.host.setSavedHistory([]);
+      this.error = null;
+      this.publish();
+      await this.load(conversation.id, generation);
+      if (!this.sameView(userId, conversation.id, generation)) {
+        throw new Error("The selected conversation changed before continuing.");
+      }
+      if (this.error) throw new Error(this.error);
+    }
+    // A start already in flight for the previous thread must settle before we
+    // can claim and open this thread, otherwise produce() would reuse it.
+    if (this.producing) await this.producing.catch(() => undefined);
+    if (this.userId !== userId || this.currentId !== conversation.id) {
+      throw new Error("The conversation changed before starting.");
+    }
+    await this.produce();
+    if (this.userId !== userId || this.currentId !== conversation.id) {
+      throw new Error("The conversation changed before the session started.");
+    }
+    if (!this.sessionLive() || !this.holdsNow()) {
+      throw new Error(this.error ?? "Couldn't resume this conversation. Try again.");
+    }
   }
 
   /** Renames a thread. A thread that is not on the server yet keeps the title for its first create. */

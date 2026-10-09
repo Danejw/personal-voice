@@ -6,6 +6,7 @@ import {
   type FormEvent,
 } from "react";
 import { HoverActionItem } from "@/components/HoverActionItem";
+import { SelectField } from "@/components/SelectField";
 import type { NotesSnapshot, NotesStatus, NotesStore } from "@/notes/NotesStore";
 import type { Note } from "@/notes/note";
 import type { NoteGroup } from "@/notes/noteGroup";
@@ -273,20 +274,17 @@ function NoteCard(props: NoteCardProps) {
               onChange={(event) => onDraftTitle(event.target.value)}
             />
           </label>
-          <label className="note-edit-field">
-            <span>Group</span>
-            <select
-              aria-label="Note group"
-              value={draftGroupId}
-              disabled={pending}
-              onChange={(event) => onDraftGroupId(event.target.value)}
-            >
-              <option value="">Ungrouped</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>{group.name}</option>
-              ))}
-            </select>
-          </label>
+          <SelectField
+            label="Group"
+            layout="stack"
+            value={draftGroupId}
+            disabled={pending}
+            options={[
+              { value: "", label: "Ungrouped" },
+              ...groups.map((group) => ({ value: group.id, label: group.name })),
+            ]}
+            onChange={onDraftGroupId}
+          />
           <textarea
             aria-label="Edit note"
             value={draft}
@@ -474,7 +472,10 @@ export function NotesPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
   const [newNote, setNewNote] = useState("");
+  const [newNoteTitle, setNewNoteTitle] = useState("");
+  const [newNoteGroupId, setNewNoteGroupId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [draftTitle, setDraftTitle] = useState("");
@@ -510,12 +511,26 @@ export function NotesPanel({
   function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = newNote.trim();
-    if (!text) return;
+    if (!editable || busy === "create" || !text) return;
     void run("create", async () => {
-      await store.create(text, "manual");
+      await store.create(text, "manual", {
+        title: newNoteTitle.trim() || undefined,
+        groupId: newNoteGroupId || undefined,
+      });
       setNewNote("");
-      setNotice("Note saved. Its title and group will organize automatically.");
+      setNewNoteTitle("");
+      setNewNoteGroupId("");
+      setComposing(false);
+      setNotice("Note saved.");
     });
+  }
+
+  function cancelCreate() {
+    setNewNote("");
+    setNewNoteTitle("");
+    setNewNoteGroupId("");
+    setComposing(false);
+    setProblem(null);
   }
 
   function copy(note: Note) {
@@ -653,18 +668,68 @@ export function NotesPanel({
 
   return (
     <>
-      <form className="note-compose" onSubmit={create}>
-        <textarea
-          aria-label="New note"
-          placeholder="Write a note…"
-          value={newNote}
-          disabled={!editable || busy === "create"}
-          onChange={(event) => setNewNote(event.target.value)}
-        />
-        <button type="submit" className="record" disabled={!editable || busy === "create" || !newNote.trim()}>
-          Save note
-        </button>
-      </form>
+      <div className="note-compose-toolbar">
+        {!composing && (
+          <button
+            type="button"
+            className="record"
+            disabled={!editable}
+            aria-expanded={false}
+            onClick={() => { setComposing(true); setProblem(null); setNotice(null); }}
+          >
+            + New note
+          </button>
+        )}
+      </div>
+      {composing && (
+        <form className="note-compose" onSubmit={create} aria-label="Create a note">
+          <div className="note-compose-fields">
+            <label className="note-edit-field">
+              <span>Title (optional)</span>
+              <input
+                aria-label="New note title"
+                maxLength={120}
+                placeholder="Add your own title or let AI organize it"
+                value={newNoteTitle}
+                disabled={!editable || busy === "create"}
+                onChange={(event) => setNewNoteTitle(event.target.value)}
+              />
+            </label>
+            <SelectField
+              label="Group (optional)"
+              layout="stack"
+              value={newNoteGroupId}
+              disabled={!editable || busy === "create"}
+              options={[
+                { value: "", label: "Organize automatically" },
+                ...snapshot.groups.map((group) => ({ value: group.id, label: group.name })),
+              ]}
+              onChange={setNewNoteGroupId}
+            />
+          </div>
+          <label className="note-edit-field">
+            <span>Note</span>
+            <textarea
+              aria-label="Note content"
+              placeholder="Type or paste text here…"
+              rows={6}
+              autoFocus
+              value={newNote}
+              disabled={!editable || busy === "create"}
+              onChange={(event) => setNewNote(event.target.value)}
+            />
+          </label>
+          <div className="note-edit-actions">
+            <button type="submit" className="record" disabled={!editable || busy === "create" || !newNote.trim()}>
+              Save note
+            </button>
+            <button type="button" className="secondary" disabled={busy === "create"} onClick={cancelCreate}>
+              Cancel
+            </button>
+            {busy === "create" && <span className="note-file-status" role="status">Saving…</span>}
+          </div>
+        </form>
+      )}
 
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
       {snapshot.organizationError && (
