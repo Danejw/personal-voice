@@ -119,7 +119,8 @@ export interface AssistantActions {
   listMemories(): Promise<string>;
   searchMemory(query: string): Promise<string>;
   listPastConversations(query: string, cursor: string | null, count: number): Promise<string>;
-  readPastConversation(conversationId: string): Promise<string>;
+  readPastConversation(conversationId: string, options?: {afterSeq?:number; count?:number; sessionId?:string|null; from?:string|null; to?:string|null}): Promise<string>;
+  listPastSessions?(conversationId: string, before: {startedAt:string;id:string}|null, count:number): Promise<string>;
   checkPastConversation(conversationId: string): Promise<string>;
   continuePastConversation(conversationId: string): Promise<void>;
   rememberMemory(input: { key: string; kind: "preference" | "fact"; value: string }): Promise<string>;
@@ -1379,7 +1380,7 @@ export class AssistantController {
           await this.runConversationContinue(decision);
           return;
         }
-        if (decision.kind === "conversations" || decision.kind === "conversationRead") {
+        if (decision.kind === "conversations" || decision.kind === "conversationRead" || decision.kind === "conversationSessions") {
           await this.runConversationHistory(decision);
           continue;
         }
@@ -1492,13 +1493,19 @@ export class AssistantController {
     }
   }
 
-  private async runConversationHistory(decision: Extract<ToolDecision, { kind: "conversations" | "conversationRead" }>) {
+  private async runConversationHistory(decision: Extract<ToolDecision, { kind: "conversations" | "conversationRead" | "conversationSessions" }>) {
     const epoch = this.toolEpoch;
     const generation = this.generation;
     try {
       const answer = decision.kind === "conversations"
         ? await this.actions.listPastConversations(decision.query, decision.cursor, decision.count)
-        : await this.actions.readPastConversation(decision.conversationId);
+        : decision.kind === "conversationSessions"
+          ? await this.actions.listPastSessions?.(decision.conversationId, decision.before, decision.count)
+          : await this.actions.readPastConversation(decision.conversationId, {
+              afterSeq: decision.afterSeq, count: decision.count, sessionId: decision.sessionId,
+              from: decision.from, to: decision.to,
+            });
+      if (!answer) throw new Error("Session history isn't available.");
       if (epoch !== this.toolEpoch || generation !== this.generation) return;
       this.replyTool(decision.id, decision.name, true, answer);
     } catch (error) {
