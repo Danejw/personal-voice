@@ -4,7 +4,7 @@ import type {AssistantInsightRun} from "@/insights/assistantInsights";
 
 const add=(days:number,count:number,from=new Date("2026-10-01T09:00:00Z")) =>
   Array.from({length:count},(_,i)=>({createdAt:new Date(from.getTime()+Math.floor(i/count*days)*86_400_000+i*1000).toISOString()}));
-const previous:AssistantInsightRun={createdAt:"2026-10-01T09:00:00Z",conversationCount:3,userMessageCount:50,voiceProfile:null,communicationTips:[]};
+const previous:AssistantInsightRun={createdAt:"2026-10-01T09:00:00Z",conversationCount:3,userMessageCount:50,voiceProfile:"This saved profile describes a repeatable, explicit communication style across multiple Assistant sessions.",communicationTips:[]};
 
 describe("Assistant Insights uses a dictation-style readiness cadence",()=>{
   it("requires enough saved messages and multiple active days before the first run",()=>{
