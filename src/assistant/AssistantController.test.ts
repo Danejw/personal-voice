@@ -67,6 +67,50 @@ function controller() {
 afterEach(() => { FakeSession.opened = []; vi.useRealTimers(); });
 
 describe("AssistantController", () => {
+  it("announces device capability facts for voice and deduplicates synchronized inventory updates", () => {
+    const { created } = controller();
+    created.setDeviceContext({ platform: "windows", otherDeviceCount: null });
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    const initialNotes = session.notes.filter((note) => note.includes("Tool capability context"));
+    expect(initialNotes).toHaveLength(1);
+    expect(initialNotes[0]).toContain("This device is Windows");
+    expect(initialNotes[0]).toContain("not known");
+    created.setDeviceContext({ platform: "windows", otherDeviceCount: 2 });
+    expect(session.notes.filter((note) => note.includes("Tool capability context"))).toHaveLength(2);
+    expect(session.notes.at(-1)).toContain("2 other registered devices");
+    created.setDeviceContext({ platform: "windows", otherDeviceCount: 2 });
+    expect(session.notes.filter((note) => note.includes("Tool capability context"))).toHaveLength(2);
+    expect(session.frames).toEqual([]);
+    created.end();
+  });
+
+  it("gives complex typed turns small platform-specific hints, not simple commands", () => {
+    const { created } = controller();
+    created.setDeviceContext({ platform: "windows", otherDeviceCount: 1 });
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    created.send("Open Notepad and then click the Save button");
+    expect(session.toolGuidances[0]).toContain("windows_control");
+    expect(session.toolGuidances[0]).toContain("not user content");
+    session.emit({ type: "turnComplete" });
+    created.send("Copy these words");
+    expect(session.toolGuidances[1]).toBeNull();
+    created.end();
+  });
+
+  it("avoids claiming Windows UI capabilities in an Android voice session", () => {
+    const { created } = controller();
+    created.setDeviceContext({ platform: "android", otherDeviceCount: 0 });
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    expect(session.notes.some((note) => note.includes("This device is Android"))).toBe(true);
+    expect(session.notes.some((note) => note.includes("This device is Windows"))).toBe(false);
+    created.send("Find our previous conversation about the app and then continue it");
+    expect(session.toolGuidances[0]).toContain("memory_recall");
+    created.end();
+  });
+
   it("returns structured evidence classification while preserving tool output and call ID", async () => {
     const { created } = controller();
     const used = toolActions();
