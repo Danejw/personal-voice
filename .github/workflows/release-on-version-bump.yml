@@ -1,0 +1,48 @@
+# Version bumps on main create a tag and invoke the existing signed release pipeline.
+# Pushes made with GITHUB_TOKEN do not trigger tag-push workflows, so dispatch
+# release.yml explicitly. Existing tags are never overwritten or force-pushed.
+name: Start release on version bump
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: release-version-bump
+  cancel-in-progress: false
+
+jobs:
+  tag-and-dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify version and start signed release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          tag="v$version"
+          grep -qx "version = \"$version\"" src-tauri/Cargo.toml || {
+            echo "::error::Cargo.toml and package.json versions differ"
+            exit 1
+          }
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::notice::Release tag $tag already exists; no new tag created"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Personal Voice $version"
+          git push origin "refs/tags/$tag"
+          gh workflow run release.yml --ref main -f "tag=$tag"
+          echo "::notice::Dispatched signed Windows and Android release workflow for $tag"
