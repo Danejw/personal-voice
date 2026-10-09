@@ -571,14 +571,25 @@ export function AssistantPanel({
           send();
         }}
       >
-        <input
-          value={draft}
-          placeholder="Type a message..."
-          aria-label="Message"
-          disabled={!canSend}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        <button type="submit" className="secondary" disabled={!canSend || !draft.trim()}>Send</button>
+        <label className="assistant-composer-field">
+          <span className="visually-hidden">Message</span>
+          <textarea
+            value={draft}
+            rows={2}
+            placeholder={canSend ? "Message your Assistant…" : "Start or continue a conversation to send a message"}
+            aria-label="Message"
+            disabled={!canSend}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                send();
+              }
+            }}
+          />
+          <span className="assistant-composer-hint">Enter to send · Shift+Enter for new line</span>
+        </label>
+        <button type="submit" className="assistant-send" disabled={!canSend || !draft.trim()} aria-label="Send message">➤</button>
       </form>
       </section>
     </div>
