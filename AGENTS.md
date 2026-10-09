@@ -158,6 +158,8 @@ For each phase:
 - report exactly what changed
 - report unresolved issues truthfully
 - do not silently continue into the next phase
+- update the root `README.md` **in the same PR** whenever user-visible capabilities, app navigation, platform support, setup steps, security/privacy behavior, tooling, tests, or release procedures materially change; verify every command/link and avoid hard-coded version numbers that drift
+- when README does not need a change, do not churn it; explain any material documentation exception in the PR summary
 - if modifying an Assistant tool, describe which declaration/router/registry/playbook/evaluation paths changed and list Windows/Android smoke tests
 
 ## When APIs differ from this spec
