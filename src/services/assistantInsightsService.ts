@@ -51,7 +51,7 @@ export async function loadAssistantInsightSamples(userId:string):Promise<Assista
   return samples;
 }
 
-async function modelAnalysis(userId:string,samples:readonly AssistantInsightSample[]):Promise<AssistantInsightAnalysis> {
+async function modelAnalysis(userId:string,samples:readonly AssistantInsightSample[],previousVoiceProfile:string|null):Promise<AssistantInsightAnalysis> {
   if(!supabaseConfig)throw new Error("Assistant Insights is not configured.");
   const jwt=await accountToken(userId);
   let response:Response;
@@ -60,7 +60,7 @@ async function modelAnalysis(userId:string,samples:readonly AssistantInsightSamp
       method:"POST",headers:{
         Authorization:`Bearer ${jwt}`,apikey:supabaseConfig.publishableKey,
         "Content-Type":"application/json",
-      },body:JSON.stringify({messages:samples}),
+      },body:JSON.stringify({messages:samples,previousVoiceProfile:previousVoiceProfile?.slice(0,6000)??null}),
     });
   }catch{throw new Error("Couldn't reach Assistant Insights. Check your connection.");}
   const raw:unknown=await response.json().catch(()=>null);
@@ -99,7 +99,7 @@ export async function analyzeAssistantUsage(userId:string):Promise<{reviewed:num
   const {lastRun}=await listAssistantInsightData(userId);
   const readiness=assistantInsightReadiness(samples,lastRun);
   if(!readiness.ready)throw new Error(readiness.reason);
-  const analysis=await modelAnalysis(userId,samples);
+  const analysis=await modelAnalysis(userId,samples,lastRun?.voiceProfile??null);
   const proposals=analysis.candidates;
   await accountToken(userId); // Fence against user switching during model inference.
   if(proposals.length){
