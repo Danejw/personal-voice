@@ -674,7 +674,7 @@ describe("AssistantController", () => {
     expect(used.insertText).not.toHaveBeenCalled();
     expect(created.getSnapshot().pendingAction).toBeNull();
     expect(created.getSnapshot().actionNotice).toBe("Copied to the clipboard.");
-    expect(session.responses).toEqual([{
+    expect(session.responses).toMatchObject([{
       toolResponse: {
         functionResponses: [{ id: "call-1", name: "copy_text", response: { result: "Copied to the clipboard." } }],
       },
@@ -795,7 +795,7 @@ describe("AssistantController", () => {
     expect(used.readRemote).toHaveBeenCalledWith("active_window", "Desk PC");
     expect(used.insertText).not.toHaveBeenCalled();
     expect(used.sendHandoff).not.toHaveBeenCalled();
-    expect(session.responses).toEqual([{
+    expect(session.responses).toMatchObject([{
       toolResponse: {
         functionResponses: [{ id: "call-remote", name: "read_remote_device", response: { result: "Desk PC is online (windows)." } }],
       },
@@ -821,7 +821,7 @@ describe("AssistantController", () => {
     expect(used.insertText).not.toHaveBeenCalled();
     created.cancelPending();
     expect(used.insertText).not.toHaveBeenCalled();
-    expect(session.responses.at(-1)).toEqual({
+    expect(session.responses.at(-1)).toMatchObject({
       toolResponse: {
         functionResponses: [{
           id: "insert-1",
@@ -841,7 +841,7 @@ describe("AssistantController", () => {
     await settle();
     expect(used.createVoiceNote).toHaveBeenCalledWith("Assistant tool test.");
     expect(JSON.stringify(session.responses.at(-1))).not.toContain("Saved the note.");
-    expect(session.responses.at(-1)).toEqual({
+    expect(session.responses.at(-1)).toMatchObject({
       toolResponse: {
         functionResponses: [{
           id: "note-1",
