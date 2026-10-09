@@ -14,8 +14,8 @@ describe("assistant tool intelligence registry", () => {
     const names = assistantFunctionDeclarations().map((item) => item.name);
     expect(names).toHaveLength(54);
     expect(ASSISTANT_TOOL_NAMES).toHaveLength(54);
-    expect(new Set(names).size).toBe(53);
-    expect(new Set(ASSISTANT_TOOL_NAMES).size).toBe(53);
+    expect(new Set(names).size).toBe(names.length);
+    expect(new Set(ASSISTANT_TOOL_NAMES).size).toBe(ASSISTANT_TOOL_NAMES.length);
     expect([...ASSISTANT_TOOL_NAMES].sort()).toEqual([...names].sort());
     for (const [name, item] of Object.entries(ASSISTANT_TOOL_INTELLIGENCE)) {
       expect(name).toMatch(/^[a-z][a-z0-9_]*$/);
