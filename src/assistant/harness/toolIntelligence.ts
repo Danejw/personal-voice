@@ -3,7 +3,7 @@
  * Does NOT grant permissions or execute tools. Descriptions remain compatible
  * with the existing Live function declarations and their argument schemas.
  */
-export type ToolFamily = "text" | "devices" | "visual" | "session" | "windows" | "memory" | "analytics";
+export type ToolFamily = "text" | "devices" | "visual" | "session" | "windows" | "memory" | "analytics" | "harness";
 export type ToolPlatform = "all" | "windows";
 
 export interface ToolIntelligence {
@@ -83,7 +83,7 @@ export const ASSISTANT_TOOL_INTELLIGENCE = {
   remember_memory: spec("memory", "all", "User explicitly asks to retain a new preference or fact.", "User only discusses hypothetical information or an existing key requires updating.", "Choose stable key and store fact.", "New memory appears active.", "Use change_memory for existing keys."),
   change_memory: spec("memory", "all", "User corrects a previously saved memory key.", "They ask to create unrelated new memory.", "Identify key with list_memories if needed; update once.", "Corrected value supersedes previous.", "Avoid creating competing duplicate keys."),
   forget_memory: spec("memory", "all", "User asks to forget an explicit saved memory.", "They ask merely to stop referencing a source in the current response.", "Identify key if needed; forget and stop injecting.", "Memory no longer active.", "Conversation history remains separate."),
-  get_tool_playbook: spec("memory", "all", "Complex multi-step task needs a reusable procedure for choosing and sequencing existing tools.", "A simple request already maps to a single obvious tool or can be answered without tools.", "Retrieve at most the relevant playbook, then apply only needed steps.", "Playbook text is received; no user objective is claimed completed by retrieval.", "Use once for genuinely complex multi-tool workflows, not trivial commands."),
+  get_tool_playbook: spec("harness", "all", "Complex multi-step task needs a reusable procedure for choosing and sequencing existing tools.", "A simple request already maps to a single obvious tool or can be answered without tools.", "Retrieve at most the relevant playbook, then apply only needed steps.", "Playbook text is received; no user objective is claimed completed by retrieval.", "Use once for genuinely complex multi-tool workflows, not trivial commands."),
   remote_action: spec("devices", "all", "User explicitly asks for a permitted action on another paired Windows device.", "They want a read-only view or a text handoff.", "Choose named online device and supported remote action.", "Destination device reports result.", "Use read_remote_device for observation, send_handoff for inbox transfer."),
 } as const satisfies Record<string, ToolIntelligence>;
 
