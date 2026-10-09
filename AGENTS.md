@@ -40,6 +40,8 @@ The repository now includes **both** dictation and a Gemini Live Assistant with 
 
 **Unrelated PRs:** if a change impacts tool access, behaviors or context indirectly, perform the same impact check. When no harness update is appropriate, explain why in the PR description.
 
+**Assistant Analytics contract:** `src/usage/AssistantUsageStore.ts` and `assistantUsage.ts` record metadata-only finalized turns, sessions and bounded activity (Phase A). Never duplicate saved text or derive duration from historical conversations. The `assistant_usage_events` migration and `write_assistant_usage_event` RPC enforce account, consent and epoch protection; `clear_usage_analytics()` must continue to clear both Assistant and dictation metadata. Tool reliability (Phase B) and personalized Assistant Insights (Phase C) must remain separate and require their own review. Refer to `docs/Assistant-Phases/21-assistant-usage-analytics.md`.
+
 
 ## Core rules
 
