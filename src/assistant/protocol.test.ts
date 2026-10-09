@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ASSISTANT_SEARCH_GUIDANCE } from "@/assistant/grounding";
+import { ASSISTANT_PLAYBOOK_GUIDANCE } from "@/assistant/harness/playbooks";
 import { ASSISTANT_TOOL_SELECTION_GUIDANCE } from "@/assistant/harness/toolIntelligence";
 import { assistantFunctionDeclarations as declaredTools } from "@/assistant/tools";
 import {
@@ -39,7 +40,7 @@ describe("assistant setup and typed turns", () => {
           { functionDeclarations: declaredTools() },
           { googleSearch: {} },
         ],
-        systemInstruction: { parts: [{ text: `${ASSISTANT_SEARCH_GUIDANCE}\n\n${ASSISTANT_TOOL_SELECTION_GUIDANCE}` }] },
+        systemInstruction: { parts: [{ text: `${ASSISTANT_SEARCH_GUIDANCE}\n\n${ASSISTANT_TOOL_SELECTION_GUIDANCE}\n\n${ASSISTANT_PLAYBOOK_GUIDANCE}` }] },
       },
     });
     const setup = JSON.stringify(assistantSetupMessage());
@@ -101,6 +102,7 @@ describe("assistant setup and typed turns", () => {
       "remember_memory",
       "change_memory",
       "forget_memory",
+      "get_tool_playbook",
       "remote_action",
     ]);
     expect(ASSISTANT_PCM_RATE).toBe(24_000);

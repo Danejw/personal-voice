@@ -51,6 +51,7 @@ import {
   type ScreenSnapshot,
 } from "@/assistant/snapshot";
 import { decideToolCall, type ConfirmToolName, type ParsedToolCall, type ToolDecision } from "@/assistant/tools";
+import { playbookToolText } from "@/assistant/harness/playbooks";
 import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
 import { runComputerTask, type ComputerImage } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
@@ -1213,6 +1214,10 @@ export class AssistantController {
         this.dispatch({ type:"toolActivity", activity:{ id:call.id??call.name, label:call.name.replace(/_/g," "), status:"running" } });
         if (decision.kind === "reject") {
           this.replyTool(decision.id, decision.name, false, decision.message);
+          continue;
+        }
+        if (decision.kind === "playbook") {
+          this.replyTool(decision.id, decision.name, true, playbookToolText(decision.playbookId));
           continue;
         }
         if (decision.kind === "copy") {

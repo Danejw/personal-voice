@@ -1,0 +1,40 @@
+import { playbookStep, type ToolPlaybook } from "@/assistant/harness/playbooks/types";
+
+export const WINDOWS_CONTROL: ToolPlaybook = {
+  id: "windows_control",
+  title: "Navigate and control Windows applications",
+  platform: "windows",
+  useWhen: "The user asks to manage an open window, manipulate a specific UI control, or complete a screen workflow.",
+  skipWhen: "Only a simple already-understood one-step tool call is necessary, or device is not Windows.",
+  steps: [
+    playbookStep("Identify application", ["list_windows", "list_installed_apps"],
+      "Choose list_windows for existing window; list_installed_apps only when a launch target is uncertain.",
+      "An exact window title or allowed application name is known."),
+    playbookStep("Bring correct app into focus", ["navigate_window", "open_app"],
+      "Activate an existing window or open an installed app; do not confuse the two.",
+      "Intended application is foreground or launched."),
+    playbookStep("Inspect target", ["inspect_accessibility_tree", "inspect_accessible_elements"],
+      "For exact control targeting; use tree paths for pattern actions and accessible names for simpler UIA actions.",
+      "Current target locator and available patterns observed."),
+    playbookStep("Choose the smallest effective action", ["accessibility_pattern_action", "uia_control_action", "focus_accessible_control", "invoke_accessible_control", "press_shortcut"],
+      "Only when observed target supports the action; use existing confirmation/auto-run behavior.",
+      "The requested action is accepted and its effect can be inspected."),
+    playbookStep("Delegate visual multi-step workflow", ["supervise_screen"],
+      "When task truly requires several visual screen steps rather than a single accessible control.",
+      "Computer Use stepper attempts goal; do not call it for a trivial action."),
+    playbookStep("Check target state again", ["inspect_accessibility_tree", "inspect_active_app", "capture_screen"],
+      "After actions where observable application state matters.",
+      "Desired end state observed, or task marked incomplete."),
+  ],
+  branches: [
+    "If the user points to a control and its name is unknown, first use inspect_pointer_context from the screen playbook.",
+    "Use inspect_accessibility_tree followed by accessibility_pattern_action when precise path/pattern is required.",
+    "Use supervise_screen for visually complex workflows; do not assume a successful step proves the whole task is done.",
+  ],
+  recovery: [
+    "If an inspected locator becomes stale, inspect the current tree again rather than repeating the old target.",
+    "If the app is unavailable, report the exact blocker. Do not switch to a different application without a reason.",
+    "If a tool is unsupported, choose a different declared tool only when it can accomplish the same requested objective.",
+  ],
+  completion: ["Confirm the target app/control reaches the user-requested state using available observations."],
+};
