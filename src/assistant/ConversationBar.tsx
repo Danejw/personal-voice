@@ -10,6 +10,8 @@ interface ConversationBarProps {
   onOpen: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onArchive?: (id: string, archived: boolean) => void;
+  onShowArchived?: (archived: boolean) => void;
   onRetry: () => void;
   onRefresh?: () => void;
   hasUnlinkedTranscript?: boolean;
@@ -29,7 +31,7 @@ export function threadTime(value?: string | null): string | null {
 }
 
 /** The conversation rail owns thread navigation, not the main transcript. */
-export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen, onRename, onDelete, onRetry, onRefresh, onLoadOlder, onDismissRecovery, hasUnlinkedTranscript = false }: ConversationBarProps) {
+export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen, onRename, onDelete, onArchive, onShowArchived, onRetry, onRefresh, onLoadOlder, onDismissRecovery, hasUnlinkedTranscript = false }: ConversationBarProps) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -38,13 +40,17 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
   return (
     <aside id="assistant-threads" className="assistant-threads" aria-label="Conversation history">
       <div className="assistant-rail-heading">
-        <h3>Conversations</h3>
+        <h3>{library.archivedView ? "Archived" : "Conversations"}</h3>
         <div className="assistant-rail-heading-actions">
           <span className="assistant-rail-count">{library.conversations.length}</span>
           {signedIn && onRefresh && <button type="button" className="assistant-refresh-threads"
             aria-label="Refresh conversations" title="Refresh conversations" disabled={library.loadingThreads} onClick={onRefresh}>↻</button>}
         </div>
       </div>
+      {onShowArchived && <button type="button" className="assistant-archive-switch secondary"
+        aria-pressed={library.archivedView} onClick={() => onShowArchived(!library.archivedView)}>
+        {library.archivedView ? "← Active conversations" : "View archived"}
+      </button>}
       <button type="button" className="assistant-new-thread" disabled={!signedIn} onClick={() => { setSearch(""); onNew(); }}>
         <span aria-hidden="true">＋</span> New conversation
       </button>
@@ -59,7 +65,7 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
         {signedIn && visible.length === 0 && <p className="assistant-rail-empty" role="status">
           {library.loadingThreads ? "Loading saved conversations…" : search ? "No matching conversations." : library.error ? "Could not load saved conversations. Try Refresh." :
             hasUnlinkedTranscript ? "This transcript is not attached to a saved thread. Refresh or start a conversation to save new messages." :
-            "No saved conversations found."}
+            library.archivedView ? "No archived conversations." : "No saved conversations found."}
         </p>}
         {signedIn && <ul className="assistant-thread-list">
           {visible.map((row) => (
@@ -88,12 +94,17 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
                   </button>
                   <div className="assistant-thread-actions">
                     <button type="button" aria-label={`Rename ${row.title}`} onClick={() => { setEditing(row.id); setTitle(row.title); }}>✎</button>
-                    <button type="button" aria-label={`Delete ${row.title}`} onClick={() => confirm.ask({
-                      title: "Delete conversation?",
-                      description: `“${row.title}” and its saved messages will be permanently deleted. Separately saved memories are unaffected.`,
-                      confirmLabel: "Delete conversation",
+                    {onArchive && <button type="button" aria-label={library.archivedView ? `Restore ${row.title}` : `Archive ${row.title}`}
+                      onClick={() => onArchive(row.id, !library.archivedView)}
+                      title={library.archivedView ? "Restore thread" : "Archive without deleting"}>
+                      {library.archivedView ? "↩" : "▣"}
+                    </button>}
+                    {library.archivedView && <button type="button" aria-label={`Permanently delete ${row.title}`} onClick={() => confirm.ask({
+                      title: "Permanently delete conversation?",
+                      description: `“${row.title}” and its saved messages will be permanently deleted. Archiving is the safer option.`,
+                      confirmLabel: "Permanently delete",
                       onConfirm: () => onDelete(row.id),
-                    })}>×</button>
+                    })}>×</button>}
                   </div>
                 </>
               )}
