@@ -21,7 +21,7 @@ export const NOTES_WORKFLOW: ToolPlaybook = {
     "A new note is create_voice_note; editing an existing one requires an ID from list_voice_notes.",
     "edit_voice_note replaces the complete note text; do not accidentally discard unspecified content.",
     "For new notes, capture_screen or capture_camera_photo first, then set attachment_source on create_voice_note.",
-    "For existing notes without text edits, capture a still then attach_image_to_voice_note using the id from list_voice_notes. Attaching image pixels always needs confirmation."
+    "For existing notes without text edits, capture a still then attach_image_to_voice_note using the id from list_voice_notes. Attaching image pixels always needs confirmation.",
     "Archive, restore and permanent delete are different operations. Do not substitute one for another.",
     "The manual Notes UI supports metadata that the create_voice_note tool does not accept.",
   ],
