@@ -61,7 +61,6 @@ export function AssistantToolReliabilityPanel({active,userId,epoch,enabled,store
     return [...unique.values()];
   },[remote,loadedKey,userId,epoch,fromDay,pending,sameAccount]);
   const summary=summarizeToolReliability(merged,fromDay,localUsageDay(new Date()));
-  const actions=summary.acknowledged+summary.observed;
   const top=Math.max(1,...summary.tools.map(t=>t.calls));
   const familyTop=Math.max(1,...summary.categories.map(t=>t.calls));
 
@@ -95,6 +94,8 @@ export function AssistantToolReliabilityPanel({active,userId,epoch,enabled,store
             <p>Observed results: {summary.observed} · Actions acknowledged: {summary.acknowledged} · Failed: {summary.failed} · Blocked: {summary.blocked} · Incomplete: {summary.incomplete}</p>
             <p>Cancelled: {summary.cancelled} · Guidance-only: {summary.reference} · P95 elapsed: {msLabel(summary.p95Ms)}</p>
             <p className="hint">Accepted response rate excludes cancellations and reference-only calls. Latency includes time awaiting a confirmation.</p>
+            <p>Same-tool follow-ups after a failure (within 2 min): {summary.postFailureFollowUps}; subsequent accepted responses: {summary.postFailureAccepted}.</p>
+            <p className="hint">These follow-ups are a timing heuristic, not proof of a retried task or successful recovery.</p>
           </section>
           <div className="analytics-visual-row">
             <HorizontalShareBars headingId="assistant-top-tools" title="Most-used tools"
