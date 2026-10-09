@@ -5,7 +5,7 @@ import { evaluateBatch } from "@/assistant/harness/evals/evaluate";
 describe("bounded, injected model probe (no provider calls)", () => {
   it("runs a scripted multi-step proposal through a mock executor and records results", async () => {
     let now = 0;
-    const executor = { execute: vi.fn(async (_name: string) => {
+    const executor = { execute: vi.fn(async () => {
       now += 25;
       return { ok: true, message: "Mock acknowledged (not a real action)." };
     }) };
