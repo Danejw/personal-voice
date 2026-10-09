@@ -8,7 +8,7 @@ import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { AssistantConversationStore } from "@/assistant/AssistantConversationStore";
 import { capturedImageFile } from "@/assistant/noteAttachment";
 import type { CapturedNoteImage } from "@/assistant/noteAttachment";
-import { listPastConversations, readPastConversation } from "@/assistant/assistantConversationRecall";
+import { listPastConversations, listPastSessions, readPastConversation } from "@/assistant/assistantConversationRecall";
 import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
 import { MemoryPanel } from "@/assistant/MemoryPanel";
@@ -430,7 +430,8 @@ assistant.setActions({
   listMemories: () => assistantMemory.listText(),
   searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
   listPastConversations: (query, cursor, count) => listPastConversations(assistantConversationsApi, accountUserId ?? "", query, cursor, count),
-  readPastConversation: (conversationId) => readPastConversation(assistantConversationsApi, accountUserId ?? "", conversationId),
+  readPastConversation: (conversationId, options) => readPastConversation(assistantConversationsApi, accountUserId ?? "", conversationId, options),
+  listPastSessions: (conversationId, before, count) => listPastSessions(assistantConversationsApi, accountUserId ?? "", conversationId, before, count),
   checkPastConversation: async (conversationId) => {
     if (!accountUserId) throw new Error("Sign in to continue a conversation.");
     const conversation = await assistantConversationsApi.get(accountUserId, conversationId);
@@ -1269,6 +1270,8 @@ export default function App() {
               onOpenThread={(id) => assistantLibrary.open(id)}
               onRenameThread={(id, title) => { void assistantLibrary.rename(id, title); }}
               onDeleteThread={(id) => { void assistantLibrary.delete(id); }}
+              onArchiveThread={(id, archived) => { void assistantLibrary.archive(id, archived); }}
+              onShowArchived={(archived) => { void assistantLibrary.setArchivedView(archived); }}
               onRetrySave={() => assistantLibrary.retry()}
               onLoadOlder={() => { void assistantLibrary.loadOlder(); }}
               onRefreshThreads={() => { void assistantLibrary.catchUp(); }}
