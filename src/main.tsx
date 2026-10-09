@@ -17,6 +17,7 @@ const isOverlayFeedback = windowLabel === "overlay-feedback";
 if (isComputerVisual) document.documentElement.classList.add("computer-visual-view");
 if (isAssistantToolPopup || isOverlayFeedback) { document.documentElement.style.background = "transparent"; document.body.style.background = "transparent"; }
 if (isOverlayFeedback) document.documentElement.classList.add("overlay-feedback-view");
+if (isAssistantToolPopup) document.documentElement.classList.add("assistant-popup-view");
 if (isIndicator) document.documentElement.classList.add("indicator-view");
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
