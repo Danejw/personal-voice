@@ -12,8 +12,8 @@ import { scoreToolTrace } from "@/assistant/harness/evals/traceScore";
 describe("assistant tool intelligence registry", () => {
   it("covers every current Gemini tool with exactly one complete usage profile", () => {
     const names = assistantFunctionDeclarations().map((item) => item.name);
-    expect(names).toHaveLength(54);
-    expect(ASSISTANT_TOOL_NAMES).toHaveLength(54);
+    expect(names).toHaveLength(ASSISTANT_TOOL_NAMES.length);
+    expect(ASSISTANT_TOOL_NAMES).toHaveLength(names.length);
     expect(new Set(names).size).toBe(names.length);
     expect(new Set(ASSISTANT_TOOL_NAMES).size).toBe(ASSISTANT_TOOL_NAMES.length);
     expect([...ASSISTANT_TOOL_NAMES].sort()).toEqual([...names].sort());
@@ -47,11 +47,11 @@ describe("assistant tool intelligence registry", () => {
 });
 
 describe("deterministic tool-selection trace fixtures", () => {
-  it("defines 81 independent scenarios including one for each of the 54 tools", () => {
-    expect(TOOL_SELECTION_SCENARIOS).toHaveLength(81);
-    expect(new Set(TOOL_SELECTION_SCENARIOS.map((scenario) => scenario.id)).size).toBe(81);
+  it("defines one base scenario for every declared tool plus ambiguity and no-tool cases", () => {
+    expect(TOOL_SELECTION_SCENARIOS).toHaveLength(ASSISTANT_TOOL_NAMES.length + 20 + 7);
+    expect(new Set(TOOL_SELECTION_SCENARIOS.map((scenario) => scenario.id)).size).toBe(TOOL_SELECTION_SCENARIOS.length);
     const singles = TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("tool-"));
-    expect(singles).toHaveLength(54);
+    expect(singles).toHaveLength(ASSISTANT_TOOL_NAMES.length);
     expect(singles.map((scenario) => scenario.id.slice(5)).sort()).toEqual([...ASSISTANT_TOOL_NAMES].sort());
     expect(TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("choice-"))).toHaveLength(20);
     expect(TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("none-"))).toHaveLength(7);
