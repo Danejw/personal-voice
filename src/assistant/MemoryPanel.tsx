@@ -195,7 +195,7 @@ export function MemoryPanel({ store, snapshot, signedIn, userId, learning, onLea
           <button type="button" className="secondary assistant-enable-all" disabled={semanticBusy || snapshot.saving}
             onClick={() => { void enableAll(); }}>Enable all four preferences</button>
         )}
-      {signedIn && (
+      {signedIn && settingsLoaded && (
         <Toggle
           label="Learn from Assistant"
           description="Only saved Assistant messages after this is turned on. This does not read voice notes or dictations."
@@ -204,18 +204,18 @@ export function MemoryPanel({ store, snapshot, signedIn, userId, learning, onLea
           onChange={onLearningChange}
         />
       )}
-      {signedIn && <Toggle
+      {signedIn && settingsLoaded && <Toggle
         label="Semantic search across saved content"
         description="Optional. Search eligible notes and saved Assistant conversations in addition to explicit memories. Other source permissions still apply."
         checked={semanticEnabled}
         disabled={semanticBusy || !settingsLoaded}
         onChange={(enabled) => { void toggleSemantic(enabled); }}
       />}
-      {signedIn && <Toggle label="Include saved Notes in search"
+      {signedIn && settingsLoaded && <Toggle label="Include saved Notes in search"
         description="Notes stay separate from permanent Assistant memories."
         checked={notesSearch} disabled={semanticBusy || !settingsLoaded}
         onChange={(enabled) => { void toggleSource("notes", enabled); }} />}
-      {signedIn && <Toggle label="Include synced Dictations in search"
+      {signedIn && settingsLoaded && <Toggle label="Include synced Dictations in search"
         description="Requires the separate Sync recent dictations setting. Never uploads local-only history."
         checked={dictationSearch} disabled={semanticBusy || !settingsLoaded}
         onChange={(enabled) => { void toggleSource("dictations", enabled); }} />}
