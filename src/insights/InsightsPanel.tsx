@@ -490,7 +490,12 @@ export function InsightsPanel({
                           type="button"
                           className="secondary"
                           disabled={busyCandidate !== null}
-                          onClick={() => void dismiss(candidate)}
+                          onClick={() => confirm.ask({
+                          title: "Dismiss insight suggestion?",
+                          description: `“${candidate.title}” will be dismissed from the current Insights suggestions. Nothing will be added to your account.`,
+                          confirmLabel: "Dismiss suggestion",
+                          onConfirm: () => dismiss(candidate),
+                        })}
                         >
                           Dismiss
                         </button>
