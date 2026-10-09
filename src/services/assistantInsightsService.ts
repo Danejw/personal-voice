@@ -1,8 +1,8 @@
 import { getSupabase, supabaseConfig } from "@/services/supabase";
 import { assistantInsightReadiness } from "@/insights/assistantInsightReadiness";
 import {
-  parseAssistantCandidate,parseAssistantProposals,parsePersonalDraft,
-  type AssistantInsightCandidate,type AssistantInsightProposal,type AssistantInsightRun,
+  parseAssistantCandidate,parseAssistantAnalysis,parsePersonalDraft,
+  type AssistantInsightCandidate,type AssistantInsightAnalysis,type AssistantInsightRun,
   type AssistantInsightSample,type PersonalPlaybookDraft,
 } from "@/insights/assistantInsights";
 
@@ -51,7 +51,7 @@ export async function loadAssistantInsightSamples(userId:string):Promise<Assista
   return samples;
 }
 
-async function modelProposals(userId:string,samples:readonly AssistantInsightSample[]):Promise<AssistantInsightProposal[]> {
+async function modelAnalysis(userId:string,samples:readonly AssistantInsightSample[]):Promise<AssistantInsightAnalysis> {
   if(!supabaseConfig)throw new Error("Assistant Insights is not configured.");
   const jwt=await accountToken(userId);
   let response:Response;
@@ -70,7 +70,7 @@ async function modelProposals(userId:string,samples:readonly AssistantInsightSam
       `Assistant Insights analysis failed (${response.status}).`;
     throw new Error(message);
   }
-  return parseAssistantProposals(raw,samples);
+  return parseAssistantAnalysis(raw,samples);
 }
 
 export async function listAssistantInsightData(userId:string):Promise<{
@@ -80,12 +80,16 @@ export async function listAssistantInsightData(userId:string):Promise<{
   const [suggestions,drafts,runs]=await Promise.all([
     rest(userId,"assistant_insight_candidates?select=*&order=created_at.desc&limit=200"),
     rest(userId,"assistant_personal_playbook_drafts?select=*&order=created_at.desc&limit=100"),
-    rest(userId,"assistant_insight_runs?select=created_at,user_message_count,conversation_count&order=created_at.desc&limit=1"),
+    rest(userId,"assistant_insight_runs?select=created_at,user_message_count,conversation_count,voice_profile,communication_tips&order=created_at.desc&limit=1"),
   ]);
   const last=Array.isArray(runs)?runs[0]:null;
-  const run=last&&typeof last==="object"&&typeof last.created_at==="string"?
+  const run:AssistantInsightRun|null=last&&typeof last==="object"&&typeof last.created_at==="string"?
     {createdAt:last.created_at,userMessageCount:Number(last.user_message_count)||0,
-      conversationCount:Number(last.conversation_count)||0}:null;
+      conversationCount:Number(last.conversation_count)||0,
+      voiceProfile:typeof last.voice_profile==="string"&&last.voice_profile.trim()?last.voice_profile.trim():null,
+      communicationTips:Array.isArray(last.communication_tips)?
+        last.communication_tips.filter((tip:unknown):tip is string=>typeof tip==="string")
+          .map((tip:string)=>tip.slice(0,220)).slice(0,4):[]}:null;
   return {candidates:rows(suggestions,parseAssistantCandidate),drafts:rows(drafts,parsePersonalDraft),lastRun:run};
 }
 
@@ -95,7 +99,8 @@ export async function analyzeAssistantUsage(userId:string):Promise<{reviewed:num
   const {lastRun}=await listAssistantInsightData(userId);
   const readiness=assistantInsightReadiness(samples,lastRun);
   if(!readiness.ready)throw new Error(readiness.reason);
-  const proposals=await modelProposals(userId,samples);
+  const analysis=await modelAnalysis(userId,samples);
+  const proposals=analysis.candidates;
   await accountToken(userId); // Fence against user switching during model inference.
   if(proposals.length){
     const payload=proposals.map(p=>({
@@ -109,6 +114,7 @@ export async function analyzeAssistantUsage(userId:string):Promise<{reviewed:num
   await rest(userId,"assistant_insight_runs",json({
     user_id:userId,user_message_count:samples.length,
     conversation_count:new Set(samples.map(s=>s.conversationId)).size,
+    voice_profile:analysis.voiceProfile,communication_tips:analysis.communicationTips,
   }));
   return {reviewed:samples.length,proposed:proposals.length};
 }
