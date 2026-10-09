@@ -33,6 +33,7 @@ import {
   type AssistantMessageInput,
   type AssistantStoredMessage,
   type AssistantConversation,
+  type AssistantSession,
 } from "@/services/assistantConversations";
 import type { AssistantConversationsApi } from "@/services/assistantConversationsService";
 import type { KeyValueStorage } from "@/sync/personalCache";
@@ -60,6 +61,9 @@ export interface AssistantLibrarySnapshot {
   hasOlder: boolean;
   loadingOlder: boolean;
   loadingThreads: boolean;
+  archivedView: boolean;
+  sessions: AssistantSession[];
+  activeSessionId: string | null;
 }
 
 /** The Assistant screen methods this store is allowed to drive. */
@@ -96,6 +100,9 @@ const EMPTY: AssistantLibrarySnapshot = {
   hasOlder: false,
   loadingOlder: false,
   loadingThreads: false,
+  archivedView: false,
+  sessions: [],
+  activeSessionId: null,
 };
 
 function messageOf(error: unknown): string {
@@ -122,6 +129,9 @@ export class AssistantConversationStore {
   private olderCursor: { updatedAt: string; id: string } | null = null;
   private loadingOlder = false;
   private loadingThreads = false;
+  private archivedView = false;
+  private sessions: AssistantSession[] = [];
+  private activeSession: { id: string; userId: string } | null = null;
   private titles = new Map<string, string>();
   private pending: PendingAssistantWrite[] = [];
   private deleted = new Set<string>();
@@ -219,6 +229,9 @@ export class AssistantConversationStore {
     this.olderCursor = null;
     this.loadingOlder = false;
     this.loadingThreads = false;
+    this.archivedView = false;
+    this.sessions = [];
+    this.activeSession = null;
     this.titles.clear();
     this.error = null;
     this.stopFeed();
@@ -277,6 +290,7 @@ export class AssistantConversationStore {
     writeOpenConversation(this.storage, userId, id);
     this.host.showSaved([]);
     this.host.setSavedHistory([]);
+    this.sessions = [];
     this.error = null;
     this.publish();
   }
@@ -328,6 +342,16 @@ export class AssistantConversationStore {
       if (!this.sessionLive()) {
         await this.prepareContext(userId, id, claimed.conversation.summary, claimed.conversation.contextItems);
         if (!this.sameView(userId, id, generation)) return;
+        if (this.api.startSession) {
+          const sessionId = this.createId();
+          const session = await this.api.startSession(userId, id, deviceId, sessionId);
+          if (!this.sameView(userId, id, generation)) {
+            await this.api.finishSession?.(userId, session.id, "interrupted").catch(() => undefined);
+            return;
+          }
+          this.activeSession = {id: session.id, userId};
+          this.sessions = [session, ...this.sessions.filter(s => s.id !== session.id)];
+        }
         this.host.start();
       }
       this.publish();
@@ -361,11 +385,13 @@ export class AssistantConversationStore {
     this.generation += 1;
     const generation = this.generation;
     this.currentId = id;
+    this.sessions = [];
     writeOpenConversation(this.storage, userId, id);
     this.host.showSaved([]);
     this.host.setSavedHistory([]);
     this.publish();
     void this.load(id, generation);
+    void this.loadSessions(id);
   }
 
   /**
@@ -397,6 +423,7 @@ export class AssistantConversationStore {
       this.generation += 1;
       const generation = this.generation;
       this.currentId = conversation.id;
+      this.sessions = [];
       this.titles.set(conversation.id, conversation.title);
       writeOpenConversation(this.storage, userId, conversation.id);
       this.host.showSaved([]);
@@ -422,6 +449,40 @@ export class AssistantConversationStore {
     if (!this.sessionLive() || !this.holdsNow()) {
       throw new Error(this.error ?? "Couldn't resume this conversation. Try again.");
     }
+  }
+
+  /** Hide threads without deleting their history. The archive is reversible. */
+  async archive(id: string, archived = true): Promise<void> {
+    const userId = this.userId;
+    if (!userId) return;
+    if (!this.api.archive) throw new Error("Archive service isn't available.");
+    if (archived && this.currentId === id) {
+      if (this.sessionLive()) this.host.end();
+      this.generation += 1;
+      this.currentId = null;
+      this.sessions = [];
+      writeOpenConversation(this.storage, userId, null);
+      this.host.showSaved([]);
+      this.host.setSavedHistory([]);
+    }
+    try {
+      await this.api.archive(userId, id, archived);
+      await this.reloadList(userId, this.generation);
+      this.error = null;
+    } catch (error) {
+      this.error = messageOf(error);
+      await this.reloadList(userId, this.generation);
+      throw error;
+    } finally {
+      this.publish();
+    }
+  }
+
+  async setArchivedView(archived: boolean): Promise<void> {
+    if (this.archivedView === archived) return;
+    this.archivedView = archived;
+    this.olderCursor = null;
+    if (this.userId) await this.reloadList(this.userId, this.generation);
   }
 
   /** Renames a thread. A thread that is not on the server yet keeps the title for its first create. */
@@ -601,6 +662,24 @@ export class AssistantConversationStore {
     }
   }
 
+  /** Each loaded conversation exposes its independently addressable session timeline. */
+  async loadSessions(conversationId: string): Promise<void> {
+    const userId = this.userId;
+    if (!userId || !this.api.listSessions) return;
+    const generation = this.generation;
+    try {
+      const rows = await this.api.listSessions(userId, conversationId, {limit: 100});
+      if (!this.sameView(userId, conversationId, generation)) return;
+      this.sessions = rows;
+      this.publish();
+    } catch (error) {
+      if (this.sameView(userId, conversationId, generation)) {
+        this.error = messageOf(error);
+        this.publish();
+      }
+    }
+  }
+
   private async readMessages(userId: string, conversationId: string): Promise<AssistantStoredMessage[]> {
     const all: AssistantStoredMessage[] = [];
     let afterSeq = 0;
@@ -619,7 +698,9 @@ export class AssistantConversationStore {
     this.loadingThreads = true;
     this.publish();
     try {
-      const rows = await this.api.list(userId, { limit: ASSISTANT_PAGE_SIZE });
+      const rows = this.archivedView && this.api.listArchived
+        ? await this.api.listArchived(userId, {limit: ASSISTANT_PAGE_SIZE})
+        : await this.api.list(userId, { limit: ASSISTANT_PAGE_SIZE });
       if (!this.sameAccount(userId, generation)) return;
       this.olderCursor = rows.length === ASSISTANT_PAGE_SIZE && rows.at(-1)
         ? { id: rows[rows.length - 1]!.id, updatedAt: rows[rows.length - 1]!.updatedAt } : null;
@@ -663,7 +744,9 @@ export class AssistantConversationStore {
     this.loadingOlder = true;
     this.publish();
     try {
-      const rows = await this.api.list(userId, { limit: ASSISTANT_PAGE_SIZE, before });
+      const rows = this.archivedView && this.api.listArchived
+        ? await this.api.listArchived(userId, {limit: ASSISTANT_PAGE_SIZE, before})
+        : await this.api.list(userId, { limit: ASSISTANT_PAGE_SIZE, before });
       if (!this.sameAccount(userId, generation)) return;
       const existing = new Set(this.conversations.map((item) => item.id));
       for (const row of rows) {
@@ -765,7 +848,10 @@ export class AssistantConversationStore {
       this.ack(userId, latest.message.id);
       return;
     }
-    await this.api.append(userId, messageInput(latest));
+    const result = await this.api.append(userId, messageInput(latest));
+    if (result.message.id !== latest.message.id || result.message.conversationId !== latest.conversationId) {
+      throw new Error("Saved conversation acknowledgement did not match the queued message.");
+    }
     if (this.deleted.has(item.conversationId)) {
       await this.api.delete(userId, item.conversationId);
       this.ack(userId, item.message.id);
@@ -1066,7 +1152,20 @@ export class AssistantConversationStore {
 
   private onStatus(status: AssistantStatus): void {
     const live = status === "CONNECTING" || status === "READY" || status === "RESPONDING";
-    if (this.wasLive && !live && this.holding) void this.releaseHeld();
+    if (this.wasLive && !live) {
+      const session = this.activeSession;
+      this.activeSession = null;
+      if (session) {
+        const reason = status === "IDLE" ? "ended" : "interrupted";
+        void this.api.finishSession?.(session.userId, session.id, reason).catch((error) => {
+          if (this.userId === session.userId) {
+            this.error = "Session boundary could not sync: " + messageOf(error);
+            this.publish();
+          }
+        });
+      }
+      if (this.holding) void this.releaseHeld();
+    }
     this.wasLive = live;
   }
 
@@ -1206,6 +1305,9 @@ export class AssistantConversationStore {
       hasOlder: Boolean(this.olderCursor) && !this.offlineCopy,
       loadingOlder: this.loadingOlder,
       loadingThreads: this.loadingThreads,
+      archivedView: this.archivedView,
+      sessions: this.sessions,
+      activeSessionId: this.activeSession?.id ?? null,
     };
     for (const listener of this.listeners) listener();
   }
