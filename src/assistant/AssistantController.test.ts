@@ -67,6 +67,42 @@ function controller() {
 afterEach(() => { FakeSession.opened = []; vi.useRealTimers(); });
 
 describe("AssistantController", () => {
+  it("records opted-in tool traces from real controller events without capturing text or arguments", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    const traces: unknown[] = [];
+    created.setToolEvalTraceHandler((trace) => traces.push(trace));
+    created.beginToolEvalCase({
+      scenarioId: "choice-copy-v-insert",
+      modality: "typed",
+      platform: "windows",
+    });
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({
+      type: "toolCalls",
+      calls: [{ id: "private-tool-call-id", name: "copy_text", args: { text: "PRIVATE-SECRET-DO-NOT-LOG" } }],
+    });
+    await settle();
+    expect(actions.copyText).toHaveBeenCalledWith("PRIVATE-SECRET-DO-NOT-LOG");
+    const completed = created.endToolEvalCase();
+    expect(completed).toMatchObject({
+      version: 1, origin: "live", scenarioId: "choice-copy-v-insert",
+      modality: "typed", platform: "windows",
+      goal: { passed: null, source: "unverified" },
+      attempts: [{ tool: "copy_text", status: "acknowledged", failureKind: null }],
+    });
+    expect(JSON.stringify(traces)).not.toContain("PRIVATE-SECRET-DO-NOT-LOG");
+    expect(JSON.stringify(traces)).not.toContain("private-tool-call-id");
+    expect(created.endToolEvalCase()).toBeNull();
+    created.setToolEvalTraceHandler(null);
+    session.emit({ type: "toolCalls", calls: [{ id: "second", name: "copy_text", args: { text: "again" } }] });
+    await settle();
+    expect(traces).toHaveLength(3);
+    created.end();
+  });
+
   it("announces device capability facts for voice and deduplicates synchronized inventory updates", () => {
     const { created } = controller();
     created.setDeviceContext({ platform: "windows", otherDeviceCount: null });
