@@ -157,7 +157,7 @@ describe("settings epoch", () => {
     expect(row).not.toHaveProperty("assistant_learning_since");
     expect(row.usage_intelligence).toBe(false);
     expect(row.cloud_dictation_history).toBe(false);
-    expect(row.assistant_memory_learning).toBe(false);
+    expect(row.assistant_memory_learning).toBe(true);
   });
 });
 
