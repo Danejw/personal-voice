@@ -314,6 +314,7 @@ export function assistantFunctionDeclarations() {
         query: { type: "string", description: "Optional keyword or phrase (up to 160 characters). Omit to browse the most recent conversations." },
         cursor: { type: "string", description: "Optional next_cursor from a previous result to browse older conversations." },
         count: { type: "integer", description: "Number of most-recent conversations to scan on this page, between 1 and 20. Use 5 for the previous five. Default 20." },
+        archived_only: { type: "boolean", description: "Browse archived threads rather than active ones; archived messages remain retrievable." },
       } },
     },
     {
@@ -478,7 +479,7 @@ export type ToolDecision =
   | { kind: "snippets"; id: string; name: "list_snippets" }
   | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
   | { kind: "dashboard"; id: string; name: "read_usage_analytics" | "read_insights" }
-  | { kind: "conversations"; id: string; name: "list_past_conversations"; query: string; cursor: string | null; count: number }
+  | { kind: "conversations"; id: string; name: "list_past_conversations"; query: string; cursor: string | null; count: number; archivedOnly: boolean }
   | { kind: "conversationRead"; id: string; name: "read_past_conversation"; conversationId: string;
       afterSeq: number; count: number; sessionId: string | null; from: string | null; to: string | null }
   | { kind: "conversationSessions"; id: string; name: "list_conversation_sessions"; conversationId: string;
@@ -605,7 +606,7 @@ export function decideToolCall(
       return { kind: "conversations", id: call.id, name: "list_past_conversations",
         query: typeof args.query === "string" ? args.query.trim() : "",
         cursor: typeof args.cursor === "string" && args.cursor ? args.cursor : null,
-        count: typeof args.count === "number" ? args.count : 20 };
+        count: typeof args.count === "number" ? args.count : 20, archivedOnly: args.archived_only === true };
     }
     case "read_past_conversation": {
       const conversationId = args.conversation_id;
