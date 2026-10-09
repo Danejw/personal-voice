@@ -65,6 +65,74 @@ function controller() {
 afterEach(() => { FakeSession.opened = []; vi.useRealTimers(); });
 
 describe("AssistantController", () => {
+  it("returns structured evidence classification while preserving tool output and call ID", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setActions(used);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{ id: "observe-1", name: "list_voice_notes", args: {} }] });
+    await settle();
+    expect(session.responses.at(-1)).toMatchObject({
+      toolResponse: { functionResponses: [{
+        id: "observe-1", name: "list_voice_notes",
+        response: {
+          result: expect.stringContaining("Notes (1)"),
+          interpretation: { status: "observed", evidence: "read_result", goal_verified: null },
+        },
+      }] },
+    });
+    session.emit({ type: "toolCalls", calls: [{ id: "copy-2", name: "copy_text", args: { text: "sample" } }] });
+    await settle();
+    expect(used.copyText).toHaveBeenCalledTimes(1);
+    expect(session.responses.at(-1)).toMatchObject({
+      toolResponse: { functionResponses: [{
+        id: "copy-2", response: {
+          result: "Copied to the clipboard.",
+          interpretation: { status: "acknowledged", evidence: "action_acknowledged", goal_verified: null },
+        },
+      }] },
+    });
+    created.end();
+  });
+
+  it("informs Gemini about a failed tool twice, without automatically replaying it", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    used.createVoiceNote.mockRejectedValue(new Error("Saving the note failed."));
+    created.setActions(used);
+    created.setAutoRun(true);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    for (const [index, callId] of ["failure-1", "failure-2"].entries()) {
+      session.emit({ type: "toolCalls", calls: [
+        { id: callId, name: "create_voice_note", args: { text: "test" } },
+      ] });
+      await vi.waitFor(() => expect(session.responses).toHaveLength(index + 1));
+    }
+    expect(used.createVoiceNote).toHaveBeenCalledTimes(2);
+    expect(session.responses[0]).toMatchObject({
+      toolResponse: { functionResponses: [{ response: {
+        error: "Saving the note failed.",
+        interpretation: { status: "failed", failure_streak: 1, goal_verified: null },
+      } }] },
+    });
+    expect(session.responses[1]).toMatchObject({
+      toolResponse: { functionResponses: [{ response: {
+        interpretation: { status: "failed", failure_streak: 2, next_step: expect.stringContaining("Do not repeat") },
+      } }] },
+    });
+    used.createVoiceNote.mockResolvedValueOnce(undefined);
+    session.emit({ type: "toolCalls", calls: [{ id: "success", name: "create_voice_note", args: { text: "test" } }] });
+    await vi.waitFor(() => expect(session.responses).toHaveLength(3));
+    expect(session.responses[2]).toMatchObject({
+      toolResponse: { functionResponses: [{ response: {
+        result: "Saved the note.", interpretation: { status: "acknowledged", failure_streak: 0 },
+      } }] },
+    });
+    created.end();
+  });
+
   it("returns an on-demand playbook as a tool response without invoking device actions", async () => {
     const { created } = controller();
     created.start();
