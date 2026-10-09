@@ -1130,7 +1130,7 @@ export class AssistantConversationStore {
   }
 
   private publish(): void {
-    const rows = this.conversations.map((row) => ({ id: row.id, title: this.titles.get(row.id) ?? row.title }));
+    const rows = this.conversations.map((row) => ({ ...row, title: this.titles.get(row.id) ?? row.title }));
     if (this.currentId && !rows.some((row) => row.id === this.currentId)) {
       rows.unshift({ id: this.currentId, title: this.titles.get(this.currentId) ?? ASSISTANT_DEFAULT_TITLE });
     }
