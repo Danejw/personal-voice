@@ -89,6 +89,7 @@ export function AssistantPanel({
   const [draft, setDraft] = useState("");
   const [view, setView] = useState<"chat" | "settings" | "tools">("chat");
   const [showThreads, setShowThreads] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const [accessibility, setAccessibility] = useState<{windowTitle: string | null; focusedName: string | null; focusedClass: string | null; text: string | null; status: string} | null>(null);
   const [accessibilityError, setAccessibilityError] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -154,7 +155,7 @@ export function AssistantPanel({
   const sessionIdle = snapshot.status === "IDLE" || snapshot.status === "ERROR";
   const selected = library?.conversations.find((item) => item.id === library.currentId);
   return (
-    <div className={`assistant-workspace${showThreads ? " show-thread-rail" : ""}`}>
+    <div className={`assistant-workspace${showThreads ? " show-thread-rail" : ""}${railCollapsed ? " is-rail-collapsed" : ""}`}>
       {library && onNewThread && onOpenThread && onRenameThread && onDeleteThread && onRetrySave && (
         <ConversationBar
           library={library}
@@ -171,9 +172,11 @@ export function AssistantPanel({
       )}
       <section className="assistant-main-panel" aria-label="Assistant workspace">
         <header className="assistant-chat-header">
-          <button type="button" className="assistant-mobile-threads secondary" onClick={() => setShowThreads((open) => !open)} aria-expanded={showThreads} aria-label="Toggle conversation history">☰</button>
+          <button type="button" className="assistant-rail-toggle secondary"
+            onClick={() => { if (window.matchMedia("(max-width: 780px)").matches) setShowThreads((open) => !open); else setRailCollapsed((collapsed) => !collapsed); }}
+            aria-expanded={showThreads || !railCollapsed} aria-controls="assistant-threads" aria-label={showThreads || !railCollapsed ? "Collapse conversations" : "Show conversations"}
+            title={showThreads || !railCollapsed ? "Collapse conversations" : "Show conversations"}>☰</button>
           <div className="assistant-conversation-heading">
-            <span className="assistant-eyebrow">PERSONAL ASSISTANT</span>
             <h3 title={selected?.title ?? "New conversation"}>{selected?.title ?? "New conversation"}</h3>
           </div>
           <AssistantHeader controller={controller} snapshot={snapshot} signedIn={signedIn}
@@ -197,24 +200,19 @@ export function AssistantPanel({
       <ul className="assistant-log" aria-live="polite">
         {snapshot.turns.map((turn) => (
           <li key={turn.id} className={turn.role === "user" ? "assistant-turn is-user" : "assistant-turn"}>
-            <span className="assistant-role">
-              {turn.role === "user" ? "You" : "Assistant"}
-              {turn.status === "interrupted" ? " · interrupted" : ""}
-            </span>
-            <p>{turn.text}</p>
+            <div className="assistant-bubble-copy">
+              <span className="assistant-role">{turn.role === "user" ? "You" : "Assistant"}{turn.status === "interrupted" ? " · interrupted" : ""}</span>{" "}
+              <p>{turn.text}</p>
+            </div>
             {turn.role === "assistant" && turn.sources && <SourceList sources={turn.sources} />}
           </li>
         ))}
         {snapshot.liveUser && (
-          <li className="assistant-turn is-user">
-            <span className="assistant-role">You</span>
-            <p className="partial">{snapshot.liveUser}</p>
-          </li>
+          <li className="assistant-turn is-user"><div className="assistant-bubble-copy"><span className="assistant-role">You</span>{" "}<p className="partial">{snapshot.liveUser}</p></div></li>
         )}
         {snapshot.liveText && (
           <li className="assistant-turn">
-            <span className="assistant-role">Assistant</span>
-            <p className="partial">{snapshot.liveText}</p>
+            <div className="assistant-bubble-copy"><span className="assistant-role">Assistant</span>{" "}<p className="partial">{snapshot.liveText}</p></div>
             <SourceList sources={snapshot.liveSources} />
           </li>
         )}
@@ -578,7 +576,7 @@ export function AssistantPanel({
           <span className="visually-hidden">Message</span>
           <textarea
             value={draft}
-            rows={2}
+            rows={1}
             placeholder={canSend ? "Message your Assistant…" : "Start or continue a conversation to send a message"}
             aria-label="Message"
             disabled={!canSend}
@@ -590,7 +588,6 @@ export function AssistantPanel({
               }
             }}
           />
-          <span className="assistant-composer-hint">Enter to send · Shift+Enter for new line</span>
         </label>
         <button type="submit" className="assistant-send" disabled={!canSend || !draft.trim()} aria-label="Send message">➤</button>
       </form>
