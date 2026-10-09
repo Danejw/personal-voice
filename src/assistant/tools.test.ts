@@ -75,6 +75,7 @@ describe("assistant tool schema", () => {
       "remember_memory",
       "change_memory",
       "forget_memory",
+      "get_tool_playbook",
       "remote_action",
     ]);
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
