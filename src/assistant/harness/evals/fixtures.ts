@@ -54,6 +54,7 @@ const BASE_TOOL_SCENARIOS = [
   { id: "tool-supervise_screen", request: "Work through these three screens and set the requested options.", expected: ["supervise_screen"], successCriterion: "Multi-step on-screen goal reached" },
   { id: "tool-list_past_conversations", request: "Which were my last five conversations?", expected: ["list_past_conversations"], successCriterion: "Five most recent threads listed" },
   { id: "tool-read_past_conversation", request: "Read our conversation from yesterday about keyboards.", expected: ["list_past_conversations","read_past_conversation"], successCriterion: "Exact historical thread excerpt returned" },
+  { id: "tool-list_conversation_sessions", request: "Show the times and IDs of our sessions inside the Personal Voice thread.", expected: ["list_past_conversations","list_conversation_sessions"], successCriterion: "Dated session IDs within a continuous conversation" },
   { id: "tool-continue_past_conversation", request: "Continue the second-most-recent conversation, not this one.", expected: ["list_past_conversations","continue_past_conversation"], successCriterion: "Existing conversation becomes active" },
   { id: "tool-list_memories", request: "What preferences do you explicitly remember about me?", expected: ["list_memories"], successCriterion: "Saved memory entries listed" },
   { id: "tool-search_memory", request: "What did I previously say about my purpose across my notes?", expected: ["search_memory"], successCriterion: "Relevant provenance-backed saved evidence returned" },
