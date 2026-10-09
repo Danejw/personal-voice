@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ConversationBar } from "@/assistant/ConversationBar";
@@ -28,6 +28,7 @@ interface AssistantChromeProps {
   onRetrySave?: () => void;
   onProduce?: () => void;
   onDismissRecovery?: (id: string) => void;
+  settingsContent?: ReactNode;
 }
 
 /** Header status and the Start / End control. Continue here is the only way a second device takes the microphone. */
@@ -79,8 +80,13 @@ export function AssistantPanel({
   onDeleteThread,
   onRetrySave,
   onDismissRecovery,
+  onProduce,
+  micBusy,
+  settingsContent,
 }: AssistantChromeProps) {
   const [draft, setDraft] = useState("");
+  const [view, setView] = useState<"chat" | "settings" | "tools">("chat");
+  const [showThreads, setShowThreads] = useState(false);
   const [accessibility, setAccessibility] = useState<{windowTitle: string | null; focusedName: string | null; focusedClass: string | null; text: string | null; status: string} | null>(null);
   const [accessibilityError, setAccessibilityError] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -144,21 +150,42 @@ export function AssistantPanel({
 
   const showEchoNote = snapshot.echoFallback && (snapshot.status === "CONNECTING" || snapshot.status === "READY" || snapshot.status === "RESPONDING");
   const sessionIdle = snapshot.status === "IDLE" || snapshot.status === "ERROR";
+  const selected = library?.conversations.find((item) => item.id === library.currentId);
   return (
-    <>
+    <div className={`assistant-workspace${showThreads ? " show-thread-rail" : ""}`}>
       {library && onNewThread && onOpenThread && onRenameThread && onDeleteThread && onRetrySave && (
         <ConversationBar
           library={library}
           signedIn={signedIn}
           sessionIdle={sessionIdle}
-          onNew={onNewThread}
-          onOpen={onOpenThread}
+          onNew={() => { onNewThread(); setView("chat"); setShowThreads(false); }}
+          onOpen={(id) => { onOpenThread(id); setView("chat"); setShowThreads(false); }}
           onRename={onRenameThread}
           onDelete={onDeleteThread}
           onRetry={onRetrySave}
           onDismissRecovery={onDismissRecovery}
         />
       )}
+      <section className="assistant-main-panel" aria-label="Assistant workspace">
+        <header className="assistant-chat-header">
+          <button type="button" className="assistant-mobile-threads secondary" onClick={() => setShowThreads((open) => !open)} aria-expanded={showThreads} aria-label="Toggle conversation history">☰</button>
+          <div className="assistant-conversation-heading">
+            <span className="assistant-eyebrow">PERSONAL ASSISTANT</span>
+            <h3 title={selected?.title ?? "New conversation"}>{selected?.title ?? "New conversation"}</h3>
+          </div>
+          <AssistantHeader controller={controller} snapshot={snapshot} signedIn={signedIn}
+            micBusy={micBusy} library={library} onProduce={onProduce} />
+        </header>
+        <nav className="assistant-view-tabs" aria-label="Assistant views">
+          {(["chat", "settings", "tools"] as const).map((tab) => (
+            <button key={tab} type="button" className={view === tab ? "is-active" : ""}
+              aria-current={view === tab ? "page" : undefined}
+              onClick={() => setView(tab)}>
+              {tab === "chat" ? "Conversation" : tab === "settings" ? "Settings" : "Advanced tools"}
+            </button>
+          ))}
+        </nav>
+        <div className="assistant-chat-scroll hide-scrollbar" hidden={view !== "chat"}>
       {showEchoNote && (
         <p className="assistant-echo" role="note">
           This phone can't cancel speaker echo, so the microphone pauses while a reply plays and for a short moment after the sound ends. Stop and listen cuts the reply off. Talking over it will not interrupt. Noise reduction lowers background noise. It does not pick out your voice or remove other people.
@@ -222,6 +249,12 @@ export function AssistantPanel({
         </div>
       )}
       {snapshot.accountError && <p className="error" role="alert">{snapshot.accountError}</p>}
+        </div>
+        <div className="assistant-settings-pane hide-scrollbar" hidden={view !== "settings"} role="region" aria-label="Assistant settings">
+          {settingsContent}
+        </div>
+        <div className="assistant-tools-pane hide-scrollbar" hidden={view !== "tools"} role="region" aria-label="Advanced Assistant tools">
+          <div className="assistant-pane-intro"><h4>Advanced tools</h4><p>Screen, camera and computer diagnostics. These tools are available whenever you need them.</p></div>
       {navigator.userAgent.includes("Windows") && (
         <div className="assistant-selection" role="region" aria-label="Windows accessibility inspection">
           <p className="note-meta">Windows accessibility · read-only · manual</p>
@@ -468,6 +501,8 @@ export function AssistantPanel({
 
         </div>
       )}
+        </div>
+        <div className="assistant-chat-actions" hidden={view !== "chat"}>
       {(snapshot.computerRunning || snapshot.computerPrompt) && (
         <div className="assistant-action" role="region" aria-label="Supervised screen task">
           <p>{snapshot.computerPrompt ?? "A supervised screen task is running."}</p>
@@ -505,6 +540,8 @@ export function AssistantPanel({
         </div>
       )}
       {snapshot.actionNotice && <p className="status" role="status">{snapshot.actionNotice}</p>}
+        </div>
+        <div className="assistant-tools-transfer" hidden={view !== "tools"}>
       {onContinueTask && (
         <button
           type="button"
@@ -525,8 +562,10 @@ export function AssistantPanel({
       )}
       {continueNotice && <p className="status" role="status">{continueNotice}</p>}
       {continueError && <p className="error" role="alert">{continueError}</p>}
+        </div>
       <form
         className="assistant-composer"
+        hidden={view !== "chat"}
         onSubmit={(event) => {
           event.preventDefault();
           send();
@@ -541,7 +580,8 @@ export function AssistantPanel({
         />
         <button type="submit" className="secondary" disabled={!canSend || !draft.trim()}>Send</button>
       </form>
-    </>
+      </section>
+    </div>
   );
 }
 
