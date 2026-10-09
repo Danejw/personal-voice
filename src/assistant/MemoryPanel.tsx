@@ -23,13 +23,14 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [semanticEnabled, setSemanticEnabled] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [semanticBusy, setSemanticBusy] = useState(false);
   const [notesSearch, setNotesSearch] = useState(false);
   const [dictationSearch, setDictationSearch] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    if (!signedIn) { return; }
+    if (!signedIn) { setSettingsLoaded(false); return; }
     const client = getSupabase();
     if (!client) return;
     void (async () => {
@@ -40,6 +41,7 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
         setSemanticEnabled(data?.assistant_semantic_search ?? false);
         setNotesSearch(data?.assistant_recall_notes ?? false);
         setDictationSearch(data?.assistant_recall_dictations ?? false);
+        setSettingsLoaded(Boolean(data));
       }
     })();
     return () => { cancelled = true; };
@@ -81,6 +83,32 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not change source preferences.");
     } finally { setSemanticBusy(false); }
+  }
+
+  async function enableAll(): Promise<void> {
+    const client = getSupabase();
+    if (!client) return;
+    setSemanticBusy(true);
+    try {
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) throw new Error("Sign in to update memory preferences.");
+      const { data, error } = await client.from("settings").update({
+        assistant_semantic_search: true,
+        assistant_recall_notes: true,
+        assistant_recall_dictations: true,
+      }).eq("user_id", user.id).select("user_id").maybeSingle();
+      if (error || !data) throw new Error(error?.message ?? "Could not enable memory recall.");
+      setSemanticEnabled(true);
+      setNotesSearch(true);
+      setDictationSearch(true);
+      if (!learning) onLearningChange(true);
+      setNotice("Memory and recall are enabled. Synced dictation search still requires cloud dictation history.");
+      void indexNextMemoryBatch().catch(() => undefined);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not update memory preferences.");
+    } finally {
+      setSemanticBusy(false);
+    }
   }
 
   async function attachMemoryFile(memoryId: string, file: File): Promise<void> {
@@ -162,12 +190,17 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
           <span className="assistant-settings-count">4 preferences</span>
         </div>
         <p className="assistant-settings-description">Choose what your Assistant can learn and search. Changes sync with your account.</p>
+        {!settingsLoaded && signedIn && <p className="note-meta" role="status">Loading saved recall preferences…</p>}
+        {signedIn && settingsLoaded && !(learning && semanticEnabled && notesSearch && dictationSearch) && (
+          <button type="button" className="secondary assistant-enable-all" disabled={semanticBusy || snapshot.saving}
+            onClick={() => { void enableAll(); }}>Enable all four preferences</button>
+        )}
       {signedIn && (
         <Toggle
           label="Learn from Assistant"
           description="Only saved Assistant messages after this is turned on. This does not read voice notes or dictations."
           checked={learning}
-          disabled={snapshot.saving}
+          disabled={snapshot.saving || !settingsLoaded}
           onChange={onLearningChange}
         />
       )}
@@ -175,16 +208,16 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
         label="Semantic search across saved content"
         description="Optional. Search eligible notes and saved Assistant conversations in addition to explicit memories. Other source permissions still apply."
         checked={semanticEnabled}
-        disabled={semanticBusy}
+        disabled={semanticBusy || !settingsLoaded}
         onChange={(enabled) => { void toggleSemantic(enabled); }}
       />}
       {signedIn && <Toggle label="Include saved Notes in search"
         description="Notes stay separate from permanent Assistant memories."
-        checked={notesSearch} disabled={semanticBusy}
+        checked={notesSearch} disabled={semanticBusy || !settingsLoaded}
         onChange={(enabled) => { void toggleSource("notes", enabled); }} />}
       {signedIn && <Toggle label="Include synced Dictations in search"
         description="Requires the separate Sync recent dictations setting. Never uploads local-only history."
-        checked={dictationSearch} disabled={semanticBusy}
+        checked={dictationSearch} disabled={semanticBusy || !settingsLoaded}
         onChange={(enabled) => { void toggleSource("dictations", enabled); }} />}
       </div>
       <details className="fold assistant-stored-memories">
