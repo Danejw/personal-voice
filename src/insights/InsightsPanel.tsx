@@ -338,7 +338,7 @@ export function InsightsPanel({
 
       {tab==="assistant" && <AssistantInsightsPanel
         active={active} userId={userId} refreshToken={assistantInsightsRefreshToken}
-        view="profile" onPendingChange={reportAssistantPending}
+        view="profile" usageEpoch={usage.epoch} devices={devices} onPendingChange={reportAssistantPending}
         onOpenSuggestions={()=>setTab("suggestions")}
       />}
 
@@ -539,7 +539,7 @@ export function InsightsPanel({
           ) : null}
           <AssistantInsightsPanel
             active={active} userId={userId} refreshToken={assistantInsightsRefreshToken}
-            view="suggestions" onPendingChange={reportAssistantPending}
+            view="suggestions" usageEpoch={usage.epoch} devices={devices} onPendingChange={reportAssistantPending}
             onOpenSuggestions={()=>setTab("suggestions")}
           />
         </div>
