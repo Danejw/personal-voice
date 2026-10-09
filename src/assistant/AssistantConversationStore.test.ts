@@ -91,6 +91,7 @@ class FakeHost implements AssistantTranscriptHost {
 class FakeApi implements AssistantConversationsApi {
   conversations = new Map<string, AssistantConversation & { userId: string; deleted: boolean }>();
   messages: AssistantStoredMessage[] = [];
+  sessions: Array<{id:string;conversationId:string;deviceId:string;startedAt:string;endedAt:string|null;endReason:string|null}> = [];
   appends = 0;
   deletes: string[] = [];
   gets = 0;
@@ -152,9 +153,38 @@ class FakeApi implements AssistantConversationsApi {
   async list(userId: string) {
     if (this.delayList) await this.delayList;
     if (this.failReads) throw new AssistantStorageError("unavailable", "Couldn't reach conversation storage. Check your connection.");
-    return [...this.conversations.values()].filter((conversation) => conversation.userId === userId && !conversation.deleted);
+    return [...this.conversations.values()].filter((conversation) => conversation.userId === userId && !conversation.deleted && !conversation.archivedAt);
   }
 
+  async archive(userId: string,id:string,archived:boolean) {
+    const c=this.own(userId,id);
+    c.archivedAt=archived ? new Date().toISOString() : null;
+    return c;
+  }
+  async listArchived(userId:string) {
+    return [...this.conversations.values()].filter(c=>c.userId===userId && !c.deleted && !!c.archivedAt);
+  }
+  async startSession(userId:string,conversationId:string,deviceId:string,sessionId:string) {
+    this.own(userId,conversationId);
+    const s={id:sessionId,conversationId,deviceId,startedAt:new Date().toISOString(),endedAt:null,endReason:null};
+    this.sessions.push(s);
+    return s;
+  }
+  async finishSession(userId:string,sessionId:string,reason:"ended"|"interrupted"|"lost") {
+    const s=this.sessions.find(s=>s.id===sessionId);
+    if(!s || this.own(userId,s.conversationId).userId!==userId)return;
+    s.endedAt=new Date().toISOString();
+    s.endReason=reason;
+  }
+  async linkMessageSession(userId:string,messageId:string,sessionId:string) {
+    const m=this.messages.find(m=>m.id===messageId);
+    if (!m || this.own(userId,m.conversationId).userId!==userId)throw Error("Not owned");
+    m.sessionId=sessionId;
+  }
+  async listSessions(userId:string,conversationId:string) {
+    this.own(userId,conversationId);
+    return this.sessions.filter(s=>s.conversationId===conversationId);
+  }
   async claim(userId: string, id: string, deviceId: string, input: { ttlSeconds: number; takeover: boolean }) {
     const conversation = this.own(userId, id);
     const expiry = conversation.leaseExpiresAt ? Date.parse(conversation.leaseExpiresAt) : 0;
@@ -325,6 +355,29 @@ describe("saved assistant conversations", () => {
     expect(readPending(storage, USER_B)).toEqual([]);
     await vi.waitFor(() => expect(readPending(storage, USER_A)).toEqual([]));
     expect(api.messages.map((message) => message.body)).toEqual(["Secret from A"]);
+  });
+
+  it("keeps messages and session boundaries when archiving and restoring", async () => {
+    const api=new FakeApi(); const host=new FakeHost(); const store=new AssistantConversationStore(host,api,memory(),()=>thread,()=>DEVICE);
+    await store.setUser(USER_A);
+    await store.produce();
+    const session=store.getSnapshot().activeSessionId;
+    expect(session).toBeTruthy();
+    host.emit(turn("44444444-4444-4444-8444-000000000777","Keep this conversation"));
+    await vi.waitFor(()=>expect(api.messages.length).toBe(1));
+    expect(api.messages[0]?.sessionId).toBe(session);
+    host.end();
+    await vi.waitFor(()=>expect(api.sessions[0]?.endedAt).not.toBeNull());
+    expect(api.sessions[0]?.endReason).toBe("ended");
+    await store.archive(thread,true);
+    expect(api.messages).toHaveLength(1);
+    expect(store.getSnapshot().conversations.some(x=>x.id===thread)).toBe(false);
+    await store.setArchivedView(true);
+    expect(store.getSnapshot().conversations.map(x=>x.id)).toContain(thread);
+    await store.archive(thread,false);
+    await store.setArchivedView(false);
+    expect(store.getSnapshot().conversations.map(x=>x.id)).toContain(thread);
+    expect(api.messages).toHaveLength(1);
   });
 
   it("does not let a slow append put a deleted thread back", async () => {
