@@ -2,17 +2,17 @@ import { getSupabase, supabaseConfig } from "@/services/supabase";
 import type { AssistantUsageEvent } from "@/usage/assistantUsage";
 
 export interface AssistantUsageApi {
-  write(event: AssistantUsageEvent): Promise<void>;
-  list(epoch: number): Promise<AssistantUsageEvent[]>;
+  write(event: AssistantUsageEvent, userId: string): Promise<void>;
+  list(epoch: number, userId: string): Promise<AssistantUsageEvent[]>;
 }
 type Row = Record<string, unknown>;
 
-async function call(path: string, init?: RequestInit): Promise<unknown> {
+async function call(path: string, userId: string, init?: RequestInit): Promise<unknown> {
   if (!supabaseConfig) throw new Error("Assistant Analytics is not configured.");
   const client = getSupabase();
   if (!client) throw new Error("Assistant Analytics requires sign in.");
   const { data: { session } } = await client.auth.getSession();
-  if (!session?.access_token) throw new Error("Assistant Analytics requires sign in.");
+  if (!session?.access_token || session.user.id !== userId) throw new Error("Assistant Analytics account changed.");
   const response = await fetch(`${supabaseConfig.url}/rest/v1/${path}`, {
     ...init,
     headers: {
@@ -45,8 +45,8 @@ function parse(row: Row): AssistantUsageEvent | null {
 }
 
 export const assistantUsageApi: AssistantUsageApi = {
-  async write(event) {
-    await call("rpc/write_assistant_usage_event", {
+  async write(event, userId) {
+    await call("rpc/write_assistant_usage_event", userId, {
       method: "POST",
       headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
       body: JSON.stringify({
@@ -58,13 +58,13 @@ export const assistantUsageApi: AssistantUsageApi = {
       }),
     });
   },
-  async list(epoch) {
+  async list(epoch, userId) {
     // At most 12 months of metadata retained in the dashboard; page rather than silently truncate.
     const rows: AssistantUsageEvent[] = [];
     const selected = "id,device_id,session_id,conversation_id,occurred_at,local_day,epoch,kind,modality,duration_ms,end_reason";
     for (let offset = 0; offset < 20_000; offset += 1000) {
       const query = `assistant_usage_events?select=${selected}&epoch=eq.${encodeURIComponent(String(epoch))}&order=occurred_at.desc&limit=1000&offset=${offset}`;
-      const response = await call(query);
+      const response = await call(query, userId);
       if (!Array.isArray(response)) throw new Error("Invalid Assistant Analytics response.");
       const page = response.flatMap((raw: unknown) => {
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
