@@ -84,6 +84,32 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
   });
 
+  it("validates note image source and keeps old text-only calls compatible", () => {
+    expect(decideToolCall({id: "new", name: "create_voice_note",
+      args: {text: "Bug report", attachment_source: "screenshot"}}, plan)).toMatchObject({
+      kind: "confirm", name: "create_voice_note", title: "Save note with captured image",
+      text: JSON.stringify({text: "Bug report", attachment_source: "screenshot"}),
+    });
+    expect(decideToolCall({id: "edit", name: "edit_voice_note",
+      args: {id: "note-1", text: "Updated", attachment_source: "camera_photo"}}, plan)).toMatchObject({
+      kind: "confirm", name: "edit_voice_note", title: "Edit note and attach captured image",
+    });
+    expect(decideToolCall({id: "attach", name: "attach_image_to_voice_note",
+      args: {id: "note-1", attachment_source: "screenshot"}}, plan)).toMatchObject({
+      kind: "confirm", name: "attach_image_to_voice_note",
+      text: JSON.stringify({id: "note-1", attachment_source: "screenshot"}),
+    });
+    for (const bad of ["file:///etc/passwd", "camera", "screenshot.png", "", null]) {
+      expect(decideToolCall({id: "bad", name: "attach_image_to_voice_note",
+        args: {id: "note-1", attachment_source: bad}}, plan)).toMatchObject({kind: "reject"});
+    }
+    expect(decideToolCall({id: "missing", name: "attach_image_to_voice_note", args: {id: "note-1"}}, plan)).toMatchObject({kind: "reject"});
+    expect(decideToolCall({id: "bad", name: "create_voice_note",
+      args: {text: "Keep", attachment_source: "local_file"}}, plan)).toMatchObject({kind: "reject"});
+    expect(decideToolCall({id: "plain", name: "create_voice_note", args: {text: "Keep"}}, plan))
+      .toMatchObject({kind: "confirm", text: "Keep", title: "Save this note"});
+  });
+
   it("routes mouse pointer inspection read-only, rejecting missing tool ids", () => {
     expect(decideToolCall({ id: "pointer-1", name: "inspect_pointer_context", args: {} }, plan))
       .toEqual({ kind: "pointer", id: "pointer-1", name: "inspect_pointer_context" });
