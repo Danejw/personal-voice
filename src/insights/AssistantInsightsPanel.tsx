@@ -228,13 +228,7 @@ export function AssistantInsightsPanel({active,userId,refreshToken,view,usageEpo
         </div>
         {latest?.voiceProfile?(
           <p className="voice-profile">{latest.voiceProfile}</p>
-        ):(
-          <p className="placeholder">
-            {latest
-              ?"Your earlier analysis generated suggestions but did not save a communication profile. Generate your profile to fill this section."
-              :showingReadiness?.reason??"Loading recent Assistant conversations…"}
-          </p>
-        )}
+        ): null}
         {!showingReadiness?.ready&&latest&&<p className="insights-next-refresh">{showingReadiness?.reason}</p>}
         {!!pending.length&&<button type="button" className="secondary"
           onClick={onOpenSuggestions}>Review {pending.length} suggestion{pending.length===1?"":"s"}</button>}
@@ -294,7 +288,7 @@ export function AssistantInsightsPanel({active,userId,refreshToken,view,usageEpo
         ):(
           <p className="hint">
             {measured
-              ?"No measured Assistant interactions in the last 30 days. Earlier saved conversations can still inform your communication profile."
+              ?"No measured Assistant interactions in the last 30 days."
               :"Loading measured Assistant activity…"}
           </p>
         )}

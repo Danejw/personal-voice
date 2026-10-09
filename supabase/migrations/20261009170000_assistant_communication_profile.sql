@@ -4,7 +4,7 @@ begin;
 
 alter table public.assistant_insight_runs
   add column voice_profile text
-    check (voice_profile is null or length(voice_profile) between 40 and 6000)),
+    check (voice_profile is null or length(voice_profile) between 40 and 6000),
   add column communication_tips jsonb not null default '[]'::jsonb
     check (jsonb_typeof(communication_tips) = 'array' and jsonb_array_length(communication_tips) <= 4);
 
