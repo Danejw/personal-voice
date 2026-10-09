@@ -10,6 +10,7 @@ import {
 } from "@/assistant/computerActions";
 import { cameraFacingFromArgs, type CameraFacing } from "@/platform/camera";
 import { enrichToolDescription } from "@/assistant/harness/toolIntelligence";
+import { isToolPlaybookId, TOOL_PLAYBOOK_IDS, type ToolPlaybookId } from "@/assistant/harness/playbooks";
 
 /**
  * Gemini 3.8 Live function calls, checked against the Live tools guide on 2026-09-15:
@@ -365,6 +366,15 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
+      name: "get_tool_playbook",
+      description: "Retrieve a short local reference workflow for multi-step or uncertain tool tasks. Use only when several tools must be sequenced or their prerequisites are unclear. Do not call for straightforward single-tool or conversational requests. Retrieval does not perform any action.",
+      parameters: {
+        type: "object",
+        properties: { id: { type: "string", enum: [...TOOL_PLAYBOOK_IDS], description: "Exact playbook ID." } },
+        required: ["id"],
+      },
+    },
+    {
       name: "remote_action",
       description: "Ask another owned Windows device to open Notepad or Calculator, press an allowlisted shortcut, or insert text. No shell, delete, or click. The other device must allow remote actions and confirm. Name the device.",
       parameters: {
@@ -446,6 +456,7 @@ export type ToolDecision =
   | { kind: "conversationContinue"; id: string; name: "continue_past_conversation"; conversationId: string }
   | { kind: "memories"; id: string; name: "list_memories" }
   | { kind: "memorySearch"; id: string; name: "search_memory"; query: string }
+  | { kind: "playbook"; id: string; name: "get_tool_playbook"; playbookId: ToolPlaybookId }
   | { kind: "handoffs"; id: string; name: "list_handoffs" }
   | {
     kind: "confirm";
@@ -493,6 +504,12 @@ export function decideToolCall(
     return { kind: "reject", id: call.id, name: call.name, message: "The action arguments were not an object." };
   }
   switch (call.name) {
+    case "get_tool_playbook": {
+      if (!isToolPlaybookId(args.id)) {
+        return { kind: "reject", id: call.id, name: call.name, message: "Choose one listed playbook ID." };
+      }
+      return { kind: "playbook", id: call.id, name: "get_tool_playbook", playbookId: args.id };
+    }
     case "read_remote_device": {
       const read = readKind(args);
       if ("error" in read) return { kind: "reject", id: call.id, name: call.name, message: read.error };
