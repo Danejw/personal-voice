@@ -8,7 +8,12 @@ import type {
   AssistantInsightCandidate,AssistantInsightRun,AssistantInsightSample,PersonalPlaybookDraft,
 } from "@/insights/assistantInsights";
 
-interface Props {active:boolean;userId:string|null;refreshToken:number;}
+interface Props {
+  active:boolean; userId:string|null; refreshToken:number;
+  view:"profile"|"suggestions";
+  onPendingChange:(userId:string,count:number)=>void;
+  onOpenSuggestions:()=>void;
+}
 type Snapshot={
   candidates:AssistantInsightCandidate[];drafts:PersonalPlaybookDraft[];
   lastRun:AssistantInsightRun|null;
@@ -17,7 +22,7 @@ const EMPTY:Snapshot={candidates:[],drafts:[],lastRun:null};
 const LABELS={workflow:"Personal workflow",adaptation:"Assistant adaptation",goal:"Goal / productivity"} as const;
 const KINDS=["workflow","adaptation","goal"] as const;
 
-export function AssistantInsightsPanel({active,userId,refreshToken}:Props) {
+export function AssistantInsightsPanel({active,userId,refreshToken,view,onPendingChange,onOpenSuggestions}:Props) {
   const [snapshot,setSnapshot]=useState<Snapshot>(EMPTY);
   const [loadedFor,setLoadedFor]=useState<string|null>(null);
   const [readiness,setReadiness]=useState<AssistantInsightReadiness|null>(null);
@@ -56,6 +61,10 @@ export function AssistantInsightsPanel({active,userId,refreshToken}:Props) {
     return ()=>{window.removeEventListener("focus",update);window.removeEventListener("online",update);};
   },[active,userId]);
 
+  useEffect(()=>{
+    if(userId&&loadedFor===userId) onPendingChange(userId,snapshot.candidates.filter(c=>c.status==="pending").length);
+  },[userId,loadedFor,snapshot.candidates,onPendingChange]);
+
   async function analyze() {
     if(!userId||!readiness?.ready||loading||analyzing)return;
     setAnalyzing(true);setError(null);setNotice(null);
@@ -63,6 +72,7 @@ export function AssistantInsightsPanel({active,userId,refreshToken}:Props) {
       const result=await analyzeAssistantUsage(userId);
       setNotice(`Reviewed ${result.reviewed} saved user messages. ${result.proposed} supported suggestions identified; existing review decisions are preserved.`);
       setRefresh(n=>n+1);
+      if(result.proposed>0)onOpenSuggestions();
     }catch(e){setError(e instanceof Error?e.message:"Assistant analysis failed.");}
     finally{setAnalyzing(false);}
   }
@@ -114,14 +124,17 @@ export function AssistantInsightsPanel({active,userId,refreshToken}:Props) {
   const dayCount=latest?Math.min(ASSISTANT_REFRESH_DAYS,Math.floor(showingReadiness?.daysSinceLastRun??0)):(showingReadiness?.activeDays??0);
   const dayTarget=latest?ASSISTANT_REFRESH_DAYS:ASSISTANT_FIRST_MIN_DAYS;
   const dayPercent=Math.min(100,Math.round(dayCount/dayTarget*100));
-  return (
+  if(view==="profile")return (
     <div className="insights-stack">
       <section className="insights-voice-hero">
         <div className="insights-heading-row">
           <div>
             <p className="insights-eyebrow">Your Assistant</p>
             <h2>Understand how you work</h2>
-            <p className="hint">Suggestions for reusable personal workflows, explicit preferences and goals.</p>
+            <p className="insights-hero-meta">
+              {latest?`Based on ${latest.userMessageCount} user messages across ${latest.conversationCount} conversations`
+                :"A profile of recurring workflows and preferences appears after enough saved conversations accumulate."}
+            </p>
           </div>
           <button type="button" className="secondary insights-refresh"
             disabled={loading||analyzing||!showingReadiness?.ready}
@@ -130,8 +143,9 @@ export function AssistantInsightsPanel({active,userId,refreshToken}:Props) {
           </button>
         </div>
         <p className="hint">{showingReadiness?.reason??"Loading recent Assistant activity…"}</p>
-        {latest&&<p className="insights-hero-meta">Last analysis: {new Date(latest.createdAt).toLocaleDateString()} · {latest.userMessageCount} user messages reviewed</p>}
-        <p className="hint">Analyzing sends recent saved user messages to Gemini when you click the button.</p>
+        {latest&&<p className="insights-hero-meta">Last analysis: {new Date(latest.createdAt).toLocaleDateString()}</p>}
+        {!!pending.length&&<button type="button" className="secondary insights-refresh"
+          onClick={onOpenSuggestions}>Review {pending.length} suggestion{pending.length===1?"":"s"}</button>}
       </section>
       <div className="analytics-visual-row insights-visual-row">
         <section className="insights-progress-card">
@@ -153,94 +167,139 @@ export function AssistantInsightsPanel({active,userId,refreshToken}:Props) {
             <span className="progress-percent">{dayPercent}%</span>
           </div>
           <div className="insights-progress-rail is-secondary" aria-hidden="true"><span style={{width:`${dayPercent}%`}} /></div>
-          {latest&&<p className="hint">Time-based refresh requires {ASSISTANT_REFRESH_MIN_AFTER_WEEK} new messages.</p>}
+          {latest&&<p className="hint">Refresh after {ASSISTANT_REFRESH_MIN_AFTER_WEEK} new messages and 7 days.</p>}
         </section>
       </div>
-      {loading&&<p className="hint">Loading saved Assistant suggestions…</p>}
+      {loading&&<p className="hint">Loading Assistant Insights…</p>}
       {error&&<p className="error" role="alert">{error}</p>}
       {notice&&<p className="insights-notice" role="status">{notice}</p>}
-      <section className="insights-suggestion-summary">
-        <h2>{pending.length} suggestion{pending.length===1?"":"s"} to review</h2>
-        <div className="stat-row">
-          {KINDS.map(kind=><div className="stat-cell" key={kind}>
-            <p className="stat-value">{pending.filter(c=>c.kind===kind).length}</p>
-            <p className="stat-label">{LABELS[kind]}</p>
-          </div>)}
-        </div>
-      </section>
+    </div>
+  );
 
-      {!pending.length&&!loading&&(
-        <p className="hint">No pending Assistant suggestions. Analyze saved conversations to look for grounded patterns.</p>
-      )}
+  // Dictation and Assistant recommendations share the same Suggestions tab,
+  // card layout, buttons and review model. They keep distinct storage/actions.
+  return (
+    <div className="insights-stack">
+      {loading&&<p className="hint">Loading Assistant suggestions…</p>}
+      {error&&<p className="error" role="alert">{error}</p>}
+      {notice&&<p className="insights-notice" role="status">{notice}</p>}
       {KINDS.map(kind=>{
-        const group=pending.filter(c=>c.kind===kind);
-        return group.length?<section key={kind} className="insight-candidate-group">
-          <h2>{LABELS[kind]}</h2>
+        const group=pending.filter(candidate=>candidate.kind===kind);
+        if(!group.length)return null;
+        const maximum=Math.max(1,...group.map(candidate=>candidate.evidenceMessageIds.length));
+        return <section key={kind} className="insight-candidate-group"
+          aria-labelledby={`assistant-${kind}-heading`}>
+          <div className="insight-group-heading">
+            <h2 id={`assistant-${kind}-heading`}>Assistant · {LABELS[kind]}</h2>
+            <span>{group.length}</span>
+          </div>
           <div className="insight-candidate-grid">
             {group.map(candidate=>(
               <article key={candidate.id} className="insight-candidate-card">
-                <h3>{candidate.title}</h3>
-                <p className="candidate-reason">{candidate.reason}</p>
-                <p className="hint">Evidence: {candidate.evidenceMessageIds.length} saved user messages.</p>
-                <button type="button" className="secondary" disabled={busy!==null}
-                  onClick={()=>void showEvidence(candidate)}>
-                  {evidence?.id===candidate.id?"Hide source messages":"Review source messages"}
-                </button>
-                {evidence?.id===candidate.id&&(
-                  <div className="insights-stack">
-                    {evidence.items.length?evidence.items.map(item=><blockquote key={item.messageId}>
-                      <p>{item.text}</p>
-                      <p className="hint">{new Date(item.createdAt).toLocaleString()} · Saved user message</p>
-                    </blockquote>):<p className="hint">Those messages are outside the current bounded sample or no longer available. Re-analyze to refresh source references.</p>}
-                  </div>
-                )}
-                <p><strong>Proposed improvement:</strong> {candidate.nextStep}</p>
-                {candidate.kind==="workflow"&&(
+                <div className="insights-heading-row">
                   <div>
-                    <h4>Proposed personal workflow</h4>
-                    <ol>{candidate.proposedSteps.map((step,i)=><li key={i}>{step}</li>)}</ol>
-                    {editing?.id===candidate.id?(
-                      <div className="insights-stack">
-                        <label>Draft name
-                          <input value={editing.title}
-                            onChange={event=>setEditing({...editing,title:event.currentTarget.value})}/>
-                        </label>
-                        <label>Draft steps (one per line, 2–8)
-                          <textarea rows={5} value={editing.steps}
-                            onChange={event=>setEditing({...editing,steps:event.currentTarget.value})}/>
-                        </label>
-                        <button type="button" disabled={busy!==null} onClick={()=>void saveWorkflow(candidate)}>Save personal draft</button>
-                        <button type="button" className="secondary" onClick={()=>setEditing(null)}>Cancel edit</button>
-                      </div>
-                    ):<button type="button" disabled={busy!==null}
-                      onClick={()=>setEditing({id:candidate.id,title:candidate.title,steps:candidate.proposedSteps.join("\n")})}>Review and save draft</button>}
+                    <p className="candidate-kind">Assistant · {LABELS[candidate.kind]}</p>
+                    <h3>{candidate.title}</h3>
                   </div>
-                )}
-                {candidate.kind!=="workflow"&&<button type="button" disabled={busy!==null}
-                  onClick={()=>void update(candidate,"saved")}>Save suggestion for review</button>}
-                <button type="button" className="secondary" disabled={busy!==null}
-                  onClick={()=>void update(candidate,"dismissed")}>Dismiss</button>
-                <button type="button" className="secondary" disabled={busy!==null}
-                  onClick={()=>void update(candidate,"muted")}>Don't suggest again</button>
+                </div>
+                <div className="candidate-evidence">
+                  <div className="candidate-evidence-head">
+                    <span>{candidate.evidenceMessageIds.length} saved messages</span>
+                    <span>evidence</span>
+                  </div>
+                  <div className="candidate-evidence-rail" aria-hidden="true">
+                    <span style={{width:`${Math.max(10,Math.round(candidate.evidenceMessageIds.length/maximum*100))}%`}} />
+                  </div>
+                </div>
+                <p className="candidate-reason">{candidate.reason}</p>
+                <details className="candidate-details">
+                  <summary>Suggested improvement</summary>
+                  <p>{candidate.nextStep}</p>
+                  {candidate.kind==="workflow"&&<ol className="insights-suggested-steps">
+                    {candidate.proposedSteps.map((step,i)=><li key={i}>{step}</li>)}
+                  </ol>}
+                </details>
+                <details className="candidate-details">
+                  <summary>Review source messages</summary>
+                  <div className="insights-suggestion-disclosure">
+                    <button type="button" className="secondary"
+                      disabled={busy!==null} onClick={()=>void showEvidence(candidate)}>
+                      {evidence?.id===candidate.id?"Hide messages":"Load saved messages"}
+                    </button>
+                    {evidence?.id===candidate.id&&(
+                      evidence.items.length?evidence.items.map(item=><blockquote key={item.messageId}>
+                        <p>{item.text}</p>
+                        <span className="candidate-evidence-head">{new Date(item.createdAt).toLocaleString()}</span>
+                      </blockquote>):<p className="candidate-reason">
+                        Source messages are no longer within the recent sample or are unavailable.
+                      </p>
+                    )}
+                  </div>
+                </details>
+                {editing?.id===candidate.id&&<div className="insights-draft-editor">
+                  <label>Draft name
+                    <input value={editing.title}
+                      onChange={event=>setEditing({...editing,title:event.currentTarget.value})}/>
+                  </label>
+                  <label>Draft steps (one per line, 2–8)
+                    <textarea rows={5} value={editing.steps}
+                      onChange={event=>setEditing({...editing,steps:event.currentTarget.value})}/>
+                  </label>
+                  <div className="candidate-actions">
+                    <button type="button" className="record" disabled={busy!==null}
+                      onClick={()=>void saveWorkflow(candidate)}>{busy===candidate.id?"Saving…":"Save draft"}</button>
+                    <button type="button" className="secondary" disabled={busy!==null}
+                      onClick={()=>setEditing(null)}>Cancel</button>
+                  </div>
+                </div>}
+                {editing?.id!==candidate.id&&<div className="candidate-actions">
+                  <button type="button" className="record" disabled={busy!==null}
+                    onClick={candidate.kind==="workflow"
+                      ?()=>setEditing({id:candidate.id,title:candidate.title,steps:candidate.proposedSteps.join("\n")})
+                      :()=>void update(candidate,"saved")}>
+                    {busy===candidate.id?"Saving…":candidate.kind==="workflow"?"Review and save draft":"Save for review"}
+                  </button>
+                  <button type="button" className="secondary" disabled={busy!==null}
+                    onClick={()=>void update(candidate,"dismissed")}>Dismiss</button>
+                </div>}
+                <details className="candidate-details">
+                  <summary>More options</summary>
+                  <div className="insights-suggestion-disclosure">
+                    <button type="button" className="secondary" disabled={busy!==null}
+                      onClick={()=>void update(candidate,"muted")}>Don't suggest again</button>
+                  </div>
+                </details>
               </article>
             ))}
           </div>
-        </section>:null;
+        </section>;
       })}
       {!!display.drafts.length&&<section className="insight-candidate-group">
-        <h2>Personal Playbook drafts ({display.drafts.length})</h2>
-        <p className="hint">These are account-owned draft proposals, separate from system tool playbooks. Steps can be reviewed before saving; execution, scheduling, and post-save editing are not yet enabled.</p>
-        {display.drafts.map(d=><article className="insight-candidate-card" key={d.id}>
-          <h3>{d.title}</h3>
-          <ol>{d.steps.map((step,i)=><li key={i}>{step}</li>)}</ol>
-        </article>)}
+        <div className="insight-group-heading">
+          <h2>Saved personal playbook drafts</h2><span>{display.drafts.length}</span>
+        </div>
+        <div className="insight-candidate-grid">
+          {display.drafts.map(draft=><article key={draft.id} className="insight-candidate-card">
+            <p className="candidate-kind">Assistant · Draft</p>
+            <h3>{draft.title}</h3>
+            <details className="candidate-details">
+              <summary>Draft steps</summary>
+              <ol className="insights-suggested-steps">{draft.steps.map((step,i)=><li key={i}>{step}</li>)}</ol>
+            </details>
+            <p className="candidate-reason">Saved for review. This draft cannot execute or schedule actions.</p>
+          </article>)}
+        </div>
       </section>}
-      {!!saved.filter(c=>c.kind!=="workflow").length&&<section className="insight-candidate-group">
-        <h2>Saved adaptation and goal suggestions</h2>
-        <p className="hint">Saved for later review; preferences, memory and goals have not been changed automatically.</p>
-        {saved.filter(c=>c.kind!=="workflow").map(c=><article className="insight-candidate-card" key={c.id}>
-          <h3>{c.title}</h3><p>{c.nextStep}</p>
-        </article>)}
+      {!!saved.filter(candidate=>candidate.kind!=="workflow").length&&<section className="insight-candidate-group">
+        <div className="insight-group-heading"><h2>Saved Assistant suggestions</h2></div>
+        <div className="insight-candidate-grid">
+          {saved.filter(candidate=>candidate.kind!=="workflow").map(candidate=>
+            <article key={candidate.id} className="insight-candidate-card">
+              <p className="candidate-kind">Assistant · {LABELS[candidate.kind]}</p>
+              <h3>{candidate.title}</h3>
+              <p className="candidate-reason">{candidate.nextStep}</p>
+            </article>)}
+        </div>
       </section>}
     </div>
   );
