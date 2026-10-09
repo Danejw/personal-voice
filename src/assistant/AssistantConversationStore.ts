@@ -42,6 +42,8 @@ export type AssistantSaveState = "idle" | "saving" | "saved" | "retry";
 export interface AssistantLibraryConversation {
   id: string;
   title: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AssistantLibrarySnapshot {
@@ -607,7 +609,7 @@ export class AssistantConversationStore {
       this.conversations = rows.map((row) => {
         this.ensured.add(row.id);
         if (!this.titles.has(row.id)) this.titles.set(row.id, row.title);
-        return { id: row.id, title: this.titles.get(row.id) ?? row.title };
+        return { id: row.id, title: this.titles.get(row.id) ?? row.title, createdAt: row.createdAt, updatedAt: row.updatedAt };
       });
       this.offlineCopy = false;
       this.rememberCache(userId);
