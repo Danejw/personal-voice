@@ -1238,6 +1238,7 @@ export default function App() {
                     store={assistantMemory}
                     snapshot={assistantMemorySnapshot}
                     signedIn={signedIn}
+                    userId={auth.userId}
                     learning={sync.data.settings.assistantMemoryLearning}
                     onLearningChange={(enabled) => { personalSync.updateSettings({ assistantMemoryLearning: enabled }); }}
                   />
