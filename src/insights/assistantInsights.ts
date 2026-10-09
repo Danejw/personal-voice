@@ -31,6 +31,14 @@ export interface AssistantInsightRun {
   createdAt: string;
   userMessageCount: number;
   conversationCount: number;
+  /** A persistent, sample-grounded communication-style narrative, not inferred demographics. */
+  voiceProfile: string | null;
+  communicationTips: string[];
+}
+export interface AssistantInsightAnalysis {
+  voiceProfile: string;
+  communicationTips: string[];
+  candidates: AssistantInsightProposal[];
 }
 export type AssistantInsightProposal = Omit<AssistantInsightCandidate, "id" | "status" | "createdAt">;
 
@@ -41,6 +49,19 @@ const isKind = (value: unknown): value is AssistantInsightKind => kinds.some(k=>
 const isStatus = (value: unknown): value is AssistantInsightStatus => statuses.some(k=>k===value);
 const plain = (x:unknown,max:number):string => typeof x==="string" ? x.trim().slice(0,max) : "";
 const isUuid = (s:unknown):s is string => typeof s==="string" && UUID.test(s);
+
+/** Profiles and workflow candidates share a single explicit model analysis.
+ * Old deployments without a profile are rejected rather than recording an empty latest run.
+ */
+export function parseAssistantAnalysis(raw:unknown,samples:readonly AssistantInsightSample[]):AssistantInsightAnalysis {
+  if(!raw||typeof raw!=="object"||Array.isArray(raw))throw new Error("Assistant analysis returned invalid data.");
+  const row=raw as Record<string,unknown>;
+  const voiceProfile=plain(row.voiceProfile,6000);
+  if(voiceProfile.length<40)throw new Error("Assistant profile is unavailable. Deploy the updated assistant-insights Edge Function.");
+  const communicationTips=Array.isArray(row.communicationTips)
+    ?row.communicationTips.map(t=>plain(t,220)).filter(t=>t.length>=8).slice(0,4):[];
+  return {voiceProfile,communicationTips,candidates:parseAssistantProposals(raw,samples)};
+}
 
 export function candidateFingerprint(kind:AssistantInsightKind,title:string):string {
   const slug=title.toLocaleLowerCase().normalize("NFKC").replace(/[^a-z0-9 ]/g," ")
