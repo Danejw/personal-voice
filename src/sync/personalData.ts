@@ -11,7 +11,8 @@ export interface SyncedSettings {
   cloudDictationHistory: boolean;
   /**
    * When true, finalized Assistant user lines saved after the switch may become memories.
-   * Off until the user opts in. This is not consent to read dictation history.
+   * Enabled for new accounts. Existing users retain their saved preference.
+   * This is not consent to read dictation history.
    */
   assistantMemoryLearning: boolean;
   /**
@@ -40,7 +41,7 @@ export const DEFAULT_SETTINGS: SyncedSettings = {
   usageIntelligence: true,
   usageEpoch: 0,
   cloudDictationHistory: false,
-  assistantMemoryLearning: false,
+  assistantMemoryLearning: true,
 };
 export const EMPTY_PERSONAL_DATA: PersonalData = { settings: DEFAULT_SETTINGS, terms: [] };
 
