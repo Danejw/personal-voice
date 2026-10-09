@@ -8,7 +8,7 @@ import type {
   AssistantInsightCandidate,AssistantInsightRun,AssistantInsightSample,PersonalPlaybookDraft,
 } from "@/insights/assistantInsights";
 
-interface Props {active:boolean;userId:string|null;}
+interface Props {active:boolean;userId:string|null;refreshToken:number;}
 type Snapshot={
   candidates:AssistantInsightCandidate[];drafts:PersonalPlaybookDraft[];
   lastRun:AssistantInsightRun|null;
@@ -17,7 +17,7 @@ const EMPTY:Snapshot={candidates:[],drafts:[],lastRun:null};
 const LABELS={workflow:"Personal workflow",adaptation:"Assistant adaptation",goal:"Goal / productivity"} as const;
 const KINDS=["workflow","adaptation","goal"] as const;
 
-export function AssistantInsightsPanel({active,userId}:Props) {
+export function AssistantInsightsPanel({active,userId,refreshToken}:Props) {
   const [snapshot,setSnapshot]=useState<Snapshot>(EMPTY);
   const [loadedFor,setLoadedFor]=useState<string|null>(null);
   const [readiness,setReadiness]=useState<AssistantInsightReadiness|null>(null);
@@ -47,7 +47,7 @@ export function AssistantInsightsPanel({active,userId}:Props) {
       setLoading(false);setError(reason instanceof Error?reason.message:"Could not load Assistant Insights.");
     });
     return ()=>{cancelled=true;};
-  },[active,userId,refresh]);
+  },[active,userId,refresh,refreshToken]);
   useEffect(()=>{
     if(!active||!userId)return;
     const update=()=>setRefresh(count=>count+1);
