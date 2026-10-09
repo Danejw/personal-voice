@@ -593,6 +593,7 @@ export class AssistantConversationStore {
       sourceDeviceId: this.deviceId(userId),
       turn,
       fence: turn.role === "assistant" ? this.fence : null,
+      sessionId: this.activeSession?.id ?? null,
     });
     if (!item) return;
     this.pending = enqueuePending(this.pending, item);
@@ -855,6 +856,9 @@ export class AssistantConversationStore {
     const result = await this.api.append(userId, messageInput(latest));
     if (result.message.id !== latest.message.id || result.message.conversationId !== latest.conversationId) {
       throw new Error("Saved conversation acknowledgement did not match the queued message.");
+    }
+    if (latest.message.sessionId && this.api.linkMessageSession) {
+      await this.api.linkMessageSession(userId, latest.message.id, latest.message.sessionId);
     }
     if (this.deleted.has(item.conversationId)) {
       await this.api.delete(userId, item.conversationId);
