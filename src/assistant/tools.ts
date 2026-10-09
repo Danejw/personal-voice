@@ -1,4 +1,5 @@
 import { selectionPreview } from "@/assistant/selectionContext";
+import type { NoteImageSource } from "@/assistant/noteAttachment";
 import { parseMemoryCommand, type MemoryCommand } from "@/assistant/memory";
 import { isRemoteKind, type RemoteKind } from "@/assistant/remoteContext";
 import {
@@ -28,6 +29,8 @@ import { isToolPlaybookId, TOOL_PLAYBOOK_IDS, type ToolPlaybookId } from "@/assi
  * that focus is gone, so a replace would write into the wrong place.
  */
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const ASSISTANT_TOOL_TEXT_LIMIT = 8_000;
 
 const TEXT = {
@@ -50,8 +53,8 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "create_voice_note",
-      description: "Save text as a note on the user's account. Call this when the user asks to save a note. Do not ask them to click. Do not say notes are unavailable.",
-      parameters: { type: "object", properties: { text: TEXT }, required: ["text"] },
+      description: "Save text as a new note. When the user explicitly asks to attach an image, first call capture_screen or capture_camera_photo, then set attachment_source to screenshot or camera_photo. Never assume an image was captured; the current still is uploaded privately only after confirmation.",
+      parameters: { type: "object", properties: { text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo"], description: "Optional current captured still to attach. Omit for text-only notes." } }, required: ["text"] },
     },
     {
       name: "list_voice_notes",
@@ -162,8 +165,16 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "edit_voice_note",
-      description: "Edit an existing note by id obtained from list_voice_notes. Replaces its full text, with confirmation.",
-      parameters: { type: "object", properties: { id: { type: "string" }, text: TEXT }, required: ["id", "text"] },
+      description: "Replace full text of a note selected from list_voice_notes. Optionally attach the currently captured screenshot or camera photo when the user requests it; capture first. The existing note attachments remain intact. Requires confirmation.",
+      parameters: { type: "object", properties: { id: { type: "string" }, text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo"] } }, required: ["id", "text"] },
+    },
+    {
+      name: "attach_image_to_voice_note",
+      description: "Attach a captured screenshot or camera still to an existing saved note without changing its text. First capture_screen or capture_camera_photo, then list_voice_notes to select the note id. Requires confirmation. Cannot read arbitrary disk paths.",
+      parameters: { type: "object", properties: {
+        id: { type: "string", description: "Existing note id from list_voice_notes." },
+        attachment_source: { type: "string", enum: ["screenshot", "camera_photo"] },
+      }, required: ["id", "attachment_source"] },
     },
     {
       name: "create_transform",
@@ -303,13 +314,29 @@ export function assistantFunctionDeclarations() {
         query: { type: "string", description: "Optional keyword or phrase (up to 160 characters). Omit to browse the most recent conversations." },
         cursor: { type: "string", description: "Optional next_cursor from a previous result to browse older conversations." },
         count: { type: "integer", description: "Number of most-recent conversations to scan on this page, between 1 and 20. Use 5 for the previous five. Default 20." },
+        archived_only: { type: "boolean", description: "Browse archived threads rather than active ones; archived messages remain retrievable." },
       } },
     },
     {
       name: "read_past_conversation",
-      description: "Read the latest saved user and assistant messages in a selected prior conversation. First get its id from list_past_conversations. This does not change or continue that thread. Cite uncertainty when text is shortened.",
+      description: "Read complete, unshortened saved messages in chronological pages. First get the conversation id from list_past_conversations. Use next_after_seq to retrieve the next page, optionally scoped to a session id or UTC date range. This never resumes or changes the conversation.",
       parameters: { type: "object", properties: {
         conversation_id: { type: "string", description: "Exact conversation id returned by list_past_conversations." },
+        after_seq: { type: "integer", description: "Cursor from next_after_seq, default 0." },
+        count: { type: "integer", description: "Messages in this page, 1-20, default 5. Text is unshortened." },
+        session_id: { type: "string", description: "Optional session ID from list_conversation_sessions." },
+        from_utc: { type: "string", description: "Optional UTC ISO time inclusive. Pages still use sequence pagination." },
+        to_utc: { type: "string", description: "Optional UTC ISO time inclusive." },
+      }, required: ["conversation_id"] },
+    },
+    {
+      name: "list_conversation_sessions",
+      description: "List dated Assistant sessions inside one continuous saved conversation, including session IDs, device, start/end times and interruption status. Use the session id in read_past_conversation to inspect that session.",
+      parameters: { type: "object", properties: {
+        conversation_id: { type: "string" },
+        count: { type: "integer", description: "1-50 sessions; default 20." },
+        before_started_at: { type: "string", description: "Optional UTC timestamp from next_cursor." },
+        before_id: { type: "string", description: "Optional session_id from next_cursor; supply with before_started_at." },
       }, required: ["conversation_id"] },
     },
     {
@@ -415,6 +442,7 @@ export type ConfirmToolName =
   | "update_snippet"
   | "send_remote_dictation"
   | "edit_voice_note"
+  | "attach_image_to_voice_note"
   | "create_transform"
   | "add_dictionary_word"
   | "send_handoff"
@@ -451,8 +479,11 @@ export type ToolDecision =
   | { kind: "snippets"; id: string; name: "list_snippets" }
   | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
   | { kind: "dashboard"; id: string; name: "read_usage_analytics" | "read_insights" }
-  | { kind: "conversations"; id: string; name: "list_past_conversations"; query: string; cursor: string | null; count: number }
-  | { kind: "conversationRead"; id: string; name: "read_past_conversation"; conversationId: string }
+  | { kind: "conversations"; id: string; name: "list_past_conversations"; query: string; cursor: string | null; count: number; archivedOnly: boolean }
+  | { kind: "conversationRead"; id: string; name: "read_past_conversation"; conversationId: string;
+      afterSeq: number; count: number; sessionId: string | null; from: string | null; to: string | null }
+  | { kind: "conversationSessions"; id: string; name: "list_conversation_sessions"; conversationId: string;
+      count: number; before: {startedAt: string; id: string} | null }
   | { kind: "conversationContinue"; id: string; name: "continue_past_conversation"; conversationId: string }
   | { kind: "memories"; id: string; name: "list_memories" }
   | { kind: "memorySearch"; id: string; name: "search_memory"; query: string }
@@ -575,14 +606,43 @@ export function decideToolCall(
       return { kind: "conversations", id: call.id, name: "list_past_conversations",
         query: typeof args.query === "string" ? args.query.trim() : "",
         cursor: typeof args.cursor === "string" && args.cursor ? args.cursor : null,
-        count: typeof args.count === "number" ? args.count : 20 };
+        count: typeof args.count === "number" ? args.count : 20, archivedOnly: args.archived_only === true };
     }
     case "read_past_conversation": {
       const conversationId = args.conversation_id;
       if (typeof conversationId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(conversationId)) {
         return { kind: "reject", id: call.id, name: call.name, message: "Provide a valid conversation id from list_past_conversations." };
       }
-      return { kind: "conversationRead", id: call.id, name: "read_past_conversation", conversationId };
+      const afterSeq = args.after_seq === undefined ? 0 : args.after_seq;
+      const count = args.count === undefined ? 5 : args.count;
+      const sessionId = args.session_id ?? null;
+      const from = args.from_utc ?? null;
+      const to = args.to_utc ?? null;
+      if (!Number.isSafeInteger(afterSeq) || (afterSeq as number) < 0 ||
+          !Number.isInteger(count) || (count as number) < 1 || (count as number) > 20 ||
+          (sessionId !== null && (typeof sessionId !== "string" || !UUID_PATTERN.test(sessionId))) ||
+          (from !== null && (typeof from !== "string" || !Number.isFinite(Date.parse(from)))) ||
+          (to !== null && (typeof to !== "string" || !Number.isFinite(Date.parse(to))))) {
+        return {kind:"reject",id:call.id,name:call.name,message:"Invalid history page, date, or session ID."};
+      }
+      return { kind:"conversationRead", id:call.id, name:"read_past_conversation", conversationId,
+        afterSeq: afterSeq as number, count: count as number, sessionId: sessionId as string | null,
+        from: from as string | null, to: to as string | null };
+    }
+    case "list_conversation_sessions": {
+      const conversationId = args.conversation_id;
+      const count = args.count ?? 20;
+      const beforeAt = args.before_started_at ?? null;
+      const beforeId = args.before_id ?? null;
+      if (typeof conversationId !== "string" || !UUID_PATTERN.test(conversationId) ||
+          !Number.isInteger(count) || (count as number) < 1 || (count as number) > 50 ||
+          ((beforeAt === null) !== (beforeId === null)) ||
+          (beforeAt !== null && (typeof beforeAt !== "string" || !Number.isFinite(Date.parse(beforeAt)))) ||
+          (beforeId !== null && (typeof beforeId !== "string" || !UUID_PATTERN.test(beforeId)))) {
+        return {kind:"reject",id:call.id,name:call.name,message:"Invalid session history request."};
+      }
+      return {kind:"conversationSessions",id:call.id,name:"list_conversation_sessions",conversationId,
+        count: count as number, before: beforeAt && beforeId ? {startedAt: beforeAt as string,id: beforeId as string} : null};
     }
     case "continue_past_conversation": {
       const conversationId = args.conversation_id;
@@ -691,8 +751,22 @@ export function decideToolCall(
     case "edit_voice_note": {
       const id = readId(args);
       const body = readText(args);
-      if ("error" in id || "error" in body) return { kind: "reject", id: call.id, name: call.name, message: "error" in id ? id.error : "error" in body ? body.error : "Invalid note." };
-      return confirm(call.id, "edit_voice_note", JSON.stringify({ id: id.id, text: body.text }), "Edit this note", null, null);
+      const attachment = readNoteImageSource(args, false);
+      if ("error" in id) return { kind: "reject", id: call.id, name: call.name, message: id.error };
+      if ("error" in body) return { kind: "reject", id: call.id, name: call.name, message: body.error };
+      if ("error" in attachment) return { kind: "reject", id: call.id, name: call.name, message: attachment.error };
+      return confirm(call.id, "edit_voice_note",
+        JSON.stringify({ id: id.id, text: body.text, attachment_source: attachment.source }),
+        attachment.source ? "Edit note and attach captured image" : "Edit this note", null, null);
+    }
+    case "attach_image_to_voice_note": {
+      const id = readId(args);
+      const attachment = readNoteImageSource(args, true);
+      if ("error" in id) return { kind: "reject", id: call.id, name: call.name, message: id.error };
+      if ("error" in attachment) return { kind: "reject", id: call.id, name: call.name, message: attachment.error };
+      return confirm(call.id, "attach_image_to_voice_note",
+        JSON.stringify({ id: id.id, attachment_source: attachment.source }),
+        "Attach captured image to note", null, null);
     }
     case "create_transform": {
       if (typeof args.name !== "string" || !args.name.trim() || args.name.length > 80 || typeof args.instruction !== "string" || !args.instruction.trim() || args.instruction.length > 4000) {
@@ -757,7 +831,11 @@ export function decideToolCall(
     return confirm(call.id, "insert_text", text.text, "Insert this text into the focused app", null, null);
   }
   if (call.name === "create_voice_note") {
-    return confirm(call.id, "create_voice_note", text.text, "Save this note", null, null);
+    const attachment = readNoteImageSource(args, false);
+    if ("error" in attachment) return { kind: "reject", id: call.id, name: call.name, message: attachment.error };
+    return confirm(call.id, "create_voice_note",
+      attachment.source ? JSON.stringify({ text: text.text, attachment_source: attachment.source }) : text.text,
+      attachment.source ? "Save note with captured image" : "Save this note", null, null);
   }
   const device = readDevice(args);
   if ("error" in device) return { kind: "reject", id: call.id, name: call.name, message: device.error };
@@ -801,6 +879,14 @@ function plainArgs(value: unknown): Record<string, unknown> | null {
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+export function readNoteImageSource(args: Record<string, unknown>, required: boolean):
+  { source: NoteImageSource | null } | { error: string } {
+  const input = args.attachment_source;
+  if (input === undefined && !required) return { source: null };
+  if (input === "screenshot" || input === "camera_photo") return { source: input };
+  return { error: "Choose attachment_source screenshot or camera_photo from an already captured image." };
 }
 
 function readId(args: Record<string, unknown>): { id: string } | { error: string } {

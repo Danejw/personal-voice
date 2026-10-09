@@ -10,6 +10,7 @@ export interface ListedNote {
   text: string;
   status: "inbox" | "archived";
   createdAt: string;
+  attachments?: readonly { fileName: string }[];
 }
 
 export interface ListedHandoff {
@@ -47,7 +48,11 @@ function joinList(label: string, total: number, blocks: string[]): string {
 }
 
 function formatNote(note: ListedNote, index: number): string {
-  return `${index + 1}. id: ${note.id}\nstatus: ${note.status}\nsaved: ${note.createdAt}\n${clip(note.text)}`;
+  const files = note.attachments ?? [];
+  const attachmentLine = files.length
+    ? `\nattachments (${files.length}): ${files.slice(0, 3).map((file) => clip(file.fileName).slice(0, 80)).join(", ")}${files.length > 3 ? ", …" : ""}`
+    : "";
+  return `${index + 1}. id: ${note.id}\nstatus: ${note.status}\nsaved: ${note.createdAt}${attachmentLine}\n${clip(note.text)}`;
 }
 
 function formatHandoff(handoff: ListedHandoff, index: number): string {

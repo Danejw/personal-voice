@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { cameraPhotoToDibBase64 } from "@/assistant/cameraPhotoClipboard";
+import type { CapturedNoteImage, NoteImageSource } from "@/assistant/noteAttachment";
 import {
   screenOmittedText,
   type AssistantContinuation,
@@ -84,8 +85,9 @@ export interface AssistantSessionHandle {
 export interface AssistantActions {
   copyText(text: string): Promise<void>;
   insertText(text: string): Promise<void>;
-  createVoiceNote(text: string): Promise<void>;
-  editVoiceNote(id: string, text: string): Promise<void>;
+  createVoiceNote(text: string, image?: CapturedNoteImage): Promise<void>;
+  editVoiceNote(id: string, text: string, image?: CapturedNoteImage): Promise<void>;
+  attachImageToVoiceNote(id: string, image: CapturedNoteImage): Promise<void>;
   listSnippets(): Promise<string>;
   createSnippet(trigger: string, content: string): Promise<void>;
   updateSnippet(id: string, trigger: string, content: string): Promise<void>;
@@ -116,8 +118,9 @@ export interface AssistantActions {
   /** Active and forgotten memories for this account. */
   listMemories(): Promise<string>;
   searchMemory(query: string): Promise<string>;
-  listPastConversations(query: string, cursor: string | null, count: number): Promise<string>;
-  readPastConversation(conversationId: string): Promise<string>;
+  listPastConversations(query: string, cursor: string | null, count: number, archivedOnly?: boolean): Promise<string>;
+  readPastConversation(conversationId: string, options?: {afterSeq?:number; count?:number; sessionId?:string|null; from?:string|null; to?:string|null}): Promise<string>;
+  listPastSessions?(conversationId: string, before: {startedAt:string;id:string}|null, count:number): Promise<string>;
   checkPastConversation(conversationId: string): Promise<string>;
   continuePastConversation(conversationId: string): Promise<void>;
   rememberMemory(input: { key: string; kind: "preference" | "fact"; value: string }): Promise<string>;
@@ -243,6 +246,7 @@ export class AssistantController {
       insertText: unavailable,
       createVoiceNote: unavailable,
       editVoiceNote: unavailable,
+      attachImageToVoiceNote: unavailable,
       listSnippets: async () => { throw new Error("Snippets unavailable."); },
       createSnippet: unavailable,
       updateSnippet: unavailable,
@@ -1376,7 +1380,7 @@ export class AssistantController {
           await this.runConversationContinue(decision);
           return;
         }
-        if (decision.kind === "conversations" || decision.kind === "conversationRead") {
+        if (decision.kind === "conversations" || decision.kind === "conversationRead" || decision.kind === "conversationSessions") {
           await this.runConversationHistory(decision);
           continue;
         }
@@ -1410,6 +1414,13 @@ export class AssistantController {
             continue;
           }
         }
+        let noteImage: CapturedNoteImage | null;
+        try {
+          noteImage = this.noteImageForTool(decision);
+        } catch (error) {
+          this.replyTool(decision.id, decision.name, false, toolFailure(error));
+          continue;
+        }
         this.pending = {
           id: decision.id,
           name: decision.name,
@@ -1420,6 +1431,7 @@ export class AssistantController {
           label: decision.name === "send_handoff" ? decision.title.slice("Send this text to ".length) : null,
           remote: decision.remote,
           memory: decision.memory,
+          noteImage,
           working: false,
         };
         // Camera photos can leave the device. Always require a review card.
@@ -1439,6 +1451,10 @@ export class AssistantController {
   }
 
   private shouldAutoRun(decision: Extract<ToolDecision, {kind:"confirm"}>): boolean {
+    // Saving a private screenshot or camera photo always requires explicit consent.
+    if (decision.name === "attach_image_to_voice_note" ||
+        decision.title === "Save note with captured image" ||
+        decision.title === "Edit note and attach captured image") return false;
     if (!this.autoRun) return false;
     if (decision.name === "paste_camera_photo" || decision.name === "start_accessibility_watch") return false;
     if (decision.name === "accessibility_pattern_action") {
@@ -1477,13 +1493,19 @@ export class AssistantController {
     }
   }
 
-  private async runConversationHistory(decision: Extract<ToolDecision, { kind: "conversations" | "conversationRead" }>) {
+  private async runConversationHistory(decision: Extract<ToolDecision, { kind: "conversations" | "conversationRead" | "conversationSessions" }>) {
     const epoch = this.toolEpoch;
     const generation = this.generation;
     try {
       const answer = decision.kind === "conversations"
-        ? await this.actions.listPastConversations(decision.query, decision.cursor, decision.count)
-        : await this.actions.readPastConversation(decision.conversationId);
+        ? await this.actions.listPastConversations(decision.query, decision.cursor, decision.count, decision.archivedOnly)
+        : decision.kind === "conversationSessions"
+          ? await this.actions.listPastSessions?.(decision.conversationId, decision.before, decision.count)
+          : await this.actions.readPastConversation(decision.conversationId, {
+              afterSeq: decision.afterSeq, count: decision.count, sessionId: decision.sessionId,
+              from: decision.from, to: decision.to,
+            });
+      if (!answer) throw new Error("Session history isn't available.");
       if (epoch !== this.toolEpoch || generation !== this.generation) return;
       this.replyTool(decision.id, decision.name, true, answer);
     } catch (error) {
@@ -1883,6 +1905,21 @@ export class AssistantController {
     return invoke<string>("paste_camera_photo_image", { bitmapBase64: dib, expectedWindow });
   }
 
+  private noteImageForTool(decision: Extract<ToolDecision, {kind:"confirm"}>): CapturedNoteImage | null {
+    if (decision.name !== "create_voice_note" && decision.name !== "edit_voice_note" &&
+        decision.name !== "attach_image_to_voice_note") return null;
+    if (decision.name === "create_voice_note" && decision.title !== "Save note with captured image") return null;
+    const source = (JSON.parse(decision.text) as { attachment_source?: NoteImageSource }).attachment_source;
+    if (!source) return null;
+    const image = source === "screenshot" ? this.screenShot :
+      source === "camera_photo" ? this.cameraPhoto : null;
+    if (!image) throw new Error(source === "screenshot"
+      ? "Capture a screenshot first; there is no active screenshot to attach."
+      : "Capture a camera photo first; there is no active camera image to attach.");
+    // Pin the image to the confirmation; later captures cannot change the saved file.
+    return { source, capturedAt: image.capturedAt, jpeg: image.jpeg };
+  }
+
   private async execute(pending: ConfirmedTool): Promise<string> {
     switch (pending.name) {
       case "paste_camera_photo":
@@ -1933,8 +1970,15 @@ export class AssistantController {
       }
       case "edit_voice_note": {
         const input = JSON.parse(pending.text) as {id: string; text: string};
-        await this.actions.editVoiceNote(input.id, input.text);
-        return "Updated the note.";
+        if (pending.noteImage) await this.actions.editVoiceNote(input.id, input.text, pending.noteImage);
+        else await this.actions.editVoiceNote(input.id, input.text);
+        return pending.noteImage ? "Updated the note and attached the captured image." : "Updated the note.";
+      }
+      case "attach_image_to_voice_note": {
+        const input = JSON.parse(pending.text) as {id: string};
+        if (!pending.noteImage) throw new Error("Capture an image first.");
+        await this.actions.attachImageToVoiceNote(input.id, pending.noteImage);
+        return "Attached the captured image to the note.";
       }
       case "create_transform": {
         const input = JSON.parse(pending.text) as {name: string; instruction: string};
@@ -1944,9 +1988,12 @@ export class AssistantController {
       case "add_dictionary_word":
         await this.actions.addDictionaryWord(pending.text);
         return "Added the dictionary word.";
-      case "create_voice_note":
-        await this.actions.createVoiceNote(pending.text);
-        return "Saved the note.";
+      case "create_voice_note": {
+        const input = pending.noteImage ? (JSON.parse(pending.text) as {text: string}).text : pending.text;
+        if (pending.noteImage) await this.actions.createVoiceNote(input, pending.noteImage);
+        else await this.actions.createVoiceNote(input);
+        return pending.noteImage ? "Saved the note and its captured image." : "Saved the note.";
+      }
       case "archive_voice_note":
         await this.actions.archiveVoiceNote(pending.text, true);
         return "Archived the note.";
@@ -2111,6 +2158,7 @@ interface ConfirmedTool {
   label: string | null;
   remote: { action: RemoteComputerAction; device: string } | null;
   memory: MemoryCommand | null;
+  noteImage: CapturedNoteImage | null;
   working: boolean;
 }
 

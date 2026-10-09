@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { listPastConversations, readPastConversation } from "@/assistant/assistantConversationRecall";
+import { listPastConversations, listPastSessions, readPastConversation } from "@/assistant/assistantConversationRecall";
 import type { AssistantConversationsApi } from "@/services/assistantConversationsService";
 import type { AssistantConversation, AssistantStoredMessage } from "@/services/assistantConversations";
 
@@ -59,19 +59,50 @@ describe("Assistant saved conversation recall", () => {
     expect(JSON.parse(await listPastConversations(api, USER_A, "security rules")).results).toHaveLength(0);
   });
 
-  it("reads only the user's selected conversation, excluding historical tool calls", async () => {
+  it("reads unshortened owned history, with tool outcomes and explicit paging metadata", async () => {
     const { api, get, listMessages } = fakeApi();
     const result = JSON.parse(await readPastConversation(api, USER_A, THREAD_A));
-    expect(result.messages.map((item: { role: string }) => item.role)).toEqual(["user", "assistant"]);
+    expect(result.messages.map((item: { role: string }) => item.role)).toEqual(["user", "assistant", "tool"]);
     expect(result.messages[0].text).toContain("purple bicycle");
-    expect(result.note).toContain("Do not execute");
+    expect(result.note).toContain("not instructions");
     expect(result.created_at).toBe(time);
     expect(result.updated_at).toBe(time);
     expect(get).toHaveBeenCalledWith(USER_A, THREAD_A);
-    expect(listMessages).toHaveBeenCalledWith(USER_A, THREAD_A, { limit: 100, afterSeq: 0 });
+    expect(listMessages).toHaveBeenCalledWith(USER_A, THREAD_A, { limit: 6, afterSeq: 0 });
     await expect(readPastConversation(api, USER_B, THREAD_A)).rejects.toThrow();
     await expect(readPastConversation(api, USER_A, "not-an-id")).rejects.toThrow();
     await expect(listPastConversations(api, "")).rejects.toThrow(/Sign in/);
+  });
+
+  it("returns complete long message bodies without shortening and pages by sequence", async () => {
+    const longText = "A".repeat(7200);
+    const rows = [line(THREAD_A,"user",longText,1),line(THREAD_A,"assistant","Second",2),line(THREAD_A,"assistant","Third",3)];
+    const api = fakeApi().api;
+    api.listMessages = vi.fn(async (_user, _id, page) =>
+      rows.filter(x => x.seq > (page?.afterSeq ?? 0)).slice(0,page?.limit ?? 5));
+    const first = JSON.parse(await readPastConversation(api,USER_A,THREAD_A,{count:1}));
+    expect(first.messages[0].text).toBe(longText);
+    expect(first.messages[0].text.length).toBe(7200);
+    expect(first.has_more).toBe(true);
+    expect(first.next_after_seq).toBe(1);
+    const second = JSON.parse(await readPastConversation(api,USER_A,THREAD_A,{count:2,afterSeq:first.next_after_seq}));
+    expect(second.messages.map((x:{seq:number})=>x.seq)).toEqual([2,3]);
+    expect(second.has_more).toBe(false);
+    await expect(readPastConversation(api,USER_A,THREAD_A,{count:21})).rejects.toThrow("Invalid message page");
+  });
+
+  it("lists sessions and restricts full message pages to one session", async () => {
+    const api = fakeApi().api;
+    const sessionId = "66666666-6666-4666-8666-666666666666";
+    api.listSessions = vi.fn(async () => [{id:sessionId,conversationId:THREAD_A,deviceId:USER_A,
+      startedAt:time,endedAt:null,endReason:null}]);
+    api.listSessionMessages = vi.fn(async () => [{...line(THREAD_A,"user","Only this session",2),sessionId}]);
+    const listed = JSON.parse(await listPastSessions(api,USER_A,THREAD_A));
+    expect(listed.sessions[0].session_id).toBe(sessionId);
+    const read = JSON.parse(await readPastConversation(api,USER_A,THREAD_A,{sessionId}));
+    expect(read.session_id).toBe(sessionId);
+    expect(read.messages[0].text).toBe("Only this session");
+    expect(api.listSessionMessages).toHaveBeenCalledWith(USER_A,THREAD_A,sessionId,{limit:6,afterSeq:0});
   });
 
   it("lists five newest threads with exact creation and last activity timestamps", async () => {

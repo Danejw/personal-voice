@@ -182,6 +182,21 @@ describe("NotesStore", () => {
     expect(store.getSnapshot().notes).toEqual([]);
   });
 
+  it("creates Assistant notes with private image attachments in one workflow across devices", async () => {
+    const server = fakeServer();
+    const windows = new NotesStore(server.api, () => "device-1");
+    const android = new NotesStore(server.api, () => "device-2");
+    await Promise.all([windows.setUser("user-1"), android.setUser("user-1")]);
+    const image = new File([new Uint8Array([255, 216, 255, 217])], "screenshot.jpg", { type: "image/jpeg" });
+    await windows.create("Screenshot context.", "assistant", {}, [image]);
+    expect(windows.getSnapshot().notes[0]).toMatchObject({
+      text: "Screenshot context.", sourceType: "assistant",
+      attachments: [{fileName: "screenshot.jpg", mimeType: "image/jpeg"}],
+    });
+    await android.reload();
+    expect(android.getSnapshot().notes[0]?.attachments[0]?.fileName).toBe("screenshot.jpg");
+  });
+
   it("adds and removes arbitrary file attachments", async () => {
     const server = fakeServer();
     const store = new NotesStore(server.api, () => "device-1");

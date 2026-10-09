@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import type { AssistantLibraryConversation, AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 
 interface ConversationBarProps {
@@ -9,6 +10,8 @@ interface ConversationBarProps {
   onOpen: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onArchive?: (id: string, archived: boolean) => void;
+  onShowArchived?: (archived: boolean) => void;
   onRetry: () => void;
   onRefresh?: () => void;
   hasUnlinkedTranscript?: boolean;
@@ -28,22 +31,26 @@ export function threadTime(value?: string | null): string | null {
 }
 
 /** The conversation rail owns thread navigation, not the main transcript. */
-export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen, onRename, onDelete, onRetry, onRefresh, onLoadOlder, onDismissRecovery, hasUnlinkedTranscript = false }: ConversationBarProps) {
+export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen, onRename, onDelete, onArchive, onShowArchived, onRetry, onRefresh, onLoadOlder, onDismissRecovery, hasUnlinkedTranscript = false }: ConversationBarProps) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const visible = filterConversations(library.conversations, search);
   return (
     <aside id="assistant-threads" className="assistant-threads" aria-label="Conversation history">
       <div className="assistant-rail-heading">
-        <h3>Conversations</h3>
+        <h3>{library.archivedView ? "Archived" : "Conversations"}</h3>
         <div className="assistant-rail-heading-actions">
           <span className="assistant-rail-count">{library.conversations.length}</span>
           {signedIn && onRefresh && <button type="button" className="assistant-refresh-threads"
             aria-label="Refresh conversations" title="Refresh conversations" disabled={library.loadingThreads} onClick={onRefresh}>↻</button>}
         </div>
       </div>
+      {onShowArchived && <button type="button" className="assistant-archive-switch secondary"
+        aria-pressed={library.archivedView} onClick={() => onShowArchived(!library.archivedView)}>
+        {library.archivedView ? "← Active conversations" : "View archived"}
+      </button>}
       <button type="button" className="assistant-new-thread" disabled={!signedIn} onClick={() => { setSearch(""); onNew(); }}>
         <span aria-hidden="true">＋</span> New conversation
       </button>
@@ -58,7 +65,7 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
         {signedIn && visible.length === 0 && <p className="assistant-rail-empty" role="status">
           {library.loadingThreads ? "Loading saved conversations…" : search ? "No matching conversations." : library.error ? "Could not load saved conversations. Try Refresh." :
             hasUnlinkedTranscript ? "This transcript is not attached to a saved thread. Refresh or start a conversation to save new messages." :
-            "No saved conversations found."}
+            library.archivedView ? "No archived conversations." : "No saved conversations found."}
         </p>}
         {signedIn && <ul className="assistant-thread-list">
           {visible.map((row) => (
@@ -78,7 +85,7 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
               ) : (
                 <>
                   <button type="button" className="assistant-thread" aria-current={row.id === library.currentId ? "page" : undefined}
-                    onClick={() => { setConfirming(null); onOpen(row.id); }}>
+                    onClick={() => onOpen(row.id)}>
                     <span className="assistant-thread-icon" aria-hidden="true">▤</span>
                     <span className="assistant-thread-content">
                       <span className="assistant-thread-title">{row.title}</span>
@@ -86,17 +93,18 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
                     </span>
                   </button>
                   <div className="assistant-thread-actions">
-                    {confirming === row.id ? (
-                      <>
-                        <button type="button" className="is-danger" onClick={() => { onDelete(row.id); setConfirming(null); }}>Delete</button>
-                        <button type="button" onClick={() => setConfirming(null)}>Cancel</button>
-                      </>
-                    ) : (
-                      <>
-                        <button type="button" aria-label={`Rename ${row.title}`} onClick={() => { setEditing(row.id); setTitle(row.title); setConfirming(null); }}>✎</button>
-                        <button type="button" aria-label={`Delete ${row.title}`} onClick={() => { setConfirming(row.id); setEditing(null); }}>×</button>
-                      </>
-                    )}
+                    <button type="button" aria-label={`Rename ${row.title}`} onClick={() => { setEditing(row.id); setTitle(row.title); }}>✎</button>
+                    {onArchive && <button type="button" aria-label={library.archivedView ? `Restore ${row.title}` : `Archive ${row.title}`}
+                      onClick={() => onArchive(row.id, !library.archivedView)}
+                      title={library.archivedView ? "Restore thread" : "Archive without deleting"}>
+                      {library.archivedView ? "↩" : "▣"}
+                    </button>}
+                    {library.archivedView && <button type="button" aria-label={`Permanently delete ${row.title}`} onClick={() => confirm.ask({
+                      title: "Permanently delete conversation?",
+                      description: `“${row.title}” and its saved messages will be permanently deleted. Archiving is the safer option.`,
+                      confirmLabel: "Permanently delete",
+                      onConfirm: () => onDelete(row.id),
+                    })}>×</button>}
                   </div>
                 </>
               )}
@@ -123,13 +131,19 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
         )}
         {library.recovery.map((line) => (
           <p key={line.id} className="note-meta">Unsynced message: {line.text.slice(0, 100)}
-            <button type="button" className="secondary" onClick={() => onDismissRecovery?.(line.id)}>Dismiss</button>
+            <button type="button" className="secondary" onClick={() => confirm.ask({
+              title: "Discard unsynced message?",
+              description: "This message has not been saved to your account. Dismissing this recovery copy may permanently lose its text.",
+              confirmLabel: "Discard message",
+              onConfirm: () => onDismissRecovery?.(line.id),
+            })}>Dismiss</button>
           </p>
         ))}
         {library.summaryNote && <p className="note-meta">{library.summaryNote}</p>}
         {library.unavailableScreenshots.length > 0 && <p className="note-meta">Some screenshots are unavailable on this device.</p>}
         {library.error && library.save !== "retry" && <p className="error" role="alert">{library.error}</p>}
       </div>
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </aside>
   );
 }

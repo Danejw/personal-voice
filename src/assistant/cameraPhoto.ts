@@ -1,6 +1,6 @@
 /**
  * One explicit camera still for Assistant. Separate from screen screenshots.
- * JPEG stays in memory only; never written to conversations, memories, or storage.
+ * JPEG stays in memory by default; an explicitly confirmed note attachment may store a private copy.
  */
 
 import {

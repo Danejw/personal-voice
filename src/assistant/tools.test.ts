@@ -44,6 +44,7 @@ describe("assistant tool schema", () => {
       "inspect_active_app",
       "send_remote_dictation",
       "edit_voice_note",
+      "attach_image_to_voice_note",
       "create_transform",
       "add_dictionary_word",
       "read_usage_analytics",
@@ -69,6 +70,7 @@ describe("assistant tool schema", () => {
       "supervise_screen",
       "list_past_conversations",
       "read_past_conversation",
+      "list_conversation_sessions",
       "continue_past_conversation",
       "list_memories",
       "search_memory",
@@ -83,6 +85,32 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
   });
 
+  it("validates note image source and keeps old text-only calls compatible", () => {
+    expect(decideToolCall({id: "new", name: "create_voice_note",
+      args: {text: "Bug report", attachment_source: "screenshot"}}, plan)).toMatchObject({
+      kind: "confirm", name: "create_voice_note", title: "Save note with captured image",
+      text: JSON.stringify({text: "Bug report", attachment_source: "screenshot"}),
+    });
+    expect(decideToolCall({id: "edit", name: "edit_voice_note",
+      args: {id: "note-1", text: "Updated", attachment_source: "camera_photo"}}, plan)).toMatchObject({
+      kind: "confirm", name: "edit_voice_note", title: "Edit note and attach captured image",
+    });
+    expect(decideToolCall({id: "attach", name: "attach_image_to_voice_note",
+      args: {id: "note-1", attachment_source: "screenshot"}}, plan)).toMatchObject({
+      kind: "confirm", name: "attach_image_to_voice_note",
+      text: JSON.stringify({id: "note-1", attachment_source: "screenshot"}),
+    });
+    for (const bad of ["file:///etc/passwd", "camera", "screenshot.png", "", null]) {
+      expect(decideToolCall({id: "bad", name: "attach_image_to_voice_note",
+        args: {id: "note-1", attachment_source: bad}}, plan)).toMatchObject({kind: "reject"});
+    }
+    expect(decideToolCall({id: "missing", name: "attach_image_to_voice_note", args: {id: "note-1"}}, plan)).toMatchObject({kind: "reject"});
+    expect(decideToolCall({id: "bad", name: "create_voice_note",
+      args: {text: "Keep", attachment_source: "local_file"}}, plan)).toMatchObject({kind: "reject"});
+    expect(decideToolCall({id: "plain", name: "create_voice_note", args: {text: "Keep"}}, plan))
+      .toMatchObject({kind: "confirm", text: "Keep", title: "Save this note"});
+  });
+
   it("routes mouse pointer inspection read-only, rejecting missing tool ids", () => {
     expect(decideToolCall({ id: "pointer-1", name: "inspect_pointer_context", args: {} }, plan))
       .toEqual({ kind: "pointer", id: "pointer-1", name: "inspect_pointer_context" });
@@ -95,13 +123,14 @@ describe("assistant tool schema", () => {
   it("validates read-only, account-scoped prior conversation tool calls", () => {
     const id = "33333333-3333-4333-8333-333333333333";
     expect(decideToolCall({ id: "list", name: "list_past_conversations", args: { query: "bike" } }, plan))
-      .toEqual({ kind: "conversations", id: "list", name: "list_past_conversations", query: "bike", cursor: null, count: 20 });
+      .toEqual({ kind: "conversations", id: "list", name: "list_past_conversations", query: "bike", cursor: null, count: 20, archivedOnly: false });
     expect(decideToolCall({ id: "last-five", name: "list_past_conversations", args: { count: 5 } }, plan))
       .toMatchObject({ kind: "conversations", count: 5, query: "" });
     expect(decideToolCall({ id: "bad-count", name: "list_past_conversations", args: { count: 21 } }, plan).kind)
       .toBe("reject");
     expect(decideToolCall({ id: "read", name: "read_past_conversation", args: { conversation_id: id } }, plan))
-      .toEqual({ kind: "conversationRead", id: "read", name: "read_past_conversation", conversationId: id });
+      .toEqual({ kind: "conversationRead", id: "read", name: "read_past_conversation", conversationId: id,
+        afterSeq: 0, count: 5, sessionId: null, from: null, to: null });
     expect(decideToolCall({ id: "resume", name: "continue_past_conversation", args: { conversation_id: id } }, plan))
       .toEqual({ kind: "conversationContinue", id: "resume", name: "continue_past_conversation", conversationId: id });
     expect(decideToolCall({ id: "wrong", name: "continue_past_conversation", args: { conversation_id: "invalid" } }, plan).kind)

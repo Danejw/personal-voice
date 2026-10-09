@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import type { FormEvent } from "react";
 import type { PersonalSyncStore, SyncSnapshot, SyncStatus as Status } from "@/sync/PersonalSyncStore";
 import { readOnlyReason } from "@/sync/SyncStatus";
@@ -52,6 +53,7 @@ export function DictionaryToolbar({ store, sync }: Pick<DictionaryPanelProps, "s
 export function DictionaryPanel({ store, sync, termUsage = {} }: DictionaryPanelProps) {
   const [draft, setDraft] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const { terms } = sync.data;
   const readOnly = readOnlyReason(sync.status);
   const editable = !readOnly;
@@ -91,7 +93,12 @@ export function DictionaryPanel({ store, sync, termUsage = {} }: DictionaryPanel
               </label>
               <button
                 type="button" className="term-delete" aria-label={`Delete ${entry.term}`} disabled={!editable}
-                onClick={() => setProblem(store.removeTerm(entry.id))}
+                onClick={() => confirm.ask({
+                  title: "Delete dictionary term?",
+                  description: `“${entry.term}” will be removed from your dictionary and will no longer help dictation recognition.`,
+                  confirmLabel: "Delete term",
+                  onConfirm: () => { const failure = store.removeTerm(entry.id); setProblem(failure); if (failure) throw new Error(failure); },
+                })}
               >
                 ×
               </button>
@@ -101,6 +108,7 @@ export function DictionaryPanel({ store, sync, termUsage = {} }: DictionaryPanel
       ) : (
         <p className="placeholder">No terms yet.</p>
       )}
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </>
   );
 }

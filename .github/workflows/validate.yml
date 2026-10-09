@@ -63,7 +63,20 @@ jobs:
       - name: Android SDK packages
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" "$ANDROID_PLATFORM" >/dev/null
+          # The SDK CDN occasionally returns truncated/corrupt NDK ZIP archives.
+          # Retry only the installation, clearing the failed download between attempts.
+          for attempt in 1 2 3; do
+            if "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" "$ANDROID_PLATFORM" >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Android SDK packages failed after three attempts"
+              exit 1
+            fi
+            echo "::warning::SDK download failed; retrying attempt $((attempt + 1)) of 3"
+            rm -rf "$ANDROID_HOME/ndk/$NDK_VERSION" "$HOME/.android/cache"
+            sleep 8
+          done
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - name: Build Android debug APK

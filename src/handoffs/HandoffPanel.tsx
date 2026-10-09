@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import { acceptContinuation, classifyHandoffText, handoffDisplayText, type AssistantContinuation } from "@/assistant/continuation";
 import { HoverActionItem } from "@/components/HoverActionItem";
 import { Tooltip } from "@/components/Tooltip";
@@ -75,6 +76,7 @@ export function HandoffPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const [draftTransformOpen, setDraftTransformOpen] = useState(false);
   const [transformingId, setTransformingId] = useState<string | null>(null);
   const connected = snapshot.status === "synced";
@@ -117,7 +119,12 @@ export function HandoffPanel({
   }
 
   function dismiss(handoff: Handoff) {
-    void run(`dismiss:${handoff.id}`, () => store.consume(handoff.id));
+    confirm.ask({
+      title: "Dismiss handoff?",
+      description: "This received handoff will be removed from the inbox. Make sure you have copied or inserted anything you want to keep.",
+      confirmLabel: "Dismiss handoff",
+      onConfirm: () => run(`dismiss:${handoff.id}`, () => store.consume(handoff.id)),
+    });
   }
 
   function attach(handoff: Handoff) {
@@ -260,6 +267,7 @@ export function HandoffPanel({
           <p className="placeholder">No received text.</p>
         )}
       </div>
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </>
   );
 }
