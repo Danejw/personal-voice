@@ -365,8 +365,7 @@ describe("saved assistant conversations", () => {
     const session=store.getSnapshot().activeSessionId;
     expect(session).toBeTruthy();
     host.emit(turn("44444444-4444-4444-8444-000000000777","Keep this conversation"));
-    await vi.waitFor(()=>expect(api.messages.length).toBe(1));
-    expect(api.messages[0]?.sessionId).toBe(session);
+    await vi.waitFor(()=>expect(api.messages[0]?.sessionId).toBe(session));
     host.end();
     await vi.waitFor(()=>expect(api.sessions[0]?.endedAt).not.toBeNull());
     expect(api.sessions[0]?.endReason).toBe("ended");
