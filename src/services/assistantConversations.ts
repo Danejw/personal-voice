@@ -41,6 +41,7 @@ export interface AssistantCitation {
 /** One saved thread. Tombstones are not returned. Lease fields stay empty until a later phase. */
 export interface AssistantConversation {
   id: string;
+  archivedAt: string | null;
   title: string;
   revision: number;
   createdAt: string;
@@ -54,6 +55,7 @@ export interface AssistantConversation {
 
 export interface AssistantStoredMessage {
   id: string;
+  sessionId: string | null;
   conversationId: string;
   role: AssistantMessageRole;
   status: AssistantMessageStatus;
@@ -64,6 +66,28 @@ export interface AssistantStoredMessage {
   citations: AssistantCitation[];
   toolName: string | null;
   toolOutcome: string | null;
+}
+
+export interface AssistantSession {
+  id: string;
+  conversationId: string;
+  deviceId: string;
+  startedAt: string;
+  endedAt: string | null;
+  endReason: string | null;
+}
+
+export function sessionFromPayload(value: unknown): AssistantSession {
+  const row = asRecord(value);
+  return {
+    id: readUuid(row.id, "session id"),
+    conversationId: readUuid(row.conversation_id, "conversation id"),
+    deviceId: readUuid(row.device_id, "device id"),
+    startedAt: readTimestamp(row.started_at, "session start"),
+    endedAt: readNullableTimestamp(row.ended_at, "session end"),
+    endReason: row.end_reason === null ? null :
+      typeof row.end_reason === "string" ? row.end_reason : (() => { throw unreadable("session end"); })(),
+  };
 }
 
 export interface AssistantMessageInput {
@@ -325,6 +349,7 @@ export function conversationFromPayload(value: unknown): AssistantConversation {
   return {
     id: readUuid(record.id, "conversation id"),
     title,
+    archivedAt: record.archived_at == null ? null : readTimestamp(record.archived_at, "archive date"),
     revision: readCount(record.revision, "revision", 0),
     createdAt: readTimestamp(record.created_at, "timestamp"),
     updatedAt: readTimestamp(record.updated_at, "timestamp"),
@@ -348,6 +373,7 @@ export function messageFromPayload(value: unknown): AssistantStoredMessage {
   return {
     id: readUuid(record.id, "message id"),
     conversationId: readUuid(record.conversation_id, "conversation id"),
+    sessionId: record.session_id == null ? null : readUuid(record.session_id, "session id"),
     role: readRole(record.role),
     status: readStatus(record.status),
     body,
