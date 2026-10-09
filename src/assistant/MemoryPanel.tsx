@@ -10,12 +10,13 @@ interface MemoryPanelProps {
   store: AssistantMemoryStore;
   snapshot: MemorySnapshot;
   signedIn: boolean;
+  userId: string | null;
   learning: boolean;
   onLearningChange(enabled: boolean): void;
 }
 
 /** What this account asked Assistant to remember. Edit and Forget stay on the account. */
-export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningChange }: MemoryPanelProps) {
+export function MemoryPanel({ store, snapshot, signedIn, userId, learning, onLearningChange }: MemoryPanelProps) {
   const [kind, setKind] = useState<MemoryKind>("preference");
   const [key, setKey] = useState("answer_length");
   const [value, setValue] = useState("");
@@ -30,13 +31,12 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
 
   useEffect(() => {
     let cancelled = false;
-    if (!signedIn) { setSettingsLoaded(false); return; }
+    setSettingsLoaded(false);
+    if (!signedIn || !userId) return;
     const client = getSupabase();
     if (!client) return;
     void (async () => {
-      const { data: { user } } = await client.auth.getUser();
-      if (!user) return;
-      const { data } = await client.from("settings").select("assistant_semantic_search, assistant_recall_notes, assistant_recall_dictations").eq("user_id", user.id).maybeSingle();
+      const { data } = await client.from("settings").select("assistant_semantic_search, assistant_recall_notes, assistant_recall_dictations").eq("user_id", userId).maybeSingle();
       if (!cancelled) {
         setSemanticEnabled(data?.assistant_semantic_search ?? false);
         setNotesSearch(data?.assistant_recall_notes ?? false);
@@ -45,7 +45,7 @@ export function MemoryPanel({ store, snapshot, signedIn, learning, onLearningCha
       }
     })();
     return () => { cancelled = true; };
-  }, [signedIn]);
+  }, [signedIn, userId]);
 
   async function toggleSemantic(enabled: boolean): Promise<void> {
     const client = getSupabase();
