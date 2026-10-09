@@ -118,7 +118,7 @@ export interface AssistantActions {
   /** Active and forgotten memories for this account. */
   listMemories(): Promise<string>;
   searchMemory(query: string): Promise<string>;
-  listPastConversations(query: string, cursor: string | null, count: number): Promise<string>;
+  listPastConversations(query: string, cursor: string | null, count: number, archivedOnly?: boolean): Promise<string>;
   readPastConversation(conversationId: string, options?: {afterSeq?:number; count?:number; sessionId?:string|null; from?:string|null; to?:string|null}): Promise<string>;
   listPastSessions?(conversationId: string, before: {startedAt:string;id:string}|null, count:number): Promise<string>;
   checkPastConversation(conversationId: string): Promise<string>;
