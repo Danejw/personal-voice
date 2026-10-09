@@ -196,7 +196,7 @@ export function AssistantInsightsPanel({active,userId}:Props) {
       })}
       {!!display.drafts.length&&<section className="insight-candidate-group">
         <h2>Personal Playbook drafts ({display.drafts.length})</h2>
-        <p className="hint">These are account-owned editable proposals, separate from system tool playbooks. Execution and scheduling are not enabled.</p>
+        <p className="hint">These are account-owned draft proposals, separate from system tool playbooks. Steps can be reviewed before saving; execution, scheduling, and post-save editing are not yet enabled.</p>
         {display.drafts.map(d=><article className="insight-candidate-card" key={d.id}>
           <h3>{d.title}</h3>
           <ol>{d.steps.map((step,i)=><li key={i}>{step}</li>)}</ol>
