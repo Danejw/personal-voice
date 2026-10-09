@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AssistantInsightsPanel } from "@/insights/AssistantInsightsPanel";
 import type { InsightCandidate, InsightCandidateKind, InsightUsageFacts } from "@/insights/insights";
 import {
   formatHour,
@@ -17,9 +18,11 @@ import { DeviceSplitBar, HorizontalShareBars } from "@/usage/HorizontalShareBars
 import { mergeUsageDays, sumCounters, targetAppUsage } from "@/usage/analytics";
 import type { UsageSnapshot } from "@/usage/usageEvents";
 
-type InsightsTab = "voice" | "suggestions" | "compaction";
+type InsightsTab = "voice" | "assistant" | "suggestions" | "compaction";
 
 interface InsightsPanelProps {
+  active: boolean;
+  userId: string | null;
   store: InsightsStore;
   snapshot: InsightsSnapshot;
   knowledge: InsightsKnowledgeInput;
@@ -176,6 +179,8 @@ function daysSince(iso: string): number {
 }
 
 export function InsightsPanel({
+  active,
+  userId,
   store,
   snapshot,
   knowledge,
@@ -279,7 +284,7 @@ export function InsightsPanel({
 
   return (
     <div className="insights-page analytics">
-      {!cloudHistoryEnabled && (
+      {tab !== "assistant" && !cloudHistoryEnabled && (
         <div className="insights-callout">
           <div>
             <p className="insights-callout-title">Cloud dictation history is off</p>
@@ -292,6 +297,7 @@ export function InsightsPanel({
       <div className="insights-tabs" role="tablist" aria-label="Insights">
         {([
           ["voice", "Your Voice"],
+          ["assistant", "Your Assistant"],
           ["suggestions", `Suggestions${pending.length ? ` (${pending.length})` : ""}`],
           ["compaction", "Compaction"],
         ] as const).map(([id, label]) => (
@@ -311,6 +317,8 @@ export function InsightsPanel({
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
       {notice && <div className="insights-notice" role="status">{notice}</div>}
       {snapshot.progress && <div className="insights-progress-note" role="status">{snapshot.progress}</div>}
+
+      {tab === "assistant" && <AssistantInsightsPanel active={active} userId={userId} />}
 
       {tab === "voice" && (
         <div className="insights-stack">
