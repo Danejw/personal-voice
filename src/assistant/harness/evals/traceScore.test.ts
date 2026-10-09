@@ -36,8 +36,8 @@ describe("assistant tool intelligence registry", () => {
     expect(byName.get("capture_screen")?.description).toContain("inspect_pointer_context");
     expect(byName.get("search_memory")?.description).toContain("list_past_conversations");
     expect(byName.get("create_voice_note")?.description).toContain("manual Notes composer");
-    expect(byName.get("read_past_conversation")?.parameters.required).toEqual(["conversation_id"]);
-    expect(byName.get("copy_text")?.parameters.required).toEqual(["text"]);
+    expect(byName.get("read_past_conversation")?.parameters).toMatchObject({ required: ["conversation_id"] });
+    expect(byName.get("copy_text")?.parameters).toMatchObject({ required: ["text"] });
     expect(enrichToolDescription("unknown_tool", "existing description")).toBe("existing description");
     const wire = JSON.stringify(declared);
     expect(wire).not.toContain("run_shell");
