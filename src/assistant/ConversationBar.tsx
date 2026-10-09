@@ -10,6 +10,8 @@ interface ConversationBarProps {
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onRetry: () => void;
+  onRefresh?: () => void;
+  hasUnlinkedTranscript?: boolean;
   onLoadOlder?: () => void;
   onDismissRecovery?: (id: string) => void;
 }
@@ -26,20 +28,21 @@ export function threadTime(value?: string | null): string | null {
 }
 
 /** The conversation rail owns thread navigation, not the main transcript. */
-export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen, onRename, onDelete, onRetry, onLoadOlder, onDismissRecovery }: ConversationBarProps) {
+export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen, onRename, onDelete, onRetry, onRefresh, onLoadOlder, onDismissRecovery, hasUnlinkedTranscript = false }: ConversationBarProps) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
   const visible = filterConversations(library.conversations, search);
   return (
-    <aside className="assistant-threads" aria-label="Conversation history">
+    <aside id="assistant-threads" className="assistant-threads" aria-label="Conversation history">
       <div className="assistant-rail-heading">
-        <div>
-          <span className="assistant-eyebrow">YOUR SPACE</span>
-          <h3>Conversations</h3>
+        <h3>Conversations</h3>
+        <div className="assistant-rail-heading-actions">
+          <span className="assistant-rail-count">{library.conversations.length}</span>
+          {signedIn && onRefresh && <button type="button" className="assistant-refresh-threads"
+            aria-label="Refresh conversations" title="Refresh conversations" onClick={onRefresh}>↻</button>}
         </div>
-        <span className="assistant-rail-count">{library.conversations.length}</span>
       </div>
       <button type="button" className="assistant-new-thread" disabled={!signedIn} onClick={() => { setSearch(""); onNew(); }}>
         <span aria-hidden="true">＋</span> New conversation
@@ -50,10 +53,13 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
         <input type="search" value={search} onChange={(event) => setSearch(event.target.value)}
           placeholder="Search conversations" disabled={!signedIn} />
       </label>
-      <div className="assistant-rail-subhead">Recent threads</div>
       <nav className="assistant-thread-scroll hide-scrollbar" aria-label="Saved conversations">
         {!signedIn && <p className="assistant-rail-empty">Sign in to see your conversations.</p>}
-        {signedIn && visible.length === 0 && <p className="assistant-rail-empty">{search ? "No matching conversations." : "Your conversations will appear here."}</p>}
+        {signedIn && visible.length === 0 && <p className="assistant-rail-empty" role="status">
+          {search ? "No matching conversations." : library.error ? "Could not load saved conversations. Try Refresh." :
+            hasUnlinkedTranscript ? "This transcript is not attached to a saved thread. Refresh or start a conversation to save new messages." :
+            "No saved conversations found."}
+        </p>}
         {signedIn && <ul className="assistant-thread-list">
           {visible.map((row) => (
             <li key={row.id} className={row.id === library.currentId ? "is-current" : ""}>
@@ -107,7 +113,8 @@ export function ConversationBar({ library, signedIn, sessionIdle, onNew, onOpen,
         <p className="assistant-save" role="status">
           {library.save === "saving" ? "Saving conversation…" : library.save === "saved" ? "Conversations synced" :
             library.save === "retry" ? (library.error ?? "Could not save conversation.") :
-              library.offlineCopy ? "Offline saved copy" : "Synced across your devices"}
+              library.offlineCopy ? "Offline saved copy" : library.error ? "Conversation list unavailable" :
+              library.conversations.length ? "Saved conversations" : "No saved threads yet"}
         </p>
         {library.save === "retry" && <button type="button" className="secondary" onClick={onRetry}>Retry save</button>}
         {library.holding && !sessionIdle && <p className="note-meta">Active on this device</p>}
