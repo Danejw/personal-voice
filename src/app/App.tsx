@@ -429,7 +429,7 @@ assistant.setActions({
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
   searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
-  listPastConversations: (query, cursor, count) => listPastConversations(assistantConversationsApi, accountUserId ?? "", query, cursor, count),
+  listPastConversations: (query, cursor, count, archivedOnly) => listPastConversations(assistantConversationsApi, accountUserId ?? "", query, cursor, count, archivedOnly),
   readPastConversation: (conversationId, options) => readPastConversation(assistantConversationsApi, accountUserId ?? "", conversationId, options),
   listPastSessions: (conversationId, before, count) => listPastSessions(assistantConversationsApi, accountUserId ?? "", conversationId, before, count),
   checkPastConversation: async (conversationId) => {
