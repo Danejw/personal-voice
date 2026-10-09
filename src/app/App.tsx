@@ -902,6 +902,15 @@ export default function App() {
 
   useEffect(() => {
     usage.setEnabled(sync.data.settings.usageIntelligence);
+    // Loading an already-known account must not erase pending metadata; a new
+    // account is quarantined until its confirmed usage setting is available.
+    if (sync.status === "loading") {
+      if (assistantUsage.getScope().userId !== auth.userId) assistantUsage.setScope({
+        userId: auth.userId, deviceId: settingsDeviceId ?? null,
+        epoch: sync.data.settings.usageEpoch, enabled: false,
+      });
+      return;
+    }
     assistantUsage.setScope({
       userId: auth.userId,
       deviceId: settingsDeviceId ?? null,
