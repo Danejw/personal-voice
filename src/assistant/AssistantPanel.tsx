@@ -92,7 +92,7 @@ export function AssistantPanel({
   const [view, setView] = useState<"chat" | "settings" | "tools">("chat");
   const [showThreads, setShowThreads] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
-  const [narrowWindow, setNarrowWindow] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 780px)").matches);
+  const [narrowWindow, setNarrowWindow] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 780px)").matches);
   const [accessibility, setAccessibility] = useState<{windowTitle: string | null; focusedName: string | null; focusedClass: string | null; text: string | null; status: string} | null>(null);
   const [accessibilityError, setAccessibilityError] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
@@ -141,6 +141,7 @@ export function AssistantPanel({
   const [continueError, setContinueError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
     const media = window.matchMedia("(max-width: 780px)");
     const update = () => { setNarrowWindow(media.matches); setShowThreads(false); };
     media.addEventListener("change", update);
