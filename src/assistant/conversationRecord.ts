@@ -76,6 +76,7 @@ export function pendingWriteFromTurn(input: {
   sourceDeviceId: string;
   turn: AssistantTurn;
   fence?: number | null;
+  sessionId?: string | null;
 }): PendingAssistantWrite | null {
   const body = input.turn.text.trim();
   if (!body || (input.turn.role !== "user" && input.turn.role !== "assistant")) return null;
@@ -91,6 +92,7 @@ export function pendingWriteFromTurn(input: {
       sourceDeviceId: input.sourceDeviceId,
       citations: citationsFromSources(input.turn.sources ?? []),
       fence: input.fence ?? null,
+      sessionId: input.sessionId ?? null,
     },
   };
 }
@@ -136,6 +138,7 @@ function readWrite(value: unknown, userId: string): PendingAssistantWrite | null
       sourceDeviceId: message.sourceDeviceId,
       citations: readCitations(message.citations),
       fence,
+      sessionId: typeof message.sessionId === "string" ? message.sessionId : null,
     },
   };
 }
