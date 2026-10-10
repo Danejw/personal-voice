@@ -43,8 +43,8 @@ export const SCRIPTED_REGRESSION_CORPUS: readonly ToolEvalTrace[] = [
   trace("choice-resume-v-read", [
     ["list_past_conversations", "observed"], ["continue_past_conversation", "acknowledged"],
   ], true, "voice", "android"),
-  trace("tool-create_voice_note", [
-    ["create_voice_note", "failed", "transient"],
-    ["create_voice_note", "failed", "transient"],
+  trace("tool-create_note", [
+    ["create_note", "failed", "transient"],
+    ["create_note", "failed", "transient"],
   ], false, "typed", "android"),
 ];
