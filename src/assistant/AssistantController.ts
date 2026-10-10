@@ -1453,9 +1453,10 @@ export class AssistantController {
             continue;
           }
         }
-        let noteAttachment: CapturedNoteAttachment | null;
+        let noteAttachment: NoteAttachmentInput | null;
         try {
           noteAttachment = this.noteAttachmentForTool(decision);
+          if (noteAttachment instanceof File) preview = preview + " | File: " + noteAttachment.name;
         } catch (error) {
           this.replyTool(decision.id, decision.name, false, toolFailure(error));
           continue;
@@ -1944,7 +1945,7 @@ export class AssistantController {
     return invoke<string>("paste_camera_photo_image", { bitmapBase64: dib, expectedWindow });
   }
 
-  private noteAttachmentForTool(decision: Extract<ToolDecision, {kind:"confirm"}>): CapturedNoteAttachment | null {
+  private noteAttachmentForTool(decision: Extract<ToolDecision, {kind:"confirm"}>): NoteAttachmentInput | null {
     if (decision.name !== "create_note" && decision.name !== "edit_note" &&
         decision.name !== "attach_file_to_note") return null;
     if (decision.name === "create_note" && decision.title !== "Save note with attachment") return null;
@@ -2015,11 +2016,11 @@ export class AssistantController {
         const input = JSON.parse(pending.text) as {id: string; text: string};
         if (pending.noteAttachment) await this.actions.editNote(input.id, input.text, pending.noteAttachment);
         else await this.actions.editNote(input.id, input.text);
-        return pending.noteAttachment ? "Updated the note and attached the captured image." : "Updated the note.";
+        return pending.noteAttachment ? "Updated the note and attached the file." : "Updated the note.";
       }
       case "attach_file_to_note": {
         const input = JSON.parse(pending.text) as {id: string};
-        if (!pending.noteAttachment) throw new Error("Capture an image first.");
+        if (!pending.noteAttachment) throw new Error("Capture or select a file first.");
         await this.actions.attachFileToNote(input.id, pending.noteAttachment);
         return "Attached the captured image to the note.";
       }
@@ -2035,7 +2036,7 @@ export class AssistantController {
         const input = pending.noteAttachment ? (JSON.parse(pending.text) as {text: string}).text : pending.text;
         if (pending.noteAttachment) await this.actions.createNote(input, pending.noteAttachment);
         else await this.actions.createNote(input);
-        return pending.noteAttachment ? "Saved the note and its captured image." : "Saved the note.";
+        return pending.noteAttachment ? "Saved the note and its attachment." : "Saved the note.";
       }
       case "archive_note":
         await this.actions.archiveNote(pending.text, true);
@@ -2210,7 +2211,7 @@ interface ConfirmedTool {
   label: string | null;
   remote: { action: RemoteComputerAction; device: string } | null;
   memory: MemoryCommand | null;
-  noteAttachment: CapturedNoteAttachment | null;
+  noteAttachment: NoteAttachmentInput | null;
   working: boolean;
 }
 
