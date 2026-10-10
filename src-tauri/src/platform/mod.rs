@@ -65,7 +65,7 @@ mod unsupported {
     pub fn set_hotkeys(
         _dictate: &[String],
         _dictate_long_press: &[super::LongPressHotkey],
-        _voice_note: &[String],
+        _note: &[String],
         _handoff: &[String],
         _selection: &[String],
         _assistant: &[String],

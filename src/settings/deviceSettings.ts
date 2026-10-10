@@ -8,7 +8,9 @@ const LEGACY_INDICATOR_KEY = "settings.showIndicator";
 const LEGACY_DICTATION_SOUNDS_KEY = "settings.dictationSounds";
 const LEGACY_PUSH_TO_TALK_KEY = "settings.pushToTalk";
 const LEGACY_PUSH_TO_TALK_LONG_PRESS_KEY = "settings.pushToTalkLongPress";
-const LEGACY_VOICE_NOTE_HOTKEY_KEY = "settings.voiceNoteHotkey";
+const NOTE_HOTKEY_KEY = "settings.noteHotkey";
+/** Read-only compatibility with existing installs that stored the previous key. */
+const LEGACY_NOTE_HOTKEY_KEY = "settings.voiceNoteHotkey";
 const LEGACY_HANDOFF_HOTKEY_KEY = "settings.handoffHotkey";
 const LEGACY_SELECTION_HOTKEY_KEY = "settings.selectionHotkey";
 const LEGACY_ASSISTANT_HOTKEY_KEY = "settings.assistantHotkey";
@@ -29,7 +31,7 @@ export interface DevicePreferences {
   pushToTalk: string[];
   /** Mouse buttons that become Dictation only after their hold threshold. */
   pushToTalkLongPress: LongPressBinding[];
-  voiceNoteHotkey: string[];
+  noteHotkey: string[];
   /**
    * Hold-to-Remote-Dictation bindings.
    * Legacy installs stored this as `handoffHotkey`; both keys are still read.
@@ -124,7 +126,7 @@ function fromLegacy(storage: KeyValueStorage): DevicePreferences {
     dictationSounds: storage.getItem(LEGACY_DICTATION_SOUNDS_KEY) !== "false",
     pushToTalk: shortcutList(storage.getItem(LEGACY_PUSH_TO_TALK_KEY), []),
     pushToTalkLongPress: longPressList(storage.getItem(LEGACY_PUSH_TO_TALK_LONG_PRESS_KEY), []),
-    voiceNoteHotkey: shortcutList(storage.getItem(LEGACY_VOICE_NOTE_HOTKEY_KEY), []),
+    noteHotkey: shortcutList(storage.getItem(NOTE_HOTKEY_KEY) ?? storage.getItem(LEGACY_NOTE_HOTKEY_KEY), []),
     remoteDictationHotkey: shortcutList(storage.getItem(LEGACY_HANDOFF_HOTKEY_KEY), []),
     selectionHotkey: shortcutList(storage.getItem(LEGACY_SELECTION_HOTKEY_KEY), []),
     assistantHotkey: shortcutList(storage.getItem(LEGACY_ASSISTANT_HOTKEY_KEY), []),
@@ -161,7 +163,7 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
       dictationSounds: fields.dictationSounds !== false,
       pushToTalk: shortcutList(fields.pushToTalk, fallback.pushToTalk),
       pushToTalkLongPress: longPressList(fields.pushToTalkLongPress, fallback.pushToTalkLongPress),
-      voiceNoteHotkey: shortcutList(fields.voiceNoteHotkey, fallback.voiceNoteHotkey),
+      noteHotkey: shortcutList(fields.noteHotkey === undefined ? fields.voiceNoteHotkey : fields.noteHotkey, fallback.noteHotkey),
       remoteDictationHotkey: remoteHotkey,
       selectionHotkey: shortcutList(fields.selectionHotkey, fallback.selectionHotkey),
       assistantHotkey: shortcutList(fields.assistantHotkey, fallback.assistantHotkey),
@@ -204,7 +206,7 @@ function write(storage: KeyValueStorage, deviceId: string | null, patch: Partial
   storage.setItem(LEGACY_TRANSFORM_KEY, next.transformProfileId ?? "");
   storage.setItem(LEGACY_PUSH_TO_TALK_KEY, JSON.stringify(next.pushToTalk));
   storage.setItem(LEGACY_PUSH_TO_TALK_LONG_PRESS_KEY, JSON.stringify(next.pushToTalkLongPress));
-  storage.setItem(LEGACY_VOICE_NOTE_HOTKEY_KEY, JSON.stringify(next.voiceNoteHotkey));
+  storage.setItem(NOTE_HOTKEY_KEY, JSON.stringify(next.noteHotkey));
   storage.setItem(LEGACY_HANDOFF_HOTKEY_KEY, JSON.stringify(next.remoteDictationHotkey));
   storage.setItem(LEGACY_SELECTION_HOTKEY_KEY, JSON.stringify(next.selectionHotkey));
   storage.setItem(LEGACY_ASSISTANT_HOTKEY_KEY, JSON.stringify(next.assistantHotkey));
@@ -283,12 +285,12 @@ export function saveStoredPushToTalkLongPress(bindings: readonly LongPressBindin
   write(storage, scope(deviceId), { pushToTalkLongPress: bindings.map((binding) => ({ ...binding })) });
 }
 
-export function loadStoredVoiceNoteHotkey(storage: KeyValueStorage = localStorage, deviceId?: string | null): string[] {
-  return read(storage, scope(deviceId)).voiceNoteHotkey;
+export function loadStoredNoteHotkey(storage: KeyValueStorage = localStorage, deviceId?: string | null): string[] {
+  return read(storage, scope(deviceId)).noteHotkey;
 }
 
-export function saveStoredVoiceNoteHotkey(shortcuts: readonly string[], storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
-  write(storage, scope(deviceId), { voiceNoteHotkey: [...shortcuts] });
+export function saveStoredNoteHotkey(shortcuts: readonly string[], storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { noteHotkey: [...shortcuts] });
 }
 
 /** Legacy name kept for call sites that still say handoff; same storage as Remote Dictation. */

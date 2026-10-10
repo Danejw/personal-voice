@@ -161,7 +161,7 @@ fn named_key(name: &str) -> Option<u32> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DestOverride {
-    VoiceNote,
+    Note,
     Handoff,
 }
 
@@ -204,7 +204,7 @@ const SWALLOW: Outcome = Outcome {
 pub struct PushToTalk {
     pub dictate: Vec<Shortcut>,
     pub dictate_long_press: Vec<LongPressShortcut>,
-    pub voice_note: Vec<Shortcut>,
+    pub note: Vec<Shortcut>,
     pub handoff: Vec<Shortcut>,
     pub selection: Vec<Shortcut>,
     pub assistant: Vec<Shortcut>,
@@ -222,7 +222,7 @@ impl Default for PushToTalk {
         Self {
             dictate: vec![Shortcut::default()],
             dictate_long_press: Vec::new(),
-            voice_note: Vec::new(),
+            note: Vec::new(),
             handoff: Vec::new(),
             selection: Vec::new(),
             assistant: Vec::new(),
@@ -246,7 +246,7 @@ impl PushToTalk {
     pub fn set_hotkeys(
         &mut self,
         dictate: Vec<Shortcut>,
-        voice_note: Vec<Shortcut>,
+        note: Vec<Shortcut>,
         handoff: Vec<Shortcut>,
         selection: Vec<Shortcut>,
         assistant: Vec<Shortcut>,
@@ -254,7 +254,7 @@ impl PushToTalk {
         self.set_all_hotkeys(
             dictate,
             self.dictate_long_press.clone(),
-            voice_note,
+            note,
             handoff,
             selection,
             assistant,
@@ -266,7 +266,7 @@ impl PushToTalk {
         self.set_all_hotkeys(
             self.dictate.clone(),
             bindings,
-            self.voice_note.clone(),
+            self.note.clone(),
             self.handoff.clone(),
             self.selection.clone(),
             self.assistant.clone(),
@@ -277,7 +277,7 @@ impl PushToTalk {
         &mut self,
         dictate: Vec<Shortcut>,
         dictate_long_press: Vec<LongPressShortcut>,
-        voice_note: Vec<Shortcut>,
+        note: Vec<Shortcut>,
         handoff: Vec<Shortcut>,
         selection: Vec<Shortcut>,
         assistant: Vec<Shortcut>,
@@ -285,10 +285,10 @@ impl PushToTalk {
         if dictate.is_empty() {
             return Err("Hold to dictate needs a key or mouse button.".into());
         }
-        ensure_unique(&[&dictate, &voice_note, &handoff, &selection, &assistant], &dictate_long_press)?;
+        ensure_unique(&[&dictate, &note, &handoff, &selection, &assistant], &dictate_long_press)?;
         self.dictate = dictate;
         self.dictate_long_press = dictate_long_press;
-        self.voice_note = voice_note;
+        self.note = note;
         self.handoff = handoff;
         self.selection = selection;
         self.assistant = assistant;
@@ -387,12 +387,12 @@ impl PushToTalk {
             return Some(PttEvent::Press { destination: None });
         }
         if self
-            .voice_note
+            .note
             .iter()
             .any(|shortcut| matches_shortcut(shortcut, vk, modifiers))
         {
             return Some(PttEvent::Press {
-                destination: Some(DestOverride::VoiceNote),
+                destination: Some(DestOverride::Note),
             });
         }
         if self
@@ -574,7 +574,7 @@ mod tests {
     }
 
     #[test]
-    fn voice_note_and_handoff_hotkeys_override_the_destination() {
+    fn note_and_handoff_hotkeys_override_the_destination() {
         let mut ptt = PushToTalk::default();
         ptt.set_hotkeys(
             vec![Shortcut::parse("RightAlt").unwrap()],
@@ -587,7 +587,7 @@ mod tests {
         assert_eq!(
             ptt.on_key(VK_XBUTTON1, true, NONE).event,
             Some(PttEvent::Press {
-                destination: Some(DestOverride::VoiceNote)
+                destination: Some(DestOverride::Note)
             })
         );
         assert_eq!(
@@ -719,7 +719,7 @@ mod tests {
         assert_eq!(
             ptt.on_key(0x20, true, ctrl_shift).event,
             Some(PttEvent::Press {
-                destination: Some(DestOverride::VoiceNote)
+                destination: Some(DestOverride::Note)
             })
         );
     }

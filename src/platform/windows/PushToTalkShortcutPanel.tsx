@@ -21,20 +21,20 @@ import {
   loadPushToTalk,
   loadPushToTalkLongPress,
   loadSelectionHotkey,
-  loadVoiceNoteHotkey,
+  loadNoteHotkey,
   saveAssistantHotkey,
   saveHandoffHotkey,
   savePushToTalk,
   savePushToTalkLongPress,
   saveSelectionHotkey,
-  saveVoiceNoteHotkey,
+  saveNoteHotkey,
 } from "@/settings/pushToTalk";
 
 interface PushToTalkShortcutPanelProps {
   platform: PlatformAdapter;
 }
 
-type HotkeyAction = "dictate" | "voiceNote" | "handoff" | "selection" | "assistant";
+type HotkeyAction = "dictate" | "note" | "handoff" | "selection" | "assistant";
 type RecordingAction = HotkeyAction | "dictateLongPress";
 
 const INVALID_CHORD = "Use one key or mouse button. Hold Ctrl, Shift, Alt, or Win for a combination.";
@@ -44,7 +44,7 @@ const LONG_PRESS_MOUSE_ONLY = "Long press currently supports right, middle, or s
 export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelProps) {
   const [dictate, setDictate] = useState(loadPushToTalk);
   const [dictateLongPress, setDictateLongPress] = useState(loadPushToTalkLongPress);
-  const [voiceNote, setVoiceNote] = useState(loadVoiceNoteHotkey);
+  const [note, setNote] = useState(loadNoteHotkey);
   const [handoff, setHandoff] = useState(loadHandoffHotkey);
   const [selection, setSelection] = useState(loadSelectionHotkey);
   const [assistant, setAssistant] = useState(loadAssistantHotkey);
@@ -52,8 +52,8 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
   const [arming, setArming] = useState<RecordingAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const longPressShortcuts = dictateLongPress.map((binding) => binding.shortcut);
-  const lists = { dictate, voiceNote, handoff, selection, assistant };
-  const conflict = hotkeysConflict(dictate, longPressShortcuts, voiceNote, handoff, selection, assistant);
+  const lists = { dictate, note, handoff, selection, assistant };
+  const conflict = hotkeysConflict(dictate, longPressShortcuts, note, handoff, selection, assistant);
   const captureRequest = useRef(0);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
     const bindings: HotkeyBindings = {
       dictate,
       dictateLongPress,
-      voiceNote,
+      note,
       handoff,
       selection,
       assistant,
@@ -72,7 +72,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
         if (cancelled) return;
         savePushToTalk(dictate);
         savePushToTalkLongPress(dictateLongPress);
-        saveVoiceNoteHotkey(voiceNote);
+        saveNoteHotkey(note);
         saveHandoffHotkey(handoff);
         saveSelectionHotkey(selection);
         saveAssistantHotkey(assistant);
@@ -85,7 +85,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
     return () => {
       cancelled = true;
     };
-  }, [platform, dictate, dictateLongPress, voiceNote, handoff, selection, assistant, conflict]);
+  }, [platform, dictate, dictateLongPress, note, handoff, selection, assistant, conflict]);
 
   useEffect(() => () => {
     captureRequest.current += 1;
@@ -167,7 +167,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
   function bindingsFor(action: HotkeyAction): string[] {
     switch (action) {
       case "dictate": return dictate;
-      case "voiceNote": return voiceNote;
+      case "note": return note;
       case "handoff": return handoff;
       case "selection": return selection;
       case "assistant": return assistant;
@@ -181,7 +181,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
   function apply(action: HotkeyAction, shortcuts: string[]) {
     switch (action) {
       case "dictate": setDictate(shortcuts); return;
-      case "voiceNote": setVoiceNote(shortcuts); return;
+      case "note": setNote(shortcuts); return;
       case "handoff": setHandoff(shortcuts); return;
       case "selection": setSelection(shortcuts); return;
       case "assistant": setAssistant(shortcuts); return;
@@ -210,7 +210,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
         return;
       }
       const next = [...dictateLongPress, { shortcut, holdMs: DEFAULT_LONG_PRESS_MS }];
-      if (hotkeysConflict(dictate, next.map((binding) => binding.shortcut), voiceNote, handoff, selection, assistant)) {
+      if (hotkeysConflict(dictate, next.map((binding) => binding.shortcut), note, handoff, selection, assistant)) {
         setError("That key or mouse button is already used by another binding.");
         return;
       }
@@ -229,7 +229,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
     if (hotkeysConflict(
       candidate.dictate,
       longPressShortcuts,
-      candidate.voiceNote,
+      candidate.note,
       candidate.handoff,
       candidate.selection,
       candidate.assistant,
@@ -311,13 +311,13 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
       />
       <HotkeyField
         label="Hold for a note"
-        shortcuts={voiceNote}
-        listening={recording === "voiceNote"}
+        shortcuts={note}
+        listening={recording === "note"}
         canRemoveLast
-        disabled={arming !== null || voiceNote.length >= MAX_BINDINGS_PER_ACTION || (recording !== null && recording !== "voiceNote")}
-        onRecord={() => startRecording("voiceNote")}
+        disabled={arming !== null || note.length >= MAX_BINDINGS_PER_ACTION || (recording !== null && recording !== "note")}
+        onRecord={() => startRecording("note")}
         onCancel={cancelRecording}
-        onRemove={(shortcut) => removeShortcut("voiceNote", shortcut)}
+        onRemove={(shortcut) => removeShortcut("note", shortcut)}
       />
       <HotkeyField
         label="Hold for Remote Dictation"

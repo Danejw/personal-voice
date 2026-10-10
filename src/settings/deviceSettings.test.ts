@@ -16,7 +16,7 @@ import {
   loadStoredPushToTalk,
   loadStoredPushToTalkLongPress,
   loadStoredRemoteDictationHotkey,
-  loadStoredVoiceNoteHotkey,
+  loadStoredNoteHotkey,
   saveAssistantAutoRun,
   saveAssistantRoutineAutoRun,
   saveAutoUpdate,
@@ -30,7 +30,7 @@ import {
   saveStoredHandoffHotkey,
   saveStoredPushToTalk,
   saveStoredPushToTalkLongPress,
-  saveStoredVoiceNoteHotkey,
+  saveStoredNoteHotkey,
 } from "@/settings/deviceSettings";
 
 function memoryStorage() {
@@ -122,11 +122,11 @@ describe("device settings", () => {
 
   it("keeps extra hotkeys on this device", () => {
     const storage = memoryStorage();
-    saveStoredVoiceNoteHotkey(["Mouse4", "F9"], storage, "windows");
+    saveStoredNoteHotkey(["Mouse4", "F9"], storage, "windows");
     saveStoredHandoffHotkey(["Mouse5"], storage, "windows");
-    expect(loadStoredVoiceNoteHotkey(storage, "windows")).toEqual(["Mouse4", "F9"]);
+    expect(loadStoredNoteHotkey(storage, "windows")).toEqual(["Mouse4", "F9"]);
     expect(loadStoredHandoffHotkey(storage, "windows")).toEqual(["Mouse5"]);
-    expect(loadStoredVoiceNoteHotkey(storage, "android")).toEqual([]);
+    expect(loadStoredNoteHotkey(storage, "android")).toEqual([]);
   });
 
   it("runs Assistant actions automatically until review is turned on", () => {
@@ -190,19 +190,30 @@ describe("device settings", () => {
     expect(loadStoredHandoffHotkey(storage, "windows")).toEqual(["Mouse5"]);
   });
 
+  it("migrates existing note shortcut settings without losing user bindings", () => {
+    const storage = memoryStorage();
+    storage.setItem("settings.voiceNoteHotkey", JSON.stringify(["Mouse4"]));
+    storage.setItem("device.prefs.windows", JSON.stringify({ voiceNoteHotkey: ["F9"] }));
+    expect(loadStoredNoteHotkey(storage, "windows")).toEqual(["F9"]);
+    saveStoredNoteHotkey(["F10"], storage, "windows");
+    expect(JSON.parse(storage.getItem("device.prefs.windows") ?? "{}")).toHaveProperty("noteHotkey", ["F10"]);
+    expect(loadStoredNoteHotkey(storage, "windows")).toEqual(["F10"]);
+    expect(loadStoredNoteHotkey(storage, "android")).toEqual(["Mouse4"]);
+  });
+
   it("restores this device's bindings after the session is bound again", () => {
     const storage = memoryStorage();
     storage.setItem("settings.pushToTalk", "Mouse5");
     bindDeviceSettings("pc", storage);
     saveStoredPushToTalk(["Mouse5", "F9"], storage);
-    saveStoredVoiceNoteHotkey(["Mouse4"], storage);
+    saveStoredNoteHotkey(["Mouse4"], storage);
     saveStoredHandoffHotkey(["Ctrl+Shift+Space"], storage);
 
     bindDeviceSettings(null, storage);
     bindDeviceSettings("pc", storage);
 
     expect(loadStoredPushToTalk(storage)).toEqual(["Mouse5", "F9"]);
-    expect(loadStoredVoiceNoteHotkey(storage)).toEqual(["Mouse4"]);
+    expect(loadStoredNoteHotkey(storage)).toEqual(["Mouse4"]);
     expect(loadStoredHandoffHotkey(storage)).toEqual(["Ctrl+Shift+Space"]);
     expect(loadStoredPushToTalk(storage, "other-pc")).toEqual(["Mouse5"]);
     expect(loadStoredHandoffHotkey(storage, "other-pc")).toEqual([]);

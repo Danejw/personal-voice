@@ -88,7 +88,7 @@ pub fn set_shortcut(shortcut: Shortcut) {
 pub fn set_hotkeys(
     dictate: Vec<Shortcut>,
     dictate_long_press: Vec<LongPressShortcut>,
-    voice_note: Vec<Shortcut>,
+    note: Vec<Shortcut>,
     handoff: Vec<Shortcut>,
     selection: Vec<Shortcut>,
     assistant: Vec<Shortcut>,
@@ -98,7 +98,7 @@ pub fn set_hotkeys(
             Ok(mut state) => state.set_all_hotkeys(
                 dictate,
                 dictate_long_press,
-                voice_note,
+                note,
                 handoff,
                 selection,
                 assistant,

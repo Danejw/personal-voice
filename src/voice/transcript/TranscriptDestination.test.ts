@@ -13,11 +13,11 @@ describe("migrateDestinationId", () => {
 describe("TranscriptDestinationRouter", () => {
   it("routes to the selected destination", async () => {
     const activeField: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
-    const voiceNote: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
+    const note: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
     const remote: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
     const router = new TranscriptDestinationRouter({
       "active-field": activeField,
-      "voice-note": voiceNote,
+      "voice-note": note,
       "remote-dictation": remote,
     });
 
@@ -29,17 +29,17 @@ describe("TranscriptDestinationRouter", () => {
 
   it("honors a one-shot override then returns to the saved destination", async () => {
     const activeField: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
-    const voiceNote: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
+    const note: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
     const unused: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
     const router = new TranscriptDestinationRouter({
       "active-field": activeField,
-      "voice-note": voiceNote,
+      "voice-note": note,
       "remote-dictation": unused,
     });
 
     router.overrideNext("voice-note");
     await router.deliver("note");
-    expect(voiceNote.deliver).toHaveBeenCalledWith("note");
+    expect(note.deliver).toHaveBeenCalledWith("note");
     await router.deliver("field");
     expect(activeField.deliver).toHaveBeenCalledWith("field");
   });
@@ -88,12 +88,12 @@ describe("TranscriptDestinationRouter", () => {
   it("reports failure without swallowing the destination error", async () => {
     const failure = new Error("insert failed");
     const activeField: TranscriptDestination = { deliver: vi.fn().mockRejectedValue(failure) };
-    const voiceNote: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
+    const note: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
     const remote: TranscriptDestination = { deliver: vi.fn().mockResolvedValue(undefined) };
     const onResult = vi.fn();
     const router = new TranscriptDestinationRouter({
       "active-field": activeField,
-      "voice-note": voiceNote,
+      "voice-note": note,
       "remote-dictation": remote,
     }, "active-field", onResult);
 
