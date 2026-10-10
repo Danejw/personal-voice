@@ -8,7 +8,7 @@ import {
 
 describe("tool result interpretation", () => {
   it("distinguishes observed evidence from action acknowledgement", () => {
-    const observation = interpretToolResult("list_voice_notes", true, "Notes (1): milk");
+    const observation = interpretToolResult("list_notes", true, "Notes (1): milk");
     expect(observation).toMatchObject({
       status: "observed", evidence: "read_result", goal_verified: null,
       failure_kind: null, failure_streak: 0,
@@ -85,7 +85,7 @@ describe("tool result interpretation", () => {
 
   it("does not emit original request data as interpretation metadata", () => {
     const privateText = "private token 12345";
-    const info = interpretToolResult("create_voice_note", true, privateText);
+    const info = interpretToolResult("create_note", true, privateText);
     expect(JSON.stringify(info)).not.toContain(privateText);
     expect(info.verification_hint).toContain("Notes");
   });
