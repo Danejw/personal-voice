@@ -6,7 +6,7 @@ export interface TranscriptDestination {
 /** The destinations available to dictation. */
 export type TranscriptDestinationId = "active-field" | "voice-note" | "remote-dictation";
 /** Historical wire ID shared with persisted dictations, analytics and older native clients. */
-export const NOTE_DESTINATION_ID: TranscriptDestinationId = "voice-note";
+export const NOTE_DESTINATION_ID = "voice-note" as const;
 
 /** Maps a persisted or legacy destination id onto the current set. */
 export function migrateDestinationId(value: unknown): TranscriptDestinationId | null {
