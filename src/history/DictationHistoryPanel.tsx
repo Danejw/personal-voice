@@ -7,7 +7,7 @@ import type {
   DictationHistoryEntry,
   DictationHistorySnapshot,
 } from "@/history/DictationHistoryStore";
-import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
+import { NOTE_DESTINATION_ID, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 interface DictationHistoryPanelProps {
   snapshot: DictationHistorySnapshot;
@@ -21,7 +21,7 @@ interface DictationHistoryPanelProps {
 function destinationLabel(destination: TranscriptDestinationId): string {
   switch (destination) {
     case "active-field": return "Active field";
-    case "voice-note": return "Voice note";
+    case NOTE_DESTINATION_ID: return "Note";
     case "remote-dictation": return "Remote Dictation";
     default: {
       const unhandled: never = destination;
