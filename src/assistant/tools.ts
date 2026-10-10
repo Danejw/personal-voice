@@ -54,7 +54,7 @@ export function assistantFunctionDeclarations() {
     {
       name: "create_note",
       description: "Save text as a new note. To attach a file, set attachment_source to selected_file (after the user selects one in Assistant), screenshot (after capture_screen), or camera_photo (after capture_camera_photo). Never invent file access. File uploads require user confirmation.",
-      parameters: { type: "object", properties: { text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo", "selected_file"], description: "Optional current captured still to attach. Omit for text-only notes." } }, required: ["text"] },
+      parameters: { type: "object", properties: { text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo", "selected_file"], description: "Optional screenshot, camera photo, or user-selected local file. Omit for text-only notes." } }, required: ["text"] },
     },
     {
       name: "list_notes",
