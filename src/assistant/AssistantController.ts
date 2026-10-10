@@ -1482,7 +1482,7 @@ export class AssistantController {
           noteAttachment,
           working: false,
         };
-        // Camera photos can leave the device. Always require a review card.
+        // Note files can leave the device. Always require explicit approval.
         if (this.shouldAutoRun(decision)) {
           this.pending.working = true;
           const epoch = this.toolEpoch;
@@ -2030,7 +2030,7 @@ export class AssistantController {
         const input = JSON.parse(pending.text) as {id: string};
         if (!pending.noteAttachment) throw new Error("Capture or select a file first.");
         await this.actions.attachFileToNote(input.id, pending.noteAttachment);
-        return "Attached the captured image to the note.";
+        return "Attached the file to the note.";
       }
       case "create_transform": {
         const input = JSON.parse(pending.text) as {name: string; instruction: string};
