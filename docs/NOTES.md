@@ -4,7 +4,7 @@ This is the **current** Notes reference for Personal Voice on Windows and Androi
 
 ## Canonical data model
 
-- **`public.notes`** is the only Notes data table. There is no parallel voice-note table or view. Notes may originate from dictation (`source_type = 'voice'`), manual entry (`manual`) or Assistant actions (`assistant`).
+- **`public.notes`** is the only Notes data table. There is no parallel legacy Notes table or view. Notes may originate from dictation (`source_type = 'voice'`), manual entry (`manual`) or Assistant actions (`assistant`).
 - `public.note_attachments` records the note relationship and file metadata (filename, MIME type, size and private storage path). File bytes reside in the private Supabase `note-attachments` bucket. Any file type supported by the device picker and storage service can be attached, with a **100 MiB per-file limit**.
 - `public.note_groups` provides organization. Archiving/restoring a note does not create another table.
 - All saved Notes remain scoped to the authenticated account and existing storage rules. File attachment actions must not bypass authorization.

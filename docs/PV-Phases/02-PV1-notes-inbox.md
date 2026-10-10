@@ -39,4 +39,4 @@ Notes are online-only. There is no offline create queue (out of scope; that is l
 
 ## How to confirm quickly
 
-Sign in → **Send transcript to** = Voice note → dictate → **Notes inbox** shows the text → Archive → Move to inbox → Copy → Delete. On a second signed-in device, focus Settings; the note should appear without realtime sockets.
+Sign in → **Send transcript to** = Note → dictate → **Notes inbox** shows the text → Archive → Move to inbox → Copy → Delete. On a second signed-in device, focus Settings; the note should appear without realtime sockets.

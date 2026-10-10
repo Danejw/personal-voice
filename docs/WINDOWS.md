@@ -110,7 +110,7 @@ Document failures by application rather than adding hacks immediately.
 ## As implemented (Phase 2)
 
 - **Push-to-talk** uses a `WH_KEYBOARD_LL` hook (`src-tauri/src/platform/windows/hook.rs`), not `RegisterHotKey`. The hook reports key-up and allows a lone key.
-  - The default is Right Alt. Each action (dictate, note, handoff, capture selection) can record several bindings: one key or mouse button, optionally with Ctrl, Shift, Alt, or Win. A mouse button and a keyboard shortcut can both start the same action. Voice note and handoff bindings hold-to-talk into that destination for one utterance. Capture selection fires once on press.
+  - The default is Right Alt. Each action (dictate, note, handoff, capture selection) can record several bindings: one key or mouse button, optionally with Ctrl, Shift, Alt, or Win. A mouse button and a keyboard shortcut can both start the same action. Note and handoff bindings hold-to-talk into that destination for one utterance. Capture selection fires once on press.
   - A `WH_MOUSE_LL` hook covers the mouse buttons. Bound buttons are swallowed so Mouse 4/5 do not also trigger Back/Forward.
   - The shortcut key is swallowed, so Alt never activates app menus. Auto-repeat is ignored while held.
   - Escape is swallowed only while an utterance is cancellable.
