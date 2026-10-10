@@ -94,6 +94,7 @@ export function AssistantPanel({
   settingsContent,
 }: AssistantChromeProps) {
   const [draft, setDraft] = useState("");
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [view, setView] = useState<"chat" | "settings" | "tools">("chat");
   const [showThreads, setShowThreads] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
@@ -276,7 +277,7 @@ export function AssistantPanel({
       {snapshot.selectionError && <p className="error" role="alert">{snapshot.selectionError}</p>}
       {snapshot.notes.map((note) => (
         <div key={note.id} className="selection-preview assistant-selection">
-          <p className="note-meta">Attached voice note · {new Date(note.createdAt).toLocaleString()}</p>
+          <p className="note-meta">Attached note · {new Date(note.createdAt).toLocaleString()}</p>
           <p>{selectionPreview(note.text)}</p>
           <button type="button" className="secondary" onClick={() => controller.detachNote(note.id)}>Remove</button>
         </div>
@@ -291,6 +292,31 @@ export function AssistantPanel({
         </div>
       )}
       {snapshot.accountError && <p className="error" role="alert">{snapshot.accountError}</p>}
+      <div className="assistant-selection" role="region" aria-label="File for note attachment">
+        <p className="note-meta">File for Assistant note attachment · choose a local file on this device</p>
+        <label className="secondary note-file-picker">
+          Select file
+          <input type="file" aria-label="Select file for Assistant note" disabled={!signedIn}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) {
+                const problem = controller.selectNoteFile(file);
+                if (problem) setAttachmentError(problem);
+                else setAttachmentError(null);
+              }
+              event.currentTarget.value = "";
+            }} />
+        </label>
+        {snapshot.selectedNoteFile && (
+          <div className="selection-preview">
+            <span>{snapshot.selectedNoteFile.name} · {Math.ceil(snapshot.selectedNoteFile.size / 1024)} KB</span>
+            <button type="button" className="secondary" onClick={() => controller.removeSelectedNoteFile()}>Remove</button>
+          </div>
+        )}
+        {attachmentError && <p className="error" role="alert">{attachmentError}</p>}
+        <p className="note-meta">Only the file you choose is available to the Assistant. Tell Aloha which note to attach it to; saving requires confirmation.</p>
+      </div>
+
         </div>
         <div className="assistant-settings-pane hide-scrollbar" hidden={view !== "settings"} role="region" aria-label="Assistant settings">
           {settingsContent}

@@ -25,11 +25,11 @@ describe("assistant tool schema", () => {
     expect(names).toEqual([
       "copy_text",
       "insert_text",
-      "create_voice_note",
-      "list_voice_notes",
-      "archive_voice_note",
-      "restore_voice_note",
-      "delete_voice_note",
+      "create_note",
+      "list_notes",
+      "archive_note",
+      "restore_note",
+      "delete_note",
       "send_handoff",
       "list_handoffs",
       "dismiss_handoff",
@@ -43,8 +43,8 @@ describe("assistant tool schema", () => {
       "inspect_pointer_context",
       "inspect_active_app",
       "send_remote_dictation",
-      "edit_voice_note",
-      "attach_image_to_voice_note",
+      "edit_note",
+      "attach_file_to_note",
       "create_transform",
       "add_dictionary_word",
       "read_usage_analytics",
@@ -86,28 +86,28 @@ describe("assistant tool schema", () => {
   });
 
   it("validates note image source and keeps old text-only calls compatible", () => {
-    expect(decideToolCall({id: "new", name: "create_voice_note",
+    expect(decideToolCall({id: "new", name: "create_note",
       args: {text: "Bug report", attachment_source: "screenshot"}}, plan)).toMatchObject({
-      kind: "confirm", name: "create_voice_note", title: "Save note with captured image",
+      kind: "confirm", name: "create_note", title: "Save note with attachment",
       text: JSON.stringify({text: "Bug report", attachment_source: "screenshot"}),
     });
-    expect(decideToolCall({id: "edit", name: "edit_voice_note",
+    expect(decideToolCall({id: "edit", name: "edit_note",
       args: {id: "note-1", text: "Updated", attachment_source: "camera_photo"}}, plan)).toMatchObject({
-      kind: "confirm", name: "edit_voice_note", title: "Edit note and attach captured image",
+      kind: "confirm", name: "edit_note", title: "Edit note and attach file",
     });
-    expect(decideToolCall({id: "attach", name: "attach_image_to_voice_note",
+    expect(decideToolCall({id: "attach", name: "attach_file_to_note",
       args: {id: "note-1", attachment_source: "screenshot"}}, plan)).toMatchObject({
-      kind: "confirm", name: "attach_image_to_voice_note",
+      kind: "confirm", name: "attach_file_to_note",
       text: JSON.stringify({id: "note-1", attachment_source: "screenshot"}),
     });
     for (const bad of ["file:///etc/passwd", "camera", "screenshot.png", "", null]) {
-      expect(decideToolCall({id: "bad", name: "attach_image_to_voice_note",
+      expect(decideToolCall({id: "bad", name: "attach_file_to_note",
         args: {id: "note-1", attachment_source: bad}}, plan)).toMatchObject({kind: "reject"});
     }
-    expect(decideToolCall({id: "missing", name: "attach_image_to_voice_note", args: {id: "note-1"}}, plan)).toMatchObject({kind: "reject"});
-    expect(decideToolCall({id: "bad", name: "create_voice_note",
+    expect(decideToolCall({id: "missing", name: "attach_file_to_note", args: {id: "note-1"}}, plan)).toMatchObject({kind: "reject"});
+    expect(decideToolCall({id: "bad", name: "create_note",
       args: {text: "Keep", attachment_source: "local_file"}}, plan)).toMatchObject({kind: "reject"});
-    expect(decideToolCall({id: "plain", name: "create_voice_note", args: {text: "Keep"}}, plan))
+    expect(decideToolCall({id: "plain", name: "create_note", args: {text: "Keep"}}, plan))
       .toMatchObject({kind: "confirm", text: "Keep", title: "Save this note"});
   });
 
@@ -229,13 +229,13 @@ describe("assistant tool schema", () => {
       read: "active_window",
       device: "Desk PC",
     });
-    expect(decideToolCall({ id: "notes", name: "list_voice_notes", args: {} }, plan)).toEqual({
+    expect(decideToolCall({ id: "notes", name: "list_notes", args: {} }, plan)).toEqual({
       kind: "notes",
       id: "notes",
-      name: "list_voice_notes",
+      name: "list_notes",
       includeArchived: false,
     });
-    expect(decideToolCall({ id: "archived", name: "list_voice_notes", args: { include_archived: true } }, plan)).toMatchObject({
+    expect(decideToolCall({ id: "archived", name: "list_notes", args: { include_archived: true } }, plan)).toMatchObject({
       includeArchived: true,
     });
     expect(decideToolCall({ id: "box", name: "list_handoffs", args: {} }, plan)).toEqual({
@@ -248,13 +248,13 @@ describe("assistant tool schema", () => {
       id: "sel",
       name: "capture_selection",
     });
-    expect(decideToolCall({ id: "drop", name: "delete_voice_note", args: {} }, plan)).toMatchObject({
+    expect(decideToolCall({ id: "drop", name: "delete_note", args: {} }, plan)).toMatchObject({
       kind: "reject",
       message: "That id is required. List the items first and pass an id from that result.",
     });
-    expect(decideToolCall({ id: "drop", name: "delete_voice_note", args: { id: "n1" } }, plan)).toMatchObject({
+    expect(decideToolCall({ id: "drop", name: "delete_note", args: { id: "n1" } }, plan)).toMatchObject({
       kind: "confirm",
-      name: "delete_voice_note",
+      name: "delete_note",
       text: "n1",
       title: "Delete this note",
     });
@@ -292,7 +292,7 @@ describe("assistant tool schema", () => {
       text: "Hello",
       title: "Insert this text into the focused app",
     });
-    expect(decideToolCall({ id: "note", name: "create_voice_note", args: { text: "Assistant tool test." } }, plan)).toMatchObject({
+    expect(decideToolCall({ id: "note", name: "create_note", args: { text: "Assistant tool test." } }, plan)).toMatchObject({
       kind: "confirm",
       title: "Save this note",
       text: "Assistant tool test.",

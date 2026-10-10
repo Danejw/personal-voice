@@ -40,6 +40,8 @@ export interface AssistantSnapshot {
   /** One explicit screenshot. Null after Remove or End. Not written to disk. */
   screen: ScreenSnapshot | null;
   screenError: string | null;
+  /** User-selected local file metadata only; bytes stay in the controller. */
+  selectedNoteFile: { name: string; size: number } | null;
   /** One explicit camera still. Null after Remove or End. Not written to disk. */
   cameraPhoto: CameraPhoto | null;
   cameraPhotoError: string | null;
@@ -47,7 +49,7 @@ export interface AssistantSnapshot {
   cameraContextActive: boolean;
   cameraContextFacing: CameraFacing | null;
   cameraContextError: string | null;
-  /** Voice notes the user attached for this session. Not a copy of the account. */
+  /** Notes the user attached for this session. Not a copy of the account. */
   notes: AttachedNote[];
   /** The one handoff the user attached for this session. */
   handoff: AttachedHandoff | null;
@@ -98,6 +100,7 @@ export type AssistantAction =
   | { type: "attachScreen"; screen: ScreenSnapshot }
   | { type: "detachScreen" }
   | { type: "screenError"; message: string }
+  | { type: "selectedNoteFile"; file: { name: string; size: number } | null }
   | { type: "attachCameraPhoto"; photo: CameraPhoto }
   | { type: "detachCameraPhoto" }
   | { type: "cameraPhotoError"; message: string }
@@ -127,6 +130,7 @@ export const initialAssistantState: AssistantSnapshot = {
   actionNotice: null,
   screen: null,
   screenError: null,
+  selectedNoteFile: null,
   cameraPhoto: null,
   cameraPhotoError: null,
   cameraContextActive: false,
@@ -285,6 +289,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         actionNotice: null,
         screen: null,
         screenError: null,
+        selectedNoteFile: null,
         cameraPhoto: null,
         cameraPhotoError: null,
         cameraContextActive: false,
@@ -321,6 +326,8 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
       return { ...state, screen: null, screenError: null };
     case "screenError":
       return { ...state, screenError: action.message };
+    case "selectedNoteFile":
+      return { ...state, selectedNoteFile: action.file };
     case "attachCameraPhoto":
       return { ...state, cameraPhoto: action.photo, cameraPhotoError: null };
     case "detachCameraPhoto":
@@ -354,6 +361,7 @@ export function assistantReducer(state: AssistantSnapshot, action: AssistantActi
         selectionError: null,
         screen: null,
         screenError: null,
+        selectedNoteFile: null,
         cameraPhoto: null,
         cameraPhotoError: null,
         cameraContextActive: false,

@@ -1,10 +1,11 @@
 import { NOTE_ATTACHMENT_MAX_BYTES } from "@/notes/noteAttachment";
 
 /** One already-captured, user-visible image. Tool calls carry only its source, never pixels. */
-export type NoteImageSource = "screenshot" | "camera_photo";
+export type NoteAttachmentSource = "screenshot" | "camera_photo" | "selected_file";
+export type CapturedImageSource = "screenshot" | "camera_photo";
 
 export interface CapturedNoteImage {
-  source: NoteImageSource;
+  source: CapturedImageSource;
   capturedAt: string;
   jpeg: string;
 }
@@ -21,4 +22,10 @@ export function capturedImageFile(image: CapturedNoteImage): File {
   const stamp = image.capturedAt.replace(/[^0-9T]/g, "-").replace(/-+/g, "-").slice(0, 24);
   const name = `${image.source === "screenshot" ? "screenshot" : "camera-photo"}-${stamp}.jpg`;
   return new File([bytes.buffer], name, { type: "image/jpeg" });
+}
+\n/** The Agent may upload only pixels it captured or a user-selected File, never a guessed disk path. */
+export type NoteAttachmentInput = CapturedNoteImage | File;
+
+export function noteAttachmentFile(input: NoteAttachmentInput): File {
+  return input instanceof File ? input : capturedImageFile(input);
 }

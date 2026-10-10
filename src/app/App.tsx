@@ -6,8 +6,8 @@ import { selectionPreview } from "@/assistant/selectionContext";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { AssistantConversationStore } from "@/assistant/AssistantConversationStore";
-import { capturedImageFile } from "@/assistant/noteAttachment";
-import type { CapturedNoteImage } from "@/assistant/noteAttachment";
+import { noteAttachmentFile } from "@/assistant/noteAttachment";
+import type { NoteAttachmentInput } from "@/assistant/noteAttachment";
 import { listPastConversations, listPastSessions, readPastConversation } from "@/assistant/assistantConversationRecall";
 import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
@@ -338,10 +338,10 @@ function pasteReceived(text: string): Promise<void> {
 assistant.setActions({
   copyText: (text) => navigator.clipboard.writeText(text),
   insertText: (text) => pasteIntoField(text),
-  createVoiceNote: (text, image) => notesStore.create(text, "assistant", {},
-    image ? [capturedImageFile(image)] : []),
-  editVoiceNote: async (id, text, image) => {
-    const file = image ? capturedImageFile(image) : null;
+  createNote: (text, attachment) => notesStore.create(text, "assistant", {},
+    attachment ? [noteAttachmentFile(attachment)] : []),
+  editNote: async (id, text, attachment) => {
+    const file = attachment ? noteAttachmentFile(attachment) : null;
     await notesStore.updateText(id, text);
     if (file) {
       try {
@@ -351,8 +351,8 @@ assistant.setActions({
       }
     }
   },
-  attachImageToVoiceNote: (id: string, image: CapturedNoteImage) =>
-    notesStore.addAttachments(id, [capturedImageFile(image)]),
+  attachFileToNote: (id: string, attachment: NoteAttachmentInput) =>
+    notesStore.addAttachments(id, [noteAttachmentFile(attachment)]),
   listSnippets: async () => {
     const snap = snippetStore.getSnapshot();
     if (snap.status === "signed-out") throw new Error("Sign in to read snippets.");
@@ -405,7 +405,7 @@ assistant.setActions({
   },
   sendHandoff: (text, deviceId) => handoffs.send(text, "dictation", deviceId),
   captureSelection: () => platform.captureSelection(),
-  listVoiceNotes: async (includeArchived) => {
+  listNotes: async (includeArchived) => {
     const snap = notesStore.getSnapshot();
     if (snap.status === "signed-out") throw new Error("Sign in to read notes.");
     if (snap.status !== "synced" && snap.notes.length === 0) throw new Error("Notes are unavailable until sync reconnects.");
@@ -432,15 +432,15 @@ assistant.setActions({
   describeItem: (kind, id) => {
     if (kind === "note") {
       const note = notesStore.getSnapshot().notes.find((item) => item.id === id);
-      if (!note) throw new Error("No note has that id. Call list_voice_notes.");
+      if (!note) throw new Error("No note has that id. Call list_notes.");
       return selectionPreview(note.text);
     }
     const handoff = handoffs.getSnapshot().received.find((item) => item.id === id);
     if (!handoff) throw new Error("No received handoff has that id. Call list_handoffs.");
     return selectionPreview(handoffDisplayText(handoff.text));
   },
-  archiveVoiceNote: (id, archived) => notesStore.setArchived(id, archived),
-  deleteVoiceNote: (id) => notesStore.remove(id),
+  archiveNote: (id, archived) => notesStore.setArchived(id, archived),
+  deleteNote: (id) => notesStore.remove(id),
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
   searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
