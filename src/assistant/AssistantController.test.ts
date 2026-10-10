@@ -944,7 +944,7 @@ describe("AssistantController", () => {
       source: "screenshot", capturedAt: "2026-10-09T01:00:00Z", jpeg: "first-image",
     });
     expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
-      id: "save-image", response: { result: "Saved the note and its captured image." },
+      id: "save-image", response: { result: "Saved the note and its attachment." },
     }] } });
     created.end();
   });
@@ -971,6 +971,49 @@ describe("AssistantController", () => {
       source: "screenshot", capturedAt: "2026-10-09T03:00:00Z", jpeg: "image-data",
     });
     expect(used.editNote).not.toHaveBeenCalled();
+    created.end();
+  });
+
+  it("attaches an explicitly selected general file, pins its bytes, and requires consent", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setActions(used);
+    created.setAutoRun(true);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    const file = new File(["file body"], "design-spec.pdf", { type: "application/pdf" });
+    const alternate = new File(["alternate"], "other.txt", { type: "text/plain" });
+    expect(created.selectNoteFile(file)).toBeNull();
+    expect(created.getSnapshot().selectedNoteFile).toEqual({ name: "design-spec.pdf", size: 9 });
+    session.emit({ type: "toolCalls", calls: [{ id: "file", name: "attach_file_to_note",
+      args: { id: "n1", attachment_source: "selected_file" } }] });
+    await settle();
+    expect(created.getSnapshot().pendingAction?.title).toBe("Attach file to note");
+    expect(used.attachFileToNote).not.toHaveBeenCalled();
+    created.selectNoteFile(alternate);
+    created.confirmPending();
+    await settle();
+    expect(used.attachFileToNote).toHaveBeenCalledWith("n1", file);
+    created.end();
+    expect(created.getSnapshot().selectedNoteFile).toBeNull();
+  });
+
+  it("refuses an absent or oversized selected file without uploading it", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setActions(used);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{ id: "missing-file", name: "attach_file_to_note",
+      args: { id: "n1", attachment_source: "selected_file" } }] });
+    await settle();
+    expect(used.attachFileToNote).not.toHaveBeenCalled();
+    expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
+      id: "missing-file", response: { error: expect.stringContaining("Select a local file") },
+    }] } });
+    const large = new File([], "big.zip");
+    Object.defineProperty(large, "size", { value: 104857601 });
+    expect(created.selectNoteFile(large)).toContain("100 MB");
     created.end();
   });
 
