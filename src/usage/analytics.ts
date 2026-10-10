@@ -1,5 +1,6 @@
 import type { DictionaryTerm } from "@/sync/personalData";
 import {
+  NOTE_CREATED_FEATURE_ID,
   OTHER_TARGET_APP,
   USAGE_FEATURES,
   USAGE_TRIGGERS,
@@ -14,7 +15,7 @@ import type {
   UsageFeature,
   UsageTrigger,
 } from "@/usage/usageEvents";
-import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
+import { NOTE_DESTINATION_ID, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 export const USAGE_PAGE_SIZE = 1000;
 
@@ -225,7 +226,7 @@ export interface AnalyticsModel {
 
 const DESTINATION_LABELS: Record<TranscriptDestinationId, string> = {
   "active-field": "Active field",
-  "voice-note": "Notes",
+  [NOTE_DESTINATION_ID]: "Notes",
   "remote-dictation": "Remote Dictation",
 };
 
@@ -240,7 +241,7 @@ export const TRIGGER_LABELS: Record<UsageTrigger, string> = {
 
 const FEATURE_LABELS: Record<UsageFeature, string> = {
   selection_captured: "Capture Selection",
-  voice_note_created: "Notes",
+  [NOTE_CREATED_FEATURE_ID]: "Notes",
   handoff_created: "Handoffs",
   history_inserted: "Recent Dictation",
   shared_clipboard: "Shared Clipboard",
@@ -420,7 +421,7 @@ export function insightsFrom(rows: readonly RemoteUsageDay[], today: string): st
   const notesByDevice = new Map<string, number>();
   const fieldByDevice = new Map<string, number>();
   for (const row of rows) {
-    notesByDevice.set(row.deviceId, (notesByDevice.get(row.deviceId) ?? 0) + (row.counters.destinations["voice-note"] ?? 0));
+    notesByDevice.set(row.deviceId, (notesByDevice.get(row.deviceId) ?? 0) + (row.counters.destinations[NOTE_DESTINATION_ID] ?? 0));
     fieldByDevice.set(row.deviceId, (fieldByDevice.get(row.deviceId) ?? 0) + (row.counters.destinations["active-field"] ?? 0));
   }
   const noteTotal = [...notesByDevice.values()].reduce((sum, count) => sum + count, 0);

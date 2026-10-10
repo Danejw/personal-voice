@@ -141,7 +141,7 @@ import { AnalyticsPanel } from "@/usage/AnalyticsPanel";
 import { localDayKey, mergeUsageDays, termUsage } from "@/usage/analytics";
 import { UsagePanel } from "@/usage/UsagePanel";
 import { UsageStore } from "@/usage/UsageStore";
-import type { UsageSnapshot } from "@/usage/usageEvents";
+import { NOTE_CREATED_FEATURE_ID, type UsageSnapshot } from "@/usage/usageEvents";
 import { useUsage } from "@/usage/useUsage";
 import { countOutputWords } from "@/usage/words";
 import { UpdatePanel } from "@/updates/UpdatePanel";
@@ -152,7 +152,7 @@ import { GeminiTokenSource } from "@/voice/provider/gemini/GeminiTokenSource";
 import { MicrophoneLease } from "@/voice/audio/microphoneLease";
 import type { VoiceState } from "@/voice/session/state";
 import { LiveFieldPreview } from "@/voice/session/LiveFieldPreview";
-import { TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
+import { NOTE_DESTINATION_ID, TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 function dictionaryTermUsage(
@@ -255,7 +255,7 @@ const notesStore = new NotesStore(
   notesApi,
   (userId) => localDeviceId(localStorage, userId, createId),
   (sourceType) => {
-    if (sourceType === "voice") usage.recordLater({ name: "voice_note_created" });
+    if (sourceType === "voice") usage.recordLater({ name: NOTE_CREATED_FEATURE_ID });
   },
   noteOrganizerApi,
 );
@@ -495,7 +495,7 @@ const destinations = new TranscriptDestinationRouter({
   "active-field": { deliver: async (transcript) => {
     if (!await liveFieldPreview.commit(transcript)) await pasteIntoField(transcript);
   } },
-  "voice-note": { deliver: (transcript) => notesStore.create(transcript, "voice") },
+  [NOTE_DESTINATION_ID]: { deliver: (transcript) => notesStore.create(transcript, "voice") },
   "remote-dictation": remoteDictationDestination,
 }, "active-field", (result) => {
   history.recordLater(result);
@@ -505,7 +505,7 @@ const destinations = new TranscriptDestinationRouter({
 }, transformFinalDictation);
 const DESTINATION_OPTIONS: readonly SelectOption[] = [
   { value: "active-field", label: "Active field" },
-  { value: "voice-note", label: "Note" },
+  { value: NOTE_DESTINATION_ID, label: "Note" },
   { value: "remote-dictation", label: "Remote Dictation" },
 ];
 
@@ -524,7 +524,7 @@ function controlFor(state: VoiceState, destination: TranscriptDestinationId): { 
     case "INSERTING": {
       switch (destination) {
         case "active-field": return { label: "Typing…", enabled: false };
-        case "voice-note": return { label: "Saving…", enabled: false };
+        case NOTE_DESTINATION_ID: return { label: "Saving…", enabled: false };
         case "remote-dictation": return { label: "Sending…", enabled: false };
         default: {
           const unhandled: never = destination;
@@ -550,7 +550,7 @@ function statusFor(state: VoiceState, destination: TranscriptDestinationId): str
     case "INSERTING": {
       switch (destination) {
         case "active-field": return "Typing";
-        case "voice-note": return "Saving note";
+        case NOTE_DESTINATION_ID: return "Saving note";
         case "remote-dictation": return "Sending";
         default: {
           const unhandled: never = destination;
@@ -719,7 +719,7 @@ export default function App() {
   const status = !auth.ready ? "Starting…" : !signedIn ? "Sign in to start dictating" : paused ? "Paused from the tray" : statusFor(state, destination);
 
   function chooseDestination(value: string) {
-    if (value !== "active-field" && value !== "voice-note" && value !== "remote-dictation") return;
+    if (value !== "active-field" && value !== NOTE_DESTINATION_ID && value !== "remote-dictation") return;
     destinations.select(value);
     setDestination(value);
     saveDestination(value);
