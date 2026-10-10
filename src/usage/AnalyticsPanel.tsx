@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AssistantAnalyticsPanel } from "@/usage/AssistantAnalyticsPanel";
 import type { AssistantUsageStore } from "@/usage/AssistantUsageStore";
+import type { AssistantToolMetricsStore } from "@/usage/AssistantToolMetricsStore";
 import { fetchUsageDays } from "@/services/usageService";
 import type { DictionaryTerm } from "@/sync/personalData";
 import { buildAnalytics, mergeUsageDays, panelRanges } from "@/usage/analytics";
@@ -19,8 +20,8 @@ interface AnalyticsPanelProps {
   usage: UsageSnapshot;
   userId: string | null;
   assistantUsage: AssistantUsageStore;
+  toolStore: AssistantToolMetricsStore;
   assistantUsageEnabled: boolean;
-  onClearAnalytics(): Promise<void>;
 }
 
 function formatWpm(value: number | null): string {
@@ -34,10 +35,7 @@ function termShare(uses: number, terms: readonly { uses: number }[]): number {
 }
 
 /** Compact personal dashboard. Numbers come from merged usage days, not a second observer. */
-export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary, usage, userId, assistantUsage, assistantUsageEnabled, onClearAnalytics }: AnalyticsPanelProps) {
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const [clearError, setClearError] = useState<string | null>(null);
+export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary, usage, userId, assistantUsage, toolStore, assistantUsageEnabled }: AnalyticsPanelProps) {
   const [mode, setMode] = useState<"dictation" | "assistant">("dictation");
   const [ranges, setRanges] = useState<{ month: RemoteUsageDay[]; recent: RemoteUsageDay[]; weeks: RemoteUsageDay[] } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -71,31 +69,9 @@ export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary
       <button type="button" role="tab" aria-selected={mode === "assistant"} className={mode === "assistant" ? "insights-tab is-active" : "insights-tab"} onClick={() => setMode("assistant")}>Assistant</button>
     </div>
   );
-  const clearControl = (
-    <div>
-      {clearError && <p className="error" role="alert">{clearError}</p>}
-      {!confirmClear ? (
-        <button type="button" className="secondary" onClick={() => setConfirmClear(true)}>Clear Analytics</button>
-      ) : (
-        <div role="group" aria-label="Confirm deleting Analytics">
-          <p className="hint">Delete all synced Dictation and Assistant usage analytics across devices? This cannot be undone. Saved conversations and notes are not deleted.</p>
-          <button type="button" disabled={clearing} onClick={() => {
-            setClearing(true);
-            void onClearAnalytics().then(() => {
-              setConfirmClear(false);
-              setClearError(null);
-            }, (error: unknown) => {
-              setClearError(error instanceof Error ? error.message : "Could not clear Analytics.");
-            }).finally(() => setClearing(false));
-          }}> {clearing ? "Clearing…" : "Confirm clear"} </button>
-          <button type="button" className="secondary" disabled={clearing} onClick={() => setConfirmClear(false)}>Cancel</button>
-        </div>
-      )}
-    </div>
-  );
-  if (mode === "assistant") return <div className="analytics">{selector}{clearControl}<AssistantAnalyticsPanel
+  if (mode === "assistant") return <div className="analytics">{selector}<AssistantAnalyticsPanel
     active={active} userId={userId} epoch={usage.epoch} enabled={assistantUsageEnabled}
-    devices={devices} store={assistantUsage}
+    devices={devices} store={assistantUsage} toolStore={toolStore}
   /></div>;
 
   const id = deviceId ?? "";
@@ -116,7 +92,6 @@ export function AnalyticsPanel({ active, signedIn, deviceId, devices, dictionary
   return (
     <div className="analytics">
       {selector}
-      {clearControl}
       {problem && <p className="error" role="alert">{problem}</p>}
       {usage.error && <p className="error" role="alert">{usage.error}</p>}
       {!model && <p className="hint">Loading analytics…</p>}

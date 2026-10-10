@@ -52,7 +52,7 @@ import {
 } from "@/assistant/snapshot";
 import { decideToolCall, type ConfirmToolName, type ParsedToolCall, type ToolDecision } from "@/assistant/tools";
 import { playbookToolText } from "@/assistant/harness/playbooks";
-import { interpretToolResult, ToolFailureHistory } from "@/assistant/harness/toolResults";
+import { interpretToolResult, ToolFailureHistory, type ToolResultAssessment } from "@/assistant/harness/toolResults";
 import { ToolTraceRecorder, type ToolEvalTrace, type TraceMetadata } from "@/assistant/harness/evals/traceRecorder";
 import { assembleTaskGuidance, deviceToolGuidance, UNKNOWN_DEVICE_CONTEXT, type AssistantDeviceContext } from "@/assistant/harness/contextAssembler";
 import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
@@ -205,6 +205,9 @@ export class AssistantController {
   /** True when this socket was opened with a resumption handle. That socket already has the history. */
   private openedWithHandle = false;
   private onToolRecord: ((record: { name: string; outcome: string }) => void) | null = null;
+  /** Metadata-only production tool observer; does not expose arguments or result payloads. */
+  private onToolMetrics: ((event: {type:"calls"; calls:readonly {id:string|null;name:string}[]} |
+    {type:"result"; id:string; name:string; assessment:ToolResultAssessment}) => void) | null = null;
   private timer?: ReturnType<typeof setTimeout>;
   private pending: ConfirmedTool | null = null;
   /** Bumped when a pending action is dropped so an in-flight confirm cannot report success. */
@@ -374,6 +377,10 @@ export class AssistantController {
     if (status === "CONNECTING" || status === "READY" || status === "RESPONDING") return;
     this.historyTurns = turns.map((turn) => ({ role: turn.role, text: turn.text }));
     this.historySeeded = false;
+  }
+
+  setToolMetricsHandler(handler: typeof this.onToolMetrics): void {
+    this.onToolMetrics = handler;
   }
 
   /** Records a finished tool result so a later session can describe it without running it again. */
@@ -1234,6 +1241,7 @@ export class AssistantController {
         this.resumeOrFail();
         return;
       case "toolCalls":
+        this.onToolMetrics?.({type:"calls", calls:event.calls.map(call=>({id:call.id,name:call.name}))});
         this.evalTrace?.noteCalls(event.calls);
         if (this.evalTrace && this.evalTraceHandler) this.evalTraceHandler(this.evalTrace.snapshot());
         this.enqueueTools(event.calls);
@@ -2002,6 +2010,7 @@ export class AssistantController {
 
   private replyTool(id: string, name: string, ok: boolean, message: string) {
     const assessment = interpretToolResult(name, ok, message, this.toolFailures.record(name, ok));
+    this.onToolMetrics?.({type:"result",id,name,assessment});
     this.evalTrace?.noteResult(id, assessment);
     if (this.evalTrace && this.evalTraceHandler) this.evalTraceHandler(this.evalTrace.snapshot());
     this.dispatch({ type:"toolActivity", activity:{

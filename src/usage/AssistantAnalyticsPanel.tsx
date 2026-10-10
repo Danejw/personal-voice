@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { assistantUsageApi } from "@/services/assistantUsageService";
+import { AssistantToolReliabilityPanel } from "@/usage/AssistantToolReliabilityPanel";
+import type { AssistantToolMetricsStore } from "@/usage/AssistantToolMetricsStore";
 import { localUsageDay, summarizeAssistantUsage, type AssistantUsageEvent } from "@/usage/assistantUsage";
 import type { AssistantUsageStore } from "@/usage/AssistantUsageStore";
 
@@ -10,6 +12,7 @@ interface Props {
   enabled: boolean;
   devices: readonly { id: string; name: string }[];
   store: AssistantUsageStore;
+  toolStore: AssistantToolMetricsStore;
 }
 const DAYS = [14, 30] as const;
 
@@ -22,7 +25,8 @@ function formatDuration(ms: number): string {
 }
 
 /** Phase A: measured Assistant activity only, not inferred historical conversations. */
-export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, devices, store }: Props) {
+export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, devices, store, toolStore }: Props) {
+  const [view, setView] = useState<"overview" | "tools">("overview");
   const [days, setDays] = useState<(typeof DAYS)[number]>(14);
   const [remote, setRemote] = useState<AssistantUsageEvent[]>([]);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
@@ -36,7 +40,7 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
     return () => { unsubscribe(); };
   }, [store]);
   useEffect(() => {
-    if (!active || !userId || !enabled) {
+    if (!active || view !== "overview" || !userId || !enabled) {
       setRemote([]);
       setLoadedKey(null);
       setError(null);
@@ -57,7 +61,7 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
       setError(cause instanceof Error ? cause.message : "Couldn't load Assistant Analytics.");
     });
     return () => { cancelled = true; };
-  }, [active, userId, enabled, epoch, refresh, store]);
+  }, [active, view, userId, enabled, epoch, refresh, store]);
 
   const scope = store.getScope();
   const sameAccount = scope.userId === userId && scope.epoch === epoch;
@@ -77,13 +81,20 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
 
   if (!userId) return <p className="hint">Sign in to see Assistant usage across your devices.</p>;
   if (!enabled) return <p className="hint">Usage intelligence is turned off in Settings. Assistant activity is not collected.</p>;
+  const viewSelector = <div className="insights-tabs" role="tablist" aria-label="Assistant Analytics view">
+    <button type="button" role="tab" aria-selected={view === "overview"} className={view === "overview" ? "insights-tab is-active" : "insights-tab"} onClick={() => setView("overview")}>Overview</button>
+    <button type="button" role="tab" aria-selected={view === "tools"} className={view === "tools" ? "insights-tab is-active" : "insights-tab"} onClick={() => setView("tools")}>Tools &amp; Reliability</button>
+  </div>;
+  if (view === "tools") return <div className="analytics">{viewSelector}<AssistantToolReliabilityPanel
+    active={active} userId={userId} enabled={enabled} epoch={epoch} store={toolStore}
+  /></div>;
   return (
     <div className="analytics">
+      {viewSelector}
       <div className="insights-tabs" role="group" aria-label="Assistant Analytics period">
         {DAYS.map(count => <button key={count} type="button" className={days === count ? "insights-tab is-active" : "insights-tab"} onClick={() => setDays(count)}>{count} days</button>)}
         <button type="button" className="secondary" onClick={() => setRefresh(i => i + 1)}>Refresh</button>
       </div>
-      <p className="hint">Measured from Assistant activity after Phase A was enabled. Saved history before that date is not counted as measured usage.</p>
       {loading && <p className="hint">Loading Assistant activity…</p>}
       {error && <p className="error" role="alert">{error} Unsynced local activity may still be shown.</p>}
       <div className="stat-row">
@@ -124,7 +135,6 @@ export function AssistantAnalyticsPanel({ active, userId, epoch, enabled, device
           </section>
         </>
       )}
-      <p className="hint">Tool performance and reliability will be added in Phase B. Personalized recommendations belong in Insights (Phase C).</p>
     </div>
   );
 }
