@@ -7,7 +7,7 @@
 
 export const RECALL_RESULT_LIMIT = 5;
 export const RECALL_QUERY_LIMIT = 200;
-/** `list_voice_notes` shows this many. Search is not limited to that page. */
+/** `list_notes` shows this many. Search is not limited to that page. */
 export const RECALL_NOTE_PAGE = 12;
 
 export type RecallSource = "note" | "dictation" | "conversation" | "memory";

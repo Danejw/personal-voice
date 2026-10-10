@@ -4,7 +4,7 @@ import type {
   DictationHistoryStore,
 } from "@/history/DictationHistoryStore";
 
-/** Subscribes the shared UI and refreshes when the window is shown again, like voice notes. */
+/** Subscribes the shared UI and refreshes when the window is shown again, like notes. */
 export function useDictationHistory(
   store: DictationHistoryStore,
   userId: string | null,

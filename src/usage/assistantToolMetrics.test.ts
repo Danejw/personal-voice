@@ -39,11 +39,11 @@ describe("Assistant tool reliability metadata",()=>{
   it("keeps failure categories, cancellations and guidance separate from outcomes",()=>{
     const t=harness();t.store.setScope(t.scope);
     t.store.noteCalls([
-      {id:"a",name:"open_app"},{id:"b",name:"create_voice_note"},
+      {id:"a",name:"open_app"},{id:"b",name:"create_note"},
       {id:"c",name:"get_tool_playbook"},
     ]);
     t.store.noteResult("a","open_app",interpretToolResult("open_app",false,"Windows only"));
-    t.store.noteResult("b","create_voice_note",interpretToolResult("create_voice_note",false,"User cancelled"));
+    t.store.noteResult("b","create_note",interpretToolResult("create_note",false,"User cancelled"));
     t.store.noteResult("c","get_tool_playbook",interpretToolResult("get_tool_playbook",true,"playbook"));
     expect(t.store.getPending().map(r=>[r.outcome,r.failureKind])).toEqual([
       ["blocked","unavailable"],["cancelled","cancelled"],["reference",null],

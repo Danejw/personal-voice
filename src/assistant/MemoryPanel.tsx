@@ -200,7 +200,7 @@ export function MemoryPanel({ store, snapshot, signedIn, userId, learning, onLea
       {signedIn && settingsLoaded && (
         <Toggle
           label="Learn from Assistant"
-          description="Only saved Assistant messages after this is turned on. This does not read voice notes or dictations."
+          description="Only saved Assistant messages after this is turned on. This does not read saved notes or dictations."
           checked={learning}
           disabled={snapshot.saving || !settingsLoaded}
           onChange={onLearningChange}

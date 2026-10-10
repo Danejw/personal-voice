@@ -3,7 +3,7 @@ import type { ContextAttachment, StoredSummary } from "@/assistant/contextRestor
 
 /** Visible title, matching the continuation handoff cap. */
 export const ASSISTANT_TITLE_LIMIT = 120;
-/** Same text cap as voice notes and dictations. */
+/** Same text cap as saved notes and dictations. */
 export const ASSISTANT_MESSAGE_LIMIT = 100_000;
 /** Same cap as an Assistant tool result shown to the model. */
 export const ASSISTANT_TOOL_OUTCOME_LIMIT = 8_000;
