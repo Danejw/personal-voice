@@ -94,7 +94,7 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
     val selected = snapshot.optString("destination", "active-field")
     listOf(
       "active-field" to "Active field",
-      "voice-note" to "Voice note",
+      "voice-note" to "Note",
       "remote-dictation" to "Remote",
     ).forEach { (id, label) ->
       destinations.addView(
@@ -117,7 +117,7 @@ class OverlayPanelView(context: Context, private val onAction: (JSONObject) -> U
       snapshot.optString("error").takeIf { it.isNotEmpty() }?.let { addPreview(it, error = true) }
     }
 
-    addSection("Voice notes", "No inbox notes.", snapshot.optJSONArray("notes") ?: JSONArray()) { item ->
+    addSection("Notes", "No inbox notes.", snapshot.optJSONArray("notes") ?: JSONArray()) { item ->
       addItemActions({ copy(item); emit("copy-note") { it.put("id", item.optString("id")) } })
     }
     addSection("Handoffs", "No pending handoffs.", snapshot.optJSONArray("handoffs") ?: JSONArray()) { item ->
