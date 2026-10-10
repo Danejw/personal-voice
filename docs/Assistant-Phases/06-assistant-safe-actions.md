@@ -12,13 +12,13 @@ Give Gemini 3.8 Live a small explicit tool set backed by capabilities Personal V
 Gemini requests a typed tool
 → Assistant validates the arguments
 → confirmation policy
-→ existing clipboard, insert, voice-note, or handoff service runs
+→ existing clipboard, insert, note, or handoff service runs
 → the real result goes back to Gemini with the same function-call id
 ```
 
 ## Starting state that mattered
 
-Assistant already had a Live session, voice, interruption, quick access, and attached selections. A `toolCall` message was refused and the session failed. Voice notes, handoffs, clipboard paste, and copy already existed outside Assistant. `DictationController` was left unchanged. The token function was not modified and was not deployed.
+Assistant already had a Live session, voice, interruption, quick access, and attached selections. A `toolCall` message was refused and the session failed. Notes, handoffs, clipboard paste, and copy already existed outside Assistant. `DictationController` was left unchanged. The token function was not modified and was not deployed.
 
 ## What shipped
 
@@ -28,7 +28,7 @@ Live setup now declares four functions. Declarations omit `behavior`, so calls s
 | --- | --- | --- |
 | `copy_text` | No. The Assistant page says "Copied to the clipboard." | `navigator.clipboard.writeText` |
 | `insert_text` | Yes | Existing `platform.insertText` (the same paste dictation uses) |
-| `create_voice_note` | Yes | `VoiceNotesStore.create` |
+| `create_note` | Yes | `NotesStore.create` |
 | `send_handoff` | Yes | `HandoffStore.send` to a resolved device id |
 
 `replace_selection` is not declared. Capture stores text and an optional app name, not a field range. Windows insert pastes into whatever is focused now. Android replaces a selection only while that field is still focused. After a conversation that focus is gone, so a replace would write into the wrong place.
@@ -44,7 +44,7 @@ Send this text to Desktop
 [Confirm] [Cancel]
 ```
 
-Insert says "Insert this text into the focused app." A voice note says "Save this voice note." Handoff uses the device name from `resolveHandoffDevice`: the requested `device` name, or the target already selected in Handoffs. No match, more than one match, or no selected target rejects the call before a confirm card. Confirm calls the existing send and does not change the saved target.
+Insert says "Insert this text into the focused app." A note says "Save this note." Handoff uses the device name from `resolveHandoffDevice`: the requested `device` name, or the target already selected in Handoffs. No match, more than one match, or no selected target rejects the call before a confirm card. Confirm calls the existing send and does not change the saved target.
 
 Cancel tells Gemini "The user cancelled. Nothing was changed." and does not call the service. A second mutating call while one is waiting is rejected with "Another action is already waiting for confirmation." End, failure, and reconnect drop a waiting action without reporting success. An in-flight confirm that outlives that session does not send a result on the next socket.
 
@@ -80,7 +80,7 @@ No database schema change. The Live setup schema is the four function declaratio
 
 ## Platform behavior
 
-Copy uses the WebView clipboard. Insert uses the existing Windows paste and Android field insert. A voice note is the existing account inbox write. A handoff is the existing Supabase send. Android confirmation is on the floating panel. Windows confirmation is on the Assistant page and, while a card is waiting, on the always-on-top button stack.
+Copy uses the WebView clipboard. Insert uses the existing Windows paste and Android field insert. A note is the existing account inbox write. A handoff is the existing Supabase send. Android confirmation is on the floating panel. Windows confirmation is on the Assistant page and, while a card is waiting, on the always-on-top button stack.
 
 ## Automated checks
 
@@ -90,15 +90,15 @@ Copy uses the WebView clipboard. Insert uses the existing Windows paste and Andr
 
 `cargo check` for the Tauri crate passed. The overlay pin grew a confirm-height flag. No Rust tests were added.
 
-Covered: the four declaration names, no `replace_selection` and no `NON_BLOCKING`, id correlation, malformed arguments and unknown tools not calling services, copy without confirmation, insert cancel, voice-note failure text, handoff confirm using the resolved device id without changing the saved target, a second pending call rejected, and End dropping a pending insert. Dictation tests still pass.
+Covered: the four declaration names, no `replace_selection` and no `NON_BLOCKING`, id correlation, malformed arguments and unknown tools not calling services, copy without confirmation, insert cancel, note creation failure text, handoff confirm using the resolved device id without changing the saved target, a second pending call rejected, and End dropping a pending insert. Dictation tests still pass.
 
 Not run: a live Gemini tool call, clipboard paste on a device, or the Windows overlay height on a monitor.
 
 ## Manual test
 
-1. Ask: `Create a voice note that says Assistant tool test.`
+1. Ask: `Create a note that says Assistant tool test.`
 2. Confirm if prompted.
-3. Pass if it appears in the existing Voice Notes inbox.
+3. Pass if it appears in the existing Notes inbox.
 4. Ask: `Copy the words copied by assistant to my clipboard.`
 5. Pass if pasting elsewhere yields that text. Copy should not ask for confirmation. The page should say it was copied.
 6. Ask to insert harmless text in another app.

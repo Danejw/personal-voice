@@ -9,7 +9,7 @@ Initial choices:
 
 ```text
 Dictate
-Voice Note
+Note
 Send to Device
 Command
 Assistant (later, disabled until PV20 exists)

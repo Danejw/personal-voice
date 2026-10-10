@@ -140,7 +140,7 @@ Track which Personal Voice triggers/actions the user actually uses.
 At minimum distinguish:
 
 - Hold to Dictate
-- Hold for Voice Note
+- Hold for Note
 - Hold for Handoff
 - UI button
 - Floating control
@@ -153,7 +153,7 @@ Most Used Shortcuts
 
 Hold to Dictate       71%
 Floating Control      18%
-Voice Note Shortcut    8%
+Note Shortcut    8%
 Handoff Shortcut       3%
 ```
 
@@ -172,7 +172,7 @@ Since Personal Voice now supports different transcript destinations, track how t
 Examples:
 
 - Active Field
-- Voice Note
+- Note
 - Handoff
 - Clipboard
 - future destinations
@@ -185,7 +185,7 @@ Example:
 Where Your Voice Goes
 
 Active Field     76%
-Voice Notes      16%
+Notes      16%
 Handoffs          8%
 ```
 
@@ -196,7 +196,7 @@ Handoffs          8%
 Track usage of meaningful Personal Voice features such as:
 
 - Capture Selection
-- Voice Notes
+- Notes
 - Handoffs
 - Dictionary
 - Recent Dictation
@@ -282,7 +282,7 @@ This analytics system should be designed so that later we can generate higher-le
 
 "You use Personal Voice most heavily in the morning."
 
-"Most of your voice notes are created from your phone."
+"Most of your notes are created from your phone."
 
 "You use Persyn-related terminology significantly more than other custom vocabulary."
 
@@ -313,7 +313,7 @@ common destinations
 preferred shortcuts
 frequently corrected terms
 frequently used applications
-voice-note habits
+note-taking habits
 handoff habits
 ```
 
@@ -419,4 +419,4 @@ Stop after completing the analytics foundation.
 
 A few additional things I think would make this genuinely interesting later are **“words saved from typing,” usage streaks, most productive voice hours, average dictation length over time, which device creates the most notes vs normal dictation, project/dictionary-group usage, and how the user’s behavior changes over time**.
 
-Then I’d make the next phase something much more ambitious than the current PV16: **Personal Insights & User Profile**. That phase would consume this analytics foundation and start producing statements like *“You primarily use Personal Voice as a coding tool from your desktop, but your phone is where most of your voice notes originate.”* That is much closer to the direction you’re describing than simple correction learning.
+Then I’d make the next phase something much more ambitious than the current PV16: **Personal Insights & User Profile**. That phase would consume this analytics foundation and start producing statements like *“You primarily use Personal Voice as a coding tool from your desktop, but your phone is where most of your notes originate.”* That is much closer to the direction you’re describing than simple correction learning.

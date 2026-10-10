@@ -17,7 +17,7 @@ Documented in `docs/ARCHITECTURE.md` and `src/usage/usageEvents.ts`. Each event 
 | `dictation_failed` | Lifecycle entered `ERROR` | |
 | `recovery_used` | Replay-from-buffer produced the delivered transcript | |
 | `destination_used` | Selected destination accepted the transcript | `destination` |
-| `voice_note_created` | Voice note row saved | |
+| `voice_note_created` (legacy metrics key) | Voice-origin note saved | |
 | `handoff_created` | Handoff row saved (dictation or typed send) | |
 | `selection_captured` | Selection capture succeeded | |
 

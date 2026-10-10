@@ -13,7 +13,7 @@ dictation_completed
 dictation_failed
 recovery_used
 destination_used
-voice_note_created
+`voice_note_created` (legacy metrics key)
 handoff_created
 selection_captured
 platform

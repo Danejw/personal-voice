@@ -23,7 +23,7 @@ Initial tools:
 ```text
 insert_text
 copy_text
-create_voice_note
+create_note
 send_handoff
 ```
 
@@ -41,7 +41,7 @@ Gemini requests typed tool
 → typed real result returned to Gemini
 ```
 
-Do not duplicate Voice Note/Handoff business logic inside Gemini code. Schemas must be explicit and tested. Preserve function call IDs/correlation.
+Do not duplicate Note/Handoff business logic inside Gemini code. Schemas must be explicit and tested. Preserve function call IDs/correlation.
 
 Verify Gemini 3.8 Live's current asynchronous function-calling and scheduling behavior before coding.
 
@@ -83,9 +83,9 @@ Record the goal, starting state, exact implementation, files changed, model/API/
 
 # MANUAL TEST — PHASE 06
 
-1. Ask: `Create a voice note that says Assistant tool test.`
+1. Ask: `Create a note that says Assistant tool test.`
 2. Confirm if prompted.
-3. PASS if it appears in the existing Voice Notes inbox.
+3. PASS if it appears in the existing Notes inbox.
 4. Ask: `Copy the words copied by assistant to my clipboard.`
 5. PASS if pasting elsewhere yields the expected text.
 6. Ask to insert/replace harmless text in another app.

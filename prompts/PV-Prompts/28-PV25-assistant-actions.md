@@ -10,7 +10,7 @@ Give the assistant a very small typed tool/action set using capabilities the app
 Initial tools may include:
 
 ```text
-create_voice_note
+create_note
 create_handoff
 copy_text
 insert_text

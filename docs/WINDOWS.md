@@ -91,7 +91,7 @@ Transcribing
 Error
 ```
 
-Clicking the idle button expands a compact overlay: start dictation, destination, capture selection, recent voice notes, pending handoffs. Listening uses the same button. Do not build a complex waveform UI in V1.
+Clicking the idle button expands a compact overlay: start dictation, destination, capture selection, recent notes, pending handoffs. Listening uses the same button. Do not build a complex waveform UI in V1.
 
 ## Test applications
 
@@ -110,7 +110,7 @@ Document failures by application rather than adding hacks immediately.
 ## As implemented (Phase 2)
 
 - **Push-to-talk** uses a `WH_KEYBOARD_LL` hook (`src-tauri/src/platform/windows/hook.rs`), not `RegisterHotKey`. The hook reports key-up and allows a lone key.
-  - The default is Right Alt. Each action (dictate, voice note, handoff, capture selection) can record several bindings: one key or mouse button, optionally with Ctrl, Shift, Alt, or Win. A mouse button and a keyboard shortcut can both start the same action. Voice note and handoff bindings hold-to-talk into that destination for one utterance. Capture selection fires once on press.
+  - The default is Right Alt. Each action (dictate, note, handoff, capture selection) can record several bindings: one key or mouse button, optionally with Ctrl, Shift, Alt, or Win. A mouse button and a keyboard shortcut can both start the same action. Voice note and handoff bindings hold-to-talk into that destination for one utterance. Capture selection fires once on press.
   - A `WH_MOUSE_LL` hook covers the mouse buttons. Bound buttons are swallowed so Mouse 4/5 do not also trigger Back/Forward.
   - The shortcut key is swallowed, so Alt never activates app menus. Auto-repeat is ignored while held.
   - Escape is swallowed only while an utterance is cancellable.
@@ -138,5 +138,5 @@ Document failures by application rather than adding hacks immediately.
   - If Task Manager's "Startup apps" disables the entry, Windows keeps the value but skips it, and the toggle still reads as on. Re-enable it there.
 - **Insertion no longer waits for the restore.** `insert_text` returns right after Ctrl+V; a background thread waits 400 ms, then restores the clipboard. The next insertion, and app exit, wait for that restore to finish first. Measured final→inserted went from ~420 ms to 14–26 ms.
 - **Microphone choice:** "Push-to-talk → Microphone", stored in `localStorage` on this PC and read at each press. It's opened with `deviceId: { exact }`, because WebView2 ignored `ideal` and opened the default device. If the chosen mic is unplugged, capture falls back to the system default and the picker lists it as "not connected".
-- **Overlay:** four round buttons — mic, voice note, handoff, Settings. The mic click starts and stops dictation. Hold the note or handoff button to send that utterance there without changing the saved destination. "Show floating control" can hide them.
+- **Overlay:** four round buttons — mic, note, handoff, Settings. The mic click starts and stops dictation. Hold the note or handoff button to send that utterance there without changing the saved destination. "Show floating control" can hide them.
 - **Tray tooltip:** "Personal Voice", or "Personal Voice: dictation paused" while paused.

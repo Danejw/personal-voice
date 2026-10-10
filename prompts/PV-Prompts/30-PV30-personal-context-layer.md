@@ -13,7 +13,7 @@ Potential sources:
 
 ```text
 active dictionary groups
-selected Voice Notes
+selected Notes
 selected Handoffs
 recent dictation when explicitly allowed
 device identity

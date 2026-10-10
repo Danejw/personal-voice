@@ -1,4 +1,4 @@
-# ASSISTANT BUILD ORDER 10 — Voice Notes + Handoffs as Explicit Context
+# ASSISTANT BUILD ORDER 10 — Notes + Handoffs as Explicit Context
 
 ## BRANCH + GROUND TRUTH
 
@@ -17,7 +17,7 @@ Preserve working Windows and Android dictation.
 ## GOAL
 
 Let the user deliberately attach existing Personal Voice data:
-- one or more selected Voice Notes
+- one or more selected Notes
 - one selected/pending Handoff
 
 Do not dump the whole account into Gemini.
@@ -51,7 +51,7 @@ Record the goal, starting state, exact implementation, files changed, model/API/
 
 # MANUAL TEST — PHASE 10
 
-1. Create two short Voice Notes with different facts.
+1. Create two short Notes with different facts.
 2. Attach both to Assistant.
 3. Ask: `Summarize the two attached notes and tell me how they differ.`
 4. PASS if both are used correctly.

@@ -11,7 +11,7 @@ Implemented in this order (prompt number, then product id):
 | Prompt | Product | Report |
 | --- | --- | --- |
 | 01 | PV2 Dictation destinations | [01-PV2-dictation-destinations.md](./01-PV2-dictation-destinations.md) |
-| 02 | PV1 Voice notes inbox | [02-PV1-voice-notes-inbox.md](./02-PV1-voice-notes-inbox.md) |
+| 02 | PV1 Notes inbox | [02-PV1-notes-inbox.md](./02-PV1-notes-inbox.md) |
 | 03 | PV3 Cross-device handoff | [03-PV3-cross-device-handoff.md](./03-PV3-cross-device-handoff.md) |
 | 04 | PV4 Shared clipboard | [04-PV4-shared-clipboard-send-to-device.md](./04-PV4-shared-clipboard-send-to-device.md) |
 | 05 | PV5 Recent dictation history | [05-PV5-recent-dictation-history.md](./05-PV5-recent-dictation-history.md) |

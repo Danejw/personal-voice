@@ -20,13 +20,13 @@ Android floating panel
 
 ## Starting state that mattered
 
-Phase 03 already had barge-in, resumption, and playback in the main window. The Windows hook already routed Dictate, Voice Note, Handoff, and Selection, with conflict checks in TypeScript and Rust. The always-on-top indicator and the Android floating panel only drove dictation. Android already wakes the hidden WebView for one dictation utterance, because Chromium otherwise throttles timers and audio. `DictationController` was left unchanged.
+Phase 03 already had barge-in, resumption, and playback in the main window. The Windows hook already routed Dictate, Note, Handoff, and Selection, with conflict checks in TypeScript and Rust. The always-on-top indicator and the Android floating panel only drove dictation. Android already wakes the hidden WebView for one dictation utterance, because Chromium otherwise throttles timers and audio. `DictationController` was left unchanged.
 
 ## What shipped
 
 Windows Settings has an Assistant binding, stored on this device with the other shortcuts. It is empty until recorded. A press emits `toggle-assistant`. That event starts Assistant when it is idle or failed, and ends it when it is connecting, listening, or responding. Releasing the key does not emit a dictation release. The same key cannot be saved on two actions. Tray Pause still passes every global shortcut through, including Assistant, because the hook is paused as a whole.
 
-The Windows floating control gained a fifth button. The mic, voice note, and handoff buttons are unchanged. The new button shows idle, listening (pulse), speaking (amber), or error. Clicking it starts or ends Assistant in the shared controller. It does not open the main window. The indicator window is taller so the extra button fits (`OVERLAY_H` 194).
+The Windows floating control gained a fifth button. The mic, note, and handoff buttons are unchanged. The new button shows idle, listening (pulse), speaking (amber), or error. Clicking it starts or ends Assistant in the shared controller. It does not open the main window. The indicator window is taller so the extra button fits (`OVERLAY_H` 194).
 
 Android's floating panel has a separate button: Start Assistant, End Assistant, or Retry Assistant, plus a line that says listening, speaking, or the error. The bubble tap and Start dictation still mean dictation. While Assistant is listening or speaking, the existing WebView wake stays on, so the microphone and speakers can keep working after the user leaves the app. It sleeps again when both dictation and Assistant are idle, or when Assistant has failed and dictation is idle.
 
@@ -73,7 +73,7 @@ Not run: a live Gemini session, speakers with the Windows window hidden, or an A
 
 ## Manual test
 
-Record an Assistant shortcut in Settings first. It has no default. Example: `Ctrl+Alt+A`, as long as it is not already used by Dictate, Voice Note, Handoff, or Selection.
+Record an Assistant shortcut in Settings first. It has no default. Example: `Ctrl+Alt+A`, as long as it is not already used by Dictate, Note, Handoff, or Selection.
 
 ### Windows
 

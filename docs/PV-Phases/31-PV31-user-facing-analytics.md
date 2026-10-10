@@ -15,7 +15,7 @@ A user-facing Analytics page under Settings. Daily counters per device, synced t
 - Sidebar item Analytics. Voice, Devices, and Settings stay mounted. The dashboard loads month, last-14-day, and week ranges, and pages lifetime rows for totals and streaks. This device's local day replaces the matching remote row. A missing device name is **Removed device**.
 - Settings keeps the Usage intelligence toggle and Clear analytics. The settings summary points at Analytics. Dictionary rows show uses or Never used.
 - An old `usage.totals.v1` blob is labeled "Earlier on this device" and is not copied into today. Clear removes it.
-- A successful paste records the receiving application: the Windows process file name or the Android package, plus a short label. The window title is not stored. Voice notes and Send to device are not pastes. A day keeps 40 named apps and folds the rest into Other. The Analytics page shows that share. Gmail and Docs inside Chrome both count as Chrome.
+- A successful paste records the receiving application: the Windows process file name or the Android package, plus a short label. The window title is not stored. Notes and Send to device are not pastes. A day keeps 40 named apps and folds the rest into Other. The Analytics page shows that share. Gmail and Docs inside Chrome both count as Chrome.
 
 ## Sync
 

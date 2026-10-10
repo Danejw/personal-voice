@@ -23,7 +23,7 @@ Potential sources:
 - current/target app
 - explicitly attached selection
 - active screenshot
-- selected Voice Notes/Handoffs
+- selected Notes/Handoffs
 - Personal Dictionary
 - analytics aggregates
 - deterministic usage preferences

@@ -10,7 +10,7 @@ Read the current AGENTS.md, docs/SPEC.md, docs/ARCHITECTURE.md, relevant source,
 
 Keep the existing Tauri 2 / React / TypeScript / Rust / Android platform architecture and Gemini integrations. Preserve direct device-to-Gemini live audio, ephemeral credentials, existing transcription cleanup, existing action permissions, and the borderless UI style. No raw microphone audio storage, new assistant provider, agent framework, or unrelated redesign. Supabase stores durable application state; a Gemini connection or resumption handle is not the conversation database.
 
-The user has explicitly requested saved Assistant conversations and personal memory; update outdated V1 scope statements narrowly where necessary. Existing dictations, voice notes, handoffs, settings, and local device preferences must continue working. Never print credentials. Verify current official documentation before relying on provider-specific or Supabase API behavior; preserve the working model/API configuration unless this phase requires a verified change.
+The user has explicitly requested saved Assistant conversations and personal memory; update outdated V1 scope statements narrowly where necessary. Existing dictations, notes, handoffs, settings, and local device preferences must continue working. Never print credentials. Verify current official documentation before relying on provider-specific or Supabase API behavior; preserve the working model/API configuration unless this phase requires a verified change.
 
 Implement the smallest complete version of this phase. Test meaningful failure cases, not merely implementation details. Run applicable lint, typecheck, tests, and build commands from the actual package scripts. Record PASS, FAIL, or NOT RUN honestly; emulator tests do not establish real-device success. If infrastructure access is unavailable, finish all safe local work and state exactly which live checks remain. Do not guess the production project or apply migrations to an unverified target. Apply remote changes only within existing authorization; otherwise leave reviewed migrations and deployment instructions ready.
 
@@ -25,7 +25,7 @@ Inspect AssistantController.ts, AssistantSession.ts, state.ts, protocol.ts, cont
 Reference findings to verify, not blindly repeat:
 - Assistant turns currently live in memory. End preserves visible turns, but ordinary later sessions do not automatically restore them as model history. Existing continuation handoffs copy a bounded transcript into a fresh session.
 - personalContext.ts provides bounded usage-derived context, not durable personal preferences.
-- Existing cloud data includes devices, dictionary, settings, voice_notes, handoffs, usage_days, remote device context/action requests, and opt-in dictations.
+- Existing cloud data includes devices, dictionary, settings, notes, handoffs, usage_days, remote device context/action requests, and opt-in dictations.
 - A platform_preferences migration exists but was absent from generated types/current sync service. Determine whether it is deployed or used; do not make it a separate feature.
 - Settings include cloud_dictation_history and server-owned usage_epoch. Device hotkeys, microphone, destination, and other preferences have local ownership.
 - Current dictation listing is bounded; do not mistake the first page for the whole history.

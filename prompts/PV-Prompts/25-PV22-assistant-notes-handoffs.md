@@ -1,11 +1,11 @@
-# BUILD ORDER 25 — PV22: Assistant + Voice Notes/Handoffs
+# BUILD ORDER 25 — PV22: Assistant + Notes/Handoffs
 
 Build on the existing Notes and Handoff systems.
 
 ## Goal
-Implement **PV22 — Assistant + Voice Notes/Handoffs**.
+Implement **PV22 — Assistant + Notes/Handoffs**.
 
-Allow the user to explicitly attach one or more selected Voice Notes and one selected Handoff to an Assistant conversation.
+Allow the user to explicitly attach one or more selected Notes and one selected Handoff to an Assistant conversation.
 
 Do NOT automatically dump all stored notes into every session.
 

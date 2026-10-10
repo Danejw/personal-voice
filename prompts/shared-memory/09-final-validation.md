@@ -10,7 +10,7 @@ Read the current AGENTS.md, docs/SPEC.md, docs/ARCHITECTURE.md, relevant source,
 
 Keep the existing Tauri 2 / React / TypeScript / Rust / Android platform architecture and Gemini integrations. Preserve direct device-to-Gemini live audio, ephemeral credentials, existing transcription cleanup, existing action permissions, and the borderless UI style. No raw microphone audio storage, new assistant provider, agent framework, or unrelated redesign. Supabase stores durable application state; a Gemini connection or resumption handle is not the conversation database.
 
-The user has explicitly requested saved Assistant conversations and personal memory; update outdated V1 scope statements narrowly where necessary. Existing dictations, voice notes, handoffs, settings, and local device preferences must continue working. Never print credentials. Verify current official documentation before relying on provider-specific or Supabase API behavior; preserve the working model/API configuration unless this phase requires a verified change.
+The user has explicitly requested saved Assistant conversations and personal memory; update outdated V1 scope statements narrowly where necessary. Existing dictations, notes, handoffs, settings, and local device preferences must continue working. Never print credentials. Verify current official documentation before relying on provider-specific or Supabase API behavior; preserve the working model/API configuration unless this phase requires a verified change.
 
 Implement the smallest complete version of this phase. Test meaningful failure cases, not merely implementation details. Run applicable lint, typecheck, tests, and build commands from the actual package scripts. Record PASS, FAIL, or NOT RUN honestly; emulator tests do not establish real-device success. If infrastructure access is unavailable, finish all safe local work and state exactly which live checks remain. Do not guess the production project or apply migrations to an unverified target. Apply remote changes only within existing authorization; otherwise leave reviewed migrations and deployment instructions ready.
 
@@ -30,11 +30,11 @@ Use a clean test account and authorized deployed test environment for this journ
 3. Continue on the desktop while the laptop is open; verify explicit takeover and stale-writer fencing.
 4. Start a new conversation; verify the preference transfers but unrelated transcript is not dumped into context.
 5. Correct and forget the preference; verify all devices and fresh/resumed sessions honor it.
-6. Retrieve an eligible voice note, older dictation, and old conversation with real source references.
+6. Retrieve an eligible note, older dictation, and old conversation with real source references.
 7. Interrupt a reply, disconnect during save, restart, expire the lease, and replay retries; verify no duplicate messages or lost recoverable user text.
 8. Delete a thread/memory while another device is offline; reconnect and verify no resurrection.
 9. Sign out and into another account during an in-flight request; verify no data, cache, attachment, lease, or context leakage.
-10. Verify existing dictation cleanup, insertion, voice-note save, handoff, dictionary, usage, remote actions, settings, and old continuation payloads still work.
+10. Verify existing dictation cleanup, insertion, note save, handoff, dictionary, usage, remote actions, settings, and old continuation payloads still work.
 
 Audit RLS/storage/RPC grants, private attachment access, ownership relationships, signed URL lifetime, server-side source validation, secret handling, bounded context, retry limits, and obsolete cache cleanup. Test migrations against existing data and older client behavior.
 
