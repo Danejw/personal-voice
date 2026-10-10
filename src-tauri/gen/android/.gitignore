@@ -18,3 +18,6 @@ keystore.properties
 
 /.tauri
 /tauri.settings.gradle
+# Generated Vite web assets are rebuilt by `pnpm tauri android build`.
+# Do not commit stale hashed JS/CSS bundles that can retain obsolete UI/tool wording.
+/app/src/main/assets/

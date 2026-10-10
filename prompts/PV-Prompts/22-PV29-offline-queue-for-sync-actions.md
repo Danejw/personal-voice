@@ -8,7 +8,7 @@ Implement **PV29 — Offline Queue for Sync Actions**.
 Support safe local queuing of appropriate mutations while offline, such as:
 
 ```text
-create voice note
+create note
 archive note
 create handoff
 dictionary/settings changes where safe

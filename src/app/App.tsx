@@ -6,8 +6,8 @@ import { selectionPreview } from "@/assistant/selectionContext";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { AssistantConversationStore } from "@/assistant/AssistantConversationStore";
-import { capturedImageFile } from "@/assistant/noteAttachment";
-import type { CapturedNoteImage } from "@/assistant/noteAttachment";
+import { noteAttachmentFile } from "@/assistant/noteAttachment";
+import type { NoteAttachmentInput } from "@/assistant/noteAttachment";
 import { listPastConversations, listPastSessions, readPastConversation } from "@/assistant/assistantConversationRecall";
 import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
@@ -141,7 +141,7 @@ import { AnalyticsPanel } from "@/usage/AnalyticsPanel";
 import { localDayKey, mergeUsageDays, termUsage } from "@/usage/analytics";
 import { UsagePanel } from "@/usage/UsagePanel";
 import { UsageStore } from "@/usage/UsageStore";
-import type { UsageSnapshot } from "@/usage/usageEvents";
+import { NOTE_CREATED_FEATURE_ID, type UsageSnapshot } from "@/usage/usageEvents";
 import { useUsage } from "@/usage/useUsage";
 import { countOutputWords } from "@/usage/words";
 import { UpdatePanel } from "@/updates/UpdatePanel";
@@ -152,7 +152,7 @@ import { GeminiTokenSource } from "@/voice/provider/gemini/GeminiTokenSource";
 import { MicrophoneLease } from "@/voice/audio/microphoneLease";
 import type { VoiceState } from "@/voice/session/state";
 import { LiveFieldPreview } from "@/voice/session/LiveFieldPreview";
-import { TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
+import { NOTE_DESTINATION_ID, TranscriptDestinationRouter } from "@/voice/transcript/TranscriptDestination";
 import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 function dictionaryTermUsage(
@@ -255,7 +255,7 @@ const notesStore = new NotesStore(
   notesApi,
   (userId) => localDeviceId(localStorage, userId, createId),
   (sourceType) => {
-    if (sourceType === "voice") usage.recordLater({ name: "voice_note_created" });
+    if (sourceType === "voice") usage.recordLater({ name: NOTE_CREATED_FEATURE_ID });
   },
   noteOrganizerApi,
 );
@@ -338,21 +338,21 @@ function pasteReceived(text: string): Promise<void> {
 assistant.setActions({
   copyText: (text) => navigator.clipboard.writeText(text),
   insertText: (text) => pasteIntoField(text),
-  createVoiceNote: (text, image) => notesStore.create(text, "assistant", {},
-    image ? [capturedImageFile(image)] : []),
-  editVoiceNote: async (id, text, image) => {
-    const file = image ? capturedImageFile(image) : null;
+  createNote: (text, attachment) => notesStore.create(text, "assistant", {},
+    attachment ? [noteAttachmentFile(attachment)] : []),
+  editNote: async (id, text, attachment) => {
+    const file = attachment ? noteAttachmentFile(attachment) : null;
     await notesStore.updateText(id, text);
     if (file) {
       try {
         await notesStore.addAttachments(id, [file]);
       } catch (error) {
-        throw new Error(`Note text updated, but attaching the image failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+        throw new Error(`Note text updated, but attaching the file failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
       }
     }
   },
-  attachImageToVoiceNote: (id: string, image: CapturedNoteImage) =>
-    notesStore.addAttachments(id, [capturedImageFile(image)]),
+  attachFileToNote: (id: string, attachment: NoteAttachmentInput) =>
+    notesStore.addAttachments(id, [noteAttachmentFile(attachment)]),
   listSnippets: async () => {
     const snap = snippetStore.getSnapshot();
     if (snap.status === "signed-out") throw new Error("Sign in to read snippets.");
@@ -405,7 +405,7 @@ assistant.setActions({
   },
   sendHandoff: (text, deviceId) => handoffs.send(text, "dictation", deviceId),
   captureSelection: () => platform.captureSelection(),
-  listVoiceNotes: async (includeArchived) => {
+  listNotes: async (includeArchived) => {
     const snap = notesStore.getSnapshot();
     if (snap.status === "signed-out") throw new Error("Sign in to read notes.");
     if (snap.status !== "synced" && snap.notes.length === 0) throw new Error("Notes are unavailable until sync reconnects.");
@@ -432,15 +432,15 @@ assistant.setActions({
   describeItem: (kind, id) => {
     if (kind === "note") {
       const note = notesStore.getSnapshot().notes.find((item) => item.id === id);
-      if (!note) throw new Error("No note has that id. Call list_voice_notes.");
+      if (!note) throw new Error("No note has that id. Call list_notes.");
       return selectionPreview(note.text);
     }
     const handoff = handoffs.getSnapshot().received.find((item) => item.id === id);
     if (!handoff) throw new Error("No received handoff has that id. Call list_handoffs.");
     return selectionPreview(handoffDisplayText(handoff.text));
   },
-  archiveVoiceNote: (id, archived) => notesStore.setArchived(id, archived),
-  deleteVoiceNote: (id) => notesStore.remove(id),
+  archiveNote: (id, archived) => notesStore.setArchived(id, archived),
+  deleteNote: (id) => notesStore.remove(id),
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
   searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
@@ -495,7 +495,7 @@ const destinations = new TranscriptDestinationRouter({
   "active-field": { deliver: async (transcript) => {
     if (!await liveFieldPreview.commit(transcript)) await pasteIntoField(transcript);
   } },
-  "voice-note": { deliver: (transcript) => notesStore.create(transcript, "voice") },
+  [NOTE_DESTINATION_ID]: { deliver: (transcript) => notesStore.create(transcript, "voice") },
   "remote-dictation": remoteDictationDestination,
 }, "active-field", (result) => {
   history.recordLater(result);
@@ -505,7 +505,7 @@ const destinations = new TranscriptDestinationRouter({
 }, transformFinalDictation);
 const DESTINATION_OPTIONS: readonly SelectOption[] = [
   { value: "active-field", label: "Active field" },
-  { value: "voice-note", label: "Note" },
+  { value: NOTE_DESTINATION_ID, label: "Note" },
   { value: "remote-dictation", label: "Remote Dictation" },
 ];
 
@@ -524,7 +524,7 @@ function controlFor(state: VoiceState, destination: TranscriptDestinationId): { 
     case "INSERTING": {
       switch (destination) {
         case "active-field": return { label: "Typing…", enabled: false };
-        case "voice-note": return { label: "Saving…", enabled: false };
+        case NOTE_DESTINATION_ID: return { label: "Saving…", enabled: false };
         case "remote-dictation": return { label: "Sending…", enabled: false };
         default: {
           const unhandled: never = destination;
@@ -550,7 +550,7 @@ function statusFor(state: VoiceState, destination: TranscriptDestinationId): str
     case "INSERTING": {
       switch (destination) {
         case "active-field": return "Typing";
-        case "voice-note": return "Saving note";
+        case NOTE_DESTINATION_ID: return "Saving note";
         case "remote-dictation": return "Sending";
         default: {
           const unhandled: never = destination;
@@ -719,7 +719,7 @@ export default function App() {
   const status = !auth.ready ? "Starting…" : !signedIn ? "Sign in to start dictating" : paused ? "Paused from the tray" : statusFor(state, destination);
 
   function chooseDestination(value: string) {
-    if (value !== "active-field" && value !== "voice-note" && value !== "remote-dictation") return;
+    if (value !== "active-field" && value !== NOTE_DESTINATION_ID && value !== "remote-dictation") return;
     destinations.select(value);
     setDestination(value);
     saveDestination(value);

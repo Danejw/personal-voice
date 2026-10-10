@@ -22,7 +22,7 @@ Citations come from `serverContent.groundingMetadata`, the Live server field doc
 
 A reply with no citations has no sources field and no "Sources" label. Sources that arrive while a reply is in progress sit on that reply, including after the turn is already on screen. A citation with no spoken text does not create a sourced turn.
 
-Attached selection text now says not to put that text into a web search unless the user asks to look it up. The same rule is in the session instruction for voice notes and other private text. The selection is still sent as conversation context, because that is what the user attached. It is not copied into a separate search request.
+Attached selection text now says not to put that text into a web search unless the user asks to look it up. The same rule is in the session instruction for notes and other private text. The selection is still sent as conversation context, because that is what the user attached. It is not copied into a separate search request.
 
 ## Files
 

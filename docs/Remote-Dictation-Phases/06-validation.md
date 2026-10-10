@@ -37,7 +37,7 @@ NOT RUN. Manual matrix from the prompt remains:
 - Android → Windows Laptop/Desktop cursor insert
 - Windows overlay tap/hold
 - Offline / disabled setting / exactly-once / focus safety
-- Regression: ordinary dictation, voice notes, handoffs, Assistant
+- Regression: ordinary dictation, notes, handoffs, Assistant
 
 ## Deviations
 

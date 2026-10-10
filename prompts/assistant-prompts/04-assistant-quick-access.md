@@ -31,7 +31,7 @@ Add a device-local Assistant binding using the existing hotkey architecture.
 
 It must:
 - start/use Assistant, never Dictation
-- coexist with Dictate / Voice Note / Handoff / Selection
+- coexist with Dictate / Note / Handoff / Selection
 - use existing conflict validation
 - stay local to Windows
 

@@ -47,7 +47,7 @@ Hold global hotkey
 → insert text into focused application
 ```
 
-The default hotkey can initially be something like Right Alt, but it must not be hard-coded into the architecture. Each Windows action can record several bindings. A binding is one key or mouse button, optionally with Ctrl, Shift, Alt, or Win, so the same action can use both a mouse button and a keyboard shortcut. Additional bindings may hold-to-talk into a voice note or a handoff. Dictation also supports delayed mouse bindings: a quick click preserves the mouse button's normal behavior, while holding past the configured threshold (300/500/750/1000 ms, default 500 ms) starts the same Dictation pipeline and releasing finalizes it.
+The default hotkey can initially be something like Right Alt, but it must not be hard-coded into the architecture. Each Windows action can record several bindings. A binding is one key or mouse button, optionally with Ctrl, Shift, Alt, or Win, so the same action can use both a mouse button and a keyboard shortcut. Additional bindings may hold-to-talk into a note or a handoff. Dictation also supports delayed mouse bindings: a quick click preserves the mouse button's normal behavior, while holding past the configured threshold (300/500/750/1000 ms, default 500 ms) starts the same Dictation pipeline and releasing finalizes it.
 
 ### Android
 
@@ -257,7 +257,7 @@ created_at
 updated_at
 ```
 
-The legacy `voice_notes` name remains a compatibility view while older installed clients roll forward.
+The canonical table is `public.notes`. The temporary `public.voice_notes` compatibility view has been removed; Notes and Assistant note operations use `public.notes`.
 
 Notes may also have an optional stable scan title and one reusable account-scoped Note group. Automatic organization runs only after an explicit Note is saved. It generates a title only while the title is missing, prefers an existing group, and creates a new group only for a clear cluster of at least three ungrouped notes. Manual title edits and manual group moves are authoritative and are not overwritten by later automatic passes. The Notes page is a responsive visual grid: group cards expose a small preview grid of their note titles before opening, while ungrouped Notes remain visible as standalone cards.
 
@@ -323,7 +323,7 @@ transformProfileId (optional selected automatic Dictation transform)
 microphone
 showIndicator
 pushToTalk
-voiceNoteHotkey
+noteHotkey
 remoteDictationHotkey (legacy handoffHotkey still read)
 remoteDictation (Allow remote dictation; default ON)
 remoteDictationTargetDeviceId
@@ -338,7 +338,7 @@ Keep schema additions conservative.
 - audio goes from the client to the transcription provider
 - backend does not receive live audio
 - audio is not permanently retained by the app
-- voice-created notes sync only when the user explicitly chooses the Voice note destination; manually created notes sync when the user saves them
+- voice-created notes sync only when the user explicitly chooses the Note destination; manually created notes sync when the user saves them
 - handoffs sync only when the user explicitly sends text to the Handoffs inbox
 - Remote Dictation sends only a finalized transcript to one selected device and expires quickly
 - never monitor or continuously synchronize the OS clipboard
@@ -448,13 +448,13 @@ Main settings view should contain only useful controls such as:
 - selection capture preview
 - usage intelligence toggle
 
-The always-visible floating control is the day-to-day interface: start dictation, choose a destination, capture a selection, and peek at recent voice notes and pending handoffs without opening Settings. While listening, the same control shows the listening state.
+The always-visible floating control is the day-to-day interface: start dictation, choose a destination, capture a selection, and peek at recent notes and pending handoffs without opening Settings. While listening, the same control shows the listening state.
 
 No dashboard.
 
 ## Explicitly out of scope for V1
 
-The original dictation scope did not include an assistant. Assistant now exists as a second mode. It does not replace dictation. Its limits are in `docs/Assistant-Phases/`. Saved Assistant conversation text is account data (`docs/Shared-Assistant-Phases/06.md`). The Assistant screen saves and reopens that transcript on every signed-in device. One device at a time holds the conversation and can answer. Starting Assistant on a saved thread sends that thread once as earlier context. A resumed connection does not send it again. Old actions are not run again. Explicit memories are separate from that transcript and from the analytics profile. A new session hears the active ones. Forgetting a memory does not delete the conversation. Learning new memories from saved Assistant messages is off until the account turns it on (`docs/Shared-Assistant-Phases/07.md`). Voice notes and dictations are not read for that.
+The original dictation scope did not include an assistant. Assistant now exists as a second mode. It does not replace dictation. Its limits are in `docs/Assistant-Phases/`. Saved Assistant conversation text is account data (`docs/Shared-Assistant-Phases/06.md`). The Assistant screen saves and reopens that transcript on every signed-in device. One device at a time holds the conversation and can answer. Starting Assistant on a saved thread sends that thread once as earlier context. A resumed connection does not send it again. Old actions are not run again. Explicit memories are separate from that transcript and from the analytics profile. A new session hears the active ones. Forgetting a memory does not delete the conversation. Learning new memories from saved Assistant messages is off until the account turns it on (`docs/Shared-Assistant-Phases/07.md`). Notes and dictations are not read for that.
 
 Still out of scope:
 

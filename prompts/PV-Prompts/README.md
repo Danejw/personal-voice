@@ -15,7 +15,7 @@ Implementation reports for completed PV phases: [`docs/PV-Phases/`](../../docs/P
 ## Build order
 
 - `Done/01-PV2-dictation-destinations.md`
-- `Done/02-PV1-voice-notes-inbox.md`
+- `Done/02-PV1-notes-inbox.md`
 - `Done/03-PV3-cross-device-handoff.md`
 - `Done/04-PV4-shared-clipboard-send-to-device.md`
 - `Done/05-PV5-recent-dictation-history.md`

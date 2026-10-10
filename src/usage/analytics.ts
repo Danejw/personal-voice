@@ -1,5 +1,6 @@
 import type { DictionaryTerm } from "@/sync/personalData";
 import {
+  NOTE_CREATED_FEATURE_ID,
   OTHER_TARGET_APP,
   USAGE_FEATURES,
   USAGE_TRIGGERS,
@@ -14,7 +15,7 @@ import type {
   UsageFeature,
   UsageTrigger,
 } from "@/usage/usageEvents";
-import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
+import { NOTE_DESTINATION_ID, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 export const USAGE_PAGE_SIZE = 1000;
 
@@ -225,14 +226,14 @@ export interface AnalyticsModel {
 
 const DESTINATION_LABELS: Record<TranscriptDestinationId, string> = {
   "active-field": "Active field",
-  "voice-note": "Voice Notes",
+  [NOTE_DESTINATION_ID]: "Notes",
   "remote-dictation": "Remote Dictation",
 };
 
 export const TRIGGER_LABELS: Record<UsageTrigger, string> = {
   "ui-button": "UI button",
   "shortcut-dictate": "Hold to Dictate",
-  "shortcut-note": "Voice Note Shortcut",
+  "shortcut-note": "Note Shortcut",
   "shortcut-handoff": "Handoff Shortcut",
   overlay: "Floating Control",
   "android-floating-mic": "Floating Mic",
@@ -240,7 +241,7 @@ export const TRIGGER_LABELS: Record<UsageTrigger, string> = {
 
 const FEATURE_LABELS: Record<UsageFeature, string> = {
   selection_captured: "Capture Selection",
-  voice_note_created: "Voice Notes",
+  [NOTE_CREATED_FEATURE_ID]: "Notes",
   handoff_created: "Handoffs",
   history_inserted: "Recent Dictation",
   shared_clipboard: "Shared Clipboard",
@@ -420,14 +421,14 @@ export function insightsFrom(rows: readonly RemoteUsageDay[], today: string): st
   const notesByDevice = new Map<string, number>();
   const fieldByDevice = new Map<string, number>();
   for (const row of rows) {
-    notesByDevice.set(row.deviceId, (notesByDevice.get(row.deviceId) ?? 0) + (row.counters.destinations["voice-note"] ?? 0));
+    notesByDevice.set(row.deviceId, (notesByDevice.get(row.deviceId) ?? 0) + (row.counters.destinations[NOTE_DESTINATION_ID] ?? 0));
     fieldByDevice.set(row.deviceId, (fieldByDevice.get(row.deviceId) ?? 0) + (row.counters.destinations["active-field"] ?? 0));
   }
   const noteTotal = [...notesByDevice.values()].reduce((sum, count) => sum + count, 0);
   const noteLeader = [...notesByDevice.entries()].sort((a, b) => b[1] - a[1])[0];
   const fieldLeader = [...fieldByDevice.entries()].sort((a, b) => b[1] - a[1])[0];
   if (noteLeader && fieldLeader && noteTotal >= 5 && noteLeader[0] !== fieldLeader[0] && share(noteLeader[1], noteTotal) >= 60) {
-    lines.push("Voice notes and active-field dictation come from different devices.");
+    lines.push("Notes and active-field dictation come from different devices.");
   }
   if (total.dictationCompleted >= 5 && share(total.recoveryUsed, total.dictationCompleted) >= 10) {
     lines.push(`${share(total.recoveryUsed, total.dictationCompleted)}% of completed dictations needed recovery.`);

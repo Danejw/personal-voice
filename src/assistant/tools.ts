@@ -1,5 +1,5 @@
 import { selectionPreview } from "@/assistant/selectionContext";
-import type { NoteImageSource } from "@/assistant/noteAttachment";
+import type { NoteAttachmentSource } from "@/assistant/noteAttachment";
 import { parseMemoryCommand, type MemoryCommand } from "@/assistant/memory";
 import { isRemoteKind, type RemoteKind } from "@/assistant/remoteContext";
 import {
@@ -52,12 +52,12 @@ export function assistantFunctionDeclarations() {
       parameters: { type: "object", properties: { text: TEXT }, required: ["text"] },
     },
     {
-      name: "create_voice_note",
-      description: "Save text as a new note. When the user explicitly asks to attach an image, first call capture_screen or capture_camera_photo, then set attachment_source to screenshot or camera_photo. Never assume an image was captured; the current still is uploaded privately only after confirmation.",
-      parameters: { type: "object", properties: { text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo"], description: "Optional current captured still to attach. Omit for text-only notes." } }, required: ["text"] },
+      name: "create_note",
+      description: "Save text as a new note. To attach a file, set attachment_source to selected_file (after the user selects one in Assistant), screenshot (after capture_screen), or camera_photo (after capture_camera_photo). Never invent file access. File uploads require user confirmation.",
+      parameters: { type: "object", properties: { text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo", "selected_file"], description: "Optional screenshot, camera photo, or user-selected local file. Omit for text-only notes." } }, required: ["text"] },
     },
     {
-      name: "list_voice_notes",
+      name: "list_notes",
       description: "Read the user's notes. Call this when the user asks what their notes say. Inbox only unless include_archived is true. Answer from this result. Use an id from this list for archive, restore, or delete.",
       parameters: {
         type: "object",
@@ -67,19 +67,19 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
-      name: "archive_voice_note",
-      description: "Archive one note. Call list_voice_notes first and pass that note's id. Call it when the user asks. Do not ask them to click. Do not say this is unavailable.",
-      parameters: { type: "object", properties: { id: { type: "string", description: "The note id from list_voice_notes." } }, required: ["id"] },
+      name: "archive_note",
+      description: "Archive one note. Call list_notes first and pass that note's id. Call it when the user asks. Do not ask them to click. Do not say this is unavailable.",
+      parameters: { type: "object", properties: { id: { type: "string", description: "The note id from list_notes." } }, required: ["id"] },
     },
     {
-      name: "restore_voice_note",
-      description: "Move one archived note back to the inbox. Call list_voice_notes with include_archived first and pass that note's id. Call it when the user asks. Do not ask them to click.",
-      parameters: { type: "object", properties: { id: { type: "string", description: "The note id from list_voice_notes." } }, required: ["id"] },
+      name: "restore_note",
+      description: "Move one archived note back to the inbox. Call list_notes with include_archived first and pass that note's id. Call it when the user asks. Do not ask them to click.",
+      parameters: { type: "object", properties: { id: { type: "string", description: "The note id from list_notes." } }, required: ["id"] },
     },
     {
-      name: "delete_voice_note",
-      description: "Delete one note permanently. Call list_voice_notes first and pass that note's id. Call it when the user asks. Do not ask them to click. Do not delete unless the user asked.",
-      parameters: { type: "object", properties: { id: { type: "string", description: "The note id from list_voice_notes." } }, required: ["id"] },
+      name: "delete_note",
+      description: "Delete one note permanently. Call list_notes first and pass that note's id. Call it when the user asks. Do not ask them to click. Do not delete unless the user asked.",
+      parameters: { type: "object", properties: { id: { type: "string", description: "The note id from list_notes." } }, required: ["id"] },
     },
     {
       name: "send_handoff",
@@ -164,16 +164,16 @@ export function assistantFunctionDeclarations() {
       parameters: { type: "object", properties: { text: TEXT, device: { type: "string" } }, required: ["text", "device"] },
     },
     {
-      name: "edit_voice_note",
-      description: "Replace full text of a note selected from list_voice_notes. Optionally attach the currently captured screenshot or camera photo when the user requests it; capture first. The existing note attachments remain intact. Requires confirmation.",
-      parameters: { type: "object", properties: { id: { type: "string" }, text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo"] } }, required: ["id", "text"] },
+      name: "edit_note",
+      description: "Replace full text of a note selected from list_notes. Optionally attach a selected file, freshly captured screenshot, or camera photo using attachment_source. The existing note attachments remain intact. Requires confirmation.",
+      parameters: { type: "object", properties: { id: { type: "string" }, text: TEXT, attachment_source: { type: "string", enum: ["screenshot", "camera_photo", "selected_file"] } }, required: ["id", "text"] },
     },
     {
-      name: "attach_image_to_voice_note",
-      description: "Attach a captured screenshot or camera still to an existing saved note without changing its text. First capture_screen or capture_camera_photo, then list_voice_notes to select the note id. Requires confirmation. Cannot read arbitrary disk paths.",
+      name: "attach_file_to_note",
+      description: "Attach a file to an existing saved note without changing its text. First identify the note with list_notes, then use attachment_source: selected_file for a file explicitly selected in Assistant, screenshot after capture_screen, or camera_photo after capture_camera_photo. Requires confirmation; cannot read arbitrary disk paths.",
       parameters: { type: "object", properties: {
-        id: { type: "string", description: "Existing note id from list_voice_notes." },
-        attachment_source: { type: "string", enum: ["screenshot", "camera_photo"] },
+        id: { type: "string", description: "Existing note id from list_notes." },
+        attachment_source: { type: "string", enum: ["screenshot", "camera_photo", "selected_file"] },
       }, required: ["id", "attachment_source"] },
     },
     {
@@ -430,7 +430,7 @@ export interface HandoffPlan {
 
 export type ConfirmToolName =
   | "insert_text"
-  | "create_voice_note"
+  | "create_note"
   | "focus_accessible_control"
   | "navigate_window"
   | "uia_control_action"
@@ -441,14 +441,14 @@ export type ConfirmToolName =
   | "create_snippet"
   | "update_snippet"
   | "send_remote_dictation"
-  | "edit_voice_note"
-  | "attach_image_to_voice_note"
+  | "edit_note"
+  | "attach_file_to_note"
   | "create_transform"
   | "add_dictionary_word"
   | "send_handoff"
-  | "archive_voice_note"
-  | "restore_voice_note"
-  | "delete_voice_note"
+  | "archive_note"
+  | "restore_note"
+  | "delete_note"
   | "dismiss_handoff"
   | "open_app"
   | "press_shortcut"
@@ -477,7 +477,7 @@ export type ToolDecision =
   | { kind: "windows"; id: string; name: "list_windows" }
   | { kind: "apps"; id: string; name: "list_installed_apps" }
   | { kind: "snippets"; id: string; name: "list_snippets" }
-  | { kind: "notes"; id: string; name: "list_voice_notes"; includeArchived: boolean }
+  | { kind: "notes"; id: string; name: "list_notes"; includeArchived: boolean }
   | { kind: "dashboard"; id: string; name: "read_usage_analytics" | "read_insights" }
   | { kind: "conversations"; id: string; name: "list_past_conversations"; query: string; cursor: string | null; count: number; archivedOnly: boolean }
   | { kind: "conversationRead"; id: string; name: "read_past_conversation"; conversationId: string;
@@ -593,8 +593,8 @@ export function decideToolCall(
     case "read_usage_analytics":
     case "read_insights":
       return { kind: "dashboard", id: call.id, name: call.name };
-    case "list_voice_notes":
-      return { kind: "notes", id: call.id, name: "list_voice_notes", includeArchived: args.include_archived === true || args.includeArchived === true };
+    case "list_notes":
+      return { kind: "notes", id: call.id, name: "list_notes", includeArchived: args.include_archived === true || args.includeArchived === true };
     case "list_handoffs":
       return { kind: "handoffs", id: call.id, name: "list_handoffs" };
     case "list_past_conversations": {
@@ -748,25 +748,25 @@ export function decideToolCall(
       }
       return confirm(call.id, "send_remote_dictation", JSON.stringify({ text: body.text, device: device.name }), "Send dictation to remote device", null, null);
     }
-    case "edit_voice_note": {
+    case "edit_note": {
       const id = readId(args);
       const body = readText(args);
-      const attachment = readNoteImageSource(args, false);
+      const attachment = readNoteAttachmentSource(args, false);
       if ("error" in id) return { kind: "reject", id: call.id, name: call.name, message: id.error };
       if ("error" in body) return { kind: "reject", id: call.id, name: call.name, message: body.error };
       if ("error" in attachment) return { kind: "reject", id: call.id, name: call.name, message: attachment.error };
-      return confirm(call.id, "edit_voice_note",
+      return confirm(call.id, "edit_note",
         JSON.stringify({ id: id.id, text: body.text, attachment_source: attachment.source }),
-        attachment.source ? "Edit note and attach captured image" : "Edit this note", null, null);
+        attachment.source ? "Edit note and attach file" : "Edit this note", null, null);
     }
-    case "attach_image_to_voice_note": {
+    case "attach_file_to_note": {
       const id = readId(args);
-      const attachment = readNoteImageSource(args, true);
+      const attachment = readNoteAttachmentSource(args, true);
       if ("error" in id) return { kind: "reject", id: call.id, name: call.name, message: id.error };
       if ("error" in attachment) return { kind: "reject", id: call.id, name: call.name, message: attachment.error };
-      return confirm(call.id, "attach_image_to_voice_note",
+      return confirm(call.id, "attach_file_to_note",
         JSON.stringify({ id: id.id, attachment_source: attachment.source }),
-        "Attach captured image to note", null, null);
+        "Attach file to note", null, null);
     }
     case "create_transform": {
       if (typeof args.name !== "string" || !args.name.trim() || args.name.length > 80 || typeof args.instruction !== "string" || !args.instruction.trim() || args.instruction.length > 4000) {
@@ -779,9 +779,9 @@ export function decideToolCall(
       if ("error" in word) return { kind: "reject", id: call.id, name: call.name, message: word.error };
       return confirm(call.id, "add_dictionary_word", word.text, "Add this dictionary word", null, null);
     }
-    case "archive_voice_note":
-    case "restore_voice_note":
-    case "delete_voice_note":
+    case "archive_note":
+    case "restore_note":
+    case "delete_note":
     case "dismiss_handoff": {
       const item = readId(args);
       if ("error" in item) return { kind: "reject", id: call.id, name: call.name, message: item.error };
@@ -813,7 +813,7 @@ export function decideToolCall(
     }
     case "copy_text":
     case "insert_text":
-    case "create_voice_note":
+    case "create_note":
     case "send_handoff":
       break;
     default:
@@ -830,12 +830,12 @@ export function decideToolCall(
   if (call.name === "insert_text") {
     return confirm(call.id, "insert_text", text.text, "Insert this text into the focused app", null, null);
   }
-  if (call.name === "create_voice_note") {
-    const attachment = readNoteImageSource(args, false);
+  if (call.name === "create_note") {
+    const attachment = readNoteAttachmentSource(args, false);
     if ("error" in attachment) return { kind: "reject", id: call.id, name: call.name, message: attachment.error };
-    return confirm(call.id, "create_voice_note",
+    return confirm(call.id, "create_note",
       attachment.source ? JSON.stringify({ text: text.text, attachment_source: attachment.source }) : text.text,
-      attachment.source ? "Save note with captured image" : "Save this note", null, null);
+      attachment.source ? "Save note with attachment" : "Save this note", null, null);
   }
   const device = readDevice(args);
   if ("error" in device) return { kind: "reject", id: call.id, name: call.name, message: device.error };
@@ -848,11 +848,11 @@ export function decideToolCall(
   }
 }
 
-function confirmTitle(name: "archive_voice_note" | "restore_voice_note" | "delete_voice_note" | "dismiss_handoff"): string {
+function confirmTitle(name: "archive_note" | "restore_note" | "delete_note" | "dismiss_handoff"): string {
   switch (name) {
-    case "archive_voice_note": return "Archive this note";
-    case "restore_voice_note": return "Restore this note";
-    case "delete_voice_note": return "Delete this note";
+    case "archive_note": return "Archive this note";
+    case "restore_note": return "Restore this note";
+    case "delete_note": return "Delete this note";
     case "dismiss_handoff": return "Dismiss this handoff";
   }
 }
@@ -881,12 +881,12 @@ function plainArgs(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-export function readNoteImageSource(args: Record<string, unknown>, required: boolean):
-  { source: NoteImageSource | null } | { error: string } {
+export function readNoteAttachmentSource(args: Record<string, unknown>, required: boolean):
+  { source: NoteAttachmentSource | null } | { error: string } {
   const input = args.attachment_source;
   if (input === undefined && !required) return { source: null };
-  if (input === "screenshot" || input === "camera_photo") return { source: input };
-  return { error: "Choose attachment_source screenshot or camera_photo from an already captured image." };
+  if (input === "screenshot" || input === "camera_photo" || input === "selected_file") return { source: input };
+  return { error: "Choose attachment_source screenshot, camera_photo, or selected_file. Capture the image or select the file first." };
 }
 
 function readId(args: Record<string, unknown>): { id: string } | { error: string } {

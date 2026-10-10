@@ -52,7 +52,7 @@ fn push_to_talk_payload(event: PttEvent) -> PushToTalkPayload {
         PttEvent::Press { destination } => PushToTalkPayload {
             event: "press",
             destination: match destination {
-                Some(DestOverride::VoiceNote) => Some("voice-note"),
+                Some(DestOverride::Note) => Some("voice-note"),
                 Some(DestOverride::Handoff) => Some("remote-dictation"),
                 None => None,
             },
@@ -91,7 +91,7 @@ pub fn set_push_to_talk_shortcut(shortcut: &str) -> Result<(), String> {
 pub fn set_hotkeys(
     dictate: &[String],
     dictate_long_press: &[crate::platform::LongPressHotkey],
-    voice_note: &[String],
+    note: &[String],
     handoff: &[String],
     selection: &[String],
     assistant: &[String],
@@ -106,7 +106,7 @@ pub fn set_hotkeys(
     hook::set_hotkeys(
         parse_list(dictate)?,
         long_press,
-        parse_list(voice_note)?,
+        parse_list(note)?,
         parse_list(handoff)?,
         parse_list(selection)?,
         parse_list(assistant)?,

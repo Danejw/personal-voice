@@ -2,7 +2,7 @@ import type { AssistantStatus } from "@/assistant/state";
 import { handoffDisplayText } from "@/assistant/continuation";
 import type { Handoff, OwnedDevice } from "@/handoffs/handoff";
 import type { Note } from "@/notes/note";
-import { migrateDestinationId, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
+import { NOTE_DESTINATION_ID, migrateDestinationId, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 import type { VoiceState } from "@/voice/session/state";
 
 export const OVERLAY_ITEM_LIMIT = 3;
@@ -55,7 +55,7 @@ export interface OverlaySnapshot {
   remoteTipEpoch: number;
 }
 
-export type OverlayHoldDestination = "voice-note";
+export type OverlayHoldDestination = typeof NOTE_DESTINATION_ID;
 
 export type OverlayAction =
   | { type: "dictate-toggle" }
@@ -308,7 +308,7 @@ export function parseOverlayAction(payload: unknown): OverlayAction | null {
       return { type: record.type };
     case "dictate-hold":
       return (record.phase === "start" || record.phase === "stop" || record.phase === "cancel")
-        && record.destination === "voice-note"
+        && record.destination === NOTE_DESTINATION_ID
         && typeof record.id === "number"
         ? { type: "dictate-hold", phase: record.phase, destination: record.destination, id: record.id }
         : null;

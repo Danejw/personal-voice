@@ -12,7 +12,7 @@ Gemini returns "Another device is continuing this conversation" on its tool call
 - Further test required on Windows to diagnose failures involving same-fence races, network/realtime disruptions, device identity resets, or persisted-server ownership.
 
 ## Existing assistant tools
-The current tool registry already supports clipboard copy, text insertion, voice notes CRUD, handoffs, screen/camera capture, selection, remote read, basic Windows app launch and keyboard shortcuts, supervised screen interaction, and assistant-memory commands. PR #15 adds on-demand accessibility inspection.
+The current tool registry already supports clipboard copy, text insertion, notes CRUD, handoffs, screen/camera capture, selection, remote read, basic Windows app launch and keyboard shortcuts, supervised screen interaction, and assistant-memory commands. PR #15 adds on-demand accessibility inspection.
 
 ## Manual functionality not yet fully exposed
 Device/settings administration, dictation preferences, keyboard shortcut configuration, dictation history, note organization, usage analytics, thread management, multi-device configuration, UI navigation, and other app workflows have no matching comprehensive Gemini tool contracts.

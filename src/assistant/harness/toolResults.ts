@@ -24,7 +24,7 @@ export interface ToolResultAssessment {
 }
 
 const READ_TOOLS = new Set<string>([
-  "list_voice_notes", "list_handoffs", "inspect_pointer_context", "inspect_active_app",
+  "list_notes", "list_handoffs", "inspect_pointer_context", "inspect_active_app",
   "inspect_accessibility_tree", "inspect_accessible_elements", "list_windows",
   "list_installed_apps", "list_snippets", "read_remote_device",
   "read_usage_analytics", "read_insights", "list_past_conversations",

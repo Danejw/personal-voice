@@ -153,11 +153,11 @@ describe("AssistantController", () => {
     created.setActions(used);
     created.start();
     const session = FakeSession.opened[0] as FakeSession;
-    session.emit({ type: "toolCalls", calls: [{ id: "observe-1", name: "list_voice_notes", args: {} }] });
+    session.emit({ type: "toolCalls", calls: [{ id: "observe-1", name: "list_notes", args: {} }] });
     await settle();
     expect(session.responses.at(-1)).toMatchObject({
       toolResponse: { functionResponses: [{
-        id: "observe-1", name: "list_voice_notes",
+        id: "observe-1", name: "list_notes",
         response: {
           result: expect.stringContaining("Notes (1)"),
           interpretation: { status: "observed", evidence: "read_result", goal_verified: null },
@@ -181,18 +181,18 @@ describe("AssistantController", () => {
   it("informs Gemini about a failed tool twice, without automatically replaying it", async () => {
     const { created } = controller();
     const used = toolActions();
-    used.createVoiceNote.mockRejectedValue(new Error("Saving the note failed."));
+    used.createNote.mockRejectedValue(new Error("Saving the note failed."));
     created.setActions(used);
     created.setAutoRun(true);
     created.start();
     const session = FakeSession.opened[0] as FakeSession;
     for (const [index, callId] of ["failure-1", "failure-2"].entries()) {
       session.emit({ type: "toolCalls", calls: [
-        { id: callId, name: "create_voice_note", args: { text: "test" } },
+        { id: callId, name: "create_note", args: { text: "test" } },
       ] });
       await vi.waitFor(() => expect(session.responses).toHaveLength(index + 1));
     }
-    expect(used.createVoiceNote).toHaveBeenCalledTimes(2);
+    expect(used.createNote).toHaveBeenCalledTimes(2);
     expect(session.responses[0]).toMatchObject({
       toolResponse: { functionResponses: [{ response: {
         error: "Saving the note failed.",
@@ -204,8 +204,8 @@ describe("AssistantController", () => {
         interpretation: { status: "failed", failure_streak: 2, next_step: expect.stringContaining("Do not repeat") },
       } }] },
     });
-    used.createVoiceNote.mockResolvedValueOnce(undefined);
-    session.emit({ type: "toolCalls", calls: [{ id: "success", name: "create_voice_note", args: { text: "test" } }] });
+    used.createNote.mockResolvedValueOnce(undefined);
+    session.emit({ type: "toolCalls", calls: [{ id: "success", name: "create_note", args: { text: "test" } }] });
     await vi.waitFor(() => expect(session.responses).toHaveLength(3));
     expect(session.responses[2]).toMatchObject({
       toolResponse: { functionResponses: [{ response: {
@@ -883,9 +883,9 @@ describe("AssistantController", () => {
     created.setActions(used);
     created.start();
     const session = FakeSession.opened[0] as FakeSession;
-    session.emit({ type: "toolCalls", calls: [{ id: "notes", name: "list_voice_notes", args: {} }] });
+    session.emit({ type: "toolCalls", calls: [{ id: "notes", name: "list_notes", args: {} }] });
     await settle();
-    expect(used.listVoiceNotes).toHaveBeenCalledWith(false);
+    expect(used.listNotes).toHaveBeenCalledWith(false);
     expect(session.responses.at(-1)).toMatchObject({
       toolResponse: { functionResponses: [{ id: "notes", response: { result: "Notes (1):\n1. id: n1\nBuy milk" } }] },
     });
@@ -905,9 +905,9 @@ describe("AssistantController", () => {
     created.setAutoRun(true);
     created.start();
     const session = FakeSession.opened[0] as FakeSession;
-    session.emit({ type: "toolCalls", calls: [{ id: "del", name: "delete_voice_note", args: { id: "n1" } }] });
+    session.emit({ type: "toolCalls", calls: [{ id: "del", name: "delete_note", args: { id: "n1" } }] });
     await settle();
-    expect(used.deleteVoiceNote).toHaveBeenCalledWith("n1");
+    expect(used.deleteNote).toHaveBeenCalledWith("n1");
     expect(created.getSnapshot().pendingAction).toBeNull();
   });
 
@@ -919,32 +919,32 @@ describe("AssistantController", () => {
     created.start();
     const session = FakeSession.opened[0] as FakeSession;
 
-    session.emit({ type: "toolCalls", calls: [{ id: "no-image", name: "create_voice_note",
+    session.emit({ type: "toolCalls", calls: [{ id: "no-image", name: "create_note",
       args: { text: "Missing screenshot", attachment_source: "screenshot" } }] });
     await settle();
-    expect(used.createVoiceNote).not.toHaveBeenCalled();
+    expect(used.createNote).not.toHaveBeenCalled();
     expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
       id: "no-image", response: { error: expect.stringContaining("Capture a screenshot first") },
     }] } });
 
     created.attachSnapshot({ source: "screen", width: 1280, height: 720,
       capturedAt: "2026-10-09T01:00:00Z", jpeg: "first-image" });
-    session.emit({ type: "toolCalls", calls: [{ id: "save-image", name: "create_voice_note",
+    session.emit({ type: "toolCalls", calls: [{ id: "save-image", name: "create_note",
       args: { text: "My bug report", attachment_source: "screenshot" } }] });
     await settle();
-    expect(created.getSnapshot().pendingAction?.title).toBe("Save note with captured image");
+    expect(created.getSnapshot().pendingAction?.title).toBe("Save note with attachment");
     expect(JSON.stringify(created.getSnapshot().pendingAction)).not.toContain("first-image");
-    expect(used.createVoiceNote).not.toHaveBeenCalled();
+    expect(used.createNote).not.toHaveBeenCalled();
 
     created.attachSnapshot({ source: "screen", width: 1280, height: 720,
       capturedAt: "2026-10-09T02:00:00Z", jpeg: "second-image" });
     created.confirmPending();
     await settle();
-    expect(used.createVoiceNote).toHaveBeenCalledWith("My bug report", {
+    expect(used.createNote).toHaveBeenCalledWith("My bug report", {
       source: "screenshot", capturedAt: "2026-10-09T01:00:00Z", jpeg: "first-image",
     });
     expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
-      id: "save-image", response: { result: "Saved the note and its captured image." },
+      id: "save-image", response: { result: "Saved the note and its attachment." },
     }] } });
     created.end();
   });
@@ -959,18 +959,61 @@ describe("AssistantController", () => {
       capturedAt: "2026-10-09T03:00:00Z", jpeg: "image-data" });
     const args = { id: "n1", attachment_source: "screenshot" };
 
-    session.emit({ type: "toolCalls", calls: [{ id: "cancel", name: "attach_image_to_voice_note", args }] });
+    session.emit({ type: "toolCalls", calls: [{ id: "cancel", name: "attach_file_to_note", args }] });
     await settle();
     created.cancelPending();
-    expect(used.attachImageToVoiceNote).not.toHaveBeenCalled();
-    session.emit({ type: "toolCalls", calls: [{ id: "attach", name: "attach_image_to_voice_note", args }] });
+    expect(used.attachFileToNote).not.toHaveBeenCalled();
+    session.emit({ type: "toolCalls", calls: [{ id: "attach", name: "attach_file_to_note", args }] });
     await settle();
     created.confirmPending();
     await settle();
-    expect(used.attachImageToVoiceNote).toHaveBeenCalledWith("n1", {
+    expect(used.attachFileToNote).toHaveBeenCalledWith("n1", {
       source: "screenshot", capturedAt: "2026-10-09T03:00:00Z", jpeg: "image-data",
     });
-    expect(used.editVoiceNote).not.toHaveBeenCalled();
+    expect(used.editNote).not.toHaveBeenCalled();
+    created.end();
+  });
+
+  it("attaches an explicitly selected general file, pins its bytes, and requires consent", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setActions(used);
+    created.setAutoRun(true);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    const file = new File(["file body"], "design-spec.pdf", { type: "application/pdf" });
+    const alternate = new File(["alternate"], "other.txt", { type: "text/plain" });
+    expect(created.selectNoteFile(file)).toBeNull();
+    expect(created.getSnapshot().selectedNoteFile).toEqual({ name: "design-spec.pdf", size: 9 });
+    session.emit({ type: "toolCalls", calls: [{ id: "file", name: "attach_file_to_note",
+      args: { id: "n1", attachment_source: "selected_file" } }] });
+    await settle();
+    expect(created.getSnapshot().pendingAction?.title).toBe("Attach file to note");
+    expect(used.attachFileToNote).not.toHaveBeenCalled();
+    created.selectNoteFile(alternate);
+    created.confirmPending();
+    await settle();
+    expect(used.attachFileToNote).toHaveBeenCalledWith("n1", file);
+    created.end();
+    expect(created.getSnapshot().selectedNoteFile).toBeNull();
+  });
+
+  it("refuses an absent or oversized selected file without uploading it", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setActions(used);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{ id: "missing-file", name: "attach_file_to_note",
+      args: { id: "n1", attachment_source: "selected_file" } }] });
+    await settle();
+    expect(used.attachFileToNote).not.toHaveBeenCalled();
+    expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
+      id: "missing-file", response: { error: expect.stringContaining("Select a local file") },
+    }] } });
+    const large = new File([], "big.zip");
+    Object.defineProperty(large, "size", { value: 104857601 });
+    expect(created.selectNoteFile(large)).toContain("100 MB");
     created.end();
   });
 
@@ -981,14 +1024,14 @@ describe("AssistantController", () => {
     created.setActions(used);
     created.start();
     const session = FakeSession.opened[0] as FakeSession;
-    session.emit({ type: "toolCalls", calls: [{ id: "del", name: "delete_voice_note", args: { id: "n1" } }] });
+    session.emit({ type: "toolCalls", calls: [{ id: "del", name: "delete_note", args: { id: "n1" } }] });
     await settle();
-    expect(used.deleteVoiceNote).not.toHaveBeenCalled();
+    expect(used.deleteNote).not.toHaveBeenCalled();
     expect(created.getSnapshot().pendingAction?.title).toBe("Delete this note");
     expect(created.getSnapshot().pendingAction?.preview).toBe("Preview n1");
     created.confirmPending();
     await settle();
-    expect(used.deleteVoiceNote).toHaveBeenCalledWith("n1");
+    expect(used.deleteNote).toHaveBeenCalledWith("n1");
     expect(session.responses.at(-1)).toMatchObject({
       toolResponse: { functionResponses: [{ id: "del", response: { result: "Deleted the note." } }] },
     });
@@ -1044,21 +1087,21 @@ describe("AssistantController", () => {
       },
     });
 
-    used.createVoiceNote.mockRejectedValue(new Error("Saving the note failed."));
+    used.createNote.mockRejectedValue(new Error("Saving the note failed."));
     session.emit({
       type: "toolCalls",
-      calls: [{ id: "note-1", name: "create_voice_note", args: { text: "Assistant tool test." } }],
+      calls: [{ id: "note-1", name: "create_note", args: { text: "Assistant tool test." } }],
     });
     await settle();
     created.confirmPending();
     await settle();
-    expect(used.createVoiceNote).toHaveBeenCalledWith("Assistant tool test.");
+    expect(used.createNote).toHaveBeenCalledWith("Assistant tool test.");
     expect(JSON.stringify(session.responses.at(-1))).not.toContain("Saved the note.");
     expect(session.responses.at(-1)).toMatchObject({
       toolResponse: {
         functionResponses: [{
           id: "note-1",
-          name: "create_voice_note",
+          name: "create_note",
           response: { error: "Saving the note failed." },
         }],
       },
@@ -1629,9 +1672,9 @@ function toolActions() {
   return {
     copyText: vi.fn(async () => {}),
     insertText: vi.fn(async () => {}),
-    createVoiceNote: vi.fn(async () => {}),
-    editVoiceNote: vi.fn(async () => {}),
-    attachImageToVoiceNote: vi.fn(async () => {}),
+    createNote: vi.fn(async () => {}),
+    editNote: vi.fn(async () => {}),
+    attachFileToNote: vi.fn(async () => {}),
     listSnippets: vi.fn(async () => "[]"),
     createSnippet: vi.fn(async () => {}),
     updateSnippet: vi.fn(async () => {}),
@@ -1653,11 +1696,11 @@ function toolActions() {
       sourceApp: "Notes",
       capturedAt: "2026-09-28T12:00:00.000Z",
     })),
-    listVoiceNotes: vi.fn(async () => "Notes (1):\n1. id: n1\nBuy milk"),
+    listNotes: vi.fn(async () => "Notes (1):\n1. id: n1\nBuy milk"),
     listHandoffs: vi.fn(async () => "Devices you can send to: Phone.\nNo received handoffs."),
     describeItem: vi.fn((_kind: "note" | "handoff", id: string) => `Preview ${id}`),
-    archiveVoiceNote: vi.fn(async () => {}),
-    deleteVoiceNote: vi.fn(async () => {}),
+    archiveNote: vi.fn(async () => {}),
+    deleteNote: vi.fn(async () => {}),
     dismissHandoff: vi.fn(async () => {}),
     listMemories: vi.fn(async () => "No memories are remembered."),
     searchMemory: vi.fn(async (query: string) => `Search evidence for ${query}`),

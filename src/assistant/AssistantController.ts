@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { cameraPhotoToDibBase64 } from "@/assistant/cameraPhotoClipboard";
-import type { CapturedNoteImage, NoteImageSource } from "@/assistant/noteAttachment";
+import { type NoteAttachmentInput, type NoteAttachmentSource } from "@/assistant/noteAttachment";
+import { NOTE_ATTACHMENT_MAX_BYTES } from "@/notes/noteAttachment";
 import {
   screenOmittedText,
   type AssistantContinuation,
@@ -85,9 +86,9 @@ export interface AssistantSessionHandle {
 export interface AssistantActions {
   copyText(text: string): Promise<void>;
   insertText(text: string): Promise<void>;
-  createVoiceNote(text: string, image?: CapturedNoteImage): Promise<void>;
-  editVoiceNote(id: string, text: string, image?: CapturedNoteImage): Promise<void>;
-  attachImageToVoiceNote(id: string, image: CapturedNoteImage): Promise<void>;
+  createNote(text: string, file?: NoteAttachmentInput): Promise<void>;
+  editNote(id: string, text: string, file?: NoteAttachmentInput): Promise<void>;
+  attachFileToNote(id: string, file: NoteAttachmentInput): Promise<void>;
   listSnippets(): Promise<string>;
   createSnippet(trigger: string, content: string): Promise<void>;
   updateSnippet(id: string, trigger: string, content: string): Promise<void>;
@@ -107,13 +108,13 @@ export interface AssistantActions {
   /** Highlighted text in the other app. */
   captureSelection(): Promise<ContextItem>;
   /** Inbox notes, or every note when archived ones are included. */
-  listVoiceNotes(includeArchived: boolean): Promise<string>;
+  listNotes(includeArchived: boolean): Promise<string>;
   /** Received handoffs and the names of other devices. */
   listHandoffs(): Promise<string>;
   /** Short text for a confirm card. Throws when the id is not in the current list. */
   describeItem(kind: "note" | "handoff", id: string): string;
-  archiveVoiceNote(id: string, archived: boolean): Promise<void>;
-  deleteVoiceNote(id: string): Promise<void>;
+  archiveNote(id: string, archived: boolean): Promise<void>;
+  deleteNote(id: string): Promise<void>;
   dismissHandoff(id: string): Promise<void>;
   /** Active and forgotten memories for this account. */
   listMemories(): Promise<string>;
@@ -185,6 +186,8 @@ export class AssistantController {
   private memoryRestartPending = false;
   private toolDepth = 0;
   private screenShot: ScreenSnapshot | null = null;
+  /** Explicit user-selected file, retained in memory only until the session ends. */
+  private selectedNoteFile: File | null = null;
   /** True after this socket has been sent the current screenshot. */
   private screenNoted = false;
   private cameraPhoto: CameraPhoto | null = null;
@@ -250,9 +253,9 @@ export class AssistantController {
     private actions: AssistantActions = {
       copyText: unavailable,
       insertText: unavailable,
-      createVoiceNote: unavailable,
-      editVoiceNote: unavailable,
-      attachImageToVoiceNote: unavailable,
+      createNote: unavailable,
+      editNote: unavailable,
+      attachFileToNote: unavailable,
       listSnippets: async () => { throw new Error("Snippets unavailable."); },
       createSnippet: unavailable,
       updateSnippet: unavailable,
@@ -267,11 +270,11 @@ export class AssistantController {
       captureSelection: async () => { throw new Error("Assistant actions are not available."); },
       inspectPointer: async () => { throw new Error("Pointer inspection is Windows-only."); },
       capturePointerTarget: async () => { throw new Error("Pointed screenshot capture is Windows-only."); },
-      listVoiceNotes: async () => { throw new Error("Assistant actions are not available."); },
+      listNotes: async () => { throw new Error("Assistant actions are not available."); },
       listHandoffs: async () => { throw new Error("Assistant actions are not available."); },
       describeItem: () => { throw new Error("Assistant actions are not available."); },
-      archiveVoiceNote: unavailable,
-      deleteVoiceNote: unavailable,
+      archiveNote: unavailable,
+      deleteNote: unavailable,
       dismissHandoff: unavailable,
       listMemories: async () => { throw new Error("Assistant actions are not available."); },
       searchMemory: async () => { throw new Error("Memory search is not configured."); },
@@ -531,6 +534,21 @@ export class AssistantController {
     this.noteSnapshot();
   }
 
+  /** User-authorized local file; never accepts arbitrary paths or background filesystem reads. */
+  selectNoteFile(file: File): string | null {
+    if (file.size > NOTE_ATTACHMENT_MAX_BYTES) return "That file exceeds the 100 MB note attachment limit.";
+    this.selectedNoteFile = file;
+    this.dispatch({ type: "selectedNoteFile", file: { name: file.name, size: file.size } });
+    this.sendNote("The user selected a file for note attachment: " + file.name.replace(/\s+/g, " ").slice(0, 120) + ". attachment_source selected_file is available. Confirm before saving.");
+    return null;
+  }
+
+  removeSelectedNoteFile(): void {
+    this.selectedNoteFile = null;
+    this.dispatch({ type: "selectedNoteFile", file: null });
+    this.sendNote("The selected note attachment file was removed.");
+  }
+
   /** Drops the screenshot and, when a session is open, tells Gemini it is no longer active. */
   detachSnapshot(): void {
     const had = this.screenShot;
@@ -727,6 +745,7 @@ export class AssistantController {
     this.selectionNoted = false;
     this.screenShot = null;
     this.screenNoted = false;
+    this.selectedNoteFile = null;
     this.cameraPhoto = null;
     this.cameraPhotoNoted = false;
     this.cameraDesired = null;
@@ -764,6 +783,7 @@ export class AssistantController {
     this.selectionNoted = false;
     this.screenShot = null;
     this.screenNoted = false;
+    this.selectedNoteFile = null;
     this.cameraPhoto = null;
     this.cameraPhotoNoted = false;
     this.cameraDesired = null;
@@ -1192,6 +1212,7 @@ export class AssistantController {
         this.noteMemories();
         this.noteSnapshot();
         this.noteCameraPhoto();
+        if (this.selectedNoteFile) this.sendNote("A local file is selected for a note attachment. Use attachment_source selected_file with confirmation.");
         this.resumeCameraIfDesired();
         this.flushPending();
         return;
@@ -1210,6 +1231,13 @@ export class AssistantController {
             text: event.text,
             ...(spokenId ? { spokenId } : {}),
           });
+          const hint = assembleTaskGuidance(event.text, {
+            ...this.deviceContext,
+            selectionAttached: this.selectionItem !== null,
+            screenAttached: this.screenShot !== null,
+            cameraContextActive: this.cameraDesired !== null,
+          });
+          if (hint) this.sendNote(hint.text);
           this.armTimer();
         }
         return;
@@ -1433,9 +1461,10 @@ export class AssistantController {
             continue;
           }
         }
-        let noteImage: CapturedNoteImage | null;
+        let noteAttachment: NoteAttachmentInput | null;
         try {
-          noteImage = this.noteImageForTool(decision);
+          noteAttachment = this.noteAttachmentForTool(decision);
+          if (noteAttachment instanceof File) preview = preview + " | File: " + noteAttachment.name;
         } catch (error) {
           this.replyTool(decision.id, decision.name, false, toolFailure(error));
           continue;
@@ -1450,10 +1479,10 @@ export class AssistantController {
           label: decision.name === "send_handoff" ? decision.title.slice("Send this text to ".length) : null,
           remote: decision.remote,
           memory: decision.memory,
-          noteImage,
+          noteAttachment,
           working: false,
         };
-        // Camera photos can leave the device. Always require a review card.
+        // Note files can leave the device. Always require explicit approval.
         if (this.shouldAutoRun(decision)) {
           this.pending.working = true;
           const epoch = this.toolEpoch;
@@ -1470,10 +1499,10 @@ export class AssistantController {
   }
 
   private shouldAutoRun(decision: Extract<ToolDecision, {kind:"confirm"}>): boolean {
-    // Saving a private screenshot or camera photo always requires explicit consent.
-    if (decision.name === "attach_image_to_voice_note" ||
-        decision.title === "Save note with captured image" ||
-        decision.title === "Edit note and attach captured image") return false;
+    // Saving any note attachment always requires explicit consent.
+    if (decision.name === "attach_file_to_note" ||
+        decision.title === "Save note with attachment" ||
+        decision.title === "Edit note and attach file") return false;
     if (!this.autoRun) return false;
     if (decision.name === "paste_camera_photo" || decision.name === "start_accessibility_watch") return false;
     if (decision.name === "accessibility_pattern_action") {
@@ -1773,7 +1802,7 @@ export class AssistantController {
   private async runNotes(decision: Extract<ToolDecision, { kind: "notes" }>) {
     const epoch = this.toolEpoch;
     try {
-      const text = await this.actions.listVoiceNotes(decision.includeArchived);
+      const text = await this.actions.listNotes(decision.includeArchived);
       if (epoch !== this.toolEpoch) return;
       this.replyTool(decision.id, decision.name, true, text);
     } catch (error) {
@@ -1924,18 +1953,22 @@ export class AssistantController {
     return invoke<string>("paste_camera_photo_image", { bitmapBase64: dib, expectedWindow });
   }
 
-  private noteImageForTool(decision: Extract<ToolDecision, {kind:"confirm"}>): CapturedNoteImage | null {
-    if (decision.name !== "create_voice_note" && decision.name !== "edit_voice_note" &&
-        decision.name !== "attach_image_to_voice_note") return null;
-    if (decision.name === "create_voice_note" && decision.title !== "Save note with captured image") return null;
-    const source = (JSON.parse(decision.text) as { attachment_source?: NoteImageSource }).attachment_source;
+  private noteAttachmentForTool(decision: Extract<ToolDecision, {kind:"confirm"}>): NoteAttachmentInput | null {
+    if (decision.name !== "create_note" && decision.name !== "edit_note" &&
+        decision.name !== "attach_file_to_note") return null;
+    if (decision.name === "create_note" && decision.title !== "Save note with attachment") return null;
+    const source = (JSON.parse(decision.text) as { attachment_source?: NoteAttachmentSource }).attachment_source;
     if (!source) return null;
+    if (source === "selected_file") {
+      if (!this.selectedNoteFile) throw new Error("Select a local file in Assistant first; no file is currently selected.");
+      return this.selectedNoteFile;
+    }
     const image = source === "screenshot" ? this.screenShot :
       source === "camera_photo" ? this.cameraPhoto : null;
     if (!image) throw new Error(source === "screenshot"
       ? "Capture a screenshot first; there is no active screenshot to attach."
       : "Capture a camera photo first; there is no active camera image to attach.");
-    // Pin the image to the confirmation; later captures cannot change the saved file.
+    // Pin the selected object to the confirmation even if a new file is chosen later.
     return { source, capturedAt: image.capturedAt, jpeg: image.jpeg };
   }
 
@@ -1987,17 +2020,17 @@ export class AssistantController {
         await this.actions.sendRemoteDictation(input.text, input.device);
         return `Sent dictation to ${input.device}.`;
       }
-      case "edit_voice_note": {
+      case "edit_note": {
         const input = JSON.parse(pending.text) as {id: string; text: string};
-        if (pending.noteImage) await this.actions.editVoiceNote(input.id, input.text, pending.noteImage);
-        else await this.actions.editVoiceNote(input.id, input.text);
-        return pending.noteImage ? "Updated the note and attached the captured image." : "Updated the note.";
+        if (pending.noteAttachment) await this.actions.editNote(input.id, input.text, pending.noteAttachment);
+        else await this.actions.editNote(input.id, input.text);
+        return pending.noteAttachment ? "Updated the note and attached the file." : "Updated the note.";
       }
-      case "attach_image_to_voice_note": {
+      case "attach_file_to_note": {
         const input = JSON.parse(pending.text) as {id: string};
-        if (!pending.noteImage) throw new Error("Capture an image first.");
-        await this.actions.attachImageToVoiceNote(input.id, pending.noteImage);
-        return "Attached the captured image to the note.";
+        if (!pending.noteAttachment) throw new Error("Capture or select a file first.");
+        await this.actions.attachFileToNote(input.id, pending.noteAttachment);
+        return "Attached the file to the note.";
       }
       case "create_transform": {
         const input = JSON.parse(pending.text) as {name: string; instruction: string};
@@ -2007,20 +2040,20 @@ export class AssistantController {
       case "add_dictionary_word":
         await this.actions.addDictionaryWord(pending.text);
         return "Added the dictionary word.";
-      case "create_voice_note": {
-        const input = pending.noteImage ? (JSON.parse(pending.text) as {text: string}).text : pending.text;
-        if (pending.noteImage) await this.actions.createVoiceNote(input, pending.noteImage);
-        else await this.actions.createVoiceNote(input);
-        return pending.noteImage ? "Saved the note and its captured image." : "Saved the note.";
+      case "create_note": {
+        const input = pending.noteAttachment ? (JSON.parse(pending.text) as {text: string}).text : pending.text;
+        if (pending.noteAttachment) await this.actions.createNote(input, pending.noteAttachment);
+        else await this.actions.createNote(input);
+        return pending.noteAttachment ? "Saved the note and its attachment." : "Saved the note.";
       }
-      case "archive_voice_note":
-        await this.actions.archiveVoiceNote(pending.text, true);
+      case "archive_note":
+        await this.actions.archiveNote(pending.text, true);
         return "Archived the note.";
-      case "restore_voice_note":
-        await this.actions.archiveVoiceNote(pending.text, false);
+      case "restore_note":
+        await this.actions.archiveNote(pending.text, false);
         return "Restored the note.";
-      case "delete_voice_note":
-        await this.actions.deleteVoiceNote(pending.text);
+      case "delete_note":
+        await this.actions.deleteNote(pending.text);
         return "Deleted the note.";
       case "dismiss_handoff":
         await this.actions.dismissHandoff(pending.text);
@@ -2171,7 +2204,7 @@ function messageOf(error: unknown): string {
 }
 
 function itemKind(name: ConfirmToolName): "note" | "handoff" | null {
-  if (name === "archive_voice_note" || name === "restore_voice_note" || name === "delete_voice_note") return "note";
+  if (name === "archive_note" || name === "restore_note" || name === "delete_note") return "note";
   if (name === "dismiss_handoff") return "handoff";
   return null;
 }
@@ -2186,7 +2219,7 @@ interface ConfirmedTool {
   label: string | null;
   remote: { action: RemoteComputerAction; device: string } | null;
   memory: MemoryCommand | null;
-  noteImage: CapturedNoteImage | null;
+  noteAttachment: NoteAttachmentInput | null;
   working: boolean;
 }
 

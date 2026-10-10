@@ -51,6 +51,8 @@ describe("context-aware assistant harness", () => {
   it.each([
     ["Find our earlier conversation about keyboards and continue it", "memory_recall"],
     ["Find the archived note and then restore it", "notes_workflow"],
+    ["Take a screenshot and add it to a note", "notes_workflow"],
+    ["Attach my PDF file to the research note", "notes_workflow"],
     ["Open Notepad and then click the Save button", "windows_control"],
     ["Look at my screenshot then check what's under the pointer", "screen_understanding"],
     ["Send this message to the other device and then type it there", "cross_device"],

@@ -104,7 +104,7 @@ describeDb("assistant conversation database", () => {
     await pool.query("insert into auth.users (id) values ($1) on conflict do nothing", [id]);
   }
 
-  it("keeps settings epoch protection and can still save a voice note", async () => {
+  it("keeps settings epoch protection and can still save a note", async () => {
     const owner = "10000000-0000-4000-8000-000000000001";
     const device = "10000000-0000-4000-8000-000000000002";
     await user(owner);
@@ -122,7 +122,7 @@ describeDb("assistant conversation database", () => {
     });
     const note = await queryUser(
       owner,
-      "insert into public.voice_notes (text, source_device_id) values ('hello', $1) returning user_id",
+      "insert into public.notes (text, source_device_id) values ('hello', $1) returning user_id",
       [device],
     );
     expect(note.rows[0]?.user_id).toBe(owner);

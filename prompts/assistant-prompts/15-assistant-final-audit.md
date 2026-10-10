@@ -117,7 +117,7 @@ Record the goal, starting state, exact implementation, files changed, model/API/
 4. Hold a multi-turn spoken conversation.
 5. Interrupt Gemini while it speaks.
 6. Capture selected text and ask about it.
-7. Create a Voice Note through an Assistant action.
+7. Create a Note through an Assistant action.
 8. Ask a current question and verify Search sources.
 9. Capture a screen and ask two visual follow-ups.
 10. Continue an Assistant task to the second device.

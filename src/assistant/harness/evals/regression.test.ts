@@ -41,7 +41,7 @@ describe("independent tool-use regression corpus", () => {
     expect(report.cases.find((row) => row.scenarioId === "none-chat-only")).toMatchObject({
       playbookLookups: 1, avoidableLookups: 1,
     });
-    expect(report.cases.find((row) => row.scenarioId === "tool-create_voice_note")).toMatchObject({
+    expect(report.cases.find((row) => row.scenarioId === "tool-create_note")).toMatchObject({
       unexaminedRepeats: 1, toolErrors: 2,
     });
   });

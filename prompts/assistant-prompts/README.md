@@ -29,7 +29,7 @@ Dictation remains its own production path. Do not force Assistant semantics into
 | 07 | Google Search grounding |
 | 08 | Explicit screen/window snapshot |
 | 09 | Screen-aware multi-turn conversation |
-| 10 | Voice Notes + Handoffs as context |
+| 10 | Notes + Handoffs as context |
 | 11 | Cross-device Assistant handoff |
 | 12 | Remote device context |
 | 13 | Personal context + analytics profile |

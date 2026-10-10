@@ -46,7 +46,7 @@ Sign in and complete the device-permission onboarding before using microphone, o
 | **Destinations** | Focused text field, saved Notes, and **Remote Dictation** to another selected device's focused cursor |
 | **Dictionary, Snippets & Transforms** | Personal vocabulary; deterministic trigger-to-text snippet expansion; built-in and custom text transforms |
 | **Selection & history** | Capture selected text for further use; recent local dictations with optional account sync of final text |
-| **Notes & Handoffs** | Saved, editable Notes with private file attachments; Assistant can attach its current captured screenshot or camera still while creating/updating a note or to an existing note; handoffs and continuation across devices |
+| **Notes & Handoffs** | Saved, editable Notes with private file attachments; the Assistant can attach an authorized screenshot, camera photo, or user-selected file (PDF, image, document, audio or video) to a new or existing note after confirmation; handoffs and continuation across devices |
 | **Assistant conversation** | Continuous saved threads with individually dated session IDs, reversible archive/restore, complete paginated historical-message tools, typed/voice turns and Google Search grounding |
 | **Visual awareness** | Explicit screen snapshots, selected text, cursor/pointer inspection on Windows, accessibility-tree inspection, camera photos, and user-requested ongoing Camera Context |
 | **Device actions** | Allowlisted Windows application/window/UI Automation actions; bounded supervised screen workflows; supported remote Windows reads/actions with existing approval controls |
@@ -83,7 +83,7 @@ Important boundaries:
 
 - A tool reporting success does **not** by itself prove that the requested goal was reached. The harness distinguishes an acknowledgement from an observed end state.
 - Playbooks load **on demand**, not before every simple command. No extra planner/model call is required by the harness.
-- Context guidance uses known platform/device information; it does not assume a registered remote device is online. Spoken requests use device capability context; short deterministic task hints currently apply to *typed* multi-step requests.
+- Context guidance uses known platform/device information; it does not assume a registered remote device is online. Spoken requests use device capability context; short deterministic Notes guidance also recognizes relevant spoken attachment requests.
 - Tool selection does **not** expand permissions. User confirmation, auto-run preferences, platform capability checks and action allowlists still apply.
 - Evaluations are offline by default. Scripted/mock passing scores measure regression mechanics, **not actual Gemini success rates**. Real model evaluation requires opt-in trace capture and independent observation.
 
@@ -92,7 +92,7 @@ See [Assistant phase reports](docs/Assistant-Phases/), including [tool registry]
 ## Privacy and safety
 
 - **Microphone audio** connects directly from the device to Gemini for the active session; Personal Voice does not proxy or permanently store it.
-- **Camera Context** is user-initiated, uses device permissions and streams frames to Gemini Live without persisting them. An explicitly captured still or screenshot may be saved in the private `note-attachments` bucket only when the user requests it and confirms the Assistant's note action; existing Notes attachment limits and account permissions apply. The Assistant cannot browse arbitrary local file paths. See [Camera Context](docs/Camera-Context-Phases/README.md).
+- **Camera Context** is user-initiated, uses device permissions and streams frames to Gemini Live without persisting them. An explicitly captured still or screenshot may be saved in the private `note-attachments` bucket only when the user requests it and confirms the Assistant's note action; existing Notes attachment limits and account permissions apply. The Assistant can use an explicitly user-selected local file in its file selector, but cannot browse arbitrary file paths. See [Camera Context](docs/Camera-Context-Phases/README.md).
 - **Cloud storage is selective:** saved account content such as Notes, Handoffs, conversations and explicit memories may sync. Recent dictation **text** sync remains an independent opt-in setting. For newly created accounts, the four Assistant memory/recall settings default on: learning from newly saved Assistant user messages, semantic search, saved notes retrieval and synced dictation retrieval. Existing account settings, including prior opt-outs, are not overwritten. Turning on dictation retrieval alone never uploads local-only dictations.
 - **Insights/analytics:** with Usage Intelligence enabled, Assistant Analytics captures metadata-only events (no prompts, transcriptions, tool arguments or screenshots) under an owner-scoped, epoch-protected Supabase table. Clearing Analytics deletes dictation, Assistant session, and tool-metadata events after both Phase A and Phase B migrations. Inspect and control what context is shared with Assistant in Settings. Assistant semantic Insights separately requires explicit per-run consent; at most 80 recent saved user-message excerpts are sent to the configured Gemini function, never in the background.
 - **Remote actions and desktop controls** require the supported platform, a permitted target and applicable approvals. There is no general-purpose shell tool.
@@ -179,7 +179,8 @@ Before merging a PR: run `pnpm check` and `pnpm eval:tools`, review **both** Win
 | Cross-device insertion | [Remote Dictation](docs/Remote-Dictation-Phases/README.md) |
 | Camera context | [Camera Context](docs/Camera-Context-Phases/README.md) |
 | Windows/Android platform notes | [WINDOWS](docs/WINDOWS.md) · [ANDROID](docs/ANDROID.md) |
-| Notes, handoffs, authentication and syncing | [Backend & Sync](docs/BACKEND_SYNC.md) |
+| Notes schema, file attachments, Assistant tools and Note hotkey | [Notes](docs/NOTES.md) · [Backend & Sync](docs/BACKEND_SYNC.md) |
+| Handoffs, authentication and syncing | [Backend & Sync](docs/BACKEND_SYNC.md) |
 | Snippet expansion | [SNIPPETS](docs/SNIPPETS.md) |
 | Tests, installers and app updates | [TESTING_RELEASES](docs/TESTING_RELEASES.md) · [RELEASING](docs/RELEASING.md) |
 

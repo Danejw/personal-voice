@@ -12,7 +12,7 @@ export interface HotkeyBindings {
   dictate: readonly string[];
   /** Delayed mouse holds that preserve a normal quick click. */
   dictateLongPress: readonly LongPressBinding[];
-  voiceNote: readonly string[];
+  note: readonly string[];
   handoff: readonly string[];
   selection: readonly string[];
   /** Press toggles Assistant. Windows only. Never starts dictation. */

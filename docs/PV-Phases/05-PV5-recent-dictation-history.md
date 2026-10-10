@@ -16,7 +16,7 @@ Local-only recovery list of finalized dictations. No cloud warehouse, no microph
 
 ## Deviations
 
-The prompt allowed “optionally resend through an existing destination.” That was not added. Copy and Insert cover recovery; resend would have duplicated Voice note / Send to device without a new need.
+The prompt allowed “optionally resend through an existing destination.” That was not added. Copy and Insert cover recovery; resend would have duplicated Note / Send to device without a new need.
 
 ## Checks
 

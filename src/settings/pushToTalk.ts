@@ -5,13 +5,13 @@ import {
   loadStoredPushToTalk,
   loadStoredPushToTalkLongPress,
   loadStoredSelectionHotkey,
-  loadStoredVoiceNoteHotkey,
+  loadStoredNoteHotkey,
   saveStoredAssistantHotkey,
   saveStoredHandoffHotkey,
   saveStoredPushToTalk,
   saveStoredPushToTalkLongPress,
   saveStoredSelectionHotkey,
-  saveStoredVoiceNoteHotkey,
+  saveStoredNoteHotkey,
 } from "@/settings/deviceSettings";
 
 export { hotkeyLabel } from "@/settings/hotkeyChord";
@@ -56,12 +56,12 @@ export function savePushToTalkLongPress(bindings: readonly LongPressBinding[]): 
   saveStoredPushToTalkLongPress(bindings);
 }
 
-export function loadVoiceNoteHotkey(): string[] {
-  return keepValid(loadStoredVoiceNoteHotkey(), []);
+export function loadNoteHotkey(): string[] {
+  return keepValid(loadStoredNoteHotkey(), []);
 }
 
-export function saveVoiceNoteHotkey(shortcuts: readonly string[]): void {
-  saveStoredVoiceNoteHotkey([...shortcuts]);
+export function saveNoteHotkey(shortcuts: readonly string[]): void {
+  saveStoredNoteHotkey([...shortcuts]);
 }
 
 export function loadHandoffHotkey(): string[] {

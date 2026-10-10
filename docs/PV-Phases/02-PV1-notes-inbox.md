@@ -1,10 +1,12 @@
-# PV1 implementation report — voice notes inbox
+# PV1 implementation report — notes inbox
 
-Prompt: `prompts/PV-Prompts/Done/02-PV1-voice-notes-inbox.md`
+Prompt: `prompts/PV-Prompts/Done/02-PV1-notes-inbox.md`
 
 ## Scope
 
 Add a dictation destination that saves the finalized transcript as a synced note instead of inserting it. Reuse Gemini, auth, device ids, and RLS. No tags, folders, summaries, or AI analysis.
+
+**Historical phase report.** PV1 originally created a `voice_notes` table. The current canonical table is `public.notes`, the legacy view was retired, and the current implementation uses `NotesStore` and `NotesPanel`. The `voice-note` destination ID remains a compatibility value, not a second notes table.
 
 ## Database
 
@@ -24,7 +26,7 @@ Migration `supabase/migrations/20260928133000_voice_notes.sql` (applied on proje
 ## What shipped
 
 - Destination id `voice-note` on the router; save waits for Supabase to confirm the insert.
-- `VoiceNotesStore` / `VoiceNotesPanel`: load on sign-in, refresh when Settings becomes visible; copy, archive/unarchive, delete.
+- `NotesStore` / `NotesPanel`: load on sign-in, refresh when Settings becomes visible; copy, archive/unarchive, delete.
 - Failed save is a destination failure: dictation goes to `ERROR`, transcript stays visible.
 
 ## Deviations
@@ -33,8 +35,8 @@ Notes are online-only. There is no offline create queue (out of scope; that is l
 
 ## Checks
 
-`src/notes/VoiceNotesStore.test.ts` covers create, archive, and failure. Lint/typecheck/test passed in-session. Live Windows↔Android load was requested by the prompt; treat a two-device inbox refresh as a manual smoke if it has not been run on your machines.
+`src/notes/NotesStore.test.ts` covers create, archive, and failure. Lint/typecheck/test passed in-session. Live Windows↔Android load was requested by the prompt; treat a two-device inbox refresh as a manual smoke if it has not been run on your machines.
 
 ## How to confirm quickly
 
-Sign in → **Send transcript to** = Voice note → dictate → **Notes inbox** shows the text → Archive → Move to inbox → Copy → Delete. On a second signed-in device, focus Settings; the note should appear without realtime sockets.
+Sign in → **Send transcript to** = Note → dictate → **Notes inbox** shows the text → Archive → Move to inbox → Copy → Delete. On a second signed-in device, focus Settings; the note should appear without realtime sockets.

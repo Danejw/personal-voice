@@ -1,6 +1,6 @@
 import type { PlatformName } from "@/platform/PlatformAdapter";
 import type { DictationSnapshot } from "@/voice/session/DictationController";
-import type { TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
+import { NOTE_DESTINATION_ID, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 /**
  * How an utterance was started. Set at the call site, then copied onto the
@@ -23,22 +23,25 @@ export const USAGE_TRIGGERS: readonly UsageTrigger[] = [
   "android-floating-mic",
 ];
 
+/** Keep this historical metrics key on disk for analytics and cross-version sync. */
+export const NOTE_CREATED_FEATURE_ID = "voice_note_created" as const;
+
 export type UsageFeature =
   | "selection_captured"
-  | "voice_note_created"
+  | typeof NOTE_CREATED_FEATURE_ID
   | "handoff_created"
   | "history_inserted"
   | "shared_clipboard";
 
 export const USAGE_FEATURES: readonly UsageFeature[] = [
   "selection_captured",
-  "voice_note_created",
+  NOTE_CREATED_FEATURE_ID,
   "handoff_created",
   "history_inserted",
   "shared_clipboard",
 ];
 
-export const DESTINATION_IDS: readonly TranscriptDestinationId[] = ["active-field", "voice-note", "remote-dictation"];
+export const DESTINATION_IDS: readonly TranscriptDestinationId[] = ["active-field", NOTE_DESTINATION_ID, "remote-dictation"];
 
 /** Rollup schema. Later Personal Insights can tell this shape from a newer one. */
 export const COUNTERS_VERSION = 1;
@@ -147,7 +150,7 @@ export type UsageEvent =
   | { name: "target_app"; appId: string; appLabel: string; words: number };
 
 export function emptyDestinations(): Record<TranscriptDestinationId, number> {
-  return { "active-field": 0, "voice-note": 0, "remote-dictation": 0 };
+  return { "active-field": 0, [NOTE_DESTINATION_ID]: 0, "remote-dictation": 0 };
 }
 
 export function emptyTriggers(): Record<UsageTrigger, number> {
@@ -164,7 +167,7 @@ export function emptyTriggers(): Record<UsageTrigger, number> {
 export function emptyFeatures(): Record<UsageFeature, number> {
   return {
     selection_captured: 0,
-    voice_note_created: 0,
+    [NOTE_CREATED_FEATURE_ID]: 0,
     handoff_created: 0,
     history_inserted: 0,
     shared_clipboard: 0,
@@ -392,7 +395,7 @@ export function applyUsageEvent(counters: UsageCounters, event: UsageEvent, hour
       if (isDestination(event.destination)) next.destinations[event.destination] += 1;
       return next;
     case "selection_captured":
-    case "voice_note_created":
+    case NOTE_CREATED_FEATURE_ID:
     case "handoff_created":
     case "history_inserted":
     case "shared_clipboard":

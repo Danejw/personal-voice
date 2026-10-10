@@ -69,7 +69,7 @@ Not run.
 4. Hold a short spoken conversation.
 5. Interrupt a spoken reply.
 6. Attach a selection and ask about that exact text.
-7. Ask Assistant to create a voice note and confirm.
+7. Ask Assistant to create a note and confirm.
 8. Ask a current question and look for sources on that reply only.
 9. Capture the screen and ask two follow-ups without a second capture.
 10. Continue the task to a second device on the same account.

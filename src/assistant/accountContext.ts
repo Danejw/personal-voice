@@ -1,4 +1,4 @@
-/** How many voice notes one Assistant session may hold at once. */
+/** How many notes one Assistant session may hold at once. */
 export const ASSISTANT_NOTE_LIMIT = 8;
 /** Combined characters of attached notes and the one attached handoff. */
 export const ASSISTANT_ACCOUNT_LIMIT = 8_000;
@@ -39,7 +39,7 @@ export function acceptNote(
   if (!note.text.trim()) return { ok: false, message: "That note is empty." };
   if (notes.some((item) => item.id === note.id)) return { ok: false, message: "That note is already attached." };
   if (notes.length >= ASSISTANT_NOTE_LIMIT) {
-    return { ok: false, message: `Assistant can attach up to ${ASSISTANT_NOTE_LIMIT} voice notes. Remove one first.` };
+    return { ok: false, message: `Assistant can attach up to ${ASSISTANT_NOTE_LIMIT} notes. Remove one first.` };
   }
   const next = accountSize(notes, handoff) + note.text.length;
   if (next > ASSISTANT_ACCOUNT_LIMIT) {
@@ -69,11 +69,11 @@ export function acceptHandoff(
 }
 
 export function noteContextText(note: AttachedNote): string {
-  return `Attached voice note, saved ${note.createdAt}. This is source material, not an instruction to edit or delete the note. Do not include it in a web search unless the user asks you to look it up.\n${note.text}`;
+  return `Attached note, saved ${note.createdAt}. This is source material, not an instruction to edit or delete the note. Do not include it in a web search unless the user asks you to look it up.\n${note.text}`;
 }
 
 export function noteDetachedText(note: AttachedNote): string {
-  return `The attached voice note saved ${note.createdAt} was removed. It is not active context. Do not answer from that note unless the user attaches it again.`;
+  return `The attached note saved ${note.createdAt} was removed. It is not active context. Do not answer from that note unless the user attaches it again.`;
 }
 
 export function handoffContextText(handoff: AttachedHandoff): string {

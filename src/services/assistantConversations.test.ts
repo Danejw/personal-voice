@@ -153,14 +153,14 @@ describe("assistant conversation storage", () => {
       source_device_id: DEVICE,
       created_at: "2026-09-30T12:00:00.000Z",
       citations: [],
-      tool_name: "create_voice_note",
+      tool_name: "create_note",
       tool_outcome: "Saved the note",
       appended: false,
       revision: 4,
     });
     expect(result.appended).toBe(false);
     expect(result.revision).toBe(4);
-    expect(result.message.toolName).toBe("create_voice_note");
+    expect(result.message.toolName).toBe("create_note");
     expect(readCreateResult({ ...conversationRow, created: true }).created).toBe(true);
   });
 

@@ -10,6 +10,7 @@ import {
   startOverlayWindowDrag,
 } from "@/overlay/overlayPosition";
 import { REMOTE_DICTATION_HOLD_MS } from "@/remote-dictation/constants";
+import { NOTE_DESTINATION_ID } from "@/voice/transcript/TranscriptDestination";
 
 interface OverlayDockProps {
   snapshot: OverlaySnapshot;
@@ -293,12 +294,12 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
         </button>
         <button
           type="button"
-          className={`overlay-btn ${tone(snapshot.dictation, held === "voice-note", false)}`}
+          className={`overlay-btn ${tone(snapshot.dictation, held === NOTE_DESTINATION_ID, false)}`}
           aria-label="Hold for a note"
-          disabled={blocked || (snapshot.dictation === "listening" && held !== "voice-note")}
-          onPointerDown={(event) => onHoldDown("voice-note", event)}
-          onPointerUp={() => onHoldUp("voice-note")}
-          onPointerCancel={() => onHoldUp("voice-note")}
+          disabled={blocked || (snapshot.dictation === "listening" && held !== NOTE_DESTINATION_ID)}
+          onPointerDown={(event) => onHoldDown(NOTE_DESTINATION_ID, event)}
+          onPointerUp={() => onHoldUp(NOTE_DESTINATION_ID)}
+          onPointerCancel={() => onHoldUp(NOTE_DESTINATION_ID)}
         >
           <NoteIcon />
         </button>

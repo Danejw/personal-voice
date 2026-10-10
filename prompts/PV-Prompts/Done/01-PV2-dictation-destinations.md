@@ -16,7 +16,7 @@ Gemini 3.5 Transcribe
    └─ Active Field
 ```
 
-For this phase, **Active Field is still the only actual destination**. Create the smallest clean destination interface/router necessary so future phases can add Voice Note, Clipboard, Handoff, etc. without modifying the transcription engine.
+For this phase, **Active Field is still the only actual destination**. Create the smallest clean destination interface/router necessary so future phases can add Note, Clipboard, Handoff, etc. without modifying the transcription engine.
 
 Do not change Gemini behavior, the existing push-to-talk experience, or create Assistant Mode. Do not introduce an event bus or oversized abstraction.
 
