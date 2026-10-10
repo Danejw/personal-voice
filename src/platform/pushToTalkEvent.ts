@@ -1,5 +1,5 @@
 import type { UsageTrigger } from "@/usage/usageEvents";
-import { migrateDestinationId, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
+import { NOTE_DESTINATION_ID, migrateDestinationId, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 export interface PushToTalkEvent {
   event: "press" | "release" | "cancel" | "capture-selection" | "toggle-assistant";
@@ -12,7 +12,7 @@ export interface PushToTalkEvent {
 /** The Windows hook already names the binding through its destination override. */
 export function windowsShortcutTrigger(destination?: TranscriptDestinationId): UsageTrigger {
   switch (destination) {
-    case "voice-note": return "shortcut-note";
+    case NOTE_DESTINATION_ID: return "shortcut-note";
     case "remote-dictation": return "shortcut-handoff";
     case "active-field":
     case undefined: return "shortcut-dictate";
