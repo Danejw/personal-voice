@@ -539,7 +539,7 @@ export class AssistantController {
     if (file.size > NOTE_ATTACHMENT_MAX_BYTES) return "That file exceeds the 100 MB note attachment limit.";
     this.selectedNoteFile = file;
     this.dispatch({ type: "selectedNoteFile", file: { name: file.name, size: file.size } });
-    this.sendNote("A file was selected by the user for note attachment: " + file.name + ". attachment_source selected_file is now available. Confirm before saving it.");
+    this.sendNote("The user selected a file for note attachment: " + file.name.replace(/\s+/g, " ").slice(0, 120) + ". attachment_source selected_file is available. Confirm before saving.");
     return null;
   }
 
@@ -1212,6 +1212,7 @@ export class AssistantController {
         this.noteMemories();
         this.noteSnapshot();
         this.noteCameraPhoto();
+        if (this.selectedNoteFile) this.sendNote("A local file is selected for a note attachment. Use attachment_source selected_file with confirmation.");
         this.resumeCameraIfDesired();
         this.flushPending();
         return;
@@ -1230,6 +1231,13 @@ export class AssistantController {
             text: event.text,
             ...(spokenId ? { spokenId } : {}),
           });
+          const hint = assembleTaskGuidance(event.text, {
+            ...this.deviceContext,
+            selectionAttached: this.selectionItem !== null,
+            screenAttached: this.screenShot !== null,
+            cameraContextActive: this.cameraDesired !== null,
+          });
+          if (hint) this.sendNote(hint.text);
           this.armTimer();
         }
         return;
