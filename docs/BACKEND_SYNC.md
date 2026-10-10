@@ -14,7 +14,7 @@ It is not a transcription server.
 - dictionary storage
 - settings storage
 - device metadata
-- explicitly saved voice notes
+- explicitly saved notes (voice, manual, or Assistant), with private file attachments
 - explicitly sent device handoffs
 - opt-in recent dictations (final text only, and only while the account setting is on)
 - saved Assistant conversations (final or interrupted text, url/title citations, and a tool name plus outcome)
@@ -91,9 +91,9 @@ Device (local, existing device ID): dictation destination, microphone, floating-
 
 Local machine only: Windows launch at login; Android overlay, accessibility, floating-mic want/start-on-boot prefs, and live FGS.
 
-### voice_notes
+### notes
 
-Voice notes are explicitly saved dictation destinations, not automatic transcript history:
+Notes are explicitly saved items, regardless of whether they come from dictation, manual entry, or the Assistant. The canonical table is `public.notes`. `voice_notes` was a temporary compatibility view and has been removed:
 
 ```sql
 id uuid primary key
@@ -103,7 +103,10 @@ source_device_id uuid not null
 status text not null -- inbox | archived
 created_at timestamptz not null
 updated_at timestamptz not null
+source_type text not null -- voice | manual | assistant
 ```
+
+Note files of any MIME type use the private `note-attachments` bucket and the `note_attachments` metadata table. A single attachment is limited to 100 MB. Stored files require explicit user authorization before an Assistant upload.
 
 ### dictations
 
@@ -181,14 +184,14 @@ Migration `supabase/migrations/20260927230000_personal_sync.sql` (applied as `pe
 - RLS on all three tables, with one policy each: `to authenticated using/with check (user_id = (select auth.uid()))`. `anon` has no table privileges.
 - Last write wins: the client sends the whole settings row on each change.
 
-## As implemented (PV1 Voice Notes)
+## Notes history (original PV1 implementation)
 
-Migration `supabase/migrations/20260928133000_voice_notes.sql` adds `voice_notes` with the same
-per-user RLS convention as the original sync tables. `source_device_id` uses the app's existing
+Historically, migration `supabase/migrations/20260928133000_voice_notes.sql` added `voice_notes` with the same
+per-user RLS convention as the original sync tables. It was later renamed to `notes`; the backward-compatibility view was removed by `20261010010000_remove_legacy_voice_notes_view.sql`. `source_device_id` uses the app's existing
 stable per-account device ID. It intentionally has no foreign key because device registration is
 best-effort and must not race note creation on a new install.
 
-`VoiceNotesStore` loads on sign-in and refreshes when the app becomes visible. Create, archive,
+The current `NotesStore` loads on sign-in and refreshes when the app becomes visible. Create, archive,
 restore, and delete are online operations; a failed destination save leaves the finalized
 transcript visible in the dictation error state.
 
