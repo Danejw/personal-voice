@@ -91,6 +91,10 @@ describe("assistant tool schema", () => {
       kind: "confirm", name: "create_note", title: "Save note with attachment",
       text: JSON.stringify({text: "Bug report", attachment_source: "screenshot"}),
     });
+    expect(decideToolCall({id: "local", name: "attach_file_to_note",
+      args: { id: "note-1", attachment_source: "selected_file" }}, plan)).toMatchObject({
+      kind: "confirm", name: "attach_file_to_note", title: "Attach file to note",
+    });
     expect(decideToolCall({id: "edit", name: "edit_note",
       args: {id: "note-1", text: "Updated", attachment_source: "camera_photo"}}, plan)).toMatchObject({
       kind: "confirm", name: "edit_note", title: "Edit note and attach file",
