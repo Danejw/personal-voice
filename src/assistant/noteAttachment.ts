@@ -23,7 +23,8 @@ export function capturedImageFile(image: CapturedNoteImage): File {
   const name = `${image.source === "screenshot" ? "screenshot" : "camera-photo"}-${stamp}.jpg`;
   return new File([bytes.buffer], name, { type: "image/jpeg" });
 }
-\n/** The Agent may upload only pixels it captured or a user-selected File, never a guessed disk path. */
+
+/** The Assistant may upload only pixels it captured or a user-selected File, never a guessed disk path. */
 export type NoteAttachmentInput = CapturedNoteImage | File;
 
 export function noteAttachmentFile(input: NoteAttachmentInput): File {
