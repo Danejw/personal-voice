@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import { AssistantInsightsPanel } from "@/insights/AssistantInsightsPanel";
 import { listAssistantInsightData } from "@/services/assistantInsightsService";
 import type { InsightCandidate, InsightCandidateKind, InsightUsageFacts } from "@/insights/insights";
@@ -198,7 +199,7 @@ export function InsightsPanel({
   const [busyCandidate, setBusyCandidate] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [confirmCompact, setConfirmCompact] = useState(false);
+  const confirm = useConfirmAction();
   const [assistantPending, setAssistantPending] = useState<{userId:string;count:number}|null>(null);
   const reportAssistantPending = useCallback((forUser:string,count:number)=>{
     setAssistantPending(previous=>previous?.userId===forUser&&previous.count===count?previous:{userId:forUser,count});
@@ -285,7 +286,6 @@ export function InsightsPanel({
     setNotice(null);
     try {
       const removed = await store.compact(latest.id);
-      setConfirmCompact(false);
       setNotice(`${removed.toLocaleString()} analyzed dictations compacted. The newest ${INSIGHTS_KEEP_RECENT} were preserved.`);
     } catch (reason) {
       setProblem(reason instanceof Error ? reason.message : String(reason));
@@ -520,7 +520,12 @@ export function InsightsPanel({
                           type="button"
                           className="secondary"
                           disabled={busyCandidate !== null}
-                          onClick={() => void dismiss(candidate)}
+                          onClick={() => confirm.ask({
+                          title: "Dismiss insight suggestion?",
+                          description: `“${candidate.title}” will be dismissed from the current Insights suggestions. Nothing will be added to your account.`,
+                          confirmLabel: "Dismiss suggestion",
+                          onConfirm: () => dismiss(candidate),
+                        })}
                         >
                           Dismiss
                         </button>
@@ -635,33 +640,23 @@ export function InsightsPanel({
                       : `Delete analyzed raw dictations from this saved run while always preserving the newest ${INSIGHTS_KEEP_RECENT}.`}
                   </p>
                 </div>
-                {!latest.compactedAt && (confirmCompact ? (
-                  <div className="compact-confirm">
-                    <p>This is the destructive step. The saved Insights run remains, but eligible raw Dictation rows will be deleted.</p>
-                    <div className="candidate-actions">
-                      <button type="button" className="record" disabled={snapshot.status === "compacting"} onClick={() => void compact()}>
-                        {snapshot.status === "compacting" ? "Compacting…" : "Confirm compaction"}
-                      </button>
-                      <button type="button" className="secondary" disabled={snapshot.status === "compacting"} onClick={() => setConfirmCompact(false)}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={snapshot.status !== "ready"}
-                    onClick={() => setConfirmCompact(true)}
-                  >
+                {!latest.compactedAt && (
+                  <button type="button" className="secondary" disabled={snapshot.status !== "ready"}
+                    onClick={() => confirm.ask({
+                      title: "Compact analyzed dictations?",
+                      description: `Eligible raw dictation rows from this run will be deleted. The saved Insights profile, usage facts, and suggestions remain. The newest ${INSIGHTS_KEEP_RECENT} dictations are preserved.`,
+                      confirmLabel: "Delete analyzed rows",
+                      onConfirm: compact,
+                    })}>
                     Compact analyzed dictations
                   </button>
-                ))}
+                )}
               </section>
             </>
           )}
         </div>
       )}
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </div>
   );
 }

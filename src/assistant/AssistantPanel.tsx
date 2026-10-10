@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ConversationBar } from "@/assistant/ConversationBar";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import { SelectField } from "@/components/SelectField";
 import type { AssistantLibrarySnapshot } from "@/assistant/AssistantConversationStore";
 import { selectionPreview } from "@/assistant/selectionContext";
@@ -25,6 +26,8 @@ interface AssistantChromeProps {
   onOpenThread?: (id: string) => void;
   onRenameThread?: (id: string, title: string) => void;
   onDeleteThread?: (id: string) => void;
+  onArchiveThread?: (id: string, archived: boolean) => void;
+  onShowArchived?: (archived: boolean) => void;
   onRetrySave?: () => void;
   onLoadOlder?: () => void;
   onRefreshThreads?: () => void;
@@ -80,6 +83,8 @@ export function AssistantPanel({
   onOpenThread,
   onRenameThread,
   onDeleteThread,
+  onArchiveThread,
+  onShowArchived,
   onRetrySave,
   onLoadOlder,
   onRefreshThreads,
@@ -104,6 +109,7 @@ export function AssistantPanel({
   const [photoNotice, setPhotoNotice] = useState<string | null>(null);
   const [computerHistory, setComputerHistory] = useState<Array<{ label: string; phase: string; at: string }>>([]);
   const [accessibilityWatch, setAccessibilityWatch] = useState(false);
+  const confirm = useConfirmAction();
   const [treeReport, setTreeReport] = useState<{
     windowTitle:string;truncated:boolean;
     nodes:Array<{path:string;name:string;automationId:string;controlType:number;
@@ -176,6 +182,8 @@ export function AssistantPanel({
           onOpen={(id) => { onOpenThread(id); setView("chat"); setShowThreads(false); }}
           onRename={onRenameThread}
           onDelete={onDeleteThread}
+          onArchive={onArchiveThread}
+          onShowArchived={onShowArchived}
           onRetry={onRetrySave}
           onLoadOlder={onLoadOlder}
           onRefresh={onRefreshThreads}
@@ -195,6 +203,23 @@ export function AssistantPanel({
           <div className="assistant-conversation-heading">
             <h3 title={displayTitle}>{displayTitle}</h3>
           </div>
+          {library?.currentId && <details className="assistant-session-dropdown">
+            <summary title="View individual sessions inside this continuous thread">
+              {library.sessions.length} session{library.sessions.length === 1 ? "" : "s"}
+            </summary>
+            <div className="assistant-session-popover" role="group" aria-label="Saved sessions">
+              {library.sessions.length === 0 && <p>No session boundaries recorded yet. Older messages remain in the thread.</p>}
+              {library.sessions.map((session) => (
+                <div className="assistant-session-entry" key={session.id}>
+                  <span>{new Date(session.startedAt).toLocaleString()} · {session.endReason ?? "Active"}</span>
+                  <button type="button" className="secondary" title="Copy full session ID"
+                    onClick={() => { void navigator.clipboard.writeText(session.id); }}>
+                    Copy ID {session.id.slice(0, 8)}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>}
           <AssistantHeader controller={controller} snapshot={snapshot} signedIn={signedIn}
             micBusy={micBusy} library={library} onProduce={onProduce} />
         </header>
@@ -486,10 +511,12 @@ export function AssistantPanel({
                 .then(() => setAccessibilityWatch(enabled))
                 .catch((error:unknown) => setAccessibilityWatchError(String(error)));
             }}>{accessibilityWatch ? "Stop live UI awareness" : "Start live UI awareness"}</button>
-            <button type="button" className="secondary" onClick={() => {
-              setAccessibilityEvents([]);
-              setComputerHistory([]);
-            }}>Clear history</button>
+            <button type="button" className="secondary" onClick={() => confirm.ask({
+              title: "Clear computer activity?",
+              description: "This clears the locally displayed accessibility and computer activity history. Saved Assistant conversations are unaffected.",
+              confirmLabel: "Clear history",
+              onConfirm: () => { setAccessibilityEvents([]); setComputerHistory([]); },
+            })}>Clear history</button>
           </div>
           <p className="note-meta">{accessibilityWatch
             ? "Windows accessibility monitoring active. Focus, selection, and UI changes are visible locally; no text is continuously sent to Gemini."
@@ -607,6 +634,7 @@ export function AssistantPanel({
         </label>
         <button type="submit" className="assistant-send" disabled={!canSend || !draft.trim()} aria-label="Send message">➤</button>
       </form>
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
       </section>
     </div>
   );

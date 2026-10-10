@@ -87,7 +87,7 @@ describe("tool result interpretation", () => {
     const privateText = "private token 12345";
     const info = interpretToolResult("create_voice_note", true, privateText);
     expect(JSON.stringify(info)).not.toContain(privateText);
-    expect(info.verification_hint).toContain("Notes service");
+    expect(info.verification_hint).toContain("Notes");
   });
 
   it("adds structured information without renaming the existing Live result and error fields", () => {

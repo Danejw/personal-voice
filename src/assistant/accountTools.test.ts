@@ -24,6 +24,15 @@ describe("account tool lists", () => {
     expect(listed).not.toContain("a".repeat(600));
   });
 
+  it("includes bounded attachment metadata so saved images can be verified without exposing file URLs", () => {
+    const listed = formatNoteList([{
+      id: "n1", text: "Bug report", status: "inbox", createdAt: "2026-10-09T12:00:00Z",
+      attachments: [{fileName: "screenshot-2026.jpg"}, {fileName: "camera-photo-2026.jpg"}],
+    }], false);
+    expect(listed).toContain("attachments (2): screenshot-2026.jpg, camera-photo-2026.jpg");
+    expect(listed).not.toContain("https://");
+  });
+
   it("lists devices even when nothing has been received", () => {
     expect(formatHandoffList(["Phone"], [])).toBe("Devices you can send to: Phone.\nNo received handoffs.");
     expect(formatHandoffList([], [])).toContain("No other device");

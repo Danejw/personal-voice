@@ -13,6 +13,8 @@ import {
   readClaimResult,
   readCreateResult,
   readSummaryResult,
+  sessionFromPayload,
+  type AssistantSession,
   type AssistantConversation,
   type AssistantMessageInput,
   type AssistantStoredMessage,
@@ -45,6 +47,14 @@ export interface AssistantConversationsApi {
   saveSummary(userId: string, id: string, summary: StoredSummary, replaces: string | null): Promise<{ conversation: AssistantConversation; saved: boolean }>;
   saveContextItems(userId: string, id: string, items: readonly ContextAttachment[]): Promise<void>;
   listMessages(userId: string, conversationId: string, page?: AssistantMessagePage): Promise<AssistantStoredMessage[]>;
+  /** Session APIs are additive so old in-memory test adapters remain compatible. */
+  startSession?(userId: string, conversationId: string, deviceId: string, sessionId: string): Promise<AssistantSession>;
+  linkMessageSession?(userId: string, messageId: string, sessionId: string): Promise<void>;
+  finishSession?(userId: string, sessionId: string, reason: "ended" | "interrupted" | "lost"): Promise<void>;
+  listSessions?(userId: string, conversationId: string, page?: { limit?: number; before?: { startedAt: string; id: string } | null }): Promise<AssistantSession[]>;
+  listSessionMessages?(userId: string, conversationId: string, sessionId: string, page?: AssistantMessagePage): Promise<AssistantStoredMessage[]>;
+  archive?(userId: string, conversationId: string, archived: boolean): Promise<AssistantConversation>;
+  listArchived?(userId: string, page?: AssistantConversationPage): Promise<AssistantConversation[]>;
 }
 
 function requireClient(): SupabaseClient<Database> {
@@ -122,6 +132,81 @@ export function createAssistantConversationsApi(
       });
       if (error) throw assistantStorageError(error);
       return (data ?? []).map(conversationFromPayload);
+    },
+
+    async listArchived(userId, page) {
+      const client = getClient();
+      const before = page?.before ?? null;
+      const { data, error } = await client.rpc("list_archived_assistant_conversations", {
+        p_user_id: assistantId(userId, "account"),
+        p_limit: preparePageLimit(page?.limit),
+        p_before_updated_at: before?.updatedAt ?? null,
+        p_before_id: before ? assistantId(before.id, "conversation") : null,
+      });
+      if (error) throw assistantStorageError(error);
+      return (data ?? []).map(conversationFromPayload);
+    },
+
+    async archive(userId, conversationId, archived) {
+      const { data, error } = await getClient().rpc("set_assistant_conversation_archived", {
+        p_user_id: assistantId(userId, "account"),
+        p_id: assistantId(conversationId, "conversation"),
+        p_archived: archived,
+      });
+      return conversationFromPayload(unwrap(error, data, "conversation"));
+    },
+
+    async startSession(userId, conversationId, deviceId, sessionId) {
+      const { data, error } = await getClient().rpc("start_assistant_session", {
+        p_user_id: assistantId(userId, "account"),
+        p_conversation_id: assistantId(conversationId, "conversation"),
+        p_device_id: assistantId(deviceId, "device"),
+        p_session_id: assistantId(sessionId, "session"),
+      });
+      return sessionFromPayload(unwrap(error, data, "session"));
+    },
+
+    async linkMessageSession(userId, messageId, sessionId) {
+      const { error } = await getClient().rpc("link_assistant_message_session", {
+        p_user_id: assistantId(userId, "account"),
+        p_message_id: assistantId(messageId, "message"),
+        p_session_id: assistantId(sessionId, "session"),
+      });
+      if (error) throw assistantStorageError(error);
+    },
+
+    async finishSession(userId, sessionId, reason) {
+      const { error } = await getClient().rpc("finish_assistant_session", {
+        p_user_id: assistantId(userId, "account"), p_session_id: assistantId(sessionId, "session"),
+        p_reason: reason,
+      });
+      if (error) throw assistantStorageError(error);
+    },
+
+    async listSessions(userId, conversationId, page) {
+      const before = page?.before ?? null;
+      const { data, error } = await getClient().rpc("list_assistant_sessions", {
+        p_user_id: assistantId(userId, "account"),
+        p_conversation_id: assistantId(conversationId, "conversation"),
+        p_limit: preparePageLimit(page?.limit),
+        p_before_started_at: before?.startedAt ?? null,
+        p_before_id: before ? assistantId(before.id, "session") : null,
+      });
+      if (error) throw assistantStorageError(error);
+      return (data ?? []).map(sessionFromPayload);
+    },
+
+    async listSessionMessages(userId, conversationId, sessionId, page) {
+      const afterSeq = page?.afterSeq ?? 0;
+      if (!Number.isSafeInteger(afterSeq) || afterSeq < 0) throw new Error("Invalid sequence cursor.");
+      const { data, error } = await getClient().rpc("list_assistant_session_messages", {
+        p_user_id: assistantId(userId, "account"),
+        p_conversation_id: assistantId(conversationId, "conversation"),
+        p_session_id: assistantId(sessionId, "session"),
+        p_after_seq: afterSeq, p_limit: preparePageLimit(page?.limit),
+      });
+      if (error) throw assistantStorageError(error);
+      return (data ?? []).map(messageFromPayload);
     },
 
     async append(userId, input) {

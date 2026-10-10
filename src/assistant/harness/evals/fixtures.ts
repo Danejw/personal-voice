@@ -1,7 +1,7 @@
 import type { ToolSelectionScenario } from "@/assistant/harness/evals/traceScore";
 
 /**
- * PR22 golden tool-path fixture set (54 tool coverage + 20 disambiguation + 7 no-tool).
+ * Offline golden tool-path fixtures. Tool and scenario counts are derived in parity tests.
  * These are expected tool sequences, NOT measured model outcomes.
  * Some examples assume identified/available targets in the mock environment.
  * Real model quality and final-state success require separate live evaluation.
@@ -28,6 +28,7 @@ const BASE_TOOL_SCENARIOS = [
   { id: "tool-inspect_active_app", request: "Read the accessible text in the current Windows app.", expected: ["inspect_active_app"], successCriterion: "Foreground accessible text read" },
   { id: "tool-send_remote_dictation", request: "Type these words into the focused field on my office PC.", expected: ["send_remote_dictation"], successCriterion: "Remote insertion acknowledged" },
   { id: "tool-edit_voice_note", request: "Replace the full text of my 'groceries' note.", expected: ["list_voice_notes","edit_voice_note"], successCriterion: "Intended note text updated" },
+  { id: "tool-attach_image_to_voice_note", request: "Take a screenshot and attach it to my saved 'research' note without changing its text.", expected: ["capture_screen","list_voice_notes","attach_image_to_voice_note"], successCriterion: "Private screenshot attachment belongs to the intended saved note" },
   { id: "tool-create_transform", request: "Save a new reusable transform named 'formal email'.", expected: ["create_transform"], successCriterion: "Transform saved" },
   { id: "tool-add_dictionary_word", request: "Add the spelling 'Kuma' to my dictionary.", expected: ["add_dictionary_word"], successCriterion: "Dictionary term saved" },
   { id: "tool-read_usage_analytics", request: "How many words have I dictated this week?", expected: ["read_usage_analytics"], successCriterion: "Usage count from recorded stats" },
@@ -53,6 +54,7 @@ const BASE_TOOL_SCENARIOS = [
   { id: "tool-supervise_screen", request: "Work through these three screens and set the requested options.", expected: ["supervise_screen"], successCriterion: "Multi-step on-screen goal reached" },
   { id: "tool-list_past_conversations", request: "Which were my last five conversations?", expected: ["list_past_conversations"], successCriterion: "Five most recent threads listed" },
   { id: "tool-read_past_conversation", request: "Read our conversation from yesterday about keyboards.", expected: ["list_past_conversations","read_past_conversation"], successCriterion: "Exact historical thread excerpt returned" },
+  { id: "tool-list_conversation_sessions", request: "Show the times and IDs of our sessions inside the Personal Voice thread.", expected: ["list_past_conversations","list_conversation_sessions"], successCriterion: "Dated session IDs within a continuous conversation" },
   { id: "tool-continue_past_conversation", request: "Continue the second-most-recent conversation, not this one.", expected: ["list_past_conversations","continue_past_conversation"], successCriterion: "Existing conversation becomes active" },
   { id: "tool-list_memories", request: "What preferences do you explicitly remember about me?", expected: ["list_memories"], successCriterion: "Saved memory entries listed" },
   { id: "tool-search_memory", request: "What did I previously say about my purpose across my notes?", expected: ["search_memory"], successCriterion: "Relevant provenance-backed saved evidence returned" },
@@ -82,6 +84,8 @@ const DISAMBIGUATION_SCENARIOS = [
   { id: "choice-memory-v-history", request: "Find a note where I wrote about workspace habits.", expected: ["search_memory"], forbidden: ["list_past_conversations"], successCriterion: "Saved source evidence retrieved" },
   { id: "choice-read-v-resume", request: "Read the previous conversation but don't switch threads.", expected: ["list_past_conversations","read_past_conversation"], forbidden: ["continue_past_conversation"], successCriterion: "Conversation stays unchanged" },
   { id: "choice-resume-v-read", request: "Switch us into the thread about hiking and continue there.", expected: ["list_past_conversations","continue_past_conversation"], forbidden: ["read_past_conversation"], successCriterion: "Exact older conversation is now active" },
+  { id: "choice-create-note-with-image", request: "Take a screen capture and create a note with it and the text 'Bug report'.", expected: ["capture_screen","create_voice_note"], forbidden: ["attach_image_to_voice_note"], successCriterion: "New note contains requested text and a screenshot attachment" },
+  { id: "choice-edit-note-with-image", request: "Update my existing 'bug' note text and include a photo from the camera.", expected: ["capture_camera_photo","list_voice_notes","edit_voice_note"], forbidden: ["create_voice_note"], successCriterion: "Existing note text updated and private photo attached" },
   { id: "choice-note-v-memory", request: "List all my current notes in the inbox.", expected: ["list_voice_notes"], forbidden: ["list_memories"], successCriterion: "Note inbox returned" },
   { id: "choice-count-v-insight", request: "Give me the exact word count I've dictated.", expected: ["read_usage_analytics"], forbidden: ["read_insights"], successCriterion: "Reports numeric usage count" },
 ] as const satisfies readonly ToolSelectionScenario[];

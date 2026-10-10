@@ -6,7 +6,9 @@ import { selectionPreview } from "@/assistant/selectionContext";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { AssistantConversationStore } from "@/assistant/AssistantConversationStore";
-import { listPastConversations, readPastConversation } from "@/assistant/assistantConversationRecall";
+import { capturedImageFile } from "@/assistant/noteAttachment";
+import type { CapturedNoteImage } from "@/assistant/noteAttachment";
+import { listPastConversations, listPastSessions, readPastConversation } from "@/assistant/assistantConversationRecall";
 import { supabaseAssistantFeed, supabaseMemoryFeed } from "@/assistant/assistantFeed";
 import { AssistantMemoryStore } from "@/assistant/AssistantMemoryStore";
 import { MemoryPanel } from "@/assistant/MemoryPanel";
@@ -336,8 +338,21 @@ function pasteReceived(text: string): Promise<void> {
 assistant.setActions({
   copyText: (text) => navigator.clipboard.writeText(text),
   insertText: (text) => pasteIntoField(text),
-  createVoiceNote: (text) => notesStore.create(text, "assistant"),
-  editVoiceNote: (id, text) => notesStore.updateText(id, text),
+  createVoiceNote: (text, image) => notesStore.create(text, "assistant", {},
+    image ? [capturedImageFile(image)] : []),
+  editVoiceNote: async (id, text, image) => {
+    const file = image ? capturedImageFile(image) : null;
+    await notesStore.updateText(id, text);
+    if (file) {
+      try {
+        await notesStore.addAttachments(id, [file]);
+      } catch (error) {
+        throw new Error(`Note text updated, but attaching the image failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+      }
+    }
+  },
+  attachImageToVoiceNote: (id: string, image: CapturedNoteImage) =>
+    notesStore.addAttachments(id, [capturedImageFile(image)]),
   listSnippets: async () => {
     const snap = snippetStore.getSnapshot();
     if (snap.status === "signed-out") throw new Error("Sign in to read snippets.");
@@ -429,8 +444,9 @@ assistant.setActions({
   dismissHandoff: (id) => handoffs.consume(id),
   listMemories: () => assistantMemory.listText(),
   searchMemory: async (query) => memorySearchToolText(query, await searchPersonalMemory(query)),
-  listPastConversations: (query, cursor, count) => listPastConversations(assistantConversationsApi, accountUserId ?? "", query, cursor, count),
-  readPastConversation: (conversationId) => readPastConversation(assistantConversationsApi, accountUserId ?? "", conversationId),
+  listPastConversations: (query, cursor, count, archivedOnly) => listPastConversations(assistantConversationsApi, accountUserId ?? "", query, cursor, count, archivedOnly),
+  readPastConversation: (conversationId, options) => readPastConversation(assistantConversationsApi, accountUserId ?? "", conversationId, options),
+  listPastSessions: (conversationId, before, count) => listPastSessions(assistantConversationsApi, accountUserId ?? "", conversationId, before, count),
   checkPastConversation: async (conversationId) => {
     if (!accountUserId) throw new Error("Sign in to continue a conversation.");
     const conversation = await assistantConversationsApi.get(accountUserId, conversationId);
@@ -1291,6 +1307,8 @@ export default function App() {
               onOpenThread={(id) => assistantLibrary.open(id)}
               onRenameThread={(id, title) => { void assistantLibrary.rename(id, title); }}
               onDeleteThread={(id) => { void assistantLibrary.delete(id); }}
+              onArchiveThread={(id, archived) => { void assistantLibrary.archive(id, archived); }}
+              onShowArchived={(archived) => { void assistantLibrary.setArchivedView(archived); }}
               onRetrySave={() => assistantLibrary.retry()}
               onLoadOlder={() => { void assistantLibrary.loadOlder(); }}
               onRefreshThreads={() => { void assistantLibrary.catchUp(); }}

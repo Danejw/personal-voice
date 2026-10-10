@@ -595,6 +595,7 @@ export type Database = {
       }
       assistant_conversations: {
         Row: {
+          archived_at: string | null
           created_at: string
           deleted_at: string | null
           fence: number
@@ -611,6 +612,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           deleted_at?: string | null
           fence?: number
@@ -627,6 +629,7 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           deleted_at?: string | null
           fence?: number
@@ -734,8 +737,39 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_sessions: {
+        Row: {
+          id: string
+          conversation_id: string
+          user_id: string
+          device_id: string
+          started_at: string
+          ended_at: string | null
+          end_reason: string | null
+        }
+        Insert: {
+          id: string
+          conversation_id: string
+          user_id: string
+          device_id: string
+          started_at?: string
+          ended_at?: string | null
+          end_reason?: string | null
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          user_id?: string
+          device_id?: string
+          started_at?: string
+          ended_at?: string | null
+          end_reason?: string | null
+        }
+        Relationships: []
+      }
       assistant_messages: {
         Row: {
+          session_id: string | null
           body: string
           citations: Json
           conversation_id: string
@@ -750,6 +784,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          session_id?: string | null
           body: string
           citations?: Json
           conversation_id: string
@@ -764,6 +799,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          session_id?: string | null
           body?: string
           citations?: Json
           conversation_id?: string
@@ -904,6 +940,34 @@ export type Database = {
           p_user_id: string
         }
         Returns: Json
+      }
+      start_assistant_session: {
+        Args: { p_user_id: string; p_conversation_id: string; p_device_id: string; p_session_id: string }
+        Returns: Database["public"]["Tables"]["assistant_sessions"]["Row"]
+      }
+      finish_assistant_session: {
+        Args: { p_user_id: string; p_session_id: string; p_reason: string }
+        Returns: undefined
+      }
+      link_assistant_message_session: {
+        Args: {p_user_id:string; p_message_id:string; p_session_id:string}
+        Returns: undefined
+      }
+      list_assistant_sessions: {
+        Args: { p_user_id: string; p_conversation_id: string; p_limit: number; p_before_started_at: string | null; p_before_id: string | null }
+        Returns: Database["public"]["Tables"]["assistant_sessions"]["Row"][]
+      }
+      list_assistant_session_messages: {
+        Args: { p_user_id: string; p_conversation_id: string; p_session_id: string; p_after_seq: number; p_limit: number }
+        Returns: Database["public"]["Tables"]["assistant_messages"]["Row"][]
+      }
+      set_assistant_conversation_archived: {
+        Args: { p_user_id: string; p_id: string; p_archived: boolean }
+        Returns: Database["public"]["Tables"]["assistant_conversations"]["Row"]
+      }
+      list_archived_assistant_conversations: {
+        Args: { p_user_id: string; p_limit: number; p_before_updated_at: string | null; p_before_id: string | null }
+        Returns: Database["public"]["Tables"]["assistant_conversations"]["Row"][]
       }
       list_assistant_conversations: {
         Args: {

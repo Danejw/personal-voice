@@ -1976,3 +1976,64 @@ section.page-panel.assistant-workspace-section { padding: 0; overflow: hidden; }
   .assistant-settings-pane, .assistant-tools-pane { padding: 18px 13px; }
   .assistant-settings-card { padding: 18px; }
 }
+
+
+/* Destructive confirmations stay in the app's own native modal top layer.
+   No extra window, CSS border, or custom focus trap is necessary. */
+.confirm-dialog {
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(85vh, 500px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  margin: auto;
+  padding: 22px 24px 19px;
+  color: #e9edf4;
+  background: #19242d;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 22px 66px rgba(0, 0, 0, .48);
+}
+.confirm-dialog::backdrop { background: rgba(5, 11, 15, .72); }
+.confirm-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  margin-bottom: 13px;
+  border-radius: 10px;
+  color: #ffc5b9;
+  background: #44302e;
+  font-size: 17px;
+  font-weight: 700;
+}
+.confirm-dialog h2 { margin: 0 0 9px; font-size: 17px; font-weight: 650; }
+.confirm-dialog > p { margin: 0; color: #b1bec9; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.confirm-dialog .error { color: #f3a7a7; margin-top: 12px; }
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 23px;
+}
+.confirm-dialog-actions button { min-width: 98px; min-height: 36px; border-radius: 9px; font: inherit; font-size: 12px; font-weight: 620; cursor: pointer; }
+.confirm-dialog-actions button:disabled { opacity: .55; cursor: not-allowed; }
+.confirm-dialog-danger { color: #fff1ed; background: #9f463f; border: 0; padding: 8px 15px; }
+.confirm-dialog-danger:hover:not(:disabled) { background: #b8574e; }
+.confirm-dialog button:focus-visible { outline: 2px solid var(--pv-primary); outline-offset: 2px; }
+@media (max-width: 480px) {
+  .confirm-dialog { padding: 18px 18px 16px; }
+  .confirm-dialog-actions button { flex: 1 1 auto; }
+}
+
+
+/* Session history is secondary to the transcript, reachable from its compact header. */
+.assistant-session-dropdown { position: relative; flex: none; font-size: 11px; color: #9cbaae; }
+.assistant-session-dropdown > summary { cursor: pointer; white-space: nowrap; padding: 5px 7px; border-radius: 8px; background: #1b2b30; }
+.assistant-session-popover { position: absolute; z-index: 12; top: 31px; right: 0; width: min(390px, 70vw); max-height: 50vh; overflow: auto;
+  border-radius: 12px; background: #1b2730; padding: 12px; box-shadow: 0 12px 30px rgba(0,0,0,.38); }
+.assistant-session-popover p { font-size: 12px; line-height: 1.5; }
+.assistant-session-entry { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 2px; }
+.assistant-session-entry > span { min-width: 0; overflow-wrap: anywhere; }
+.assistant-session-entry button { font-size: 10px; flex: none; padding: 5px 7px; }
+.assistant-archive-switch { font-size: 11px; width: 100%; margin: 6px 0 0; padding: 6px 8px; border: 0; border-radius: 8px; text-align: left; }

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import { HoverActionItem } from "@/components/HoverActionItem";
 import {
   MAX_SNIPPET_CONTENT_LENGTH,
@@ -40,6 +41,7 @@ export function SnippetPanel({ store, snapshot }: { store: SnippetStore; snapsho
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const editable = snapshot.status === "synced";
 
   function clearForm() {
@@ -92,10 +94,15 @@ export function SnippetPanel({ store, snapshot }: { store: SnippetStore; snapsho
   }
 
   function remove(snippet: Snippet) {
-    void run(`delete:${snippet.id}`, async () => {
-      await store.remove(snippet.id);
-      if (editingId === snippet.id) clearForm();
-    }, "Snippet deleted.");
+    confirm.ask({
+      title: "Delete snippet?",
+      description: `The “${snippet.trigger}” snippet and its saved expansion will be deleted.`,
+      confirmLabel: "Delete snippet",
+      onConfirm: () => run(`delete:${snippet.id}`, async () => {
+        await store.remove(snippet.id);
+        if (editingId === snippet.id) clearForm();
+      }, "Snippet deleted."),
+    });
   }
 
   return (
@@ -172,6 +179,7 @@ export function SnippetPanel({ store, snapshot }: { store: SnippetStore; snapsho
           )}
         </section>
       </div>
+      <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
     </>
   );
 }

@@ -27,7 +27,7 @@ This phase intentionally does **not** implement automatic creation of executable
 
 ## Data and isolation
 
-Migration: `supabase/migrations/20261009160000_assistant_insights_playbook_drafts.sql`.
+Migration: `supabase/migrations/20261009163000_assistant_insights_playbook_drafts.sql`.
 
 - `assistant_insight_runs`: timestamp and counts, no raw conversation content.
 - `assistant_insight_candidates`: kind, fingerprint, review status, summary/reason/next step and source message IDs. Holds *generated suggestions*, not complete messages.
@@ -51,7 +51,7 @@ No new Gemini Live Assistant tool was declared and no changes to existing tool p
 ## Required rollout order
 
 1. Ensure Phase A SQL `20261009140000_assistant_usage_analytics.sql` was deployed (user reported it applied). Phase B SQL `20261009150000_assistant_tool_reliability.sql` must be deployed before releasing the Phase B app; it is independent of the Phase C migration.
-2. Run Phase C SQL `20261009160000_assistant_insights_playbook_drafts.sql` in the **same Supabase project**, then apply the additive profile migration **`20261009170000_assistant_communication_profile.sql`**. The second migration is required even if the earlier Phase C schema is already installed.
+2. Run Phase C SQL `20261009163000_assistant_insights_playbook_drafts.sql` in the **same Supabase project**, then apply the additive profile migration **`20261009170000_assistant_communication_profile.sql`**. The second migration is required even if the earlier Phase C schema is already installed.
 3. Deploy/redeploy the updated Edge Function `supabase/functions/assistant-insights`. Configure the existing server-side `GEMINI_API_KEY`; never embed a secret in Windows/Android. If previously deployed, **redeploy it again** for profile output.
 4. Release client only after migrations and function deploy succeed. Failure to deploy function leaves the analysis action unavailable; other Insights tabs remain intact.
 5. No automatic SQL or Gemini calls are initiated merely by opening or merging the PR.

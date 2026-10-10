@@ -35,7 +35,7 @@ describe("assistant tool intelligence registry", () => {
     expect(byName.get("list_past_conversations")?.description).toContain("search_memory");
     expect(byName.get("capture_screen")?.description).toContain("inspect_pointer_context");
     expect(byName.get("search_memory")?.description).toContain("list_past_conversations");
-    expect(byName.get("create_voice_note")?.description).toContain("manual Notes composer");
+    expect(byName.get("create_voice_note")?.description).toContain("attachment_source");
     expect(byName.get("read_past_conversation")?.parameters).toMatchObject({ required: ["conversation_id"] });
     expect(byName.get("copy_text")?.parameters).toMatchObject({ required: ["text"] });
     expect(enrichToolDescription("unknown_tool", "existing description")).toBe("existing description");
@@ -48,12 +48,12 @@ describe("assistant tool intelligence registry", () => {
 
 describe("deterministic tool-selection trace fixtures", () => {
   it("defines one base scenario for every declared tool plus ambiguity and no-tool cases", () => {
-    expect(TOOL_SELECTION_SCENARIOS).toHaveLength(ASSISTANT_TOOL_NAMES.length + 20 + 7);
+    expect(TOOL_SELECTION_SCENARIOS).toHaveLength(ASSISTANT_TOOL_NAMES.length + 22 + 7);
     expect(new Set(TOOL_SELECTION_SCENARIOS.map((scenario) => scenario.id)).size).toBe(TOOL_SELECTION_SCENARIOS.length);
     const singles = TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("tool-"));
     expect(singles).toHaveLength(ASSISTANT_TOOL_NAMES.length);
     expect(singles.map((scenario) => scenario.id.slice(5)).sort()).toEqual([...ASSISTANT_TOOL_NAMES].sort());
-    expect(TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("choice-"))).toHaveLength(20);
+    expect(TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("choice-"))).toHaveLength(22);
     expect(TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("none-"))).toHaveLength(7);
     for (const scenario of TOOL_SELECTION_SCENARIOS) {
       expect(scenario.request.trim()).not.toBe("");
