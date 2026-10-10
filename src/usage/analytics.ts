@@ -225,14 +225,14 @@ export interface AnalyticsModel {
 
 const DESTINATION_LABELS: Record<TranscriptDestinationId, string> = {
   "active-field": "Active field",
-  "voice-note": "Voice Notes",
+  "voice-note": "Notes",
   "remote-dictation": "Remote Dictation",
 };
 
 export const TRIGGER_LABELS: Record<UsageTrigger, string> = {
   "ui-button": "UI button",
   "shortcut-dictate": "Hold to Dictate",
-  "shortcut-note": "Voice Note Shortcut",
+  "shortcut-note": "Note Shortcut",
   "shortcut-handoff": "Handoff Shortcut",
   overlay: "Floating Control",
   "android-floating-mic": "Floating Mic",
@@ -240,7 +240,7 @@ export const TRIGGER_LABELS: Record<UsageTrigger, string> = {
 
 const FEATURE_LABELS: Record<UsageFeature, string> = {
   selection_captured: "Capture Selection",
-  voice_note_created: "Voice Notes",
+  voice_note_created: "Notes",
   handoff_created: "Handoffs",
   history_inserted: "Recent Dictation",
   shared_clipboard: "Shared Clipboard",
@@ -427,7 +427,7 @@ export function insightsFrom(rows: readonly RemoteUsageDay[], today: string): st
   const noteLeader = [...notesByDevice.entries()].sort((a, b) => b[1] - a[1])[0];
   const fieldLeader = [...fieldByDevice.entries()].sort((a, b) => b[1] - a[1])[0];
   if (noteLeader && fieldLeader && noteTotal >= 5 && noteLeader[0] !== fieldLeader[0] && share(noteLeader[1], noteTotal) >= 60) {
-    lines.push("Voice notes and active-field dictation come from different devices.");
+    lines.push("Notes and active-field dictation come from different devices.");
   }
   if (total.dictationCompleted >= 5 && share(total.recoveryUsed, total.dictationCompleted) >= 10) {
     lines.push(`${share(total.recoveryUsed, total.dictationCompleted)}% of completed dictations needed recovery.`);
