@@ -53,7 +53,7 @@ import {
 } from "@/assistant/snapshot";
 import { decideToolCall, type ConfirmToolName, type ParsedToolCall, type ToolDecision } from "@/assistant/tools";
 import { playbookToolText } from "@/assistant/harness/playbooks";
-import { interpretToolResult, ToolFailureHistory } from "@/assistant/harness/toolResults";
+import { interpretToolResult, ToolFailureHistory, type ToolResultAssessment } from "@/assistant/harness/toolResults";
 import { ToolTraceRecorder, type ToolEvalTrace, type TraceMetadata } from "@/assistant/harness/evals/traceRecorder";
 import { assembleTaskGuidance, deviceToolGuidance, UNKNOWN_DEVICE_CONTEXT, type AssistantDeviceContext } from "@/assistant/harness/contextAssembler";
 import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
@@ -208,6 +208,9 @@ export class AssistantController {
   /** True when this socket was opened with a resumption handle. That socket already has the history. */
   private openedWithHandle = false;
   private onToolRecord: ((record: { name: string; outcome: string }) => void) | null = null;
+  /** Metadata-only production tool observer; does not expose arguments or result payloads. */
+  private onToolMetrics: ((event: {type:"calls"; calls:readonly {id:string|null;name:string}[]} |
+    {type:"result"; id:string; name:string; assessment:ToolResultAssessment}) => void) | null = null;
   private timer?: ReturnType<typeof setTimeout>;
   private pending: ConfirmedTool | null = null;
   /** Bumped when a pending action is dropped so an in-flight confirm cannot report success. */
@@ -221,6 +224,9 @@ export class AssistantController {
   /** Turn ids already handed to storage, so a reload does not append them again. */
   private published = new Set<string>();
   private onCommitted: ((turn: AssistantTurn) => void) | null = null;
+  private onUsageTurn: ((turn: { id: string; role: "user" | "assistant"; modality: "voice" | "typed" | "unknown" }) => void) | null = null;
+  private typedUsageIds = new Set<string>();
+  private voiceUsageIds = new Set<string>();
   private onRevised: ((turn: AssistantTurn) => void) | null = null;
   private computerStopped = false;
   private computerConfirm: ((allowed: boolean) => void) | null = null;
@@ -342,6 +348,11 @@ export class AssistantController {
     return trace;
   }
 
+  /** Independent metadata-only observer; restored/saved messages are never re-counted. */
+  setUsageTurnHandler(handler: typeof this.onUsageTurn): void {
+    this.onUsageTurn = handler;
+  }
+
   /** Receives each committed turn once. Streaming text is not included. */
   setCommittedTurnHandler(handler: ((turn: AssistantTurn) => void) | null): void {
     this.onCommitted = handler;
@@ -370,6 +381,10 @@ export class AssistantController {
     if (status === "CONNECTING" || status === "READY" || status === "RESPONDING") return;
     this.historyTurns = turns.map((turn) => ({ role: turn.role, text: turn.text }));
     this.historySeeded = false;
+  }
+
+  setToolMetricsHandler(handler: typeof this.onToolMetrics): void {
+    this.onToolMetrics = handler;
   }
 
   /** Records a finished tool result so a later session can describe it without running it again. */
@@ -455,7 +470,9 @@ export class AssistantController {
   send(text: string): void {
     const trimmed = text.trim();
     if (!trimmed || this.snapshot.status !== "READY" || !this.session) return;
-    this.dispatch({ type: "send", id: this.nextId(), text: trimmed });
+    const id = this.nextId();
+    this.typedUsageIds.add(id);
+    this.dispatch({ type: "send", id, text: trimmed });
     try {
       // The current socket already has the still image. A later question does not send it again.
       this.noteSnapshot();
@@ -1185,6 +1202,7 @@ export class AssistantController {
         if (event.partial) this.dispatch({ type: "userPartial", text: event.text });
         else {
           const id = this.nextId();
+          this.voiceUsageIds.add(id);
           const spokenId = this.snapshot.status === "RESPONDING" ? this.nextId() : undefined;
           this.dispatch({
             type: "userFinal",
@@ -1227,6 +1245,7 @@ export class AssistantController {
         this.resumeOrFail();
         return;
       case "toolCalls":
+        this.onToolMetrics?.({type:"calls", calls:event.calls.map(call=>({id:call.id,name:call.name}))});
         this.evalTrace?.noteCalls(event.calls);
         if (this.evalTrace && this.evalTraceHandler) this.evalTraceHandler(this.evalTrace.snapshot());
         this.enqueueTools(event.calls);
@@ -2038,6 +2057,7 @@ export class AssistantController {
 
   private replyTool(id: string, name: string, ok: boolean, message: string) {
     const assessment = interpretToolResult(name, ok, message, this.toolFailures.record(name, ok));
+    this.onToolMetrics?.({type:"result",id,name,assessment});
     this.evalTrace?.noteResult(id, assessment);
     if (this.evalTrace && this.evalTraceHandler) this.evalTraceHandler(this.evalTrace.snapshot());
     this.dispatch({ type:"toolActivity", activity:{
@@ -2124,6 +2144,14 @@ export class AssistantController {
         if (this.published.has(turn.id)) continue;
         this.published.add(turn.id);
         this.onCommitted?.(turn);
+        if (turn.text.trim() && turn.status !== "interrupted") {
+          const modality = turn.role === "user"
+            ? this.typedUsageIds.has(turn.id) ? "typed" : this.voiceUsageIds.has(turn.id) ? "voice" : "unknown"
+            : "unknown";
+          this.onUsageTurn?.({ id: turn.id, role: turn.role, modality });
+        }
+        this.typedUsageIds.delete(turn.id);
+        this.voiceUsageIds.delete(turn.id);
         continue;
       }
       if (sourcesChanged(prior, turn)) this.onRevised?.(turn);

@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
+import { AssistantInsightsPanel } from "@/insights/AssistantInsightsPanel";
+import { listAssistantInsightData } from "@/services/assistantInsightsService";
 import type { InsightCandidate, InsightCandidateKind, InsightUsageFacts } from "@/insights/insights";
 import {
   formatHour,
@@ -18,9 +20,12 @@ import { DeviceSplitBar, HorizontalShareBars } from "@/usage/HorizontalShareBars
 import { mergeUsageDays, sumCounters, targetAppUsage } from "@/usage/analytics";
 import type { UsageSnapshot } from "@/usage/usageEvents";
 
-type InsightsTab = "voice" | "suggestions" | "compaction";
+type InsightsTab = "voice" | "assistant" | "suggestions" | "compaction";
 
 interface InsightsPanelProps {
+  active: boolean;
+  userId: string | null;
+  assistantInsightsRefreshToken: number;
   store: InsightsStore;
   snapshot: InsightsSnapshot;
   knowledge: InsightsKnowledgeInput;
@@ -56,7 +61,7 @@ function statusLabel(status: InsightsStatus): string {
   }
 }
 
-export function InsightsToolbar({ store, snapshot }: Pick<InsightsPanelProps, "store" | "snapshot">) {
+export function InsightsToolbar({ store, snapshot, onRefreshAssistant }: Pick<InsightsPanelProps, "store" | "snapshot"> & {onRefreshAssistant: () => void}) {
   return (
     <div className="page-header-actions">
       <p role="status">{statusLabel(snapshot.status)}</p>
@@ -65,7 +70,7 @@ export function InsightsToolbar({ store, snapshot }: Pick<InsightsPanelProps, "s
           type="button"
           className="secondary"
           disabled={snapshot.status === "loading" || snapshot.status === "analyzing" || snapshot.status === "compacting"}
-          onClick={() => void store.reload()}
+          onClick={() => { void store.reload(); onRefreshAssistant(); }}
         >
           Refresh
         </button>
@@ -177,6 +182,9 @@ function daysSince(iso: string): number {
 }
 
 export function InsightsPanel({
+  active,
+  userId,
+  assistantInsightsRefreshToken,
   store,
   snapshot,
   knowledge,
@@ -192,6 +200,21 @@ export function InsightsPanel({
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const confirm = useConfirmAction();
+  const [assistantPending, setAssistantPending] = useState<{userId:string;count:number}|null>(null);
+  const reportAssistantPending = useCallback((forUser:string,count:number)=>{
+    setAssistantPending(previous=>previous?.userId===forUser&&previous.count===count?previous:{userId:forUser,count});
+  },[]);
+  const assistantCount = assistantPending?.userId===userId?assistantPending.count:0;
+  // Fetch saved suggestion counts even when Your Voice is the selected tab.
+  // This only reads stored metadata; it never invokes Gemini analysis.
+  useEffect(()=>{
+    if(!active||!userId)return;
+    let cancelled=false;
+    void listAssistantInsightData(userId).then(data=>{
+      if(!cancelled)reportAssistantPending(userId,data.candidates.filter(c=>c.status==="pending").length);
+    },()=>{ /* Assistant tab handles and displays any loading error. */ });
+    return ()=>{cancelled=true;};
+  },[active,userId,assistantInsightsRefreshToken,reportAssistantPending]);
   const latest = snapshot.runs[0] ?? null;
   const pending = snapshot.candidates.filter((candidate) => candidate.status === "pending");
   const accepted = snapshot.candidates.filter((candidate) => candidate.status === "accepted").length;
@@ -279,7 +302,7 @@ export function InsightsPanel({
 
   return (
     <div className="insights-page analytics">
-      {!cloudHistoryEnabled && (
+      {tab !== "assistant" && !cloudHistoryEnabled && (
         <div className="insights-callout">
           <div>
             <p className="insights-callout-title">Cloud dictation history is off</p>
@@ -292,7 +315,8 @@ export function InsightsPanel({
       <div className="insights-tabs" role="tablist" aria-label="Insights">
         {([
           ["voice", "Your Voice"],
-          ["suggestions", `Suggestions${pending.length ? ` (${pending.length})` : ""}`],
+          ["assistant", "Your Assistant"],
+          ["suggestions", `Suggestions${pending.length+assistantCount ? ` (${pending.length+assistantCount})` : ""}`],
           ["compaction", "Compaction"],
         ] as const).map(([id, label]) => (
           <button
@@ -311,6 +335,12 @@ export function InsightsPanel({
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
       {notice && <div className="insights-notice" role="status">{notice}</div>}
       {snapshot.progress && <div className="insights-progress-note" role="status">{snapshot.progress}</div>}
+
+      {tab==="assistant" && <AssistantInsightsPanel
+        active={active} userId={userId} refreshToken={assistantInsightsRefreshToken}
+        view="profile" usageEpoch={usage.epoch} devices={devices} onPendingChange={reportAssistantPending}
+        onOpenSuggestions={()=>setTab("suggestions")}
+      />}
 
       {tab === "voice" && (
         <div className="insights-stack">
@@ -424,21 +454,21 @@ export function InsightsPanel({
             <div className="insights-heading-row">
               <div>
                 <p className="insights-eyebrow">Improve Personal Voice</p>
-                <h2>{pending.length} new suggestion{pending.length === 1 ? "" : "s"}</h2>
-                <p className="hint">Everything here is checked against what already exists before it is shown and again before it is added.</p>
+                <h2>{pending.length+assistantCount} new suggestion{pending.length+assistantCount === 1 ? "" : "s"}</h2>
+                <p className="hint">{pending.length} from Dictation · {assistantCount} from Assistant. Review each suggestion before saving.</p>
               </div>
               {(accepted > 0 || dismissed > 0) && (
                 <p className="hint">{accepted} accepted · {dismissed} dismissed</p>
               )}
             </div>
-            <div className="stat-row insights-suggestion-stats">
+            {!!pending.length && <div className="stat-row insights-suggestion-stats">
               {CANDIDATE_ORDER.map((kind) => (
                 <div key={kind} className="stat-cell">
                   <p className="stat-value">{candidateCount(pending, kind)}</p>
                   <p className="stat-label">{CANDIDATE_LABELS[kind]}</p>
                 </div>
               ))}
-            </div>
+            </div>}
           </section>
 
           {pending.length ? CANDIDATE_ORDER.map((kind) => {
@@ -505,13 +535,18 @@ export function InsightsPanel({
                 </div>
               </section>
             );
-          }) : (
+          }) : !assistantCount && (assistantPending?.userId===userId) ? (
             <div className="insights-empty-state">
               <p className="insights-empty-value">0</p>
               <h2>No new suggestions</h2>
-              <p className="hint">Analyze more dictations when the next refresh becomes ready.</p>
+              <p className="hint">Analyze new dictation or Assistant activity when its next refresh becomes ready.</p>
             </div>
-          )}
+          ) : null}
+          <AssistantInsightsPanel
+            active={active} userId={userId} refreshToken={assistantInsightsRefreshToken}
+            view="suggestions" usageEpoch={usage.epoch} devices={devices} onPendingChange={reportAssistantPending}
+            onOpenSuggestions={()=>setTab("suggestions")}
+          />
         </div>
       )}
 

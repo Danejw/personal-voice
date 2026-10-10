@@ -109,10 +109,11 @@ const DEVICE_TONES = ["is-rank-0", "is-rank-1", "is-rank-2"] as const;
 interface DeviceSplitBarProps {
   devices: readonly { id: string; label: string; share: number; count: number }[];
   headingId?: string;
+  unitLabel?: string;
 }
 
-/** One bar split by device. Width is each device's share of completed dictations. */
-export function DeviceSplitBar({ devices, headingId = "device-heading" }: DeviceSplitBarProps) {
+/** One bar split by device using the caller's measured activity unit. */
+export function DeviceSplitBar({ devices, headingId = "device-heading", unitLabel = "dictations" }: DeviceSplitBarProps) {
   return (
     <ShareSplitBar
       headingId={headingId}
@@ -122,7 +123,7 @@ export function DeviceSplitBar({ devices, headingId = "device-heading" }: Device
         label: device.label,
         share: device.share,
         tone: DEVICE_TONES[index % DEVICE_TONES.length] ?? "is-rank-0",
-        tooltip: `${device.label}: ${device.share}% · ${device.count.toLocaleString()} dictations`,
+        tooltip: `${device.label}: ${device.share}% · ${device.count.toLocaleString()} ${unitLabel}`,
       }))}
     />
   );

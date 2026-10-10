@@ -88,6 +88,10 @@ import { handoffApi } from "@/services/handoffService";
 import { remoteDictationApi } from "@/services/remoteDictationService";
 import { personalSyncApi } from "@/services/personalSyncService";
 import { usageApi } from "@/services/usageService";
+import { assistantUsageApi } from "@/services/assistantUsageService";
+import { assistantToolMetricsApi } from "@/services/assistantToolMetricsService";
+import { AssistantToolMetricsStore } from "@/usage/AssistantToolMetricsStore";
+import { AssistantUsageStore } from "@/usage/AssistantUsageStore";
 import { notesApi } from "@/services/notesService";
 import { insightsApi } from "@/services/insightsService";
 import { insightsAnalyzer } from "@/services/insightsAnalysisService";
@@ -232,6 +236,17 @@ assistantLibrary.setOnUserSaved(() => {
 assistantMemory.setRemoteLearn(() => requestMemoryLearn());
 assistant.setProducer(() => assistantLibrary.holdingLease());
 const usage = new UsageStore(localStorage, platform.platform, () => new Date(), usageApi);
+const assistantUsage = new AssistantUsageStore(assistantUsageApi, localStorage);
+const assistantToolMetrics = new AssistantToolMetricsStore(assistantToolMetricsApi, localStorage);
+assistant.setUsageTurnHandler((turn) => assistantUsage.recordTurn(turn, assistantLibrary.getSnapshot().currentId));
+assistant.setToolMetricsHandler((event) => {
+  if (event.type === "calls") assistantToolMetrics.noteCalls(event.calls);
+  else assistantToolMetrics.noteResult(event.id, event.name, event.assessment);
+});
+assistant.subscribe((snapshot) => {
+  assistantUsage.onStatus(snapshot.status);
+  if (snapshot.status === "IDLE" || snapshot.status === "ERROR") assistantToolMetrics.endSession();
+});
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
 const snippetStore = new SnippetStore(snippetsApi, localStorage);
 const transformStore = new TransformStore(transformProfilesApi);
@@ -636,6 +651,7 @@ export default function App() {
   const [dictationTransformId, setDictationTransformId] = useState<string | null>(() => loadTransformProfileId());
   const [section, setSection] = useState<AppSection>("dictation");
   const insightsSnapshot = useInsights(insightsStore, auth.userId, section === "insights");
+  const [assistantInsightsRefreshToken, setAssistantInsightsRefreshToken] = useState(0);
   useHandoffAlerts(
     handoffs,
     auth.userId,
@@ -913,7 +929,28 @@ export default function App() {
 
   useEffect(() => {
     usage.setEnabled(sync.data.settings.usageIntelligence);
-  }, [sync.data.settings.usageIntelligence]);
+    // Loading an already-known account must not erase pending metadata; a new
+    // account is quarantined until its confirmed usage setting is available.
+    if (sync.status === "loading") {
+      if (assistantUsage.getScope().userId !== auth.userId) assistantUsage.setScope({
+        userId: auth.userId, deviceId: settingsDeviceId ?? null,
+        epoch: sync.data.settings.usageEpoch, enabled: false,
+      });
+      if (assistantToolMetrics.getScope().userId !== auth.userId) assistantToolMetrics.setScope({
+        userId: auth.userId, deviceId: settingsDeviceId ?? null,
+        epoch: sync.data.settings.usageEpoch, enabled: false,
+      });
+      return;
+    }
+    const analyticsScope = {
+      userId: auth.userId,
+      deviceId: settingsDeviceId ?? null,
+      epoch: sync.data.settings.usageEpoch,
+      enabled: sync.data.settings.usageIntelligence && (sync.status === "synced" || sync.status === "offline"),
+    };
+    assistantUsage.setScope(analyticsScope);
+    assistantToolMetrics.setScope(analyticsScope);
+  }, [auth.userId, settingsDeviceId, sync.status, sync.data.settings.usageEpoch, sync.data.settings.usageIntelligence]);
 
   useEffect(() => {
     assistantMemory.setLearning(sync.data.settings.assistantMemoryLearning);
@@ -1096,7 +1133,7 @@ export default function App() {
           {section === "handoffs" && <HandoffToolbar store={handoffs} snapshot={handoffSnapshot} />}
           {section === "snippets" && <SnippetToolbar store={snippetStore} snapshot={snippets} />}
           {section === "transforms" && <TransformToolbar store={transformStore} snapshot={transforms} />}
-          {section === "insights" && <InsightsToolbar store={insightsStore} snapshot={insightsSnapshot} />}
+          {section === "insights" && <InsightsToolbar store={insightsStore} snapshot={insightsSnapshot} onRefreshAssistant={() => setAssistantInsightsRefreshToken(n => n + 1)} />}
           <div id="page-header-actions" className="page-header-actions" hidden={section !== "capture"} />
         </header>
         {computerSnapshot.approval && (
@@ -1451,6 +1488,9 @@ export default function App() {
         <div className="panel-stack is-scroll" hidden={section !== "insights"}>
           <section aria-labelledby="page-title" className="page-panel">
             <InsightsPanel
+              active={section === "insights"}
+              assistantInsightsRefreshToken={assistantInsightsRefreshToken}
+              userId={auth.userId}
               store={insightsStore}
               snapshot={insightsSnapshot}
               knowledge={{
@@ -1479,6 +1519,11 @@ export default function App() {
             devices={deviceSnapshot.devices}
             dictionary={sync.data.terms}
             usage={usageSnapshot}
+            userId={auth.userId}
+            assistantUsage={assistantUsage}
+            toolStore={assistantToolMetrics}
+            assistantUsageEnabled={sync.data.settings.usageIntelligence && (sync.status === "synced" || sync.status === "offline")}
+
           />
         </div>
       </main>
