@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capturedImageFile } from "@/assistant/noteAttachment";
+import { capturedImageFile, noteAttachmentFile } from "@/assistant/noteAttachment";
 
 describe("captured note images", () => {
   it("converts the captured screen JPEG into a real private-uploadable File", async () => {
@@ -9,6 +9,12 @@ describe("captured note images", () => {
     expect(file.type).toBe("image/jpeg");
     expect(file.size).toBe(4);
     expect([...new Uint8Array(await file.arrayBuffer())]).toEqual([255, 216, 255, 217]);
+  });
+
+  it("preserves any explicitly selected file type without converting the bytes", async () => {
+    const document = new File(["%PDF-1.7"], "project.pdf", { type: "application/pdf" });
+    expect(noteAttachmentFile(document)).toBe(document);
+    expect(await noteAttachmentFile(document).text()).toBe("%PDF-1.7");
   });
 
   it("retains the camera source and rejects invalid/corrupted images", () => {
