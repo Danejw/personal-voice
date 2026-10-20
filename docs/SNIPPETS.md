@@ -57,28 +57,35 @@ V1 should favor safety over aggressive matching.
 
 A snippet expands only when the entire finalized utterance matches one saved trigger after lightweight normalization.
 
+A snippet can store several voice triggers in the same field, separated by commas. `top load, top-load, topload` are three ways to say one snippet. Each one resolves to that snippet's `@topload` reference and the same saved text.
+
 Normalization should:
 
 - trim leading/trailing whitespace
 - collapse repeated whitespace
 - compare case-insensitively
 - ignore ordinary trailing sentence punctuation added by transcription, such as `.`, `?`, `!`, `,`, `;`, or `:`
+- treat hyphenated, spaced, and joined forms of the same phrase as equivalent, such as `top load`, `top-load`, and `topload`
+
+Equivalent triggers on different snippets are a conflict and are not saved. If stored data is already ambiguous, recognition leaves the utterance unchanged instead of choosing a snippet.
 
 Examples:
 
 ```text
-Saved trigger: read only mode
+Saved triggers: top load, top-load, topload
 
-"read only mode"     → match
-"Read Only Mode."    → match
-"read   only mode"   → match
-"use read only mode" → no match
+"top load"           → @topload
+"Top-load."          → @topload
+"topload"            → @topload
+"please topload"     → no match
 "read only"          → no match
 ```
 
 Do not use fuzzy semantic matching in V1. A near match must remain ordinary dictation rather than expanding the wrong snippet.
 
-Trigger names must be unique per account after normalization.
+In the Assistant composer, those same triggers can also appear inside a longer sentence. `Investigate the vendor matching system, topload` becomes `Investigate the vendor matching system @topload`. The chip stores the snippet id, so later edits to the trigger still expand to the current instructions. Typing `/` and choosing a snippet inserts the same chip. Sending the message expands every chip. A deleted or disabled snippet blocks sending instead of dropping its instructions. Another application still receives the saved text only when the entire utterance is the trigger.
+
+Trigger phrases must be unique per account after compact matching. Several phrases may belong to one snippet. Two snippets cannot share an equivalent phrase or the same `@slug`.
 
 ## Data model
 
@@ -90,7 +97,8 @@ Suggested table:
 snippets
 id
 user_id
-trigger
+trigger          -- comma-separated display of every voice trigger
+triggers         -- individual phrases, in editor order
 content
 enabled
 created_at
@@ -99,9 +107,9 @@ updated_at
 
 Suggested constraints:
 
-- trigger is required
+- at least one trigger is required
 - content is required
-- one normalized trigger per user
+- equivalent phrases and the primary `@slug` are unique per user
 - disabled snippets never match
 - trigger length stays small enough to be a practical spoken phrase
 - content may hold long instructions or links

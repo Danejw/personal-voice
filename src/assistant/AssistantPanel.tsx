@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { SnippetComposer, type SnippetComposerHandle } from "@/snippets/SnippetComposer";
+import type { Snippet } from "@/snippets/snippet";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ConversationBar } from "@/assistant/ConversationBar";
@@ -34,6 +36,7 @@ interface AssistantChromeProps {
   onProduce?: () => void;
   onDismissRecovery?: (id: string) => void;
   settingsContent?: ReactNode;
+  snippets?: readonly Snippet[];
 }
 
 /** Header status and the Start / End control. Continue here is the only way a second device takes the microphone. */
@@ -92,8 +95,10 @@ export function AssistantPanel({
   onProduce,
   micBusy,
   settingsContent,
+  snippets = [],
 }: AssistantChromeProps) {
-  const [draft, setDraft] = useState("");
+  const composerRef = useRef<SnippetComposerHandle>(null);
+  const [composerHasText, setComposerHasText] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [view, setView] = useState<"chat" | "settings" | "tools">("chat");
   const [showThreads, setShowThreads] = useState(false);
@@ -162,10 +167,8 @@ export function AssistantPanel({
   }, [library?.currentId, snapshot.turns, snapshot.liveText, snapshot.liveUser]);
 
   function send() {
-    const text = draft.trim();
-    if (!text || !canSend) return;
-    controller.send(text);
-    setDraft("");
+    if (!canSend) return;
+    composerRef.current?.send();
   }
 
   const showEchoNote = snapshot.echoFallback && (snapshot.status === "CONNECTING" || snapshot.status === "READY" || snapshot.status === "RESPONDING");
@@ -641,24 +644,15 @@ export function AssistantPanel({
           send();
         }}
       >
-        <label className="assistant-composer-field">
-          <span className="visually-hidden">Message</span>
-          <textarea
-            value={draft}
-            rows={1}
-            placeholder={canSend ? "Message your Assistant…" : "Start or continue a conversation to send a message"}
-            aria-label="Message"
-            disabled={!canSend}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                send();
-              }
-            }}
-          />
-        </label>
-        <button type="submit" className="assistant-send" disabled={!canSend || !draft.trim()} aria-label="Send message">➤</button>
+        <SnippetComposer
+          ref={composerRef}
+          snippets={snippets}
+          disabled={!canSend}
+          placeholder={canSend ? "Message your Assistant…  / for snippets" : "Start or continue a conversation to send a message"}
+          onSend={(text) => controller.send(text)}
+          onContentChange={setComposerHasText}
+        />
+        <button type="submit" className="assistant-send" disabled={!canSend || !composerHasText} aria-label="Send message">➤</button>
       </form>
       <ConfirmDialog request={confirm.request} onClose={confirm.dismiss} />
       </section>

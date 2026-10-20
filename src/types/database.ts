@@ -123,6 +123,7 @@ export type Database = {
           id: string
           normalized_trigger: string
           trigger: string
+          triggers: string[]
           updated_at: string
           user_id: string
         }
@@ -132,6 +133,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           trigger: string
+          triggers: string[]
           updated_at?: string
           user_id?: string
         }
@@ -141,6 +143,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           trigger?: string
+          triggers?: string[]
           updated_at?: string
           user_id?: string
         }

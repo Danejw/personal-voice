@@ -1,20 +1,23 @@
 import { describe, expect, it } from "vitest";
 import type { SnippetsApi } from "@/services/snippetsService";
 import { SnippetStore } from "@/snippets/SnippetStore";
-import { writeSnippetCache } from "@/snippets/snippetCache";
-import type { Snippet } from "@/snippets/snippet";
+import { readSnippetCache, writeSnippetCache } from "@/snippets/snippetCache";
+import { formatSnippetTriggers, parseSnippetTriggers, snippetFromStored, type Snippet } from "@/snippets/snippet";
 import type { KeyValueStorage } from "@/sync/personalCache";
 
 function snippet(id: string, trigger: string, content = "Expanded text"): Snippet {
-  return {
+  const triggers = parseSnippetTriggers(trigger);
+  const stored = snippetFromStored({
     id,
-    trigger,
-    normalizedTrigger: trigger.toLocaleLowerCase(),
+    trigger: formatSnippetTriggers(triggers),
+    triggers,
     content,
     enabled: true,
     createdAt: "2026-10-06T00:00:00.000Z",
     updatedAt: "2026-10-06T00:00:00.000Z",
-  };
+  });
+  if (!stored) throw new Error("invalid test snippet");
+  return stored;
 }
 
 function storage(): KeyValueStorage {
@@ -37,12 +40,8 @@ function fakeApi(seed: Snippet[] = []): SnippetsApi {
     async update(id, trigger, content) {
       const found = rows.find((row) => row.id === id);
       if (!found) throw new Error("missing");
-      Object.assign(found, {
-        trigger,
-        normalizedTrigger: trigger.toLocaleLowerCase(),
-        content,
-        updatedAt: "2026-10-06T01:00:00.000Z",
-      });
+      const next = snippet(id, trigger, content);
+      Object.assign(found, { ...next, updatedAt: "2026-10-06T01:00:00.000Z" });
       return { ...found };
     },
     async setEnabled(id, enabled) {
@@ -79,6 +78,20 @@ describe("SnippetStore", () => {
     expect(store.getSnapshot().snippets.some((entry) => entry.id === created!.id)).toBe(false);
   });
 
+  it("saves every comma-separated trigger and rejects an equivalent one", async () => {
+    const store = new SnippetStore(fakeApi(), storage());
+    await store.setUser("user-1");
+    await store.create(" top load, top-load, topload, top load ", "Use the top-load instructions.");
+    const saved = store.getSnapshot().snippets[0];
+    expect(saved?.triggers).toEqual(["top load", "top-load", "topload"]);
+    expect(saved?.slug).toBe("topload");
+
+    await expect(store.create("topload", "Other")).rejects.toThrow(/already used/);
+    await store.update(saved!.id, "top load, top-load", "Updated instructions.");
+    expect(store.getSnapshot().snippets[0]?.content).toBe("Updated instructions.");
+    expect(store.getSnapshot().snippets[0]?.triggers).toEqual(["top load", "top-load"]);
+  });
+
   it("uses the last server-confirmed cache when sync is unavailable", async () => {
     const local = storage();
     writeSnippetCache(local, "user-1", [snippet("cached", "my LinkedIn", "https://example.com")]);
@@ -93,5 +106,22 @@ describe("SnippetStore", () => {
     await store.setUser("user-1");
     expect(store.getSnapshot().status).toBe("offline");
     expect(store.getSnapshot().snippets[0]?.content).toBe("https://example.com");
+  });
+
+  it("reads a legacy cache row that has no triggers array", () => {
+    const local = storage();
+    local.setItem("snippets.cache.user-1", JSON.stringify({
+      version: 1,
+      snippets: [{
+        id: "legacy",
+        trigger: "read only mode",
+        normalizedTrigger: "read only mode",
+        content: "Investigate only.",
+        enabled: true,
+        createdAt: "2026-10-06T00:00:00.000Z",
+        updatedAt: "2026-10-06T00:00:00.000Z",
+      }],
+    }));
+    expect(readSnippetCache(local, "user-1")[0]?.triggers).toEqual(["read only mode"]);
   });
 });

@@ -1,7 +1,13 @@
 import type { SnippetsApi } from "@/services/snippetsService";
 import type { KeyValueStorage } from "@/sync/personalCache";
 import { readSnippetCache, writeSnippetCache } from "@/snippets/snippetCache";
-import { normalizeSnippetTrigger, snippetProblem, type Snippet } from "@/snippets/snippet";
+import {
+  formatSnippetTriggers,
+  parseSnippetTriggers,
+  snippetProblem,
+  snippetTriggerConflict,
+  type Snippet,
+} from "@/snippets/snippet";
 
 export type SnippetStatus = "signed-out" | "loading" | "synced" | "offline";
 
@@ -57,7 +63,7 @@ export class SnippetStore {
 
   async create(trigger: string, content: string): Promise<void> {
     const userId = this.requireConnected();
-    const cleanTrigger = trigger.trim().replace(/\s+/g, " ");
+    const cleanTrigger = formatSnippetTriggers(parseSnippetTriggers(trigger));
     const cleanContent = content.trim();
     this.validate(cleanTrigger, cleanContent);
     const generation = this.generation;
@@ -73,7 +79,7 @@ export class SnippetStore {
 
   async update(id: string, trigger: string, content: string): Promise<void> {
     const userId = this.requireConnected();
-    const cleanTrigger = trigger.trim().replace(/\s+/g, " ");
+    const cleanTrigger = formatSnippetTriggers(parseSnippetTriggers(trigger));
     const cleanContent = content.trim();
     this.validate(cleanTrigger, cleanContent, id);
     const generation = this.generation;
@@ -116,10 +122,8 @@ export class SnippetStore {
   private validate(trigger: string, content: string, editingId?: string): void {
     const problem = snippetProblem(trigger, content);
     if (problem) throw new Error(problem);
-    const normalized = normalizeSnippetTrigger(trigger);
-    const duplicate = this.snapshot.snippets.some((snippet) =>
-      snippet.id !== editingId && snippet.normalizedTrigger === normalized);
-    if (duplicate) throw new Error("A snippet with that voice trigger already exists.");
+    const conflict = snippetTriggerConflict(parseSnippetTriggers(trigger), this.snapshot.snippets, editingId);
+    if (conflict) throw new Error(conflict);
   }
 
   private requireConnected(): string {

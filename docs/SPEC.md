@@ -129,7 +129,7 @@ The selected automatic Dictation transform is a per-device preference. `None` is
 
 ## Snippets
 
-Snippets are deterministic whole-utterance text expansions. A user saves a short voice trigger such as `read only mode` or `my LinkedIn` and an exact expansion. After final transcription, Personal Voice normalizes case, repeated whitespace, and trailing sentence punctuation and checks for an enabled exact trigger match. Matching never uses fuzzy semantics or substring replacement in V1.
+Snippets are deterministic whole-utterance text expansions. A user saves one or more comma-separated voice triggers, such as `read only mode` or `top load, top-load, topload`, and an exact expansion. After final transcription, Personal Voice normalizes case, repeated whitespace, trailing sentence punctuation, and hyphen, space, or joined-word differences, then checks for one enabled trigger match. Equivalent triggers resolve to the same snippet. In the Assistant composer, a trigger spoken inside a sentence becomes a compact `@snippet` chip stored by snippet id. The surrounding words stay in place, `/` inserts the same chip, and sending expands every chip to its current instructions. Dictation into another app still inserts the saved text only when the whole utterance is the trigger. Matching never uses fuzzy semantics or substring replacement inside a word.
 
 A matched snippet bypasses the automatic Dictation Transform so saved URLs, signatures, instructions, and other exact text are delivered unchanged. No additional model call is made for expansion. Server-confirmed snippets are cached locally so they can still expand while sync is offline, while creation/editing remains read-only until sync reconnects.
 

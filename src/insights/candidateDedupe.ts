@@ -1,7 +1,7 @@
 import type { AssistantMemory } from "@/assistant/memory";
 import type { DictionaryTerm } from "@/sync/personalData";
 import type { Snippet } from "@/snippets/snippet";
-import { normalizeSnippetTrigger } from "@/snippets/snippet";
+import { compactSnippetTrigger, normalizeSnippetTrigger } from "@/snippets/snippet";
 import type { TransformProfile } from "@/transforms/transformProfile";
 import type { InsightCandidateKind } from "@/insights/insights";
 
@@ -70,11 +70,14 @@ export function isExistingCandidate(candidate: ProposedCandidate, existing: Exis
       return !term || existing.dictionary.some((item) => normalized(item.term) === term);
     }
     case "snippet": {
-      const trigger = normalizeSnippetTrigger(stringField(candidate.payload, "trigger"));
+      const phrase = stringField(candidate.payload, "trigger");
+      const trigger = normalizeSnippetTrigger(phrase);
+      const compact = compactSnippetTrigger(phrase);
       const content = stringField(candidate.payload, "content");
-      if (!trigger || !content) return true;
+      if (!trigger || !compact || !content) return true;
       return existing.snippets.some((item) =>
         item.normalizedTrigger === trigger
+        || item.normalizedTriggers.includes(compact)
         || similarity(item.content, content) >= 0.72
       );
     }

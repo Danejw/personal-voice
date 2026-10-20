@@ -1,13 +1,13 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/services/supabase";
 import type { Database } from "@/types/database";
-import type { Snippet } from "@/snippets/snippet";
+import { formatSnippetTriggers, parseSnippetTriggers, snippetFromStored, type Snippet } from "@/snippets/snippet";
 
-const COLUMNS = "id, trigger, normalized_trigger, content, enabled, created_at, updated_at";
+const COLUMNS = "id, trigger, triggers, normalized_trigger, content, enabled, created_at, updated_at";
 
 type SnippetRow = Pick<
   Database["public"]["Tables"]["snippets"]["Row"],
-  "id" | "trigger" | "normalized_trigger" | "content" | "enabled" | "created_at" | "updated_at"
+  "id" | "trigger" | "triggers" | "normalized_trigger" | "content" | "enabled" | "created_at" | "updated_at"
 >;
 
 export interface SnippetsApi {
@@ -32,16 +32,23 @@ function check(error: PostgrestError | null): void {
   throw new Error(error.code ? `Snippet sync failed (${error.code}).` : "Couldn't reach snippet sync.");
 }
 
+function savedTriggers(trigger: string): { trigger: string; triggers: string[] } {
+  const triggers = parseSnippetTriggers(trigger);
+  return { trigger: formatSnippetTriggers(triggers), triggers };
+}
+
 function fromRow(row: SnippetRow): Snippet {
-  return {
+  const snippet = snippetFromStored({
     id: row.id,
     trigger: row.trigger,
-    normalizedTrigger: row.normalized_trigger,
+    triggers: row.triggers,
     content: row.content,
     enabled: row.enabled,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  });
+  if (!snippet) throw new Error("The snippet service returned an incomplete snippet.");
+  return snippet;
 }
 
 export const snippetsApi: SnippetsApi = {
@@ -56,9 +63,10 @@ export const snippetsApi: SnippetsApi = {
   },
 
   async create(userId, trigger, content) {
+    const saved = savedTriggers(trigger);
     const { data, error } = await requireClient()
       .from("snippets")
-      .insert({ user_id: userId, trigger, content })
+      .insert({ user_id: userId, trigger: saved.trigger, triggers: saved.triggers, content })
       .select(COLUMNS)
       .single();
     check(error);
@@ -67,9 +75,10 @@ export const snippetsApi: SnippetsApi = {
   },
 
   async update(id, trigger, content) {
+    const saved = savedTriggers(trigger);
     const { data, error } = await requireClient()
       .from("snippets")
-      .update({ trigger, content })
+      .update({ trigger: saved.trigger, triggers: saved.triggers, content })
       .eq("id", id)
       .select(COLUMNS)
       .single();

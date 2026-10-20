@@ -44,7 +44,7 @@ Sign in and complete the device-permission onboarding before using microphone, o
 | --- | --- |
 | **Dictation** | Hold-to-talk, Gemini transcript cleanup, selectable destinations, per-device keybindings/controls, voice start/stop sounds, microphone selection where supported |
 | **Destinations** | Focused text field, saved Notes, and **Remote Dictation** to another selected device's focused cursor |
-| **Dictionary, Snippets & Transforms** | Personal vocabulary; deterministic trigger-to-text snippet expansion; built-in and custom text transforms |
+| **Dictionary, Snippets & Transforms** | Personal vocabulary; deterministic snippet expansion with multiple voice triggers and `@snippet` references; built-in and custom text transforms |
 | **Selection & history** | Capture selected text for further use; recent local dictations with optional account sync of final text |
 | **Notes & Handoffs** | Saved, editable Notes with private file attachments; the Assistant can attach an authorized screenshot, camera photo, or user-selected file (PDF, image, document, audio or video) to a new or existing note after confirmation; handoffs and continuation across devices |
 | **Assistant conversation** | Continuous saved threads with individually dated session IDs, reversible archive/restore, complete paginated historical-message tools, typed/voice turns and Google Search grounding |

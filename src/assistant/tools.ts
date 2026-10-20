@@ -11,6 +11,7 @@ import {
 } from "@/assistant/computerActions";
 import { cameraFacingFromArgs, type CameraFacing } from "@/platform/camera";
 import { enrichToolDescription } from "@/assistant/harness/toolIntelligence";
+import { MAX_SNIPPET_CONTENT_LENGTH, MAX_SNIPPET_TRIGGER_FIELD_LENGTH } from "@/snippets/snippet";
 import { isToolPlaybookId, TOOL_PLAYBOOK_IDS, type ToolPlaybookId } from "@/assistant/harness/playbooks";
 
 /**
@@ -279,17 +280,17 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "list_snippets",
-      description: "Read saved voice snippets and their expansion text.",
+      description: "Read saved voice snippets, every voice trigger, the @ reference, and expansion text.",
       parameters: { type: "object", properties: {} },
     },
     {
       name: "create_snippet",
-      description: "Create a snippet with voice trigger and expansion content, requiring confirmation.",
+      description: "Create a snippet with expansion content and one or more comma-separated voice triggers, requiring confirmation. Every trigger resolves to the same snippet.",
       parameters: { type: "object", properties: { trigger: { type: "string" }, content: { type: "string" } }, required: ["trigger", "content"] },
     },
     {
       name: "update_snippet",
-      description: "Update an existing snippet by id from list_snippets, requiring confirmation.",
+      description: "Update an existing snippet by id from list_snippets, requiring confirmation. The trigger may be several comma-separated phrases for the same snippet.",
       parameters: { type: "object", properties: { id: { type: "string" }, trigger: { type: "string" }, content: { type: "string" } }, required: ["id", "trigger", "content"] },
     },
     {
@@ -732,8 +733,8 @@ export function decideToolCall(
     case "update_snippet": {
       const id = call.name === "update_snippet" ? readId(args) : null;
       if (id && "error" in id) return {kind: "reject", id: call.id, name: call.name, message: id.error};
-      if (typeof args.trigger !== "string" || !args.trigger.trim() || args.trigger.length > 120 ||
-          typeof args.content !== "string" || !args.content.trim() || args.content.length > 20000) {
+      if (typeof args.trigger !== "string" || !args.trigger.trim() || args.trigger.length > MAX_SNIPPET_TRIGGER_FIELD_LENGTH ||
+          typeof args.content !== "string" || !args.content.trim() || args.content.length > MAX_SNIPPET_CONTENT_LENGTH) {
         return {kind: "reject", id: call.id, name: call.name, message: "Provide a valid snippet trigger and content."};
       }
       return confirm(call.id, call.name,

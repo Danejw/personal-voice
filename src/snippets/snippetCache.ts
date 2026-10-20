@@ -1,6 +1,5 @@
 import type { KeyValueStorage } from "@/sync/personalCache";
-import type { Snippet } from "@/snippets/snippet";
-import { normalizeSnippetTrigger } from "@/snippets/snippet";
+import { snippetFromStored, type Snippet } from "@/snippets/snippet";
 
 const CACHE_VERSION = 1;
 
@@ -22,17 +21,18 @@ function parseSnippet(value: unknown): Snippet | null {
     || typeof fields.createdAt !== "string"
     || typeof fields.updatedAt !== "string"
   ) return null;
-  return {
+  const triggers = Array.isArray(fields.triggers)
+    ? fields.triggers.filter((item): item is string => typeof item === "string")
+    : null;
+  return snippetFromStored({
     id: fields.id,
     trigger: fields.trigger,
-    normalizedTrigger: typeof fields.normalizedTrigger === "string"
-      ? fields.normalizedTrigger
-      : normalizeSnippetTrigger(fields.trigger),
+    triggers,
     content: fields.content,
     enabled: fields.enabled,
     createdAt: fields.createdAt,
     updatedAt: fields.updatedAt,
-  };
+  });
 }
 
 /** Last server-confirmed snippets for this account. */

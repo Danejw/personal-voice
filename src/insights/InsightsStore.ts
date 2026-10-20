@@ -83,7 +83,7 @@ function mergeInput(
     deterministicUsageFacts: facts,
     existingKnowledge: {
       dictionaryTerms: knowledge.dictionary.map((item) => item.term).slice(0, 200),
-      snippetTriggers: knowledge.snippets.map((item) => item.trigger).slice(0, 200),
+      snippetTriggers: knowledge.snippets.flatMap((item) => item.triggers).slice(0, 200),
       transformNames: knowledge.transforms.map((item) => item.name).slice(0, 100),
       memoryKeys: knowledge.memories.map((item) => item.key).slice(0, 100),
     },

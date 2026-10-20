@@ -131,7 +131,8 @@ import { usePersonalSync } from "@/sync/usePersonalSync";
 import { SnippetPanel, SnippetToolbar } from "@/snippets/SnippetPanel";
 import { SnippetStore } from "@/snippets/SnippetStore";
 import { useSnippets } from "@/snippets/useSnippets";
-import { resolveSnippet } from "@/snippets/snippet";
+import { matchSnippet } from "@/snippets/snippet";
+import { acceptDictatedText, consumeSnippetReferenceAcceptance } from "@/snippets/snippetInput";
 import { TransformPanel, TransformToolbar } from "@/transforms/TransformPanel";
 import { TransformStore } from "@/transforms/TransformStore";
 import { useTransforms } from "@/transforms/useTransforms";
@@ -356,7 +357,7 @@ assistant.setActions({
   listSnippets: async () => {
     const snap = snippetStore.getSnapshot();
     if (snap.status === "signed-out") throw new Error("Sign in to read snippets.");
-    return JSON.stringify({ status: snap.status, snippets: snap.snippets.map(({id, trigger, content, enabled}) => ({id, trigger, content, enabled})) }).slice(0, 8000);
+    return JSON.stringify({ status: snap.status, snippets: snap.snippets.map(({id, trigger, triggers, slug, content, enabled}) => ({id, trigger, triggers, reference: `@${slug}`, content, enabled})) }).slice(0, 8000);
   },
   createSnippet: (trigger, content) => snippetStore.create(trigger, content),
   updateSnippet: (id, trigger, content) => snippetStore.update(id, trigger, content),
@@ -480,9 +481,21 @@ assistant.setActions({
   },
 });
 
-async function transformFinalDictation(text: string): Promise<string> {
-  const snippet = resolveSnippet(text, snippetStore.getSnapshot().snippets);
-  if (snippet.matched) return snippet.text;
+async function transformFinalDictation(text: string, destination: TranscriptDestinationId): Promise<string> {
+  if (destination === "active-field" && acceptDictatedText(text)) return text;
+  const snippets = snippetStore.getSnapshot().snippets;
+  const match = matchSnippet(text, snippets);
+  switch (match.kind) {
+    case "match":
+      return match.snippet.content;
+    case "none":
+    case "ambiguous":
+      break;
+    default: {
+      const unhandled: never = match;
+      return unhandled;
+    }
+  }
 
   const selectedId = loadTransformProfileId();
   if (!selectedId) return text;
@@ -493,6 +506,7 @@ async function transformFinalDictation(text: string): Promise<string> {
 
 const destinations = new TranscriptDestinationRouter({
   "active-field": { deliver: async (transcript) => {
+    if (consumeSnippetReferenceAcceptance()) return;
     if (!await liveFieldPreview.commit(transcript)) await pasteIntoField(transcript);
   } },
   [NOTE_DESTINATION_ID]: { deliver: (transcript) => notesStore.create(transcript, "voice") },
@@ -1299,6 +1313,7 @@ export default function App() {
                 </div>
               }
 
+              snippets={snippets.snippets}
               controller={assistant}
               snapshot={assistantSnapshot}
               signedIn={signedIn}

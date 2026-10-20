@@ -2,8 +2,12 @@ import { useState, type FormEvent } from "react";
 import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import { HoverActionItem } from "@/components/HoverActionItem";
 import {
+  formatSnippetTriggers,
   MAX_SNIPPET_CONTENT_LENGTH,
-  MAX_SNIPPET_TRIGGER_LENGTH,
+  MAX_SNIPPET_TRIGGER_FIELD_LENGTH,
+  parseSnippetTriggers,
+  snippetReference,
+  snippetTriggerConflict,
   type Snippet,
 } from "@/snippets/snippet";
 import type { SnippetSnapshot, SnippetStatus, SnippetStore } from "@/snippets/SnippetStore";
@@ -43,6 +47,9 @@ export function SnippetPanel({ store, snapshot }: { store: SnippetStore; snapsho
   const [notice, setNotice] = useState<string | null>(null);
   const confirm = useConfirmAction();
   const editable = snapshot.status === "synced";
+  const conflict = trigger.trim()
+    ? snippetTriggerConflict(parseSnippetTriggers(trigger), snapshot.snippets, editingId ?? undefined)
+    : null;
 
   function clearForm() {
     setEditingId(null);
@@ -52,7 +59,7 @@ export function SnippetPanel({ store, snapshot }: { store: SnippetStore; snapsho
 
   function edit(snippet: Snippet) {
     setEditingId(snippet.id);
-    setTrigger(snippet.trigger);
+    setTrigger(formatSnippetTriggers(snippet.triggers));
     setContent(snippet.content);
     setProblem(null);
     setNotice(null);
@@ -112,9 +119,10 @@ export function SnippetPanel({ store, snapshot }: { store: SnippetStore; snapsho
           <span>Voice trigger</span>
           <input
             value={trigger}
-            maxLength={MAX_SNIPPET_TRIGGER_LENGTH}
+            maxLength={MAX_SNIPPET_TRIGGER_FIELD_LENGTH}
             disabled={!editable || busy !== null}
-            placeholder="read only mode"
+            placeholder="top load, top-load, topload"
+            aria-describedby="snippet-trigger-hint"
             onChange={(event) => setTrigger(event.target.value)}
           />
         </label>
@@ -128,9 +136,12 @@ export function SnippetPanel({ store, snapshot }: { store: SnippetStore; snapsho
             onChange={(event) => setContent(event.target.value)}
           />
         </label>
-        <p className="hint">Say the whole trigger as one dictation. Matching ignores case, repeated spaces, and trailing punctuation.</p>
+        <p className="hint" id="snippet-trigger-hint">
+          Separate other ways to say it with commas. Matching ignores case, extra spaces, trailing punctuation, and hyphen, space, or joined-word differences such as “top load”, “top-load”, and “topload”.
+        </p>
+        {conflict && <p className="error" role="alert">{conflict}</p>}
         <div className="snippet-form-actions">
-          <button type="submit" className="record" disabled={!editable || busy !== null || !trigger.trim() || !content.trim()}>
+          <button type="submit" className="record" disabled={!editable || busy !== null || !trigger.trim() || !content.trim() || conflict !== null}>
             {busy === "save" ? "Saving…" : editingId ? "Update snippet" : "Save snippet"}
           </button>
           {editingId && (
@@ -159,7 +170,10 @@ export function SnippetPanel({ store, snapshot }: { store: SnippetStore; snapsho
                 >
                   <div className={snippet.enabled ? "snippet-card-content" : "snippet-card-content is-disabled"}>
                     <div className="snippet-card-heading">
-                      <p className="snippet-trigger">“{snippet.trigger}”</p>
+                      <p className="snippet-trigger">
+                        “{formatSnippetTriggers(snippet.triggers)}”
+                        <span className="snippet-reference">{snippetReference(snippet)}</span>
+                      </p>
                       <button
                         type="button"
                         className="secondary snippet-toggle"
