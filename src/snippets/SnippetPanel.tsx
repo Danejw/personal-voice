@@ -136,9 +136,6 @@ export function SnippetPanel({ store, snapshot }: { store: SnippetStore; snapsho
             onChange={(event) => setContent(event.target.value)}
           />
         </label>
-        <p className="hint" id="snippet-trigger-hint">
-          Separate other ways to say it with commas. Matching ignores case, extra spaces, trailing punctuation, and hyphen, space, or joined-word differences such as “top load”, “top-load”, and “topload”.
-        </p>
         {conflict && <p className="error" role="alert">{conflict}</p>}
         <div className="snippet-form-actions">
           <button type="submit" className="record" disabled={!editable || busy !== null || !trigger.trim() || !content.trim() || conflict !== null}>
