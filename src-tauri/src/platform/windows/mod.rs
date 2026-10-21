@@ -436,16 +436,16 @@ mod overlay_place_tests {
     fn defaults_to_bottom_right_with_margin() {
         let place = overlay_place(0, 0, 1920, 1040, 1.0, false, OverlayTipSide::Left, false, None);
         assert_eq!(place.width, 44);
-        assert_eq!(place.height, 194);
+        assert_eq!(place.height, 232);
         assert_eq!(place.x, 1920 - 44 - 16);
-        assert_eq!(place.y, 1040 - 194 - 16);
+        assert_eq!(place.y, 1040 - 232 - 16);
     }
 
     #[test]
     fn honors_custom_anchor_and_grows_tip_left() {
         let collapsed = overlay_place(0, 0, 1920, 1040, 1.0, false, OverlayTipSide::Left, false, Some((1800, 900)));
         assert_eq!(collapsed.x, 1800 - 44);
-        assert_eq!(collapsed.y, 900 - 194);
+        assert_eq!(collapsed.y, 900 - 232);
         let tip = overlay_place(0, 0, 1920, 1040, 1.0, true, OverlayTipSide::Left, false, Some((1800, 900)));
         assert_eq!(tip.width, 44 + 220);
         assert_eq!(tip.x, 1800 - tip.width);
@@ -477,7 +477,7 @@ mod overlay_place_tests {
         let collapsed = overlay_place(0, 0, 1920, 1040, 1.25, false, OverlayTipSide::Left, false, None);
         let expanded = overlay_place(0, 0, 1920, 1040, 1.25, true, OverlayTipSide::Left, false, None);
         assert_eq!(expanded.width, (264.0_f64 * 1.25).round() as i32);
-        assert_eq!(expanded.height, (386.0_f64 * 1.25).round() as i32);
+        assert_eq!(expanded.height, (424.0_f64 * 1.25).round() as i32);
         assert_eq!(expanded.x + expanded.width, collapsed.x + collapsed.width);
         assert_eq!(expanded.y + expanded.height, collapsed.y + collapsed.height);
     }
@@ -486,8 +486,8 @@ mod overlay_place_tests {
     fn tip_and_confirmation_keep_button_stack_at_same_bottom_anchor() {
         let collapsed = overlay_place(0, 0, 1920, 1040, 1.0, false, OverlayTipSide::Left, true, Some((1800, 900)));
         let expanded = overlay_place(0, 0, 1920, 1040, 1.0, true, OverlayTipSide::Left, true, Some((1800, 900)));
-        assert_eq!(collapsed.height, 270);
-        assert_eq!(expanded.height, 462);
+        assert_eq!(collapsed.height, 308);
+        assert_eq!(expanded.height, 500);
         assert_eq!(expanded.x + expanded.width, collapsed.x + collapsed.width);
         assert_eq!(expanded.y + expanded.height, collapsed.y + collapsed.height);
     }
