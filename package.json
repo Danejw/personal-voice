@@ -1,7 +1,7 @@
 {
   "name": "personal-voice-app",
   "private": true,
-  "version": "0.3.25",
+  "version": "0.3.26",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {
