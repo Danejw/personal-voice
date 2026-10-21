@@ -64,6 +64,7 @@ export type OverlayAction =
   | { type: "remote-dictate-hold"; phase: "start" | "stop"; targetId: string; id: number }
   | { type: "set-destination"; destination: TranscriptDestinationId }
   | { type: "capture-selection" }
+  | { type: "open-clipboard" }
   | { type: "insert-handoff"; id: string }
   | { type: "dismiss-handoff"; id: string }
   | { type: "copy-note"; id: string }
@@ -298,6 +299,7 @@ export function parseOverlayAction(payload: unknown): OverlayAction | null {
   switch (record.type) {
     case "dictate-toggle":
     case "capture-selection":
+    case "open-clipboard":
     case "open-settings":
     case "assistant-toggle":
     case "assistant-interrupt":

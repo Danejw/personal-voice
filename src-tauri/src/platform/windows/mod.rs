@@ -2,6 +2,7 @@ mod accessibility;
 mod accessibility_plus;
 mod accessibility_events;
 mod autostart;
+mod clipboard_watch;
 mod computer;
 mod handoff_alert;
 mod hook;
@@ -32,7 +33,8 @@ pub use autostart::{launch_at_login, set_launch_at_login};
 pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_shortcut};
 pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
 pub use hook::{set_active as set_dictation_active, set_paused};
-pub use insert::{capture_selection, finish_pending_restore, insert_text, insert_camera_image};
+pub use clipboard_watch::{start_clipboard_watch, stop_clipboard_watch, write_clipboard_image};
+pub use insert::{capture_selection, finish_pending_restore, insert_camera_image, insert_text, write_clipboard_text};
 pub use live_text::live_dictation_text;
 pub use snapshot::{capture_snapshot, capture_pointer_snapshot};
 pub use pointer_context::{pointer_position, inspect_pointer_context, PointerPosition, PointerContext};
@@ -69,6 +71,10 @@ fn push_to_talk_payload(event: PttEvent) -> PushToTalkPayload {
             event: "capture-selection",
             destination: None,
         },
+        PttEvent::OpenClipboard => PushToTalkPayload {
+            event: "open-clipboard",
+            destination: None,
+        },
         PttEvent::ToggleAssistant => PushToTalkPayload {
             event: "toggle-assistant",
             destination: None,
@@ -95,6 +101,7 @@ pub fn set_hotkeys(
     handoff: &[String],
     selection: &[String],
     assistant: &[String],
+    clipboard: &[String],
 ) -> Result<(), String> {
     fn parse_list(values: &[String]) -> Result<Vec<Shortcut>, String> {
         values.iter().map(|value| Shortcut::parse(value)).collect()
@@ -110,6 +117,7 @@ pub fn set_hotkeys(
         parse_list(handoff)?,
         parse_list(selection)?,
         parse_list(assistant)?,
+        parse_list(clipboard)?,
     )
 }
 
@@ -119,7 +127,7 @@ pub fn set_hotkey_capture(active: bool) -> Result<(), String> {
 
 /// Device-independent size of the button stack. Physical pixels are derived from the monitor.
 const OVERLAY_W: f64 = 44.0;
-const OVERLAY_H: f64 = 194.0;
+const OVERLAY_H: f64 = 232.0;
 /// Extra width beside the buttons while a tooltip is open.
 const OVERLAY_TIP_EXTRA: f64 = 220.0;
 /// Multiline tooltips need extra space above the dock without moving the buttons.

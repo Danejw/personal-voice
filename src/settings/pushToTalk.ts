@@ -1,12 +1,14 @@
 import { canonicalShortcut, hotkeyLabel, isMouseShortcut, type LongPressBinding } from "@/settings/hotkeyChord";
 import {
   loadStoredAssistantHotkey,
+  loadStoredClipboardHotkey,
   loadStoredHandoffHotkey,
   loadStoredPushToTalk,
   loadStoredPushToTalkLongPress,
   loadStoredSelectionHotkey,
   loadStoredNoteHotkey,
   saveStoredAssistantHotkey,
+  saveStoredClipboardHotkey,
   saveStoredHandoffHotkey,
   saveStoredPushToTalk,
   saveStoredPushToTalkLongPress,
@@ -78,6 +80,14 @@ export function loadSelectionHotkey(): string[] {
 
 export function saveSelectionHotkey(shortcuts: readonly string[]): void {
   saveStoredSelectionHotkey([...shortcuts]);
+}
+
+export function loadClipboardHotkey(): string[] {
+  return keepValid(loadStoredClipboardHotkey(), []);
+}
+
+export function saveClipboardHotkey(shortcuts: readonly string[]): void {
+  saveStoredClipboardHotkey([...shortcuts]);
 }
 
 export function loadAssistantHotkey(): string[] {

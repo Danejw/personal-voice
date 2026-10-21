@@ -35,6 +35,8 @@ export interface OverlayBindings {
   insertHandoff(text: string): Promise<void>;
   dismissHandoff(id: string): Promise<void>;
   onSelectionCaptured?(): void;
+  /** Opens Selection and focuses clipboard history. Does not start dictation. */
+  onOpenClipboard?(): void;
   /** Called at the overlay before an utterance starts. */
   onArmDictation?(): void;
   /** False while Assistant holds the microphone. */
@@ -86,6 +88,7 @@ export function useOverlay({
   insertHandoff,
   dismissHandoff,
   onSelectionCaptured,
+  onOpenClipboard,
   onArmDictation,
   canDictate,
   assistant,
@@ -212,6 +215,7 @@ export function useOverlay({
     let unlisten: (() => void) | undefined;
     void platform.onPushToTalk((event) => {
       if (event.event === "capture-selection") void captureSelection();
+      if (event.event === "open-clipboard") onOpenClipboard?.();
     }).then((fn) => {
       if (disposed) fn();
       else unlisten = fn;
@@ -220,7 +224,7 @@ export function useOverlay({
       disposed = true;
       unlisten?.();
     };
-  }, [captureSelection, platform]);
+  }, [captureSelection, onOpenClipboard, platform]);
 
   useEffect(() => {
     let disposed = false;
@@ -381,6 +385,10 @@ export function useOverlay({
         case "open-settings":
           quietly(platform.openSettings());
           return;
+        case "open-clipboard":
+          onOpenClipboard?.();
+          quietly(platform.openSettings());
+          return;
         case "assistant-toggle": {
           const intent = overlayAssistantIntent(snapshotRef.current.assistant);
           if (intent === "start") {
@@ -422,6 +430,7 @@ export function useOverlay({
     dismissHandoff,
     captureSelection,
     flash,
+    onOpenClipboard,
   ]);
 
   return snapshot;

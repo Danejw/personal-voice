@@ -59,6 +59,8 @@ export interface DevicePreferences {
   remoteDictationTargetDeviceId: string | null;
   /** Install updates found at startup without asking. Off means toast + manual install. */
   autoUpdate: boolean;
+  /** Opens Selection history from another app. Empty until the user records one. */
+  clipboardHotkey: string[];
 }
 
 function prefsKey(deviceId: string): string {
@@ -138,6 +140,7 @@ function fromLegacy(storage: KeyValueStorage): DevicePreferences {
     remoteDictation: true,
     remoteDictationTargetDeviceId: null,
     autoUpdate: true,
+    clipboardHotkey: [],
   };
 }
 
@@ -178,6 +181,7 @@ function parsePrefs(raw: string | null, fallback: DevicePreferences): DevicePref
         ? fallback.remoteDictationTargetDeviceId
         : deviceIdOrNull(fields.remoteDictationTargetDeviceId),
       autoUpdate: fields.autoUpdate !== false,
+      clipboardHotkey: shortcutList(fields.clipboardHotkey, []),
     };
   } catch {
     return fallback;
@@ -316,6 +320,14 @@ export function loadStoredSelectionHotkey(storage: KeyValueStorage = localStorag
 
 export function saveStoredSelectionHotkey(shortcuts: readonly string[], storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
   write(storage, scope(deviceId), { selectionHotkey: [...shortcuts] });
+}
+
+export function loadStoredClipboardHotkey(storage: KeyValueStorage = localStorage, deviceId?: string | null): string[] {
+  return read(storage, scope(deviceId)).clipboardHotkey;
+}
+
+export function saveStoredClipboardHotkey(shortcuts: readonly string[], storage: KeyValueStorage = localStorage, deviceId?: string | null): void {
+  write(storage, scope(deviceId), { clipboardHotkey: [...shortcuts] });
 }
 
 export function loadStoredAssistantHotkey(storage: KeyValueStorage = localStorage, deviceId?: string | null): string[] {

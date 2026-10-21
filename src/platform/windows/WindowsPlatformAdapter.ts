@@ -1,13 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
+import { parseClipboardChange, type ClipboardChange } from "@/clipboard/clipboardEntry";
 import { contextItemFromCapture } from "@/context/ContextItem";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 import { parseOverlayAction } from "@/overlay/overlay";
 import { BrowserAudioCapture } from "@/platform/BrowserAudioCapture";
 import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import { WebCameraCapture } from "@/platform/camera/WebCameraCapture";
-import type { AvailableUpdate, CaptureSelectionOptions, DictationCue, HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
+import type { AvailableUpdate, CaptureSelectionOptions, ClipboardWatchOptions, DictationCue, HotkeyBindings, PlatformAdapter } from "@/platform/PlatformAdapter";
 import { parsePushToTalk, windowsShortcutTrigger } from "@/platform/pushToTalkEvent";
 import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
 import { parseTargetApp } from "@/platform/targetApp";
@@ -52,7 +53,28 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
   async captureSelection(options?: CaptureSelectionOptions) {
     return contextItemFromCapture(await invoke("capture_selection", {
       restoreSettings: options?.restoreSettings ?? true,
+      leaveOnClipboard: options?.leaveOnClipboard ?? false,
     }));
+  }
+
+  async watchClipboard(options: ClipboardWatchOptions, handler: (change: ClipboardChange) => void) {
+    const generation = await invoke<number>("start_clipboard_watch", { images: options.images });
+    const unlisten = await listen<unknown>("clipboard-changed", (event) => {
+      const change = parseClipboardChange(event.payload);
+      if (change) handler(change);
+    });
+    return () => {
+      unlisten();
+      void invoke("stop_clipboard_watch", { generation });
+    };
+  }
+
+  writeClipboardText(text: string) {
+    return invoke<void>("write_clipboard_text", { text });
+  }
+
+  writeClipboardImage(bmpBase64: string) {
+    return invoke<void>("write_clipboard_image", { bmpBase64 });
   }
 
   captureSnapshot() {
@@ -106,6 +128,7 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
       handoff: [...bindings.handoff],
       selection: [...bindings.selection],
       assistant: [...bindings.assistant],
+      clipboard: [...bindings.clipboard],
     });
   }
 

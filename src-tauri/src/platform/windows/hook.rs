@@ -92,6 +92,7 @@ pub fn set_hotkeys(
     handoff: Vec<Shortcut>,
     selection: Vec<Shortcut>,
     assistant: Vec<Shortcut>,
+    clipboard: Vec<Shortcut>,
 ) -> Result<(), String> {
     match HOOK.get() {
         Some(hook) => match hook.state.lock() {
@@ -102,6 +103,7 @@ pub fn set_hotkeys(
                 handoff,
                 selection,
                 assistant,
+                clipboard,
             ),
             Err(_) => Err("Push-to-talk is busy.".into()),
         },

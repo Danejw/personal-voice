@@ -6,15 +6,16 @@
 //! re-synthesizes CF_BITMAP from CF_DIB, but content that exists *only* as a
 //! metafile, palette, or private format is not restored.
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread::{sleep, JoinHandle};
 use std::time::Duration;
 
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, GlobalFree, HANDLE, HGLOBAL};
 use windows::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData,
-    GetClipboardSequenceNumber, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
+    CloseClipboard, EmptyClipboard, EnumClipboardFormats,     GetClipboardData, GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard,
+    RegisterClipboardFormatW, SetClipboardData,
 };
 use windows::Win32::System::Memory::{
     GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE,
@@ -36,6 +37,11 @@ use super::hook::SYNTHETIC_INPUT_MARK;
 
 const CF_UNICODETEXT: u32 = 13;
 const CF_DIB: u32 = 8;
+const CF_DIBV5: u32 = 17;
+/// Raw bitmaps are only a transport format. TypeScript re-encodes them as PNG before storage.
+pub(crate) const MAX_CLIPBOARD_DIB_BYTES: usize = 33_554_432;
+pub(crate) const MAX_CLIPBOARD_PNG_BYTES: usize = 10_485_760;
+const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 /// Long enough for Chromium/Electron apps to read or write the clipboard asynchronously.
 const PASTE_SETTLE: Duration = Duration::from_millis(400);
 const COPY_SETTLE: Duration = PASTE_SETTLE;
@@ -45,6 +51,97 @@ type Snapshot = Vec<(u32, Vec<u8>)>;
 
 /// The clipboard restore still waiting out `PASTE_SETTLE` after the last paste.
 static PENDING_RESTORE: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
+static CLIPBOARD_WRITING: AtomicBool = AtomicBool::new(false);
+static CLIPBOARD_WRITE_START: AtomicU32 = AtomicU32::new(0);
+static OWNED_SEQUENCES: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+/// Serializes Personal Voice clipboard reads and writes. The focused app is not part of
+/// this lock, so insertion keeps a separate activity count through its paste window.
+static CLIPBOARD_ACCESS: Mutex<()> = Mutex::new(());
+static CLIPBOARD_INSERTION_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+pub(crate) fn clipboard_access() -> MutexGuard<'static, ()> {
+    CLIPBOARD_ACCESS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+}
+
+pub(crate) fn clipboard_insertion_active() -> bool {
+    CLIPBOARD_INSERTION_COUNT.load(Ordering::SeqCst) > 0
+}
+
+/// One insertion in progress. The count lets a new insertion start while the previous
+/// insertion's delayed restore is finishing without opening a sampling window.
+struct ClipboardInsertion {
+    armed: bool,
+}
+
+impl ClipboardInsertion {
+    fn begin() -> Self {
+        CLIPBOARD_INSERTION_COUNT.fetch_add(1, Ordering::SeqCst);
+        Self { armed: true }
+    }
+
+    /// Keeps the count raised after this value is dropped. The restore thread releases it.
+    fn hand_off(mut self) {
+        self.armed = false;
+    }
+
+    fn release() {
+        let _ =
+            CLIPBOARD_INSERTION_COUNT.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
+                Some(count.saturating_sub(1))
+            });
+    }
+}
+
+impl Drop for ClipboardInsertion {
+    fn drop(&mut self) {
+        if self.armed {
+            Self::release();
+        }
+    }
+}
+
+/// Marks clipboard changes Personal Voice itself makes so the history listener can ignore them.
+struct ClipboardWrite;
+
+impl ClipboardWrite {
+    fn begin() -> Self {
+        CLIPBOARD_WRITE_START.store(unsafe { GetClipboardSequenceNumber() }, Ordering::SeqCst);
+        CLIPBOARD_WRITING.store(true, Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for ClipboardWrite {
+    fn drop(&mut self) {
+        let start = CLIPBOARD_WRITE_START.load(Ordering::SeqCst);
+        let end = unsafe { GetClipboardSequenceNumber() };
+        if end != start {
+            if let Ok(mut owned) = OWNED_SEQUENCES.lock() {
+                if !owned.contains(&end) {
+                    owned.push(end);
+                }
+                if owned.len() > 32 {
+                    owned.remove(0);
+                }
+            }
+        }
+        CLIPBOARD_WRITING.store(false, Ordering::SeqCst);
+    }
+}
+
+/// True while Personal Voice is writing the clipboard, or the current contents are that write.
+pub(crate) fn clipboard_change_is_ours() -> bool {
+    if CLIPBOARD_WRITING.load(Ordering::SeqCst) {
+        return true;
+    }
+    let sequence = unsafe { GetClipboardSequenceNumber() };
+    OWNED_SEQUENCES
+        .lock()
+        .map(|owned| owned.contains(&sequence))
+        .unwrap_or(false)
+}
 
 /// Returns once the paste keystroke is sent; the clipboard is restored after
 /// `PASTE_SETTLE` on a background thread, so dictation is ready again at once.
@@ -52,6 +149,9 @@ pub fn insert_text(text: &str) -> Result<Option<TargetApp>, String> {
     if text.is_empty() {
         return Ok(None);
     }
+    // Raised before the previous restore can finish, and held until this insertion's
+    // restore finishes. The history watcher must not open the clipboard in between.
+    let insertion = ClipboardInsertion::begin();
     let mut pending = PENDING_RESTORE
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
@@ -59,20 +159,25 @@ pub fn insert_text(text: &str) -> Result<Option<TargetApp>, String> {
     if let Some(restore) = pending.take() {
         let _ = restore.join();
     }
-    let previous = {
-        let _open = Clipboard::open()?;
-        snapshot()
-    };
+    let (previous, ours) = {
+        let _access = clipboard_access();
+        let previous = {
+            let _open = Clipboard::open()?;
+            snapshot()
+        };
 
-    let mut utf16: Vec<u16> = text.encode_utf16().collect();
-    utf16.push(0);
-    {
-        let _open = Clipboard::open()?;
-        unsafe { EmptyClipboard() }.map_err(|e| format!("Could not clear the clipboard: {e}"))?;
-        set_bytes(CF_UNICODETEXT, utf16_bytes(&utf16))?;
-        exclude_from_history();
-    }
-    let ours = unsafe { GetClipboardSequenceNumber() };
+        let mut utf16: Vec<u16> = text.encode_utf16().collect();
+        utf16.push(0);
+        {
+            let _write = ClipboardWrite::begin();
+            let _open = Clipboard::open()?;
+            unsafe { EmptyClipboard() }.map_err(|e| format!("Could not clear the clipboard: {e}"))?;
+            set_bytes(CF_UNICODETEXT, utf16_bytes(&utf16))?;
+            exclude_from_history();
+        }
+        let ours = unsafe { GetClipboardSequenceNumber() };
+        (previous, ours)
+    };
 
     wait_for_modifiers_released();
     // Named at the keystroke, so the identity is the window that receives the paste.
@@ -80,9 +185,41 @@ pub fn insert_text(text: &str) -> Result<Option<TargetApp>, String> {
     let pasted = send_paste();
     *pending = Some(std::thread::spawn(move || {
         sleep(PASTE_SETTLE);
-        restore(&previous, ours);
+        {
+            let _access = clipboard_access();
+            let _write = ClipboardWrite::begin();
+            restore(&previous, ours);
+        }
+        ClipboardInsertion::release();
     }));
+    insertion.hand_off();
     pasted.map(|()| target)
+}
+
+/// Replaces the clipboard with text the user chose from history. Does not paste into the focused app.
+pub fn write_clipboard_text(text: &str) -> Result<(), String> {
+    if text.is_empty() {
+        return Err("Nothing to copy.".into());
+    }
+    let mut utf16: Vec<u16> = text.encode_utf16().collect();
+    utf16.push(0);
+    let _access = clipboard_access();
+    let _write = ClipboardWrite::begin();
+    let _open = Clipboard::open()?;
+    unsafe { EmptyClipboard() }.map_err(|e| format!("Could not clear the clipboard: {e}"))?;
+    set_bytes(CF_UNICODETEXT, utf16_bytes(&utf16))
+}
+
+/// Replaces the clipboard with a DIB the user chose from history.
+pub fn write_clipboard_dib(dib: &[u8]) -> Result<(), String> {
+    if dib.len() < 40 || dib.len() > MAX_CLIPBOARD_DIB_BYTES {
+        return Err("That image is too large to copy.".into());
+    }
+    let _access = clipboard_access();
+    let _write = ClipboardWrite::begin();
+    let _open = Clipboard::open()?;
+    unsafe { EmptyClipboard() }.map_err(|e| format!("Could not clear the clipboard: {e}"))?;
+    set_bytes(CF_DIB, dib)
 }
 
 /// Paste a real bitmap into a user-selected field on another app.
@@ -112,26 +249,31 @@ pub fn insert_camera_image(dib_base64: &str, expected_window: &str) -> Result<St
         let _open = Clipboard::open()?;
         snapshot()
     };
-    {
-        let _open = Clipboard::open()?;
-        unsafe { EmptyClipboard() }.map_err(|e| format!("Could not clear the clipboard: {e}"))?;
-        if let Err(error) = set_bytes(CF_DIB, &dib) {
-            drop(_open);
-            let changed = unsafe { GetClipboardSequenceNumber() };
-            restore(&previous, changed);
-            return Err(error);
+    let ours = {
+        let _write = ClipboardWrite::begin();
+        {
+            let _open = Clipboard::open()?;
+            unsafe { EmptyClipboard() }.map_err(|e| format!("Could not clear the clipboard: {e}"))?;
+            if let Err(error) = set_bytes(CF_DIB, &dib) {
+                drop(_open);
+                let changed = unsafe { GetClipboardSequenceNumber() };
+                restore(&previous, changed);
+                return Err(error);
+            }
+            exclude_from_history();
         }
-        exclude_from_history();
-    }
-    let ours = unsafe { GetClipboardSequenceNumber() };
-    wait_for_modifiers_released();
-    if foreground_title().as_deref() != Some(expected_window) {
-        restore(&previous, ours);
-        return Err("Focus changed before image paste. No image was inserted.".into());
-    }
+        let ours = unsafe { GetClipboardSequenceNumber() };
+        wait_for_modifiers_released();
+        if foreground_title().as_deref() != Some(expected_window) {
+            restore(&previous, ours);
+            return Err("Focus changed before image paste. No image was inserted.".into());
+        }
+        ours
+    };
     let result = send_paste();
     *pending = Some(std::thread::spawn(move || {
         sleep(PASTE_SETTLE + Duration::from_millis(350));
+        let _write = ClipboardWrite::begin();
         restore(&previous, ours);
     }));
     result?;
@@ -169,9 +311,12 @@ fn decode_base64_limited(input: &str, max_len: usize) -> Result<Vec<u8>, String>
     Ok(out)
 }
 
-/// Copies the focused app's selection, then restores the previous clipboard.
-pub fn capture_selection() -> Result<(String, Option<String>), String> {
+/// Copies the focused app's selection. Restores the previous clipboard unless `leave_on_clipboard`.
+pub fn capture_selection(leave_on_clipboard: bool) -> Result<(String, Option<String>), String> {
     finish_pending_restore();
+    let _insertion = ClipboardInsertion::begin();
+    let _access = clipboard_access();
+    let _write = ClipboardWrite::begin();
     let source = foreground_title();
     let previous = {
         let _open = Clipboard::open()?;
@@ -192,9 +337,12 @@ pub fn capture_selection() -> Result<(String, Option<String>), String> {
             return Err(err);
         }
     };
-    restore(&previous, after);
     if text.is_empty() {
+        restore(&previous, after);
         return Err("No text is selected in the other app.".into());
+    }
+    if !leave_on_clipboard {
+        restore(&previous, after);
     }
     Ok((text, source))
 }
@@ -450,6 +598,127 @@ fn display_stem(file: &str) -> String {
     }
 }
 
+/// Image formats Personal Voice can take from the clipboard. PNG is preferred because
+/// Snipping Tool and browsers publish it directly, already compressed.
+pub(crate) enum ClipboardImage {
+    Png(Vec<u8>),
+    Dib(Vec<u8>),
+}
+
+pub(crate) struct ClipboardSample {
+    pub text: Option<String>,
+    pub excluded: bool,
+    pub image: Option<ClipboardImage>,
+    pub source_app: Option<String>,
+    pub source_process: Option<String>,
+}
+
+/// Reads the current clipboard once. Returns `None` when Personal Voice wrote it or it has no
+/// supported content. Excluded content is reported without the bytes.
+pub(crate) fn sample_clipboard(include_image: bool) -> Result<Option<ClipboardSample>, String> {
+    // Wait for any Personal Voice clipboard write, then refuse to open the clipboard
+    // while an insertion is waiting for the focused app to read its paste.
+    let _access = clipboard_access();
+    if clipboard_insertion_active() || clipboard_change_is_ours() {
+        return Ok(None);
+    }
+    let source = foreground_app();
+    let source_process = source.as_ref().map(|app| app.id.clone());
+    let source_app = source.map(|app| app.label);
+    let _open = Clipboard::open()?;
+    if clipboard_insertion_active() || clipboard_change_is_ours() {
+        return Ok(None);
+    }
+    if clipboard_history_excluded() {
+        return Ok(Some(ClipboardSample {
+            text: None,
+            excluded: true,
+            image: None,
+            source_app,
+            source_process,
+        }));
+    }
+    let text = read_format_bytes(CF_UNICODETEXT)
+        .and_then(|bytes| utf16le_nul_terminated(&bytes).ok())
+        .filter(|text| !text.is_empty());
+    let image = if include_image && text.is_none() {
+        read_clipboard_image()
+    } else {
+        None
+    };
+    if text.is_none() && image.is_none() {
+        return Ok(None);
+    }
+    Ok(Some(ClipboardSample {
+        text,
+        excluded: false,
+        image,
+        source_app,
+        source_process,
+    }))
+}
+
+fn clipboard_history_excluded() -> bool {
+    let exclude = unsafe { RegisterClipboardFormatW(w!("ExcludeClipboardContentFromMonitorProcessing")) };
+    if exclude != 0 && unsafe { IsClipboardFormatAvailable(exclude) }.is_ok() {
+        return true;
+    }
+    let include = unsafe { RegisterClipboardFormatW(w!("CanIncludeInClipboardHistory")) };
+    if include == 0 {
+        return false;
+    }
+    match read_format_bytes(include) {
+        Some(bytes) if bytes.len() >= 4 => u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) == 0,
+        _ => false,
+    }
+}
+
+/// Prefers the compressed PNG many tools publish, then the modern DIBV5, then plain DIB.
+fn read_clipboard_image() -> Option<ClipboardImage> {
+    for png_format in [
+        unsafe { RegisterClipboardFormatW(w!("PNG")) },
+        unsafe { RegisterClipboardFormatW(w!("image/png")) },
+    ] {
+        if png_format == 0 {
+            continue;
+        }
+        if let Some(bytes) = read_format_bytes_with_limit(png_format, MAX_CLIPBOARD_PNG_BYTES) {
+            if is_png(&bytes) {
+                return Some(ClipboardImage::Png(bytes));
+            }
+        }
+    }
+    read_format_bytes_with_limit(CF_DIBV5, MAX_CLIPBOARD_DIB_BYTES)
+        .map(ClipboardImage::Dib)
+        .or_else(|| read_format_bytes_with_limit(CF_DIB, MAX_CLIPBOARD_DIB_BYTES).map(ClipboardImage::Dib))
+}
+
+fn is_png(bytes: &[u8]) -> bool {
+    bytes.len() >= PNG_SIGNATURE.len() && bytes[..PNG_SIGNATURE.len()] == PNG_SIGNATURE
+}
+
+fn read_format_bytes(format: u32) -> Option<Vec<u8>> {
+    read_format_bytes_with_limit(format, 2_000_000)
+}
+
+fn read_format_bytes_with_limit(format: u32, limit: usize) -> Option<Vec<u8>> {
+    let handle = unsafe { GetClipboardData(format) }.ok()?;
+    let memory = HGLOBAL(handle.0);
+    unsafe {
+        let size = GlobalSize(memory);
+        if size == 0 || size > limit {
+            return None;
+        }
+        let data = GlobalLock(memory) as *const u8;
+        if data.is_null() {
+            return None;
+        }
+        let bytes = std::slice::from_raw_parts(data, size).to_vec();
+        let _ = GlobalUnlock(memory);
+        Some(bytes)
+    }
+}
+
 fn foreground_app() -> Option<TargetApp> {
     let hwnd = unsafe { GetForegroundWindow() };
     if hwnd.is_invalid() {
@@ -514,7 +783,28 @@ fn utf16le_nul_terminated(bytes: &[u8]) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{app_from_image_path, utf16le_nul_terminated, decode_base64_limited};
+    use super::{
+        app_from_image_path, clipboard_insertion_active, decode_base64_limited, is_png,
+        utf16le_nul_terminated, ClipboardInsertion,
+    };
+
+    #[test]
+    fn insertion_stays_active_after_handoff_until_the_restore_releases_it() {
+        assert!(!clipboard_insertion_active());
+        let insertion = ClipboardInsertion::begin();
+        assert!(clipboard_insertion_active());
+        insertion.hand_off();
+        assert!(clipboard_insertion_active());
+        ClipboardInsertion::release();
+        assert!(!clipboard_insertion_active());
+    }
+
+    #[test]
+    fn recognizes_only_a_real_png_signature() {
+        assert!(is_png(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0]));
+        assert!(!is_png(b"BMxxxxxx"));
+        assert!(!is_png(&[0x89, b'P']));
+    }
 
     #[test]
     fn camera_clipboard_base64_decoding_rejects_bad_input() {

@@ -65,6 +65,7 @@ import { useNotes } from "@/notes/useNotes";
 import { useOverlay } from "@/overlay/useOverlay";
 import { overlayAssistantFrom, overlayAssistantIntent } from "@/overlay/overlay";
 import { createPlatformAdapter, type AppPlatform } from "@/platform";
+import { ClipboardFallbackError } from "@/platform/PlatformAdapter";
 import type { TargetApp } from "@/platform/targetApp";
 import { AndroidSetupPanel } from "@/platform/android/AndroidSetupPanel";
 import { MicrophonePanel } from "@/platform/windows/MicrophonePanel";
@@ -96,6 +97,7 @@ import { notesApi } from "@/services/notesService";
 import { insightsApi } from "@/services/insightsService";
 import { insightsAnalyzer } from "@/services/insightsAnalysisService";
 import { noteOrganizerApi } from "@/services/noteOrganizerService";
+import { clipboardApi } from "@/services/clipboardService";
 import { snippetsApi } from "@/services/snippetsService";
 import { transformProfilesApi } from "@/services/transformProfilesService";
 import {
@@ -128,6 +130,13 @@ import { createId } from "@/sync/createId";
 import { transcriptionPreferences } from "@/sync/personalData";
 import type { DictionaryTerm } from "@/sync/personalData";
 import { usePersonalSync } from "@/sync/usePersonalSync";
+import { ClipboardPanel } from "@/clipboard/ClipboardPanel";
+import { deviceClipboardPreferences } from "@/clipboard/clipboardPreferences";
+import { ClipboardStore } from "@/clipboard/ClipboardStore";
+import { encodeBase64, type ClipboardEntry } from "@/clipboard/clipboardEntry";
+import { imageBytesToBmp } from "@/clipboard/clipboardImageCodec";
+import { indexedDbClipboardImages } from "@/clipboard/clipboardImages";
+import { useClipboardHistory } from "@/clipboard/useClipboardHistory";
 import { SnippetPanel, SnippetToolbar } from "@/snippets/SnippetPanel";
 import { SnippetStore } from "@/snippets/SnippetStore";
 import { useSnippets } from "@/snippets/useSnippets";
@@ -250,6 +259,27 @@ assistant.subscribe((snapshot) => {
 });
 const personalSync = new PersonalSyncStore(personalSyncApi, localStorage, platform.platform);
 const snippetStore = new SnippetStore(snippetsApi, localStorage);
+const clipboardStore = new ClipboardStore(
+  clipboardApi,
+  localStorage,
+  indexedDbClipboardImages(),
+  deviceClipboardPreferences(),
+);
+
+/** Copies one saved item onto this device's clipboard. Other devices are left alone. */
+async function copyClipboardEntry(target: AppPlatform, entry: ClipboardEntry): Promise<void> {
+  const saved = await clipboardStore.markCopied(entry.id);
+  const current = saved ?? entry;
+  if (current.kind === "image") {
+    const bytes = await clipboardStore.readImage(entry.id);
+    if (!bytes) throw new Error("That image isn't on this device yet.");
+    // History stores PNG. The Windows clipboard writer takes a BMP it turns into a DIB.
+    await target.writeClipboardImage(encodeBase64(await imageBytesToBmp(bytes)));
+    return;
+  }
+  if (!current.text) throw new Error("That clipboard item is empty.");
+  await target.writeClipboardText(current.text);
+}
 const transformStore = new TransformStore(transformProfilesApi);
 const insightsStore = new InsightsStore(insightsApi, insightsAnalyzer);
 const notesStore = new NotesStore(
@@ -507,7 +537,15 @@ async function transformFinalDictation(text: string, destination: TranscriptDest
 const destinations = new TranscriptDestinationRouter({
   "active-field": { deliver: async (transcript) => {
     if (consumeSnippetReferenceAcceptance()) return;
-    if (!await liveFieldPreview.commit(transcript)) await pasteIntoField(transcript);
+    if (await liveFieldPreview.commit(transcript)) return;
+    try {
+      await pasteIntoField(transcript);
+    } catch (reason) {
+      // No field was focused and the platform put the transcript on the clipboard.
+      // That is a finished delivery, so dictation returns to idle instead of
+      // leaving the dictation control in its error state.
+      if (!(reason instanceof ClipboardFallbackError)) throw reason;
+    }
   } },
   [NOTE_DESTINATION_ID]: { deliver: (transcript) => notesStore.create(transcript, "voice") },
   "remote-dictation": remoteDictationDestination,
@@ -664,6 +702,7 @@ export default function App() {
   const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
   const [dictationTransformId, setDictationTransformId] = useState<string | null>(() => loadTransformProfileId());
   const [section, setSection] = useState<AppSection>("dictation");
+  const [clipboardFocus, setClipboardFocus] = useState(0);
   const insightsSnapshot = useInsights(insightsStore, auth.userId, section === "insights");
   const [assistantInsightsRefreshToken, setAssistantInsightsRefreshToken] = useState(0);
   useHandoffAlerts(
@@ -817,6 +856,11 @@ export default function App() {
     insertHandoff: (text) => pasteReceived(text),
     dismissHandoff: (id) => handoffs.consume(id),
     onSelectionCaptured: () => usage.recordLater({ name: "selection_captured" }),
+    onOpenClipboard: () => {
+      setSection("capture");
+      setClipboardFocus((value) => value + 1);
+      void platform.openSettings();
+    },
     onArmDictation: () => usage.armTrigger("overlay"),
     canDictate: () => microphone.heldBy() !== "assistant",
     assistant: assistantSnapshot,
@@ -848,6 +892,7 @@ export default function App() {
       ? localDeviceId(localStorage, auth.userId, createId)
       : null;
   if (settingsDeviceId !== undefined) bindDeviceSettings(settingsDeviceId);
+  const clipboard = useClipboardHistory(clipboardStore, auth.userId, settingsDeviceId ?? null, platform);
   const showFloating = settingsDeviceId !== undefined ? loadShowIndicator() : floatingControl;
   const { readiness, refresh: refreshSetup, markMicrophoneGranted } = useDeviceSetup(platform.platform, showFloating);
 
@@ -1229,12 +1274,18 @@ export default function App() {
         </div>
 
         <div className="panel-stack" hidden={section !== "capture"}>
-          <section aria-labelledby="page-title" className="page-panel">
+          <section aria-labelledby="page-title" className="page-panel selection-page">
             <SelectionPanel
               platform={platform.platform}
               disabled={!idle}
               active={section === "capture"}
               capture={() => platform.captureSelection()}
+              copySelection={async () => {
+                const item = await platform.captureSelection({ leaveOnClipboard: true });
+                await platform.writeClipboardText(item.text);
+                await clipboardStore.recordCapturedSelection(item.text, item.sourceApp);
+                return item;
+              }}
               onCaptured={() => usage.recordLater({ name: "selection_captured" })}
               attached={assistantSnapshot.selection}
               transformProfiles={availableTransforms}
@@ -1246,6 +1297,14 @@ export default function App() {
                 const message = assistant.attachSelection(item);
                 if (message) throw new Error(message);
               }}
+            />
+            <ClipboardPanel
+              store={clipboardStore}
+              snapshot={clipboard}
+              devices={deviceSnapshot.devices}
+              focusToken={clipboardFocus}
+              onCopy={(entry) => copyClipboardEntry(platform, entry)}
+              onClear={() => clipboardStore.clear()}
             />
           </section>
         </div>

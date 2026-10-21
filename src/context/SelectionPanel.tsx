@@ -11,7 +11,9 @@ interface SelectionPanelProps {
   disabled: boolean;
   /** When true, Capture / Copy / Clear render in the shared page header. */
   active?: boolean;
-  capture(): Promise<ContextItem>;
+  capture(options?: { leaveOnClipboard?: boolean }): Promise<ContextItem>;
+  /** Copies the other app's selection onto the clipboard and reports it for history. */
+  copySelection?(): Promise<ContextItem>;
   onCaptured?(): void;
   /** Called with the capture, or null when the user clears it. Throw to reject an oversized selection. */
   onItem?(item: ContextItem | null): void;
@@ -28,6 +30,7 @@ export function SelectionPanel({
   disabled,
   active = false,
   capture,
+  copySelection,
   onCaptured,
   onItem,
   attached,
@@ -68,6 +71,17 @@ export function SelectionPanel({
     }, "Selection captured.");
   }
 
+  function onCopyFromApp() {
+    if (!copySelection) return;
+    void run(async () => {
+      const next = await copySelection();
+      onItem?.(next);
+      setItem(next);
+      setTransformOpen(false);
+      try { onCaptured?.(); } catch { /* usage must not fail capture */ }
+    }, "Selection copied.");
+  }
+
   function onCopy() {
     if (!item) return;
     void run(() => navigator.clipboard.writeText(item.text), "Selection copied.");
@@ -102,6 +116,13 @@ export function SelectionPanel({
         >
           Transform
         </button>
+      )}
+      {copySelection && (
+        <Tooltip content="Copy the highlighted text onto your clipboard.">
+          <button type="button" className="secondary" disabled={disabled || busy} onClick={onCopyFromApp}>
+            Copy selection
+          </button>
+        </Tooltip>
       )}
       <button type="button" className="secondary" disabled={!item || busy} onClick={onCopy}>Copy</button>
       <button type="button" className="secondary" disabled={!item || busy} onClick={onClear}>Clear</button>
@@ -141,9 +162,7 @@ export function SelectionPanel({
             />
           )}
         </div>
-      ) : (
-        <p className="placeholder">No selection captured</p>
-      )}
+      ) : null}
     </>
   );
 }

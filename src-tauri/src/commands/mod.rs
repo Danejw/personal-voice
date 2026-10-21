@@ -291,15 +291,17 @@ pub struct CapturedSelection {
 pub async fn capture_selection(
     app: AppHandle,
     restore_settings: Option<bool>,
+    leave_on_clipboard: Option<bool>,
 ) -> Result<CapturedSelection, String> {
     let restore = restore_settings.unwrap_or(true);
     let window = app
         .get_webview_window("main")
         .ok_or("The Settings window is missing.")?;
     window.hide().map_err(|e| e.to_string())?;
-    let result = tauri::async_runtime::spawn_blocking(|| {
+    let leave = leave_on_clipboard.unwrap_or(false);
+    let result = tauri::async_runtime::spawn_blocking(move || {
         std::thread::sleep(std::time::Duration::from_millis(150));
-        platform::capture_selection()
+        platform::capture_selection(leave)
     })
     .await
     .map_err(|e| e.to_string())
@@ -388,8 +390,29 @@ pub fn set_hotkeys(
     handoff: Vec<String>,
     selection: Vec<String>,
     assistant: Vec<String>,
+    clipboard: Vec<String>,
 ) -> Result<(), String> {
-    platform::set_hotkeys(&dictate, &dictate_long_press, &note, &handoff, &selection, &assistant)
+    platform::set_hotkeys(&dictate, &dictate_long_press, &note, &handoff, &selection, &assistant, &clipboard)
+}
+
+#[tauri::command]
+pub fn start_clipboard_watch(app: AppHandle, images: Option<bool>) -> Result<u64, String> {
+    platform::start_clipboard_watch(app, images.unwrap_or(false))
+}
+
+#[tauri::command]
+pub fn stop_clipboard_watch(generation: u64) {
+    platform::stop_clipboard_watch(generation);
+}
+
+#[tauri::command]
+pub fn write_clipboard_text(text: String) -> Result<(), String> {
+    platform::write_clipboard_text(&text)
+}
+
+#[tauri::command]
+pub fn write_clipboard_image(bmp_base64: String) -> Result<(), String> {
+    platform::write_clipboard_image(&bmp_base64)
 }
 
 /// Lets the Settings window see the next chord instead of starting dictation with it.

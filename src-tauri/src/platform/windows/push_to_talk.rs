@@ -172,6 +172,8 @@ pub enum PttEvent {
     },
     /// One-shot: copies the highlighted text. Release is swallowed and does not end dictation.
     CaptureSelection,
+    /// One-shot: opens clipboard history. Release is swallowed and does not end dictation.
+    OpenClipboard,
     /// One-shot: starts or ends Assistant. Release is swallowed and does not end dictation.
     ToggleAssistant,
     Release,
@@ -208,6 +210,7 @@ pub struct PushToTalk {
     pub handoff: Vec<Shortcut>,
     pub selection: Vec<Shortcut>,
     pub assistant: Vec<Shortcut>,
+    pub clipboard: Vec<Shortcut>,
     /// While true, Escape cancels the active utterance.
     pub active: bool,
     pub paused: bool,
@@ -226,6 +229,7 @@ impl Default for PushToTalk {
             handoff: Vec::new(),
             selection: Vec::new(),
             assistant: Vec::new(),
+            clipboard: Vec::new(),
             active: false,
             paused: false,
             capturing: false,
@@ -258,6 +262,20 @@ impl PushToTalk {
             handoff,
             selection,
             assistant,
+            self.clipboard.clone(),
+        )
+    }
+
+    #[cfg(test)]
+    pub fn set_clipboard_hotkeys(&mut self, clipboard: Vec<Shortcut>) -> Result<(), String> {
+        self.set_all_hotkeys(
+            self.dictate.clone(),
+            self.dictate_long_press.clone(),
+            self.note.clone(),
+            self.handoff.clone(),
+            self.selection.clone(),
+            self.assistant.clone(),
+            clipboard,
         )
     }
 
@@ -270,6 +288,7 @@ impl PushToTalk {
             self.handoff.clone(),
             self.selection.clone(),
             self.assistant.clone(),
+            self.clipboard.clone(),
         )
     }
 
@@ -281,17 +300,19 @@ impl PushToTalk {
         handoff: Vec<Shortcut>,
         selection: Vec<Shortcut>,
         assistant: Vec<Shortcut>,
+        clipboard: Vec<Shortcut>,
     ) -> Result<(), String> {
         if dictate.is_empty() {
             return Err("Hold to dictate needs a key or mouse button.".into());
         }
-        ensure_unique(&[&dictate, &note, &handoff, &selection, &assistant], &dictate_long_press)?;
+        ensure_unique(&[&dictate, &note, &handoff, &selection, &assistant, &clipboard], &dictate_long_press)?;
         self.dictate = dictate;
         self.dictate_long_press = dictate_long_press;
         self.note = note;
         self.handoff = handoff;
         self.selection = selection;
         self.assistant = assistant;
+        self.clipboard = clipboard;
         self.held = None;
         Ok(())
     }
@@ -348,7 +369,7 @@ impl PushToTalk {
         } else if down {
             if let Some(event) = self.match_press(vk, modifiers) {
                 let action = match event {
-                    PttEvent::CaptureSelection | PttEvent::ToggleAssistant => HeldAction::OneShot,
+                    PttEvent::CaptureSelection | PttEvent::ToggleAssistant | PttEvent::OpenClipboard => HeldAction::OneShot,
                     _ => HeldAction::Talk,
                 };
                 self.held = Some((vk, action));
@@ -417,6 +438,13 @@ impl PushToTalk {
             .any(|shortcut| matches_shortcut(shortcut, vk, modifiers))
         {
             return Some(PttEvent::ToggleAssistant);
+        }
+        if self
+            .clipboard
+            .iter()
+            .any(|shortcut| matches_shortcut(shortcut, vk, modifiers))
+        {
+            return Some(PttEvent::OpenClipboard);
         }
         None
     }
@@ -789,5 +817,26 @@ mod tests {
                 vec![Shortcut::parse("RightAlt").unwrap()],
             )
             .is_err());
+    }
+
+    #[test]
+    fn clipboard_hotkey_opens_history_without_starting_dictation() {
+        let mut ptt = PushToTalk::default();
+        ptt.set_clipboard_hotkeys(vec![Shortcut::parse("Ctrl+Shift+V").unwrap()])
+            .unwrap();
+        let ctrl_shift = Modifiers {
+            ctrl: true,
+            shift: true,
+            ..NONE
+        };
+        assert_eq!(
+            ptt.on_key(0x56, true, ctrl_shift).event,
+            Some(PttEvent::OpenClipboard)
+        );
+        assert_eq!(ptt.on_key(0x56, false, NONE), SWALLOW);
+        assert_eq!(
+            ptt.on_key(RIGHT_ALT, true, NONE).event,
+            Some(PttEvent::Press { destination: None })
+        );
     }
 }

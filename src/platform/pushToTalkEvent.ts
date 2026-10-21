@@ -2,7 +2,7 @@ import type { UsageTrigger } from "@/usage/usageEvents";
 import { NOTE_DESTINATION_ID, migrateDestinationId, type TranscriptDestinationId } from "@/voice/transcript/TranscriptDestination";
 
 export interface PushToTalkEvent {
-  event: "press" | "release" | "cancel" | "capture-selection" | "toggle-assistant";
+  event: "press" | "release" | "cancel" | "capture-selection" | "toggle-assistant" | "open-clipboard";
   /** When set, this utterance is delivered here without changing the saved destination. */
   destination?: TranscriptDestinationId;
   /** Set by the platform that emitted the press. The dictation state machine only copies it. */
@@ -30,6 +30,7 @@ export function parsePushToTalk(payload: unknown): PushToTalkEvent | null {
     || payload === "cancel"
     || payload === "capture-selection"
     || payload === "toggle-assistant"
+    || payload === "open-clipboard"
   ) {
     return { event: payload };
   }
@@ -41,6 +42,7 @@ export function parsePushToTalk(payload: unknown): PushToTalkEvent | null {
     && record.event !== "cancel"
     && record.event !== "capture-selection"
     && record.event !== "toggle-assistant"
+    && record.event !== "open-clipboard"
   ) {
     return null;
   }

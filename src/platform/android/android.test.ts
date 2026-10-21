@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parsePushToTalk } from "@/platform/android/AndroidPlatformAdapter";
 import { canStartFloatingMic, parseSetupStatus } from "@/platform/android/androidSetup";
-import { pluginErrorMessage } from "@/platform/android/voicePlatformPlugin";
+import { pluginError, pluginErrorMessage } from "@/platform/android/voicePlatformPlugin";
+import { ClipboardFallbackError } from "@/platform/PlatformAdapter";
 
 describe("Android floating mic events", () => {
   it("accepts the three push-to-talk events and ignores anything else", () => {
@@ -88,5 +89,13 @@ describe("pluginErrorMessage", () => {
       .toBe("Dictation doesn't type into password fields.");
     expect(pluginErrorMessage("Plugin voice-platform not initialized")).toBe("Plugin voice-platform not initialized");
     expect(pluginErrorMessage({})).toBe("The Android platform call failed.");
+  });
+
+  it("keeps a no-field clipboard copy typed so dictation can finish", () => {
+    const fallback = pluginError({ message: "clipboard-fallback:No text field is selected. The text is on your clipboard." });
+    expect(fallback).toBeInstanceOf(ClipboardFallbackError);
+    expect(fallback.message).toBe("No text field is selected. The text is on your clipboard.");
+    const failure = pluginError({ message: "Dictation doesn't type into password fields." });
+    expect(failure).not.toBeInstanceOf(ClipboardFallbackError);
   });
 });

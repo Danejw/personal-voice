@@ -93,6 +93,10 @@ pub fn run() {
             commands::insert_handoff_text,
             commands::show_handoff_alert,
             commands::capture_selection,
+            commands::start_clipboard_watch,
+            commands::stop_clipboard_watch,
+            commands::write_clipboard_text,
+            commands::write_clipboard_image,
             commands::capture_snapshot,
             commands::describe_windows,
             #[cfg(windows)]

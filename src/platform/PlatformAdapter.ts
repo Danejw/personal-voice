@@ -1,3 +1,4 @@
+import type { ClipboardChange } from "@/clipboard/clipboardEntry";
 import type { ContextItem } from "@/context/ContextItem";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 import type { CameraCapture } from "@/platform/camera/CameraCapture";
@@ -17,11 +18,23 @@ export interface HotkeyBindings {
   selection: readonly string[];
   /** Press toggles Assistant. Windows only. Never starts dictation. */
   assistant: readonly string[];
+  /** Press opens clipboard history. Windows only. */
+  clipboard: readonly string[];
 }
 
 /** When false, Settings stays hidden so the previous app keeps focus. */
 export interface CaptureSelectionOptions {
   restoreSettings?: boolean;
+  /**
+   * Leave the captured text on the system clipboard instead of restoring what was there.
+   * Windows does this inside the capture. Other platforms still return the text for the caller to copy.
+   */
+  leaveOnClipboard?: boolean;
+}
+
+/** Starts the OS clipboard listener. The handler is not called for changes Personal Voice just wrote. */
+export interface ClipboardWatchOptions {
+  images: boolean;
 }
 
 /**
@@ -34,6 +47,18 @@ export interface AvailableUpdate {
   notes: string;
   action: "restart" | "download";
   install(): Promise<void>;
+}
+
+/**
+ * The platform could not type into a field because none was focused, so it put the
+ * text on the clipboard instead. Dictation counts that as delivered; callers that
+ * promised an actual insertion can still treat it as a failure.
+ */
+export class ClipboardFallbackError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ClipboardFallbackError";
+  }
 }
 
 /** Matches the `devices.platform` check constraint. */
@@ -55,7 +80,10 @@ export interface PlatformAdapter {
    * One long-lived instance per platform adapter; start/stop release hardware.
    */
   createCamera(): CameraCapture;
-  /** Inserts into whatever field is focused when this is called. Returns that app when it can be named. */
+  /**
+   * Inserts into whatever field is focused when this is called. Returns that app when it can be named.
+   * Throws `ClipboardFallbackError` when no field was focused and the text went to the clipboard.
+   */
   insertText(text: string): Promise<TargetApp | null>;
   /**
    * Best-effort temporary transcript in the currently focused plain-text field.
@@ -69,6 +97,15 @@ export interface PlatformAdapter {
   insertReceivedText(text: string): Promise<TargetApp | null>;
   /** Hides Settings, reads the highlighted text in the previous app, then returns here. */
   captureSelection(options?: CaptureSelectionOptions): Promise<ContextItem>;
+  /**
+   * Watches the OS clipboard for changes. Windows uses a clipboard-format listener, not a poll.
+   * Android resolves a no-op until the platform can observe clipboard changes in the background.
+   */
+  watchClipboard(options: ClipboardWatchOptions, handler: (change: ClipboardChange) => void): Promise<() => void>;
+  /** Puts text on the system clipboard. Does not paste it into the focused app. */
+  writeClipboardText(text: string): Promise<void>;
+  /** Puts a BMP image on the system clipboard. Windows only. */
+  writeClipboardImage(bmpBase64: string): Promise<void>;
   /** One explicit screenshot. Windows prefers the active window. Android uses the screen consent dialog. */
   captureSnapshot(): Promise<unknown>;
   /** Active window and top-level window titles. Windows only. */

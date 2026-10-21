@@ -12,6 +12,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 sealed class InsertResult {
   data class Typed(val appId: String?, val appLabel: String?) : InsertResult()
+  /** No field was focused, so the text went to the clipboard instead of being typed. */
+  data class CopiedToClipboard(val message: String) : InsertResult()
   data class Failed(val message: String) : InsertResult()
 }
 
@@ -160,7 +162,8 @@ class VoiceAccessibilityService : AccessibilityService() {
   private fun insertIntoFocusedField(text: String): InsertResult {
     val node = focusedField()
     if (node == null) {
-      return copyToClipboard(this, text, "No text field is selected. The text is on your clipboard.")
+      setClip(this, text)
+      return InsertResult.CopiedToClipboard("No text field is selected. The text is on your clipboard.")
     }
     if (node.isPassword) return InsertResult.Failed("Dictation doesn't type into password fields.")
     // Native fields take an exact splice. Web and rich editors get a paste, because replacing

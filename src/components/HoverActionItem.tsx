@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Tooltip } from "@/components/Tooltip";
 
 /** Actions the shared hover tray knows how to draw. */
-export type TrayActionKind = "copy" | "edit" | "insert" | "transform" | "archive" | "unarchive" | "delete" | "dismiss" | "attach";
+export type TrayActionKind = "copy" | "edit" | "insert" | "transform" | "archive" | "unarchive" | "pin" | "unpin" | "delete" | "dismiss" | "attach";
 
 export interface TrayAction {
   kind: TrayActionKind;
@@ -56,6 +56,8 @@ function isDanger(kind: TrayActionKind): boolean {
     case "transform":
     case "archive":
     case "unarchive":
+    case "pin":
+    case "unpin":
     case "attach":
       return false;
     default: {
@@ -73,6 +75,8 @@ function labelFor(kind: TrayActionKind): string {
     case "transform": return "Transform";
     case "archive": return "Archive";
     case "unarchive": return "Unarchive";
+    case "pin": return "Pin";
+    case "unpin": return "Unpin";
     case "delete": return "Delete";
     case "dismiss": return "Dismiss";
     case "attach": return "Attach to Assistant";
@@ -123,6 +127,18 @@ function ActionIcon({ kind }: { kind: TrayActionKind }) {
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 10h16v3H4zM6 13v7h12v-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
           <path d="M12 6v7M9 9l3-3 3 3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "pin":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 4h6l1 6.5 2 3H6l2-3L9 4zM12 13.5V21" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "unpin":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 4h6l1 6.5 2 3H6l2-3L9 4zM12 13.5V21M4 4l16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "delete":

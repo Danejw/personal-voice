@@ -114,6 +114,9 @@ export function useDictation(
         case "toggle-assistant":
           // The Assistant shortcut is a separate listener. It must not start dictation.
           return;
+        case "open-clipboard":
+          // Selection history has its own listener. It must not start dictation.
+          return;
         default: {
           const unhandled: never = event.event;
           throw new Error(`Unhandled push-to-talk event: ${String(unhandled)}`);

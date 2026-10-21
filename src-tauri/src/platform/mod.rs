@@ -69,6 +69,7 @@ mod unsupported {
         _handoff: &[String],
         _selection: &[String],
         _assistant: &[String],
+        _clipboard: &[String],
     ) -> Result<(), String> {
         Err(UNSUPPORTED.into())
     }
@@ -82,7 +83,17 @@ mod unsupported {
     pub fn insert_text(_text: &str) -> Result<Option<super::TargetApp>, String> {
         Err(UNSUPPORTED.into())
     }
-    pub fn capture_selection() -> Result<(String, Option<String>), String> {
+    pub fn capture_selection(_leave_on_clipboard: bool) -> Result<(String, Option<String>), String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn start_clipboard_watch(_app: AppHandle, _images: bool) -> Result<u64, String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn stop_clipboard_watch(_generation: u64) {}
+    pub fn write_clipboard_text(_text: &str) -> Result<(), String> {
+        Err(UNSUPPORTED.into())
+    }
+    pub fn write_clipboard_image(_bmp_base64: &str) -> Result<(), String> {
         Err(UNSUPPORTED.into())
     }
     pub fn capture_snapshot() -> Result<super::SnapshotFrame, String> {

@@ -17,12 +17,14 @@ import {
   MAX_BINDINGS_PER_ACTION,
   hotkeysConflict,
   loadAssistantHotkey,
+  loadClipboardHotkey,
   loadHandoffHotkey,
   loadPushToTalk,
   loadPushToTalkLongPress,
   loadSelectionHotkey,
   loadNoteHotkey,
   saveAssistantHotkey,
+  saveClipboardHotkey,
   saveHandoffHotkey,
   savePushToTalk,
   savePushToTalkLongPress,
@@ -34,7 +36,7 @@ interface PushToTalkShortcutPanelProps {
   platform: PlatformAdapter;
 }
 
-type HotkeyAction = "dictate" | "note" | "handoff" | "selection" | "assistant";
+type HotkeyAction = "dictate" | "note" | "handoff" | "selection" | "assistant" | "clipboard";
 type RecordingAction = HotkeyAction | "dictateLongPress";
 
 const INVALID_CHORD = "Use one key or mouse button. Hold Ctrl, Shift, Alt, or Win for a combination.";
@@ -48,12 +50,13 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
   const [handoff, setHandoff] = useState(loadHandoffHotkey);
   const [selection, setSelection] = useState(loadSelectionHotkey);
   const [assistant, setAssistant] = useState(loadAssistantHotkey);
+  const [clipboard, setClipboard] = useState(loadClipboardHotkey);
   const [recording, setRecording] = useState<RecordingAction | null>(null);
   const [arming, setArming] = useState<RecordingAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const longPressShortcuts = dictateLongPress.map((binding) => binding.shortcut);
-  const lists = { dictate, note, handoff, selection, assistant };
-  const conflict = hotkeysConflict(dictate, longPressShortcuts, note, handoff, selection, assistant);
+  const lists = { dictate, note, handoff, selection, assistant, clipboard };
+  const conflict = hotkeysConflict(dictate, longPressShortcuts, note, handoff, selection, assistant, clipboard);
   const captureRequest = useRef(0);
 
   useEffect(() => {
@@ -65,6 +68,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
       handoff,
       selection,
       assistant,
+      clipboard,
     };
     let cancelled = false;
     platform.setHotkeys(bindings).then(
@@ -76,6 +80,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
         saveHandoffHotkey(handoff);
         saveSelectionHotkey(selection);
         saveAssistantHotkey(assistant);
+        saveClipboardHotkey(clipboard);
         setError(null);
       },
       (reason: unknown) => {
@@ -85,7 +90,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
     return () => {
       cancelled = true;
     };
-  }, [platform, dictate, dictateLongPress, note, handoff, selection, assistant, conflict]);
+  }, [platform, dictate, dictateLongPress, note, handoff, selection, assistant, clipboard, conflict]);
 
   useEffect(() => () => {
     captureRequest.current += 1;
@@ -171,6 +176,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
       case "handoff": return handoff;
       case "selection": return selection;
       case "assistant": return assistant;
+      case "clipboard": return clipboard;
       default: {
         const unhandled: never = action;
         throw new Error(`Unhandled hotkey action: ${String(unhandled)}`);
@@ -185,6 +191,7 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
       case "handoff": setHandoff(shortcuts); return;
       case "selection": setSelection(shortcuts); return;
       case "assistant": setAssistant(shortcuts); return;
+      case "clipboard": setClipboard(shortcuts); return;
       default: {
         const unhandled: never = action;
         throw new Error(`Unhandled hotkey action: ${String(unhandled)}`);
@@ -338,6 +345,16 @@ export function PushToTalkShortcutPanel({ platform }: PushToTalkShortcutPanelPro
         onRecord={() => startRecording("selection")}
         onCancel={cancelRecording}
         onRemove={(shortcut) => removeShortcut("selection", shortcut)}
+      />
+      <HotkeyField
+        label="Open selection history"
+        shortcuts={clipboard}
+        listening={recording === "clipboard"}
+        canRemoveLast
+        disabled={arming !== null || clipboard.length >= MAX_BINDINGS_PER_ACTION || (recording !== null && recording !== "clipboard")}
+        onRecord={() => startRecording("clipboard")}
+        onCancel={cancelRecording}
+        onRemove={(shortcut) => removeShortcut("clipboard", shortcut)}
       />
       <HotkeyField
         label="Assistant"

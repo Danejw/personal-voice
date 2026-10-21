@@ -149,6 +149,75 @@ export type Database = {
         }
         Relationships: []
       }
+      clipboard_entries: {
+        Row: {
+          content_hash: string
+          copy_count: number
+          created_at: string
+          deleted_at: string | null
+          id: string
+          image_path: string | null
+          kind: string
+          last_copied_at: string | null
+          pinned: boolean
+          source_app: string | null
+          source_device_id: string | null
+          source_process: string | null
+          text: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content_hash: string
+          copy_count?: number
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          image_path?: string | null
+          kind: string
+          last_copied_at?: string | null
+          pinned?: boolean
+          source_app?: string | null
+          source_device_id?: string | null
+          source_process?: string | null
+          text?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          content_hash?: string
+          copy_count?: number
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          image_path?: string | null
+          kind?: string
+          last_copied_at?: string | null
+          pinned?: boolean
+          source_app?: string | null
+          source_device_id?: string | null
+          source_process?: string | null
+          text?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      clipboard_resets: {
+        Row: {
+          cleared_at: string
+          user_id: string
+        }
+        Insert: {
+          cleared_at?: string
+          user_id?: string
+        }
+        Update: {
+          cleared_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transform_profiles: {
         Row: {
           created_at: string

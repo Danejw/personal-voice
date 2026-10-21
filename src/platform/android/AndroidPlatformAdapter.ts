@@ -1,4 +1,5 @@
 import { getVersion } from "@tauri-apps/api/app";
+import type { ClipboardChange } from "@/clipboard/clipboardEntry";
 import { contextItemFromCapture } from "@/context/ContextItem";
 import type { OverlayAction, OverlaySnapshot } from "@/overlay/overlay";
 import { parseOverlayAction } from "@/overlay/overlay";
@@ -48,7 +49,23 @@ export class AndroidPlatformAdapter implements PlatformAdapter {
   async captureSelection(options?: CaptureSelectionOptions) {
     return contextItemFromCapture(await callPlugin("capture_selection", {
       restoreSettings: options?.restoreSettings ?? true,
+      leaveOnClipboard: options?.leaveOnClipboard ?? false,
     }));
+  }
+
+  /** Android does not observe clipboard changes in the background. History still opens synced items. */
+  watchClipboard(options: { images: boolean }, handler: (change: ClipboardChange) => void) {
+    void options;
+    void handler;
+    return Promise.resolve(() => undefined);
+  }
+
+  writeClipboardText(text: string) {
+    return navigator.clipboard.writeText(text);
+  }
+
+  writeClipboardImage() {
+    return Promise.reject(new Error("Copying an image back to the clipboard is available on Windows."));
   }
 
   captureSnapshot() {

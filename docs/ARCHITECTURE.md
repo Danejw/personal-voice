@@ -210,7 +210,9 @@ selection. Android moves Settings behind the previous app, reads only the focuse
 node's selection range, then brings Settings back. Password fields, hint text, collapsed
 cursors, and non-editable screens are refused; there is no screen scraping. The Settings
 Selection panel previews the last capture and can copy or clear it. Captures live in memory
-only. Report: [PV6](PV-Phases/09-PV6-selection-capture.md).
+only. **Copy selection** leaves that text on the system clipboard. Report: [PV6](PV-Phases/09-PV6-selection-capture.md).
+
+Clipboard history lives on the same Selection page. Capture, account sync, and images are always on, and only the last 20 copies are kept. Windows listens with `AddClipboardFormatListener` and ignores clipboard writes Personal Voice just made, so dictation paste and selection restore are not saved. Image capture prefers the PNG format tools such as Snipping Tool publish, then falls back to DIBV5 or DIB bitmaps, which are re-encoded as PNG before local storage and sync. Copying an image out of history converts it back to a bitmap on the Windows clipboard. The same value as the newest item is not stored again. Older copies of the same value reuse one row. Deletions are tombstones so other devices drop them, and **Clear history** permanently deletes the account history. Choosing an item copies it onto this device only. Android can open synced history and copy text back; it does not watch the clipboard in the background. See [CLIPBOARD.md](CLIPBOARD.md).
 
 Phase 8 added `checkForUpdate()`, which returns an `AvailableUpdate` (`version`, `notes`, `action`, `install()`) or `null`:
 

@@ -70,7 +70,7 @@ function tone(dictation: OverlayDictation, owns: boolean, showError: boolean): B
   }
 }
 
-/** Five small buttons. The Assistant button is its own action; the mic stays dictation. */
+/** The floating controls. The history button opens Selection without starting dictation. */
 export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
   const [held, setHeld] = useState<OverlayHoldDestination | "remote" | null>(null);
   const [draggingTray, setDraggingTray] = useState(false);
@@ -349,6 +349,14 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
       )}
         <button
           type="button"
+          className="overlay-btn"
+          aria-label="Selection history"
+          onClick={() => onAction({ type: "open-clipboard" })}
+        >
+          <ClipboardIcon />
+        </button>
+        <button
+          type="button"
           className="overlay-btn overlay-logo"
           aria-label="Open Personal Voice"
           onPointerDown={(event) => { void onLogoDown(event); }}
@@ -359,6 +367,15 @@ export function OverlayDock({ snapshot, onAction }: OverlayDockProps) {
           <BrandMark />
         </button>
     </div>
+  );
+}
+
+function ClipboardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="7" y="6.5" width="10" height="13" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M9.5 6.5h5V5.2a1.2 1.2 0 0 0-1.2-1.2h-2.6a1.2 1.2 0 0 0-1.2 1.2z" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
   );
 }
 

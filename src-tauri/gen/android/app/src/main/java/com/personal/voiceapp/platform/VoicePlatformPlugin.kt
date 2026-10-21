@@ -3,6 +3,9 @@ package com.personal.voiceapp.platform
 import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -28,6 +31,9 @@ import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+
+/** Marks a rejection whose text was safely copied because no field was focused. */
+const val CLIPBOARD_FALLBACK_PREFIX = "clipboard-fallback:"
 
 @InvokeArg
 class InsertTextArgs {
@@ -60,6 +66,7 @@ class OverlayJsonArgs {
 @InvokeArg
 class CaptureSelectionArgs {
   var restoreSettings: Boolean = true
+  var leaveOnClipboard: Boolean = false
 }
 
 @InvokeArg
@@ -667,6 +674,9 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       }
       when (val result = VoiceAccessibilityService.insert(activity.applicationContext, text)) {
         is InsertResult.Typed -> resolveTarget(invoke, result)
+        // Dictation treats a no-field clipboard copy as a completed delivery. The
+        // prefix lets the web layer tell it apart from a real insertion failure.
+        is InsertResult.CopiedToClipboard -> invoke.reject("$CLIPBOARD_FALLBACK_PREFIX${result.message}")
         is InsertResult.Failed -> invoke.reject(result.message)
       }
     }
@@ -684,6 +694,8 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       main.postDelayed({
         when (val result = VoiceAccessibilityService.insert(activity.applicationContext, text)) {
           is InsertResult.Typed -> resolveTarget(invoke, result)
+          // A handoff was not inserted, so its caller still hears that it landed on the clipboard.
+          is InsertResult.CopiedToClipboard -> invoke.reject(result.message)
           is InsertResult.Failed -> invoke.reject(result.message)
         }
       }, 250)
@@ -693,13 +705,19 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   /** Returns to the previous app, reads its focused selection, then optionally brings Settings back. */
   @Command
   fun captureSelection(invoke: Invoke) {
-    val restore = invoke.parseArgs(CaptureSelectionArgs::class.java).restoreSettings
+    val args = invoke.parseArgs(CaptureSelectionArgs::class.java)
+    val restore = args.restoreSettings
+    val leaveOnClipboard = args.leaveOnClipboard
     main.post {
       fun finish() {
         val result = VoiceAccessibilityService.capture()
         if (restore) bringAppForward()
         when (result) {
           is CaptureResult.Captured -> {
+            if (leaveOnClipboard) {
+              val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+              clipboard.setPrimaryClip(ClipData.newPlainText("Personal Voice", result.text))
+            }
             val payload = JSObject().put("text", result.text)
             result.sourceApp?.let { payload.put("sourceApp", it) }
             invoke.resolve(payload)
