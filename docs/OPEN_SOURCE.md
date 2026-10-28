@@ -1,6 +1,6 @@
 # Open source and independent deployment
 
-Personal Voice is an independent **Windows and Android** voice-dictation and assistant application. It is an alternative to Wispr Flow, but it is not affiliated with Wispr Inc. and does not promise feature parity. macOS and iOS are not currently implemented.
+Personal Voice is an independently developed **open-source replacement for Wispr Flow** on **Windows and Android**. Wispr Inc. is not affiliated with the project. Supported platforms and individual features differ; macOS and iOS apps have not been implemented.
 
 ## What is open source?
 
