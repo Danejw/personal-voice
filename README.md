@@ -5,13 +5,14 @@
 <h1 align="center">Personal Voice</h1>
 
 <p align="center">
-  <strong>Dictate anywhere. Talk to an assistant that can use your devices.</strong><br />
-  One personal Windows + Android app for dictation, saved knowledge, and a Gemini Live assistant.
+  <strong>An open-source alternative to Wispr Flow for Windows and Android.</strong><br />
+  Dictation across your apps, cross-device workflows, and a Gemini Live voice assistant.
 </p>
 
 <p align="center">
   <a href="https://github.com/Danejw/personal-voice/releases/latest">Latest release</a>
   · <a href="#getting-started">Get started</a>
+  · <a href="#open-source-and-self-hosting">Open source</a>
   · <a href="#features">Features</a>
   · <a href="#assistant-and-tool-harness">Assistant harness</a>
   · <a href="#development">Development</a>
@@ -19,6 +20,10 @@
 </p>
 
 ---
+
+Personal Voice is an independent, source-available project designed as an **open-source alternative to [Wispr Flow](https://wisprflow.ai/)** for **Windows and Android**. It combines AI voice dictation with optional cross-device features and a separate voice assistant. It is **not affiliated with, sponsored by, or endorsed by Wispr Inc.**
+
+The source code is licensed under the [MIT License](LICENSE). The software is open source, but **Gemini API usage and hosting are not necessarily free**. Personal Voice currently supports Windows and Android, not macOS or iOS; this is not a claim of one-to-one feature parity with Wispr Flow.
 
 ## What it does
 
@@ -98,6 +103,12 @@ See [Assistant phase reports](docs/Assistant-Phases/), including [tool registry]
 - **Remote actions and desktop controls** require the supported platform, a permitted target and applicable approvals. There is no general-purpose shell tool.
 - **Evaluation capture** is off by default, available in development only, and records tool names/timing/outcome categories rather than text, arguments, audio, screenshots or credentials.
 - Permanent Gemini credentials remain on the secure backend; clients receive short-lived tokens. Never commit API keys or Supabase service-role secrets.
+
+## Open source and self-hosting
+
+This repository includes the application source, Supabase migrations and Edge Functions. **A separate Supabase project and Google Gemini API credentials are required** to operate cloud-backed transcription and Assistant functionality independently. This is not an offline speech-to-text engine.
+
+Published installers use the backend configuration provided by the publisher at build time; **installing a GitHub release is not the same as deploying your own backend**. If you fork or self-host, use your own Supabase and Gemini project, review auth/quota controls, configure Tauri's backend origin allowlist, and build your own app. See [Open-source deployment notes](docs/OPEN_SOURCE.md) and [Contributing](CONTRIBUTING.md).
 
 ## Getting started
 
@@ -186,4 +197,4 @@ Before merging a PR: run `pnpm check` and `pnpm eval:tools`, review **both** Win
 
 ---
 
-This repository is a personal app under active development. GitHub release availability, platform requirements and feature readiness may differ from the current development branch; verify release notes before installing.
+Personal Voice is an independent open-source project under active development. GitHub release availability, platform requirements and feature readiness may differ from the current development branch; verify release notes before installing.
