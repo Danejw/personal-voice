@@ -28,6 +28,10 @@
   <a href="CONTRIBUTING.md">Contribute</a>
 </p>
 
+<p align="center">
+  <img src="docs/assets/hero-illustration.svg" alt="Personal Voice illustrated product hero, with Windows and Android voice dictation interfaces" width="100%" />
+</p>
+
 ---
 
 ## Your voice is personal. Your dictation app should be too.
@@ -39,6 +43,8 @@ I built Personal Voice because I wanted more control over that. It replaced Wisp
 **Your voice. Your words. Your call.**
 
 ## What you can do
+
+![Illustrated feature overview: dictation, cross-device handoff, and voice assistant](docs/assets/feature-illustration.svg)
 
 | | |
 | --- | --- |
