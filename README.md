@@ -5,8 +5,8 @@
 <h1 align="center">Personal Voice</h1>
 
 <p align="center">
-  <strong>An open-source alternative to Wispr Flow for Windows and Android.</strong><br />
-  Dictation across your apps, cross-device workflows, and a Gemini Live voice assistant.
+  <strong>The open-source replacement for Wispr Flow.</strong><br />
+  Dictate across your apps. Keep control of your words. Windows + Android.
 </p>
 
 <p align="center">
@@ -21,9 +21,15 @@
 
 ---
 
-Personal Voice is an independent, source-available project designed as an **open-source alternative to [Wispr Flow](https://wisprflow.ai/)** for **Windows and Android**. It combines AI voice dictation with optional cross-device features and a separate voice assistant. It is **not affiliated with, sponsored by, or endorsed by Wispr Inc.**
+Your voice goes into everything: messages, emails, code, notes, and ideas you haven't even finished thinking through. Over time, those words reveal a lot about you. That's a lot of trust to place in a dictation app.
 
-The source code is licensed under the [MIT License](LICENSE). The software is open source, but **Gemini API usage and hosting are not necessarily free**. Personal Voice currently supports Windows and Android, not macOS or iOS; this is not a claim of one-to-one feature parity with Wispr Flow.
+I built Personal Voice because I wanted to own that part of my workflow. It replaced [Wispr Flow](https://wisprflow.ai/) for me. Now I'm opening up the code.
+
+Dictate across your apps on Windows and Android, send text between devices, and talk to an assistant that can work with your computer. Read the code, set up your own backend, and decide what gets saved.
+
+**Your voice. Your words. Your call.**
+
+Personal Voice is independently developed and has no affiliation with Wispr Inc. The source is offered under the [MIT License](LICENSE). Live voice processing uses Google Gemini, and cloud features require a configured Supabase backend. See the [open-source deployment notes](docs/OPEN_SOURCE.md) for setup and costs.
 
 ## What it does
 
