@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620" role="img" aria-labelledby="title desc">
+<title id="title">Personal Voice. Your voice. Your call.</title>
+<desc id="desc">Illustrated Personal Voice desktop dictation and Android companion, using the application's mint and charcoal theme. This is a product illustration, not a screenshot.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0B1319"/><stop offset=".56" stop-color="#111F27"/><stop offset="1" stop-color="#0A1017"/></linearGradient>
+  <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#182731"/><stop offset="1" stop-color="#10181F"/></linearGradient>
+  <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#C2F8E4"/><stop offset="1" stop-color="#75D5BC"/></linearGradient>
+  <radialGradient id="glow"><stop stop-color="#54D5AF" stop-opacity=".22"/><stop offset="1" stop-color="#54D5AF" stop-opacity="0"/></radialGradient>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#A2DCCA" stroke-opacity=".055"/></pattern>
+  <filter id="shadow" x="-25%" y="-35%" width="160%" height="180%"><feDropShadow dx="0" dy="24" stdDeviation="23" flood-color="#000" flood-opacity=".5"/></filter>
+  <clipPath id="appClip"><rect x="648" y="105" width="550" height="409" rx="20"/></clipPath>
+</defs>
+<rect width="1280" height="620" fill="url(#bg)"/>
+<rect width="1280" height="620" fill="url(#grid)"/>
+<circle cx="885" cy="280" r="470" fill="url(#glow)"/>
+<circle cx="250" cy="660" r="310" fill="url(#glow)" opacity=".45"/>
+<path d="M0 586C250 530 340 660 625 596S1050 540 1280 590" fill="none" stroke="#A1E7D4" stroke-opacity=".1"/>
+<!-- Brand -->
+<circle cx="90" cy="89" r="20" fill="none" stroke="#92E9D0" stroke-width="2.3"/>
+<path d="M80 83v12M90 76v26M100 83v12" stroke="#92E9D0" stroke-width="2.5" stroke-linecap="round"/>
+<text x="127" y="96" font-family="Segoe UI, Arial, sans-serif" font-size="25" font-weight="700" letter-spacing=".3" fill="#F4FAF8">Personal Voice</text>
+<rect x="70" y="155" width="234" height="32" rx="16" fill="#162F2A" stroke="#528D7C" stroke-opacity=".7"/>
+<circle cx="89" cy="171" r="4" fill="#8CE2C7"/>
+<text x="102" y="176" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#C0F1E0" letter-spacing="1.1">OPEN SOURCE · MIT</text>
+<text x="67" y="286" font-family="Segoe UI, Arial, sans-serif" font-size="72" font-weight="750" letter-spacing="-2.6" fill="#F4FAF8">YOUR VOICE.</text>
+<text x="67" y="362" font-family="Segoe UI, Arial, sans-serif" font-size="72" font-weight="750" letter-spacing="-2.6" fill="url(#mint)">YOUR CALL.</text>
+<text x="72" y="432" font-family="Segoe UI, Arial, sans-serif" font-size="23" fill="#D4E4E4">The open-source replacement</text>
+<text x="72" y="467" font-family="Segoe UI, Arial, sans-serif" font-size="23" fill="#D4E4E4">for Wispr Flow.</text>
+<rect x="71" y="515" width="198" height="42" rx="21" fill="#9AE8CE"/>
+<text x="170" y="541" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" text-anchor="middle" fill="#11231F">WINDOWS + ANDROID</text>
+<!-- Desktop product illustration -->
+<rect x="643" y="100" width="561" height="420" rx="24" fill="#061014" opacity=".36" filter="url(#shadow)"/>
+<rect x="648" y="105" width="550" height="409" rx="20" fill="#101922" stroke="#527368" stroke-opacity=".7" stroke-width="1.4"/>
+<g clip-path="url(#appClip)">
+<rect x="648" y="105" width="550" height="47" fill="#1B2A33"/>
+<circle cx="671" cy="128" r="5" fill="#4B6269"/><circle cx="689" cy="128" r="5" fill="#4B6269"/><circle cx="707" cy="128" r="5" fill="#4B6269"/>
+<text x="738" y="134" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="#C3D5D4">Personal Voice</text>
+<rect x="648" y="152" width="168" height="362" fill="#0D151C"/>
+<circle cx="677" cy="185" r="9" fill="none" stroke="#88D8C1" stroke-width="1.5"/>
+<path d="M672 182v6M677 180v10M682 182v6" stroke="#88D8C1" stroke-linecap="round" stroke-width="1.5"/>
+<text x="697" y="190" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#D9E6E3">VOICE</text>
+<rect x="660" y="207" width="144" height="39" rx="9" fill="#173B31"/>
+<rect x="660" y="215" width="3" height="23" rx="1.5" fill="#8DE5CA"/>
+<text x="682" y="233" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#C7F5E5">Dictations</text>
+<text x="682" y="272" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#A7B9BE">Dictionary</text>
+<text x="682" y="307" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#A7B9BE">Notes</text>
+<text x="682" y="342" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#A7B9BE">Assistant</text>
+<text x="682" y="377" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#A7B9BE">Memory</text>
+<text x="839" y="194" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700" fill="#F2F7F6">Dictation</text>
+<rect x="1047" y="172" width="132" height="30" rx="15" fill="#173A30"/>
+<circle cx="1064" cy="187" r="4.2" fill="#9AE8CE"/>
+<text x="1077" y="191" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#BAEBDC">Listening</text>
+<rect x="838" y="218" width="343" height="153" rx="16" fill="url(#panel)" stroke="#344E50"/>
+<text x="858" y="248" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#A0B6BD">LIVE TRANSCRIPTION</text>
+<g stroke="#8DDCC4" stroke-width="5" stroke-linecap="round">
+<path d="M873 289v13M889 279v33M905 286v19M921 264v63M937 278v36M953 252v89M969 274v43M985 286v19M1001 267v57M1017 279v32M1033 257v78M1049 278v34M1065 285v20M1081 271v50M1097 283v27M1113 291v10M1129 281v29M1145 288v16"/>
+</g>
+<rect x="838" y="386" width="343" height="95" rx="13" fill="#192932" stroke="#335450"/>
+<text x="856" y="413" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#92ADAD">RESULT</text>
+<text x="856" y="442" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="600" fill="#ECF8F3">Let's get this shipped this week.</text>
+<circle cx="1146" cy="451" r="15" fill="#88D8C1"/>
+<path d="m1139 451 5 5 9-11" stroke="#0A2720" stroke-width="2.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<!-- mobile product illustration -->
+<rect x="1033" y="323" width="178" height="271" rx="29" fill="#091117" stroke="#88D8C1" stroke-opacity=".65" stroke-width="2" filter="url(#shadow)"/>
+<rect x="1044" y="334" width="156" height="248" rx="20" fill="#111C23"/>
+<rect x="1092" y="343" width="59" height="9" rx="4.5" fill="#0B1015"/>
+<text x="1122" y="378" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#F1F7F5">Personal Voice</text>
+<text x="1122" y="405" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#A6BEBB">Android companion</text>
+<circle cx="1122" cy="474" r="43" fill="#19382F" stroke="#529A85"/>
+<circle cx="1122" cy="474" r="26" fill="#88D8C1"/>
+<rect x="1116" y="459" width="12" height="22" rx="6" fill="#0E2E25"/>
+<path d="M1110 473a12 12 0 0 0 24 0M1122 485v7M1115 492h14" fill="none" stroke="#0E2E25" stroke-width="2.3" stroke-linecap="round"/>
+<text x="1122" y="544" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" fill="#E4F6EF">Hold to dictate</text>
+<text x="1122" y="565" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#96B0AF">Send to your PC</text>
+</svg>

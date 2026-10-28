@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="330" viewBox="0 0 1200 330" role="img" aria-labelledby="flowtitle flowdesc">
+<title id="flowtitle">One voice. Across your workflow.</title>
+<desc id="flowdesc">Product concept diagram showing dictation, cross-device handoff, and voice assistant features.</desc>
+<defs>
+  <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0B141B"/><stop offset="1" stop-color="#182C30"/></linearGradient>
+  <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#1A3034"/><stop offset="1" stop-color="#101C24"/></linearGradient>
+</defs>
+<rect width="1200" height="330" rx="24" fill="url(#bg2)"/>
+<text x="42" y="48" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#9BDEC9" letter-spacing="2.3">BUILT FOR THE WAY YOU WORK</text>
+<!-- card one -->
+<rect x="40" y="75" width="347" height="216" rx="20" fill="url(#card)" stroke="#42675F"/>
+<circle cx="85" cy="126" r="23" fill="#24483D"/>
+<path d="M76 122v8M85 115v22M94 122v8" stroke="#A1F1D6" stroke-width="3.5" stroke-linecap="round"/>
+<text x="125" y="124" font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="22" fill="#F0FAF6">Dictate anywhere</text>
+<text x="62" y="186" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#C0D3D1">Press. Speak. Your words appear</text>
+<text x="62" y="211" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#C0D3D1">in the app you're using.</text>
+<rect x="62" y="239" width="143" height="30" rx="15" fill="#214337"/>
+<text x="134" y="258" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="700" fill="#BBF3E0">WINDOWS + ANDROID</text>
+<!-- card two -->
+<rect x="427" y="75" width="347" height="216" rx="20" fill="url(#card)" stroke="#42675F"/>
+<rect x="450" y="108" width="27" height="28" rx="6" fill="none" stroke="#A1F1D6" stroke-width="2.5"/>
+<rect x="484" y="113" width="37" height="24" rx="4" fill="none" stroke="#A1F1D6" stroke-width="2.5"/>
+<path d="M458 123h13M491 142h23" stroke="#A1F1D6" stroke-width="2"/>
+<text x="535" y="124" font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="22" fill="#F0FAF6">Across devices</text>
+<text x="449" y="186" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#C0D3D1">Speak on your phone. Send the text</text>
+<text x="449" y="211" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#C0D3D1">to your computer's cursor.</text>
+<rect x="449" y="239" width="154" height="30" rx="15" fill="#214337"/>
+<text x="526" y="258" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="700" fill="#BBF3E0">REMOTE DICTATION</text>
+<!-- card three -->
+<rect x="814" y="75" width="347" height="216" rx="20" fill="url(#card)" stroke="#42675F"/>
+<circle cx="855" cy="126" r="24" fill="#24483D"/>
+<path d="M842 127q13-23 26 0t-26 0" fill="none" stroke="#A1F1D6" stroke-width="2.5" stroke-linecap="round"/>
+<text x="896" y="124" font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="22" fill="#F0FAF6">Voice assistant</text>
+<text x="836" y="186" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#C0D3D1">Talk through ideas. Use your notes.</text>
+<text x="836" y="211" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#C0D3D1">Approve actions on your devices.</text>
+<rect x="836" y="239" width="144" height="30" rx="15" fill="#214337"/>
+<text x="908" y="258" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="700" fill="#BBF3E0">GEMINI LIVE</text>
+</svg>

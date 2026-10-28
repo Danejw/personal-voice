@@ -1,189 +1,110 @@
 <p align="center">
-  <img src="src-tauri/icons/icon.svg" alt="Personal Voice icon" width="80" height="80" />
+  <img src="src-tauri/icons/icon.svg" alt="Personal Voice logo" width="96" />
 </p>
 
 <h1 align="center">Personal Voice</h1>
 
 <p align="center">
-  <strong>Dictate anywhere. Talk to an assistant that can use your devices.</strong><br />
-  One personal Windows + Android app for dictation, saved knowledge, and a Gemini Live assistant.
+  <strong>The open-source replacement for Wispr Flow.</strong><br />
+  Dictate anywhere. Own your workflow. Windows + Android.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Danejw/personal-voice/releases/latest">Latest release</a>
-  · <a href="#getting-started">Get started</a>
-  · <a href="#features">Features</a>
-  · <a href="#assistant-and-tool-harness">Assistant harness</a>
-  · <a href="#development">Development</a>
-  · <a href="#documentation">Documentation</a>
+  <a href="https://github.com/Danejw/personal-voice/releases/latest"><img src="https://img.shields.io/github/v/release/Danejw/personal-voice?style=flat-square&label=release" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license" /></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Android-555?style=flat-square" alt="Windows and Android" />
+  <a href="https://github.com/Danejw/personal-voice/actions/workflows/validate.yml"><img src="https://github.com/Danejw/personal-voice/actions/workflows/validate.yml/badge.svg" alt="Validation status" /></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Danejw/personal-voice/releases/latest"><strong>Download Personal Voice</strong></a>
+  &nbsp;&middot;&nbsp;
+  <a href="#what-you-can-do">Features</a>
+  &nbsp;&middot;&nbsp;
+  <a href="#your-data-your-decision">Privacy</a>
+  &nbsp;&middot;&nbsp;
+  <a href="docs/OPEN_SOURCE.md">Self-hosting</a>
+  &nbsp;&middot;&nbsp;
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/hero-illustration.svg" alt="Personal Voice illustrated product hero, with Windows and Android voice dictation interfaces" width="100%" />
 </p>
 
 ---
 
-## What it does
+## Your voice is personal. Your dictation app should be too.
 
-Personal Voice has two connected but independent experiences:
+Emails. Messages. Code. Notes. Half-formed ideas. When you start talking to every app, your dictation tool gets a front-row seat to your life.
 
-- **Dictation:** hold your chosen hotkey or floating microphone, speak, and release. Gemini finalizes the speech with punctuation and cleanup; Personal Voice inserts the result at the cursor or sends it to your chosen destination.
-- **Assistant:** start a real-time **Gemini 3.8 Live** voice conversation or send typed messages. The Assistant can draw on explicitly available account context and use bounded tools to inspect information, manage notes and memories, and carry out supported device actions.
+I built Personal Voice because I wanted more control over that. It replaced Wispr Flow in my own workflow. Now the code is open so you can make it yours.
 
-Both run from the same **Tauri 2** application, with shared TypeScript logic and platform-specific Windows/Android implementations. Dictation uses **Gemini 3.5 Transcribe Live**; Assistant uses a separate **Gemini 3.8 Live** session. They do not record microphone audio into a persistent transcript warehouse.
+**Your voice. Your words. Your call.**
 
-### Basic controls
+## What you can do
 
-| Platform | Dictation | Assistant |
-| --- | --- | --- |
-| **Windows** | Configurable global shortcut or floating control; release to insert or route the final text | Assistant page, typed messages or live microphone conversation; optional desktop inspection and approved controls |
-| **Android** | Floating microphone and supported native input integration; hold-to-talk destinations | Assistant page with voice/typed conversation, notes, camera context, and supported account/cross-device tools |
+![Illustrated feature overview: dictation, cross-device handoff, and voice assistant](docs/assets/feature-illustration.svg)
 
-Sign in and complete the device-permission onboarding before using microphone, overlay, or platform-dependent features. Windows-only accessibility and window tools do **not** run locally on Android.
-
-## Features
-
-| Area | What is available |
+| | |
 | --- | --- |
-| **Dictation** | Hold-to-talk, Gemini transcript cleanup, selectable destinations, per-device keybindings/controls, voice start/stop sounds, microphone selection where supported |
-| **Destinations** | Focused text field, saved Notes, and **Remote Dictation** to another selected device's focused cursor |
-| **Dictionary, Snippets & Transforms** | Personal vocabulary; deterministic snippet expansion with multiple voice triggers and `@snippet` references; built-in and custom text transforms |
-| **Selection & clipboard** | Capture selected text, or copy it straight to the clipboard. Clipboard history keeps the last 20 copies of text, links, and images and syncs them to the account. Copying an item puts it on this device only |
-| **Notes & Handoffs** | Saved, editable Notes with private file attachments; the Assistant can attach an authorized screenshot, camera photo, or user-selected file (PDF, image, document, audio or video) to a new or existing note after confirmation; handoffs and continuation across devices |
-| **Assistant conversation** | Continuous saved threads with individually dated session IDs, reversible archive/restore, complete paginated historical-message tools, typed/voice turns and Google Search grounding |
-| **Visual awareness** | Explicit screen snapshots, selected text, cursor/pointer inspection on Windows, accessibility-tree inspection, camera photos, and user-requested ongoing Camera Context |
-| **Device actions** | Allowlisted Windows application/window/UI Automation actions; bounded supervised screen workflows; supported remote Windows reads/actions with existing approval controls |
-| **Memory** | Explicit remember/edit/forget, memory learning, semantic retrieval, source indexing and a **Memory** page showing a read-only network of memories and connections |
-| **Insights & Analytics** | Analytics now offers **Dictation / Assistant** views: measured Assistant sessions, finalized turns, bounded active time, daily activity, voice/typed use and device totals. The separate Insights page still analyzes dictation patterns and offers reviewable suggestions. The **Tools & Reliability** tab now measures tool attempts, outcome classifications, failure reasons and latency. **Insights → Your Assistant** now provides a persistent, evidence-based communication-style profile and practical messaging tips, with the same usage charts as Your Voice for measured peak days/times, device share, input modes and tool categories. Dictation and Assistant suggestions appear together under **Suggestions**. Personal Playbooks remain account-owned **non-executable drafts**, separate from system playbooks. |
-| **Devices & Settings** | Signed-in device management, local controls, sync preferences, Assistant auto-run/review controls, and app updates |
-| **Destructive-action confirmations** | One branded confirmation dialog before deleting dictionary terms, notes and attachments, snippets, transforms, saved conversations and memories, or dismissing handoffs and suggestions; also protects device removal, activity-history clearing, and Insights compaction |
+| **Dictate into your apps** | Hold a shortcut, speak, and put the finished text where your cursor is. Use a floating mic on Windows or Android. |
+| **Talk on one device, type on another** | Send dictation from your phone to your computer, or between your signed-in devices. |
+| **Make it sound like you** | Save words in your dictionary, expand snippets, and apply text transforms. |
+| **Keep your notes close** | Save notes, attach files, capture selections, and pick up where you left off. |
+| **Use a real voice assistant** | Have a live Gemini conversation. With your permission, the assistant can use notes, memory, screen context, and supported device controls. |
+| **See your own patterns** | Review dictation activity, assistant usage, insights, and connected devices. |
 
-Some features require an authenticated account, a synced device, Windows OS APIs, user permission, or separately configured backend services. A declared Assistant tool is not a promise that the capability is available on every device.
+Personal Voice runs on **Windows and Android**. The two share account features, while some screen and computer controls are Windows-specific.
 
-### Navigation
+## Get Personal Voice
 
-The app sidebar contains **Voice** (Dictations, Dictionary, Selection, Notes, Handoffs, Snippets, Transforms), **Assistant**, **Memory**, **Insights**, **Analytics**, **Devices & Controls**, and **Settings**. On Android and narrow windows this appears as a menu drawer.
+Download the latest release for your device:
 
-The **Assistant** page opens on the Conversation view, with a searchable left thread rail on desktop and a collapsible history drawer on narrow screens. Select a saved thread and press **Continue conversation** to resume it. **New conversation** starts an independent thread. Each Live activation creates a separately identifiable session inside that thread; use the compact **Sessions** menu to copy a session ID. **Archive** hides an old thread without deleting its messages, while **View archived** allows restoration. Permanent deletion is only available through an explicit confirmation in archived history. **Settings** contains memory learning, semantic search, notes/dictation recall and saved-memory management; **Advanced tools** contains optional screen, camera and accessibility controls. When a session is idle, the composer is disabled until you start/continue it.
+| Windows | Android |
+| :--- | :--- |
+| [**Download Windows installer**](https://github.com/Danejw/personal-voice/releases/latest) | [**Download Android APK**](https://github.com/Danejw/personal-voice/releases/latest) |
+| Windows installer and in-app updates | APK installation and release updates |
 
-## Assistant and tool harness
+Install the app, sign in, grant the microphone and device permissions you want to use, and set your preferred dictation shortcut or floating microphone.
 
-The Assistant is not an unrestricted computer agent. It uses a defined set of Gemini Live function declarations, typed validation, existing confirmation settings, and real platform executors. For complex tasks, the harness supplies guidance about which supported tool to use and how to interpret its result.
+**Before you install:** Published builds connect to the project's configured cloud backend. They use Google Gemini for live voice processing and require a signed-in account. Review [how your data is handled](#your-data-your-decision) and the [release notes](https://github.com/Danejw/personal-voice/releases/latest).
 
-| Layer | Implementation | Responsibility |
-| --- | --- | --- |
-| Live tools | [`src/assistant/tools.ts`](src/assistant/tools.ts) | Function declarations, schemas, argument validation and routing |
-| Execution | [`AssistantController.ts`](src/assistant/AssistantController.ts) | Tool queue, confirmation/auto-run rules, dispatch and function responses |
-| Tool intelligence | [`toolIntelligence.ts`](src/assistant/harness/toolIntelligence.ts) | Intent, platform, alternatives, next steps and verification hints |
-| On-demand playbooks | [`playbooks/`](src/assistant/harness/playbooks/) | Seven reference workflows for screen, Windows, notes, memory, cross-device, content and camera tasks |
-| Context guidance | [`contextAssembler.ts`](src/assistant/harness/contextAssembler.ts) | Trusted Windows/Android capability notes and brief guidance for complex typed requests |
-| Result interpretation | [`toolResults.ts`](src/assistant/harness/toolResults.ts) | Separate observed information, action acknowledgements, incomplete tasks, errors and bounded recovery guidance |
-| Evaluation | [`evals/`](src/assistant/harness/evals/) | Tool-route fixtures, catalog drift checks, offline regressions, optional sanitized live traces and independent goal scoring |
+## Your data. Your decision.
 
-**At the PR #26 baseline:** the catalog contains **54 declared tools** and **81 evaluation scenarios** (54 tool-specific, 20 disambiguation, seven no-tool). These numbers change when tools are added or retired; the source code, not this snapshot, is authoritative.
+A dictation app can see the words you send into almost everything you use. You should know where that data goes.
 
-Important boundaries:
+- **Live audio:** Sent directly to Google Gemini while a voice session is active. Personal Voice does not operate its own audio-recording warehouse.
+- **Dictation history:** Uploading recent dictation text is a separate opt-in setting. Saved notes and assistant conversations can sync with your account.
+- **Your own deployment:** The app, Supabase migrations, and Edge Functions are in this repository. You can use a backend you control and configure your own Gemini credentials.
 
-- A tool reporting success does **not** by itself prove that the requested goal was reached. The harness distinguishes an acknowledgement from an observed end state.
-- Playbooks load **on demand**, not before every simple command. No extra planner/model call is required by the harness.
-- Context guidance uses known platform/device information; it does not assume a registered remote device is online. Spoken requests use device capability context; short deterministic Notes guidance also recognizes relevant spoken attachment requests.
-- Tool selection does **not** expand permissions. User confirmation, auto-run preferences, platform capability checks and action allowlists still apply.
-- Evaluations are offline by default. Scripted/mock passing scores measure regression mechanics, **not actual Gemini success rates**. Real model evaluation requires opt-in trace capture and independent observation.
+**A clear boundary:** Personal Voice currently uses cloud-based Gemini models. It is not an offline transcription app. Running your own backend gives you control over the application storage and infrastructure, but live audio still goes to Google for processing. API usage and hosting may cost money.
 
-See [Assistant phase reports](docs/Assistant-Phases/), including [tool registry](docs/Assistant-Phases/16-tool-intelligence-harness.md), [playbooks](docs/Assistant-Phases/17-tool-playbooks.md), [result intelligence](docs/Assistant-Phases/18-tool-result-intelligence.md), [context routing](docs/Assistant-Phases/19-context-aware-tool-guidance.md), and [evaluation framework](docs/Assistant-Phases/20-tool-use-evaluation-framework.md).
+Read the [privacy and architecture details](docs/DEVELOPER_GUIDE.md#privacy-and-safety) or the [independent deployment guide](docs/OPEN_SOURCE.md).
 
-## Privacy and safety
+## Open source, built to be yours
 
-- **Microphone audio** connects directly from the device to Gemini for the active session; Personal Voice does not proxy or permanently store it.
-- **Camera Context** is user-initiated, uses device permissions and streams frames to Gemini Live without persisting them. An explicitly captured still or screenshot may be saved in the private `note-attachments` bucket only when the user requests it and confirms the Assistant's note action; existing Notes attachment limits and account permissions apply. The Assistant can use an explicitly user-selected local file in its file selector, but cannot browse arbitrary file paths. See [Camera Context](docs/Camera-Context-Phases/README.md).
-- **Cloud storage is selective:** saved account content such as Notes, Handoffs, conversations and explicit memories may sync. Recent dictation **text** sync remains an independent opt-in setting. For newly created accounts, the four Assistant memory/recall settings default on: learning from newly saved Assistant user messages, semantic search, saved notes retrieval and synced dictation retrieval. Existing account settings, including prior opt-outs, are not overwritten. Turning on dictation retrieval alone never uploads local-only dictations.
-- **Insights/analytics:** with Usage Intelligence enabled, Assistant Analytics captures metadata-only events (no prompts, transcriptions, tool arguments or screenshots) under an owner-scoped, epoch-protected Supabase table. Clearing Analytics deletes dictation, Assistant session, and tool-metadata events after both Phase A and Phase B migrations. Inspect and control what context is shared with Assistant in Settings. Assistant semantic Insights separately requires explicit per-run consent; at most 80 recent saved user-message excerpts are sent to the configured Gemini function, never in the background.
-- **Remote actions and desktop controls** require the supported platform, a permitted target and applicable approvals. There is no general-purpose shell tool.
-- **Evaluation capture** is off by default, available in development only, and records tool names/timing/outcome categories rather than text, arguments, audio, screenshots or credentials.
-- Permanent Gemini credentials remain on the secure backend; clients receive short-lived tokens. Never commit API keys or Supabase service-role secrets.
+Personal Voice is built with **Tauri 2, Rust, React, TypeScript, and Android Kotlin**, with **Supabase** for account-backed features and **Google Gemini Live** for dictation and assistant sessions.
 
-## Getting started
+Want to run your own version, work on a feature, or understand the internals?
 
-### Install a release
-
-See the [latest GitHub release](https://github.com/Danejw/personal-voice/releases/latest) for Windows installers and Android APKs. Windows uses the built-in signed updater after installation; Android updates are installed from the published APK. Release versions are defined in [`package.json`](package.json) and must agree with the Rust crate version—do not rely on a version number hard-coded in this README.
-
-Full installation, signing, updater and release procedures: [`docs/RELEASING.md`](docs/RELEASING.md).
-
-### Development — Windows
-
-**Prerequisites:** Node.js **22.12+**, **pnpm 11.25.0**, Rust toolchain, MSVC Build Tools and WebView2. See [Windows setup](docs/WINDOWS.md) and the pinned toolchain/config files for native requirements.
-
-```powershell
-# Copy .env.example to .env.local and enter only your public Supabase client settings.
-pnpm install --frozen-lockfile
-pnpm tauri dev
-```
-
-`pnpm dev` runs the Vite frontend **without** the native Tauri shell; use `pnpm tauri dev` when testing actual microphone, overlay, window and OS integration.
-
-Client `.env.local` values:
-
-```dotenv
-VITE_SUPABASE_URL=https://<project-ref>.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-```
-
-A configured Supabase project and its expected functions/migrations are required for login, tokens and cloud-backed features. Session tracking and reversible conversation archiving require the additive migration `20261009160000_assistant_session_archive.sql` before running a client built from this branch. That migration does **not** clean up old records or invent session boundaries for messages saved before session tracking. The Assistant can retrieve complete message text using `read_past_conversation` with `count` and `after_seq`; use `list_conversation_sessions` for session IDs and time ranges. The local recovery cache remains deliberately bounded and is not a replacement for the account's Supabase archive. Do **not** put permanent Gemini keys or a Supabase service-role key in client variables.
-
-### Development — Android
-
-Requires Android Studio, Java/Android SDK, appropriate NDK, a configured emulator or device, and the Rust Android target. Detailed environment setup is in [`docs/ANDROID.md`](docs/ANDROID.md).
-
-```powershell
-rustup target add aarch64-linux-android
-pnpm tauri android dev
-# Or make a local debug APK:
-pnpm tauri android build --debug --apk --target aarch64
-```
-
-For Android native builds from Windows, use a **filesystem with symlink support** (such as an NTFS checkout). An exFAT checkout can fail at Tauri's native-library symlink stage. Release builds are normally produced by GitHub Actions.
-
-## Development and quality
-
-### Checks
-
-```powershell
-pnpm check        # ESLint + TypeScript + Vitest
-pnpm eval:tools   # Offline Assistant tool-use and catalog-drift regression tests
-pnpm build        # Frontend typecheck + production Vite bundle
-cargo check --locked --manifest-path src-tauri/Cargo.toml
-cargo test --locked --manifest-path src-tauri/Cargo.toml
-```
-
-The GitHub **Validate** workflow runs Windows TypeScript/tests, the offline harness suite and Rust checks/tests, as well as an Android debug APK build and native tests. A green scripted eval does not substitute for actual on-device behavior or independently verified Assistant task completion.
-
-For optional *real* Assistant evaluation, see [`docs/Assistant-Phases/20-tool-use-evaluation-framework.md`](docs/Assistant-Phases/20-tool-use-evaluation-framework.md). It describes the development-only `window.__pvToolEval` interface, sanitized JSON import, modality/platform breakdowns and explicit observed-goal checks. No real model calls or credits are used by the offline CI suite.
-
-### Contributing and keeping tool guidance current
-
-**Read the agent instructions before editing:**
-
-- [Root `AGENTS.md`](AGENTS.md) — repository boundaries, feature architecture, security, PR acceptance and manual QA.
-- [`src/assistant/harness/AGENTS.md`](src/assistant/harness/AGENTS.md) — mandatory **same-PR tool lifecycle checklist** for adding, changing, renaming or retiring any Assistant tool.
-- [`docs/SPEC.md`](docs/SPEC.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — product and architecture references; when a historical document conflicts, verify the live implementation.
-
-Every Assistant tool change must consider the **Live declaration → typed validation → platform executor/permissions → intelligence profile → playbooks/context → result interpretation → evaluation fixtures/tests** chain. The automated drift guard checks that tool declarations, router cases, intelligence profiles and base scenarios stay aligned. It cannot detect all semantic or platform regressions, so update targeted tests and manually verify real behavior.
-
-Before merging a PR: run `pnpm check` and `pnpm eval:tools`, review **both** Windows and Android CI results, and provide a brief manual test procedure with expected outcomes.
-
-## Documentation
-
-| Topic | Reference |
+| Resource | Start here |
 | --- | --- |
-| Product specification and architecture | [SPEC](docs/SPEC.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) |
-| Dictation and personal-voice features | [PV phase reports](docs/PV-Phases/README.md) |
-| Assistant and the tool harness | [Assistant phase reports](docs/Assistant-Phases/) · [Tool evals](docs/Assistant-Phases/20-tool-use-evaluation-framework.md) · [Assistant Analytics Phase A](docs/Assistant-Phases/21-assistant-usage-analytics.md) · [Tool Reliability Phase B](docs/Assistant-Phases/22-assistant-tool-reliability.md) · [Assistant Insights Phase C](docs/Assistant-Phases/23-assistant-insights-and-playbook-drafts.md) |
-| Cross-device insertion | [Remote Dictation](docs/Remote-Dictation-Phases/README.md) |
-| Camera context | [Camera Context](docs/Camera-Context-Phases/README.md) |
-| Windows/Android platform notes | [WINDOWS](docs/WINDOWS.md) · [ANDROID](docs/ANDROID.md) |
-| Notes schema, file attachments, Assistant tools and Note hotkey | [Notes](docs/NOTES.md) · [Backend & Sync](docs/BACKEND_SYNC.md) |
-| Handoffs, authentication and syncing | [Backend & Sync](docs/BACKEND_SYNC.md) |
-| Snippet expansion | [SNIPPETS](docs/SNIPPETS.md) |
-| Tests, installers and app updates | [TESTING_RELEASES](docs/TESTING_RELEASES.md) · [RELEASING](docs/RELEASING.md) |
+| Run your own backend | [Open-source setup and deployment](docs/OPEN_SOURCE.md) |
+| Explore the implementation | [Technical guide](docs/DEVELOPER_GUIDE.md) and [architecture](docs/ARCHITECTURE.md) |
+| Build on Windows or Android | [Windows guide](docs/WINDOWS.md) and [Android guide](docs/ANDROID.md) |
+| Learn about the assistant tools | [Assistant implementation](docs/Assistant-Phases/README.md) |
+| Ship a release | [Release guide](docs/RELEASING.md) |
+| Make a contribution | [Contributing guide](CONTRIBUTING.md) |
 
----
+The full documentation covers the tool harness, permissions, testing, migrations, and platform-specific behavior. Start with the [technical guide](docs/DEVELOPER_GUIDE.md) for the detailed feature breakdown and development commands.
 
-This repository is a personal app under active development. GitHub release availability, platform requirements and feature readiness may differ from the current development branch; verify release notes before installing.
+## Contributing
+
+Bug reports, ideas, and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes, especially to the assistant's tool and permission system.
+
+## License
+
+Personal Voice is licensed under the [MIT License](LICENSE). Third-party dependencies retain their own licenses.
+
+Personal Voice is an independent project and is not affiliated with or endorsed by Wispr Inc. **Wispr Flow** is referenced only to explain the product it replaced for its creator.
