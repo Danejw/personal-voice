@@ -1,6 +1,7 @@
 {
   "name": "personal-voice-app",
   "private": true,
+  "description": "Personal Voice for Windows and Android",
   "version": "0.3.27",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
