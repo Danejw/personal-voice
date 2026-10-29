@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+afterEach(() => vi.useRealTimers());
 import { localDayKey } from "@/usage/analytics";
 import { emptyCounters } from "@/usage/usageEvents";
 import { UsageStore } from "@/usage/UsageStore";
@@ -126,6 +128,39 @@ describe("UsageStore", () => {
     await first;
     await store.flushNow();
     expect(sent).toEqual([1, 2]);
+  });
+
+  it("never retries a quota failure, even after later usage events", async () => {
+    vi.useFakeTimers();
+    const upsertDay = vi.fn().mockRejectedValue(new Error("Supabase quota exceeded (HTTP 402)."));
+    const api: UsageApi = { upsertDay, clear: async () => 1, fetchDays: async () => [] };
+    const store = new UsageStore(memoryStorage(), "windows", () => new Date("2026-09-28T15:00:00"), api, 250);
+    store.beginBootstrap(0, "dev");
+    store.adoptRemote([]);
+    store.record({ name: "selection_captured" });
+    await store.flushNow();
+    expect(upsertDay).toHaveBeenCalledTimes(1);
+    store.record({ name: "selection_captured" });
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(upsertDay).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot().days[0]?.dirty).toBe(true);
+  });
+
+  it("backs off on transient failures, then synchronizes the latest revision", async () => {
+    vi.useFakeTimers();
+    const upsertDay = vi.fn().mockRejectedValueOnce(new Error("network failed")).mockResolvedValue(undefined);
+    const api: UsageApi = { upsertDay, clear: async () => 1, fetchDays: async () => [] };
+    const store = new UsageStore(memoryStorage(), "windows", () => new Date("2026-09-28T15:00:00"), api, 250);
+    store.beginBootstrap(0, "dev");
+    store.adoptRemote([]);
+    store.record({ name: "selection_captured" });
+    await store.flushNow();
+    expect(upsertDay).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(upsertDay).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(upsertDay).toHaveBeenCalledTimes(2);
+    expect(store.getSnapshot().days[0]?.dirty).toBe(false);
   });
 
   it("prunes clean days beyond the newest 90 and keeps a dirty day", () => {

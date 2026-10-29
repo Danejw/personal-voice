@@ -54,6 +54,9 @@ export class UsageStore {
   private inflight = new Set<string>();
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
   private generation = 0;
+  private quotaBlocked = false;
+  private failures = new Map<string, number>();
+  private retryAfter = new Map<string, number>();
   /** Stable for `useSyncExternalStore` until the next `publish`. */
   private cached: UsageSnapshot | null = null;
 
@@ -152,6 +155,8 @@ export class UsageStore {
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     this.inflight.clear();
+    this.failures.clear();
+    this.retryAfter.clear();
     let epoch = this.epoch + 1;
     if (this.api) epoch = await this.api.clear();
     if (generation !== this.generation) return;
@@ -192,6 +197,8 @@ export class UsageStore {
 
   private applyEpoch(epoch: number): void {
     this.generation += 1;
+    this.failures.clear();
+    this.retryAfter.clear();
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
     if (epoch !== this.epoch) {
@@ -204,18 +211,19 @@ export class UsageStore {
   }
 
   private schedule(day: string): void {
-    if (!this.api || !this.deviceId) return;
+    if (!this.api || !this.deviceId || this.quotaBlocked) return;
     const timer = this.timers.get(day);
     if (timer) clearTimeout(timer);
     this.timers.set(day, setTimeout(() => {
       this.timers.delete(day);
       void this.pump(day);
-    }, this.debounceMs));
+    }, Math.max(this.debounceMs, (this.retryAfter.get(day) ?? 0) - Date.now())));
   }
 
   private async pump(day: string): Promise<void> {
-    if (!this.api || !this.deviceId) return;
+    if (!this.api || !this.deviceId || this.quotaBlocked) return;
     if (this.inflight.has(day)) return;
+    if (Date.now() < (this.retryAfter.get(day) ?? 0)) return;
     const snapshot = this.days.get(day);
     if (!snapshot?.dirty || snapshot.epoch !== this.epoch) return;
     const generation = this.generation;
@@ -231,6 +239,8 @@ export class UsageStore {
         counters: snapshot.counters,
       });
       if (generation !== this.generation) return;
+      this.failures.delete(day);
+      this.retryAfter.delete(day);
       const current = this.days.get(day);
       if (current && current.revision === revision) {
         current.dirty = false;
@@ -238,15 +248,24 @@ export class UsageStore {
         this.persist();
         this.publish();
       }
-    } catch {
+    } catch (error) {
       if (generation === this.generation) {
         this.error = "Usage totals could not be saved on this device.";
+        if (error instanceof Error && /quota exceeded|exceed_egress_quota|HTTP 402/i.test(error.message)) {
+          // A quota restriction cannot be fixed by retrying. Keep the local day dirty.
+          this.quotaBlocked = true;
+        } else {
+          const failures = Math.min((this.failures.get(day) ?? 0) + 1, 8);
+          this.failures.set(day, failures);
+          // Cap exponential backoff at five minutes, with no immediate recursive retry.
+          this.retryAfter.set(day, Date.now() + Math.min(5_000 * 2 ** (failures - 1), 300_000));
+        }
         this.publish();
       }
     } finally {
       this.inflight.delete(day);
       const current = this.days.get(day);
-      if (generation === this.generation && current?.dirty) void this.pump(day);
+      if (generation === this.generation && current?.dirty && !this.quotaBlocked) this.schedule(day);
     }
   }
 

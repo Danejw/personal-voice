@@ -56,6 +56,9 @@ export const usageApi: UsageApi = {
       p_revision: day.revision,
       p_updated_at: day.updatedAt,
     });
+    if (error && /exceed_egress_quota|quota|spend cap|402/i.test(`${error.code} ${error.message}`)) {
+      throw new Error("Supabase quota exceeded (HTTP 402).");
+    }
     check(error);
   },
 
