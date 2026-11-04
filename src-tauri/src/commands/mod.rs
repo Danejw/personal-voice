@@ -34,6 +34,12 @@ pub fn pairing_sign(device_id: String, message: String) -> Result<String, String
 
 #[cfg(windows)]
 #[tauri::command]
+pub fn companion_pointer_sample() -> Result<platform::CompanionPointerSample, String> {
+    platform::companion_pointer_sample()
+}
+
+#[cfg(windows)]
+#[tauri::command]
 pub fn pointer_position() -> Result<platform::PointerPosition, String> {
     platform::pointer_position()
 }
