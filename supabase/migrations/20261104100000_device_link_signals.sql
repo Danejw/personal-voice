@@ -53,3 +53,6 @@ revoke all on function public.device_link_send_signal(uuid,uuid,uuid,uuid,text)
 from public, anon, authenticated;
 grant execute on function public.device_link_send_signal(uuid,uuid,uuid,uuid,text)
 to service_role;
+
+-- Realtime sends only a wake hint; the receiver reads the authoritative request.
+alter publication supabase_realtime add table public.device_link_signals;
