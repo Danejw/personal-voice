@@ -227,7 +227,7 @@ fn handle_client(id: u64, mut stream: TcpStream, registry: Arc<Mutex<ClientRegis
                         guard.hellos.insert(id, (target.to_string(), text.to_string()));
                     }
                     recipients = guard.names.iter().filter(|(other, name)| {
-                        **other != id && name == target
+                        **other != id && name.as_str() == target
                           && guard.hellos.get(other).is_some_and(|(wanted, _)| wanted == from)
                     }).filter_map(|(other, _)| guard.clients.get(other).cloned()).collect();
                 }
