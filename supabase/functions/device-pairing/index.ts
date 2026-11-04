@@ -8,7 +8,7 @@ const cors = {
   "Content-Type": "application/json",
 };
 type JsonRecord = Record<string, unknown>;
-const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke", "signal", "trusted_start", "trusted_stop", "trusted_list", "trusted_claim", "trusted_validate"]);
+const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke", "signal", "trusted_start", "trusted_stop", "trusted_list", "trusted_claim", "trusted_validate", "trusted_seen"]);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const proofPattern = /^[A-Za-z0-9_-]{86}$/;
 const keyPart = /^[A-Za-z0-9_-]{43}$/;
@@ -220,8 +220,8 @@ Deno.serve(async (request: Request) => {
       if (!requestId || Object.keys(args).sort().join() !== "requestId") {
         return reply(400, { error: "bad_request" });
       }
-      result = await admin.rpc(op === "trusted_claim"
-        ? "trusted_remote_claim" : "trusted_remote_validate", {
+      result = await admin.rpc(op === "trusted_claim" ? "trusted_remote_claim"
+        : op === "trusted_seen" ? "trusted_remote_seen" : "trusted_remote_validate", {
         p_user_id: userId, p_pc_id: deviceId, p_request_id: requestId,
       });
     }
