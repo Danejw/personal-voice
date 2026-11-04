@@ -9,8 +9,8 @@ pub const INDICATOR_WINDOW: &str = "indicator";
 
 #[cfg(windows)]
 #[tauri::command]
-pub fn device_link_start_relay() -> Result<u16, String> {
-    platform::device_link_start_relay()
+pub fn device_link_start_relay(device_id: String) -> Result<u16, String> {
+    platform::device_link_start_relay(&device_id)
 }
 
 #[cfg(windows)]
