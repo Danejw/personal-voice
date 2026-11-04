@@ -45,24 +45,27 @@ create policy trusted_claims_read on public.device_trusted_claims
 -- Check pairing revocation, exact device IDs, and the RPC's action allowlist.
 create function public.trusted_remote_claim(
   p_user_id uuid, p_pc_id uuid, p_request_id uuid
-) returns boolean language plpgsql security definer set search_path = ''
+) returns text language plpgsql security definer set search_path = ''
 as $$
 declare
   r record;
   g record;
   inserted uuid;
 begin
+  if exists(select 1 from public.device_trusted_claims where request_id=p_request_id and user_id=p_user_id) then
+    return 'already';
+  end if;
   select * into r from public.device_action_requests
     where id=p_request_id and user_id=p_user_id and target_device_id=p_pc_id
       and status='pending' and version=2 and expires_at>now()
     for update;
-  if not found then return false; end if;
+  if not found then return 'none'; end if;
 
   -- Only the two fixed apps and non-modifying navigation shortcuts qualify.
   if not (
     (r.action='open_app' and lower(r.argument) in ('notepad','calculator'))
     or (r.action='press_shortcut' and lower(r.argument) in ('escape','tab'))
-  ) then return false; end if;
+  ) then return 'none'; end if;
 
   select * into g from public.device_trusted_grants
     where user_id=p_user_id and pc_device_id=p_pc_id
@@ -70,25 +73,26 @@ begin
       and stopped_at is null and expires_at>now()
       and r.action=any(scopes)
     order by created_at desc limit 1 for update;
-  if not found then return false; end if;
+  if not found then return 'none'; end if;
 
   if not exists (
     select 1 from public.device_pair_links l
     where l.user_id=p_user_id and l.revoked_at is null
       and l.left_device_id=least(p_pc_id,r.requester_device_id)
       and l.right_device_id=greatest(p_pc_id,r.requester_device_id)
-  ) then return false; end if;
+  ) then return 'none'; end if;
 
   -- Serialize accepted operations for this grant and enforce a small ceiling.
   if (select count(*) from public.device_trusted_claims c
       where c.grant_id=g.id and c.claimed_at > now()-interval '1 minute') >= 10
-  then return false; end if;
+  then return 'none'; end if;
 
   insert into public.device_trusted_claims(request_id,user_id,grant_id)
     values(p_request_id,p_user_id,g.id)
     on conflict (request_id) do nothing
     returning request_id into inserted;
-  return inserted is not null;
+  if inserted is null then return 'already'; end if;
+  return 'claimed';
 end;
 $$;
 revoke all on function public.trusted_remote_claim(uuid,uuid,uuid) from public,anon,authenticated;
