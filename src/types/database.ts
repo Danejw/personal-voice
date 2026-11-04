@@ -285,6 +285,9 @@ export type Database = {
           target_device_id: string
           user_id: string
           version: number
+          expires_at: string
+          request_signature: string | null
+          response_signature: string | null
         }
         Insert: {
           answered_at?: string | null
@@ -298,6 +301,9 @@ export type Database = {
           target_device_id: string
           user_id?: string
           version?: number
+          expires_at?: string
+          request_signature?: string | null
+          response_signature?: string | null
         }
         Update: {
           answered_at?: string | null
@@ -311,6 +317,9 @@ export type Database = {
           target_device_id?: string
           user_id?: string
           version?: number
+          expires_at?: string
+          request_signature?: string | null
+          response_signature?: string | null
         }
         Relationships: []
       }
@@ -367,6 +376,9 @@ export type Database = {
           target_device_id: string
           user_id: string
           version: number
+          expires_at: string
+          request_signature: string | null
+          response_signature: string | null
         }
         Insert: {
           action: string
@@ -381,6 +393,9 @@ export type Database = {
           target_device_id: string
           user_id?: string
           version?: number
+          expires_at?: string
+          request_signature?: string | null
+          response_signature?: string | null
         }
         Update: {
           action?: string
@@ -395,6 +410,9 @@ export type Database = {
           target_device_id?: string
           user_id?: string
           version?: number
+          expires_at?: string
+          request_signature?: string | null
+          response_signature?: string | null
         }
         Relationships: []
       }

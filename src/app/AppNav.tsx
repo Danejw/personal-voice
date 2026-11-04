@@ -12,6 +12,7 @@ export type AppSection =
   | "snippets"
   | "transforms"
   | "assistant"
+  | "companion"
   | "memory-graph"
   | "devices"
   | "settings"
@@ -27,7 +28,7 @@ export type VoiceSection =
   | "snippets"
   | "transforms";
 
-type TopSection = "voice" | "assistant" | "memory-graph" | "insights" | "devices" | "settings" | "analytics";
+type TopSection = "voice" | "assistant" | "companion" | "memory-graph" | "insights" | "devices" | "settings" | "analytics";
 
 const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   dictation: { label: "Dictations" },
@@ -38,6 +39,7 @@ const SECTION_META: Record<AppSection, { label: string; title?: string }> = {
   snippets: { label: "Snippets" },
   transforms: { label: "Transforms" },
   assistant: { label: "Assistant" },
+  companion: { label: "Companion" },
   "memory-graph": { label: "Memory" },
   devices: { label: "Devices & Controls" },
   settings: { label: "Settings" },
@@ -55,10 +57,11 @@ const VOICE_CHILDREN: readonly VoiceSection[] = [
   "transforms",
 ];
 
-const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "memory-graph", "insights", "analytics", "devices", "settings"];
+const TOP_SECTIONS: readonly TopSection[] = ["voice", "assistant", "companion", "memory-graph", "insights", "analytics", "devices", "settings"];
 const TOP_LABELS: Record<TopSection, string> = {
   voice: "Voice",
   assistant: "Assistant",
+  companion: "Companion",
   "memory-graph": "Memory",
   insights: "Insights",
   devices: "Devices & Controls",
@@ -278,6 +281,7 @@ export function AppNav({
       </div>
       <nav className="app-nav" aria-label="Personal Voice">
         {TOP_SECTIONS.map((id) => {
+          if (id === "companion" && !/\bAndroid\b/.test(navigator.userAgent)) return null;
           const label = TOP_LABELS[id];
           if (id === "voice") {
             const groupClass = [
@@ -397,6 +401,14 @@ function NavIcon({ section }: { section: TopSection }) {
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6 6.5h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H11l-4 3.2V16.5H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        </svg>
+      );
+    case "companion":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3.5" y="6" width="17" height="12" rx="6" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <circle cx="9" cy="12" r="2" fill="currentColor" />
+          <circle cx="15" cy="12" r="2" fill="currentColor" />
         </svg>
       );
     case "memory-graph":

@@ -204,11 +204,12 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "read_remote_device",
-      description: "Read-only look at another device on this account. Kinds: presence, active_window, windows, screenshot. Never clicks, types, or changes that device. If the user did not name a device and more than one other device exists, ask which one. Do not guess. Answer only from this tool's result.",
+      description: "Read a paired Windows PC: presence, active_window, windows, or screenshot. Supply an exact name or device_id, or omit both only when a default PC has been selected on this phone or the device is unambiguous. Do not guess or claim unverified results.",
       parameters: {
         type: "object",
         properties: {
-          device: { type: "string", description: "Name of the other device, such as Desk PC. Omit only when one other device exists." },
+          device: { type: "string", description: "Exact paired device name. Omit to use the selected default." },
+          device_id: { type: "string", description: "Exact paired Windows device UUID; omit when supplying a name." },
           kind: { type: "string", description: "presence, active_window, windows, or screenshot." },
         },
         required: ["kind"],
@@ -404,15 +405,16 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "remote_action",
-      description: "Ask another owned Windows device to open Notepad or Calculator, press an allowlisted shortcut, or insert text. No shell, delete, or click. The other device must allow remote actions and confirm. Name the device.",
+      description: "Ask a paired Windows PC to open an allowed app, press an allowlisted shortcut, or insert text. The PC must explicitly approve. Give the exact device or device_id, or omit only when a default is selected. Never silently switch PCs or treat a queued request as executed. No shell, delete, click or unattended control.",
       parameters: {
         type: "object",
         properties: {
-          device: { type: "string", description: "Name of the other device." },
+          device: { type: "string", description: "Exact paired Windows device name. Omit to use the phone's saved default." },
+          device_id: { type: "string", description: "Exact paired Windows device UUID; omit when supplying a name." },
           action: { type: "string", description: "open_app, press_shortcut, or insert_text." },
           argument: { type: "string", description: "App id, shortcut id, or the exact text." },
         },
-        required: ["device", "action", "argument"],
+        required: ["action", "argument"],
       },
     },
   ].map((tool) => ({ ...tool, description: enrichToolDescription(tool.name, tool.description) }));
@@ -498,7 +500,7 @@ export type ToolDecision =
     title: string;
     preview: string;
     deviceId: string | null;
-    remote: { action: RemoteComputerAction; device: string } | null;
+    remote: { action: RemoteComputerAction; device: string | null } | null;
     memory: MemoryCommand | null;
   }
   | { kind: "remote"; id: string; name: "read_remote_device"; read: RemoteKind; device: string | null };
@@ -807,8 +809,8 @@ export function decideToolCall(
       const remote = readRemoteAction(args);
       if ("error" in remote) return { kind: "reject", id: call.id, name: call.name, message: remote.error };
       const device = readDevice(args);
-      if ("error" in device || !device.name) {
-        return { kind: "reject", id: call.id, name: call.name, message: "error" in device ? device.error : "Name the other device." };
+      if ("error" in device) {
+        return { kind: "reject", id: call.id, name: call.name, message: device.error };
       }
       return confirm(call.id, "remote_action", remote.argument, remote.label, null, { action: remote.action, device: device.name });
     }
@@ -864,7 +866,7 @@ function confirm(
   text: string,
   title: string,
   deviceId: string | null,
-  remote: { action: RemoteComputerAction; device: string } | null,
+  remote: { action: RemoteComputerAction; device: string | null } | null,
   memory: MemoryCommand | null = null,
 ): ToolDecision {
   return { kind: "confirm", id, name, text, title, preview: selectionPreview(text), deviceId, remote, memory };
@@ -929,7 +931,18 @@ function readRemoteAction(
 }
 
 function readDevice(args: Record<string, unknown>): { name: string | null } | { error: string } {
-  if (args.device === undefined || args.device === null || args.device === "") return { name: null };
-  if (typeof args.device !== "string") return { error: "Device has to be a name." };
-  return { name: args.device };
+  const hasName = args.device !== undefined && args.device !== null && args.device !== "";
+  const hasId = args.device_id !== undefined && args.device_id !== null && args.device_id !== "";
+  if (hasName && hasId) return { error: "Choose either a device name or a device ID, not both." };
+  if (hasId) {
+    if (typeof args.device_id !== "string" || !UUID_PATTERN.test(args.device_id)) {
+      return { error: "Provide a valid paired device ID." };
+    }
+    return { name: args.device_id };
+  }
+  if (!hasName) return { name: null };
+  if (typeof args.device !== "string" || !args.device.trim() || args.device.length > 120) {
+    return { error: "Provide an exact device name." };
+  }
+  return { name: args.device.trim() };
 }

@@ -39,9 +39,9 @@ function failureKind(message: string): Exclude<ToolFailureKind, null> {
   if (/\b(cancelled|canceled|declined|denied by the user|user rejected)\b/i.test(message)) return "cancelled";
   if (/another action is already waiting|\b(busy|already running|waiting for confirmation)\b/i.test(message)) return "busy";
   if (/\b(invalid|malformed|missing tool id|arguments? (?:were|was) not|specify the exact|provide a valid|that id is required)\b/i.test(message)) return "invalid_arguments";
-  if (/\b(stale|focus (?:changed|lost)|locator|element (?:changed|disappeared)|window (?:changed|closed))\b/i.test(message)) return "stale_target";
+  if (/\b(stale|expired|focus (?:changed|lost)|locator|element (?:changed|disappeared)|window (?:changed|closed))\b/i.test(message)) return "stale_target";
   if (/\b(offline|not online|disconnected device|device is unavailable)\b/i.test(message)) return "offline";
-  if (/\b(unavailable|unsupported|not supported|windows.only|not allowed|not enabled|not configured)\b/i.test(message)) return "unavailable";
+  if (/\b(unavailable|unsupported|not supported|windows.only|not allowed|not enabled|not configured|not paired|pairing has been revoked|signature or pairing is invalid|could not be authenticated)\b/i.test(message)) return "unavailable";
   if (/\b(timed? out|timeout|temporarily|network|connection reset|service unavailable|429|503)\b/i.test(message)) return "transient";
   return "unknown";
 }

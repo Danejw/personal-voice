@@ -134,7 +134,7 @@ export interface AssistantActions {
 export interface ComputerHost {
   openApp(id: string): Promise<string>;
   pressShortcut(id: string): Promise<string>;
-  remoteAction(action: RemoteComputerAction, argument: string, deviceName: string): Promise<string>;
+  remoteAction(action: RemoteComputerAction, argument: string, deviceName: string | null): Promise<string>;
   capture(): Promise<ComputerImage>;
   propose(body: Record<string, unknown>): Promise<unknown>;
   execute(call: ComputerCall, image: ComputerImage): Promise<string>;
@@ -2217,7 +2217,7 @@ interface ConfirmedTool {
   preview: string;
   deviceId: string | null;
   label: string | null;
-  remote: { action: RemoteComputerAction; device: string } | null;
+  remote: { action: RemoteComputerAction; device: string | null } | null;
   memory: MemoryCommand | null;
   noteAttachment: NoteAttachmentInput | null;
   working: boolean;

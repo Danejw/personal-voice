@@ -216,6 +216,30 @@ describe("assistant tool schema", () => {
     }, plan)).toMatchObject({ kind: "reject", id: "4" });
   });
 
+  it("routes an exact paired PC by ID or the saved default without changing the model tool", () => {
+    const targetId = "00000000-0000-4000-8000-000000000001";
+    expect(decideToolCall({
+      id: "remote-id", name: "remote_action",
+      args: { device_id: targetId, action: "open_app", argument: "calculator" },
+    }, plan)).toMatchObject({ kind: "confirm", remote: { action: "open_app", device: targetId } });
+    expect(decideToolCall({
+      id: "remote-default", name: "remote_action",
+      args: { action: "open_app", argument: "notepad" },
+    }, plan)).toMatchObject({ kind: "confirm", remote: { action: "open_app", device: null } });
+    expect(decideToolCall({
+      id: "read-id", name: "read_remote_device",
+      args: { device_id: targetId, kind: "active_window" },
+    }, plan)).toMatchObject({ kind: "remote", device: targetId });
+    expect(decideToolCall({
+      id: "ambiguous-args", name: "remote_action",
+      args: { device: "Laptop", device_id: targetId, action: "open_app", argument: "notepad" },
+    }, plan)).toMatchObject({ kind: "reject", message: expect.stringContaining("either") });
+    expect(decideToolCall({
+      id: "invalid-id", name: "read_remote_device",
+      args: { device_id: "../other", kind: "presence" },
+    }, plan)).toMatchObject({ kind: "reject" });
+  });
+
   it("copies without confirmation and confirms insert, notes, and handoff", () => {
     expect(decideToolCall({
       id: "copy",

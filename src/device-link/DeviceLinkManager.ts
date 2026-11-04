@@ -4,7 +4,8 @@ import { LocalDeviceLink } from "@/device-link/LocalDeviceLink";
 import {
   signalPairedDevice, subscribeDeviceLinkWakes, type DeviceLinkWakeFamily,
 } from "@/device-link/cloudSignaling";
-import { type DeviceLinkEnvelope, type DeviceLinkPayload, type DeviceLinkState } from "@/device-link/protocol";
+import { isEphemeral, type CompanionAssistantPhase, type DeviceLinkEnvelope, type DeviceLinkPayload, type DeviceLinkState } from "@/device-link/protocol";
+import { isPointerSample, type PointerSample } from "@/companion/companionGeometry";
 import { devicePairingApi, type PairLink } from "@/services/devicePairingService";
 import { verifiedPairLinks } from "@/services/verifiedPairLinks";
 
@@ -29,6 +30,15 @@ export class DeviceLinkManager {
   private lastPeerMessage = new Map<string, number>();
   private listeners = new Set<() => void>();
   private wakeHandlers = new Set<(family: DeviceLinkWakeFamily, id: string) => void>();
+  private companionListeners = new Set<(senderId: string, payload: DeviceLinkPayload) => void>();
+  private companionRequesters = new Map<string, number>();
+  private companionOpen = false;
+  private companionTimer: ReturnType<typeof setInterval> | null = null;
+  private companionRenew: ReturnType<typeof setInterval> | null = null;
+  private companionSamplePending = false;
+  private lastMonitorLayout = "";
+  private lastPointer = "";
+  private companionPhase: CompanionAssistantPhase = "idle";
   private cloudUnsubscribe: (() => void) | null = null;
   private scanTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -48,6 +58,76 @@ export class DeviceLinkManager {
   }
   getSnapshot = () => this.snapshot;
 
+  /** No pointer data is stored or included in the cloud fallback. */
+  subscribeCompanion(listener: (senderId: string, payload: DeviceLinkPayload) => void): () => void {
+    this.companionListeners.add(listener);
+    return () => this.companionListeners.delete(listener);
+  }
+
+  setCompanionOpen(open: boolean): void {
+    if (this.platform !== "android") return;
+    if (this.companionOpen === open) return;
+    this.companionOpen = open;
+    if (this.companionRenew) clearInterval(this.companionRenew);
+    this.companionRenew = null;
+    void this.announceCompanion(open ? "start" : "stop");
+    if (open) this.companionRenew = setInterval(() => {
+      void this.announceCompanion("start");
+    }, 4_000);
+  }
+
+  private async announceCompanion(action: "start" | "stop"): Promise<void> {
+    for (const peer of this.pairs) {
+      if (!this.sessions.get(peer.peerDeviceId)?.connected) continue;
+      void this.sendEphemeral(peer.peerDeviceId, { type: "companion", action });
+    }
+  }
+
+  /** Only a visible, authenticated LAN companion may activate Windows sampling. */
+  private async sampleCompanion(): Promise<void> {
+    if (this.platform !== "windows" || this.companionSamplePending) return;
+    const now = Date.now();
+    for (const [id, expiry] of this.companionRequesters) {
+      if (expiry < now || !this.sessions.get(id)?.connected) this.companionRequesters.delete(id);
+    }
+    if (!this.companionRequesters.size) {
+      if (this.companionTimer) clearInterval(this.companionTimer);
+      this.companionTimer = null;
+      return;
+    }
+    this.companionSamplePending = true;
+    try {
+      const sample: unknown = await invoke("companion_pointer_sample");
+      if (!isPointerSample(sample)) return;
+      const { x, y, monitors } = sample as PointerSample;
+      const layout = JSON.stringify(monitors);
+      for (const peerId of this.companionRequesters.keys()) {
+        if (layout !== this.lastMonitorLayout) {
+          await this.sendEphemeral(peerId, { type: "layout", monitors });
+        }
+        const pointerKey = `${x}:${y}`;
+        if (pointerKey !== this.lastPointer || layout !== this.lastMonitorLayout) {
+          await this.sendEphemeral(peerId, { type: "cursor", x, y });
+        }
+      }
+      this.lastMonitorLayout = layout;
+      this.lastPointer = `${x}:${y}`;
+    } catch {
+      // Permission, desktop switching and device disconnects must fail quietly.
+    } finally {
+      this.companionSamplePending = false;
+    }
+  }
+
+  publishCompanionAssistant(phase: CompanionAssistantPhase): void {
+    if (this.companionPhase === phase) return;
+    this.companionPhase = phase;
+    if (this.platform !== "windows") return;
+    for (const peerId of this.companionRequesters.keys()) {
+      void this.sendEphemeral(peerId, { type: "assistant-state", phase });
+    }
+  }
+
   private emit() { for (const listener of this.listeners) listener(); }
   private update() {
     const localPeers = [...this.sessions].filter(([, session]) => session.connected).map(([id]) => id);
@@ -59,6 +139,29 @@ export class DeviceLinkManager {
   }
   private deliver(frame: DeviceLinkEnvelope) {
     this.lastPeerMessage.set(frame.sender, Date.now());
+    if (frame.payload.type === "companion" && this.platform === "windows") {
+      if (frame.payload.action === "start") {
+        const first = !this.companionRequesters.has(frame.sender);
+        this.companionRequesters.set(frame.sender, Date.now() + 12_000);
+        if (first) {
+          // Deliver current state immediately on activation and after reconnect.
+          void this.sendEphemeral(frame.sender, { type: "assistant-state", phase: this.companionPhase });
+          this.lastMonitorLayout = "";
+          this.lastPointer = "";
+          void this.sampleCompanion();
+        }
+        if (!this.companionTimer) this.companionTimer = setInterval(() => {
+          void this.sampleCompanion();
+        }, 80);
+      } else {
+        this.companionRequesters.delete(frame.sender);
+      }
+    } else if (this.platform === "android" &&
+      (frame.payload.type === "cursor" || frame.payload.type === "layout" ||
+       frame.payload.type === "assistant-state")) {
+      if (!this.companionOpen) return;
+      for (const cb of this.companionListeners) cb(frame.sender, frame.payload);
+    }
     if (frame.payload.type === "wake") {
       for (const cb of this.wakeHandlers) cb(frame.payload.family, frame.payload.requestId);
     }
@@ -158,7 +261,11 @@ export class DeviceLinkManager {
         socket, deviceId: this.deviceId, peerId: peer.peerDeviceId, peerIdentity: peer.peerPublicKey,
         onMessage: frame => this.deliver(frame),
         onState: state => {
-          if (state === "connected") { this.lastPeerMessage.set(peer.peerDeviceId, Date.now()); this.update(); }
+          if (state === "connected") {
+            this.lastPeerMessage.set(peer.peerDeviceId, Date.now());
+            this.update();
+            if (this.companionOpen) void this.sendEphemeral(peer.peerDeviceId, { type: "companion", action: "start" });
+          }
           if (state === "closed") this.disconnectPeer(peer.peerDeviceId);
         },
       });
@@ -185,7 +292,11 @@ export class DeviceLinkManager {
             peerIdentity: pairing.peerPublicKey,
             onMessage: frame => this.deliver(frame),
             onState: state => {
-              if (state === "connected") { this.lastPeerMessage.set(peer.deviceId, Date.now()); this.update(); }
+              if (state === "connected") {
+                this.lastPeerMessage.set(peer.deviceId, Date.now());
+                this.update();
+                if (this.companionOpen) void this.sendEphemeral(peer.deviceId, { type: "companion", action: "start" });
+              }
               if (state === "closed") this.disconnectPeer(peer.deviceId);
             },
           });
@@ -201,6 +312,8 @@ export class DeviceLinkManager {
     if (!session) return;
     this.sessions.delete(peerId);
     this.lastPeerMessage.delete(peerId);
+    this.companionRequesters.delete(peerId);
+    this.lastMonitorLayout = "";
     session.stop();
     this.update();
   }
@@ -221,7 +334,7 @@ export class DeviceLinkManager {
 
   /** High-frequency presence/cursor updates are strictly LAN-only. */
   async sendEphemeral(targetDeviceId: string, payload: DeviceLinkPayload): Promise<boolean> {
-    if (payload.type !== "presence" && payload.type !== "cursor") return false;
+    if (!isEphemeral(payload)) return false;
     if (!this.pairs.some(p => p.peerDeviceId === targetDeviceId)) return false;
     const session = this.sessions.get(targetDeviceId);
     if (!session?.connected) return false;
@@ -236,9 +349,19 @@ export class DeviceLinkManager {
     if (this.scanTimer) clearInterval(this.scanTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     if (this.trustTimer) clearInterval(this.trustTimer);
+    if (this.companionTimer) clearInterval(this.companionTimer);
+    if (this.companionRenew) clearInterval(this.companionRenew);
     this.scanTimer = null;
     this.heartbeatTimer = null;
     this.trustTimer = null;
+    this.companionTimer = null;
+    this.companionRenew = null;
+    this.companionOpen = false;
+    this.companionRequesters.clear();
+    this.lastMonitorLayout = "";
+    this.lastPointer = "";
+    this.companionSamplePending = false;
+    this.companionPhase = "idle";
     this.cloudUnsubscribe?.();
     this.cloudUnsubscribe = null;
     for (const session of this.sessions.values()) session.stop();

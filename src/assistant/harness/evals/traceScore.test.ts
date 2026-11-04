@@ -48,13 +48,18 @@ describe("assistant tool intelligence registry", () => {
 
 describe("deterministic tool-selection trace fixtures", () => {
   it("defines one base scenario for every declared tool plus ambiguity and no-tool cases", () => {
-    expect(TOOL_SELECTION_SCENARIOS).toHaveLength(ASSISTANT_TOOL_NAMES.length + 22 + 7);
+    const choices = TOOL_SELECTION_SCENARIOS.filter(scenario => scenario.id.startsWith("choice-"));
+    const noTool = TOOL_SELECTION_SCENARIOS.filter(scenario => scenario.id.startsWith("none-"));
+    expect(TOOL_SELECTION_SCENARIOS).toHaveLength(ASSISTANT_TOOL_NAMES.length + choices.length + noTool.length);
+    expect(choices.length).toBeGreaterThanOrEqual(22);
+    expect(noTool.length).toBeGreaterThanOrEqual(7);
     expect(new Set(TOOL_SELECTION_SCENARIOS.map((scenario) => scenario.id)).size).toBe(TOOL_SELECTION_SCENARIOS.length);
     const singles = TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("tool-"));
     expect(singles).toHaveLength(ASSISTANT_TOOL_NAMES.length);
     expect(singles.map((scenario) => scenario.id.slice(5)).sort()).toEqual([...ASSISTANT_TOOL_NAMES].sort());
-    expect(TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("choice-"))).toHaveLength(22);
-    expect(TOOL_SELECTION_SCENARIOS.filter((scenario) => scenario.id.startsWith("none-"))).toHaveLength(7);
+    expect(choices.map(s => s.id)).toContain("choice-phone-open-remote-v-local");
+    expect(choices.map(s => s.id)).toContain("choice-phone-read-pc-v-capture-local");
+    expect(noTool.map(s => s.id)).toContain("none-remote-default-explanation");
     for (const scenario of TOOL_SELECTION_SCENARIOS) {
       expect(scenario.request.trim()).not.toBe("");
       expect(scenario.successCriterion.trim()).not.toBe("");
