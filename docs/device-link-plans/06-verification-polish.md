@@ -1,9 +1,9 @@
 # DeviceLink 6/6: Usability, regression and real-device sign-off
 
-**Status:** Planned only. No implementation authorized.
+**Status:** Implementation completed for code-level validation; physical acceptance and backend rollout are outstanding.
 **Working branch:** `plan/device-link-06-validation-polish`
 **Merge target:** `feature/device-link-companion-mode`
-**Depends on:** PRs 1–5 merged into feature branch; this PR is the final integration gate before proposing feature branch -> main.
+**Depends on:** PRs #36–40 merged into feature branch. This PR is the final integration gate before proposing feature branch -> main.
 
 ## Objective
 Ship a simple, reliably connected end-to-end experience by validating the complete pairing, companion and remote-voice workflow on real Android and Windows devices.
@@ -42,7 +42,24 @@ Any new feature beyond the approved five PRs, major UI redesign, additional devi
 - Keep UI minimal, borderless, and accessible. Keep existing dictation, handoffs, clipboard, Assistant, and account sync working.
 - Add focused tests, document meaningful architecture decisions, and update README when user-visible capabilities or security change.
 - Never claim tests or live-device validation ran until results are recorded.
-- This draft PR is **PLAN ONLY**. Do not implement code or migrations until explicitly instructed.
+- Implementation was authorized. Keep the PR a draft until the required physical-device evidence is recorded and the backend release gate is clear.
 
 ## PR completion report required
 When implementation is authorized, report (1) actual changes, (2) automated checks and CI, (3) 3–5 manual tests with expected/actual results, (4) blockers, and (5) readiness to merge.
+
+## Implemented in PR #41
+
+- Stacked on merged DeviceLink phases #36–40, preserving the integration branch and leaving `main` unchanged.
+- Fixed multi-PC Companion privacy/routing: selecting a paired PC is now mandatory when ambiguous, with no fallback after revocation or disconnect. Windows sampling activates for only the chosen PC. Switching sends Stop to the prior target; Android drops stale cursor, monitor and Assistant phase data.
+- Added selected-target, stale-frame, missing pairing, hidden-view, reconnect and native listener restart regression tests.
+- Serialized Windows native relay shutdown/start to avoid a late stop closing a new listener after rapid restart or account transitions.
+- Made optional trusted-control backend failures independent of primary pairing, preserving pairing when trusted grants are not yet deployed.
+- Updated README and architecture to describe exact security, UI and backend rollout boundaries.
+- Added `docs/device-link-plans/06-acceptance.md` with a detailed physical three-device test matrix, failure triage and release criteria. Each unexecuted test is explicitly `NOT RUN`.
+
+### Release blockers
+
+- Production Supabase still lacks signed-v2 request and trusted-control migrations; current `device-pairing` Edge Function is the older version. Coordinate backend deployment before using updated clients.
+- Physical Windows desktop/laptop + Android tests (including Wi-Fi, cellular, multi-monitor, lock, revoke, tray, and regressions) have not been run through connected devices and cannot be counted as passing.
+- CI status should be recorded on PR #41's exact head after the latest run; a previous failed run was due to a new test fixture and was corrected.
+- Keep this PR draft and do not promote `feature/device-link-companion-mode` to `main` until all acceptance gates are satisfied.
