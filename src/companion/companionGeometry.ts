@@ -9,7 +9,7 @@ export function selectedCompanionPC(
   pairedWindows: readonly { id: string }[], preferredId: string | null,
 ): string | null {
   if (preferredId) return pairedWindows.find(device => device.id === preferredId)?.id ?? null;
-  return pairedWindows.length === 1 ? pairedWindows[0].id : null;
+  return pairedWindows.length === 1 ? pairedWindows[0]?.id ?? null : null;
 }
 
 export interface PointerSample {
