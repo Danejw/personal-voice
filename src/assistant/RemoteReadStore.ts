@@ -1,7 +1,6 @@
 import { askRemote, fulfillRemoteRequest } from "@/assistant/remoteContextChannel";
 import {
   planRemoteRead,
-  resolveRemoteDevice,
   type RemoteDevice,
   type RemoteKind,
   type RemoteResponse,
@@ -12,6 +11,7 @@ import type { ScreenSnapshot } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import { loadRemoteReads } from "@/settings/deviceSettings";
+import { resolvePairedVoiceTarget } from "@/assistant/remoteVoiceTarget";
 
 export interface RemoteApproval {
   id: string;
@@ -50,8 +50,7 @@ export class RemoteReadStore {
   async ask(userId: string, kind: RemoteKind, deviceName: string | null): Promise<{ text: string; screenshot: ScreenSnapshot | null }> {
     const devices = await this.listDevices(userId);
     const currentId = this.getDeviceId(userId);
-    const resolved = resolveRemoteDevice(devices, currentId, deviceName, Date.now());
-    if (!resolved.ok) throw new Error(resolved.message);
+    const resolved = { device: await resolvePairedVoiceTarget(devices, currentId, deviceName) };
     const response = await askRemote(
       this.api,
       userId,
