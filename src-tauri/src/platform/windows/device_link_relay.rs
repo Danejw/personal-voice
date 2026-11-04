@@ -224,8 +224,10 @@ fn handle_client(id: u64, mut stream: TcpStream, registry: Arc<Mutex<ClientRegis
                     if value.get("kind").and_then(Value::as_str) == Some("hello") {
                         guard.hellos.insert(id, (target.to_string(), text.to_string()));
                     }
-                    recipients = guard.names.iter().filter(|(other, name)| **other != id && name == target)
-                        .filter_map(|(other, _)| guard.clients.get(other).cloned()).collect();
+                    recipients = guard.names.iter().filter(|(other, name)| {
+                        **other != id && name == target
+                          && guard.hellos.get(other).is_some_and(|(wanted, _)| wanted == from)
+                    }).filter_map(|(other, _)| guard.clients.get(other).cloned()).collect();
                 }
                 for outgoing in recipients { let _ = outgoing.send(text.to_string()); }
             }
