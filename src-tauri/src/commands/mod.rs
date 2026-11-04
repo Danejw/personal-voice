@@ -619,14 +619,38 @@ pub async fn computer_click(x: i32, y: i32, times: u32) -> Result<String, String
 }
 
 #[tauri::command]
-pub async fn computer_pointer_action(kind: String, x: i32, y: i32, end_x: Option<i32>, end_y: Option<i32>) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || platform::pointer_action(&kind, x, y, end_x, end_y))
+pub async fn computer_pointer_action(app: AppHandle, kind: String, x: i32, y: i32, end_x: Option<i32>, end_y: Option<i32>) -> Result<String, String> {
+    use tauri::PhysicalPosition;
+    let overlay = app.get_webview_window("assistant-pointer");
+    if let Some(ref window) = overlay {
+        window.set_ignore_cursor_events(true).map_err(|error| error.to_string())?;
+        window.show().map_err(|error| error.to_string())?;
+    }
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        platform::pointer_action(&kind, x, y, end_x, end_y, |_, _| {
+            if let Some(ref window) = overlay {
+                use windows::Win32::Foundation::POINT;
+                use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+                let mut point = POINT::default();
+                if unsafe { GetCursorPos(&mut point) }.is_ok() {
+                    let _ = window.set_position(PhysicalPosition::new(point.x - 12, point.y - 12));
+                }
+            }
+        })
+    })
         .await
-        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+    if result.is_err() {
+        if let Some(window) = app.get_webview_window("assistant-pointer") {
+            let _ = window.hide();
+        }
+    }
+    result
 }
 
 #[tauri::command]
 pub fn computer_restore(app: AppHandle) -> Result<(), String> {
+    if let Some(pointer) = app.get_webview_window("assistant-pointer") { let _ = pointer.hide(); }
     let window = app
         .get_webview_window("main")
         .ok_or("The Settings window is missing.")?;
