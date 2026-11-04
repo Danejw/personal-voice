@@ -9,7 +9,7 @@ const laptop = "00000000-0000-4000-8000-000000000003";
 type TestManager = {
   platform: "android";
   pairs: { id: string; peerDeviceId: string; createdAt: string }[];
-  sessions: Map<string, { connected: boolean }>;
+  sessions: Map<string, { connected: boolean; stop(): void }>;
   deliver(frame: DeviceLinkEnvelope): void;
 };
 function setup() {
@@ -22,8 +22,8 @@ function setup() {
     { id: "pair-2", peerDeviceId: laptop, createdAt: "" },
   ];
   internal.sessions = new Map([
-    [desktop, { connected: true }],
-    [laptop, { connected: true }],
+    [desktop, { connected: true, stop: () => undefined }],
+    [laptop, { connected: true, stop: () => undefined }],
   ]);
   const send = vi.spyOn(manager, "sendEphemeral").mockResolvedValue(true);
   return { manager, internal, send };
