@@ -53,8 +53,8 @@ export function isPointerSample(value: unknown): value is PointerSample {
 }
 
 export function assistantPhase(snapshot: AssistantSnapshot): CompanionAssistantPhase {
-  if (snapshot.status === "RESPONDING" || snapshot.liveText.trim()) return "speaking";
-  if (snapshot.status === "CONNECTING") return "thinking";
-  if (snapshot.status === "READY") return snapshot.liveUser.trim() ? "listening" : "listening";
+  if (snapshot.status === "RESPONDING") return snapshot.liveText.trim() ? "speaking" : "thinking";
+  if (snapshot.status === "CONNECTING" || snapshot.toolActivity?.status === "running") return "thinking";
+  if (snapshot.status === "READY") return "listening";
   return "idle";
 }
