@@ -1,3 +1,4 @@
+-- Requires PR #39 migration 20261105010000_remote_voice_proofs.sql first.
 -- Trusted remote control is a separately approved, short-lived Windows-PC grant.
 -- Neither an account JWT nor an Android client can create or extend a grant.
 -- Only the existing native-signature-verified device-pairing Edge Function
