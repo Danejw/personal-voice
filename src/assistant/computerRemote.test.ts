@@ -17,6 +17,10 @@ function memoryApi(rows: ComputerActionRow[] = []): ComputerActionApi & { rows: 
         status: "pending",
         result: null,
         error: null,
+        version: 2,
+        expiresAt: "2026-09-28T12:01:00.000Z",
+        requestSignature: "test-request-proof",
+        responseSignature: null,
       };
       store.push(row);
       return row.id;
