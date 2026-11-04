@@ -33,6 +33,7 @@ export class DeviceLinkManager {
   private companionListeners = new Set<(senderId: string, payload: DeviceLinkPayload) => void>();
   private companionRequesters = new Map<string, number>();
   private companionOpen = false;
+  private companionTarget: string | null = null;
   private companionTimer: ReturnType<typeof setInterval> | null = null;
   private companionRenew: ReturnType<typeof setInterval> | null = null;
   private companionSamplePending = false;
@@ -64,22 +65,32 @@ export class DeviceLinkManager {
     return () => this.companionListeners.delete(listener);
   }
 
-  setCompanionOpen(open: boolean): void {
+  /** Only the selected PC may stream Companion data. Never activate every pair. */
+  setCompanionOpen(open: boolean, targetDeviceId: string | null = null): void {
     if (this.platform !== "android") return;
-    if (this.companionOpen === open) return;
+    const target = targetDeviceId && this.pairs.some(p => p.peerDeviceId === targetDeviceId)
+      ? targetDeviceId : null;
+    if (this.companionOpen === open && this.companionTarget === target) return;
+    const previous = this.companionTarget;
+    if (this.companionOpen && previous && (!open || previous !== target)) {
+      void this.sendEphemeral(previous, { type: "companion", action: "stop" });
+    }
     this.companionOpen = open;
+    this.companionTarget = target;
     if (this.companionRenew) clearInterval(this.companionRenew);
     this.companionRenew = null;
-    void this.announceCompanion(open ? "start" : "stop");
-    if (open) this.companionRenew = setInterval(() => {
+    if (open && target) {
       void this.announceCompanion("start");
-    }, 4_000);
+      this.companionRenew = setInterval(() => {
+        void this.announceCompanion("start");
+      }, 4_000);
+    }
   }
 
   private async announceCompanion(action: "start" | "stop"): Promise<void> {
-    for (const peer of this.pairs) {
-      if (!this.sessions.get(peer.peerDeviceId)?.connected) continue;
-      void this.sendEphemeral(peer.peerDeviceId, { type: "companion", action });
+    const target = this.companionTarget;
+    if (target && this.sessions.get(target)?.connected) {
+      await this.sendEphemeral(target, { type: "companion", action });
     }
   }
 
@@ -159,7 +170,7 @@ export class DeviceLinkManager {
     } else if (this.platform === "android" &&
       (frame.payload.type === "cursor" || frame.payload.type === "layout" ||
        frame.payload.type === "assistant-state")) {
-      if (!this.companionOpen) return;
+      if (!this.companionOpen || frame.sender !== this.companionTarget) return;
       for (const cb of this.companionListeners) cb(frame.sender, frame.payload);
     }
     if (frame.payload.type === "wake") {
@@ -264,7 +275,9 @@ export class DeviceLinkManager {
           if (state === "connected") {
             this.lastPeerMessage.set(peer.peerDeviceId, Date.now());
             this.update();
-            if (this.companionOpen) void this.sendEphemeral(peer.peerDeviceId, { type: "companion", action: "start" });
+            if (this.companionOpen && this.companionTarget === peer.peerDeviceId) {
+              void this.sendEphemeral(peer.peerDeviceId, { type: "companion", action: "start" });
+            }
           }
           if (state === "closed") this.disconnectPeer(peer.peerDeviceId);
         },
@@ -295,7 +308,9 @@ export class DeviceLinkManager {
               if (state === "connected") {
                 this.lastPeerMessage.set(peer.deviceId, Date.now());
                 this.update();
-                if (this.companionOpen) void this.sendEphemeral(peer.deviceId, { type: "companion", action: "start" });
+                if (this.companionOpen && this.companionTarget === peer.deviceId) {
+                  void this.sendEphemeral(peer.deviceId, { type: "companion", action: "start" });
+                }
               }
               if (state === "closed") this.disconnectPeer(peer.deviceId);
             },
@@ -357,6 +372,7 @@ export class DeviceLinkManager {
     this.companionTimer = null;
     this.companionRenew = null;
     this.companionOpen = false;
+    this.companionTarget = null;
     this.companionRequesters.clear();
     this.lastMonitorLayout = "";
     this.lastPointer = "";
