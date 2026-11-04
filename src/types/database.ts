@@ -892,6 +892,38 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      pair_register_identity: {
+        Args: { p_user_id: string; p_device_id: string; p_public_jwk: Json }
+        Returns: boolean
+      }
+      pair_create_invite: {
+        Args: { p_user_id: string; p_device_id: string }
+        Returns: Json
+      }
+      pair_claim_invite: {
+        Args: { p_user_id: string; p_device_id: string; p_code: string; p_signature: string }
+        Returns: Json
+      }
+      pair_get_invite: {
+        Args: { p_user_id: string; p_id: string; p_device_id: string }
+        Returns: Json
+      }
+      pair_approve_invite: {
+        Args: { p_user_id: string; p_id: string; p_device_id: string; p_signature: string }
+        Returns: boolean
+      }
+      pair_cancel_invite: {
+        Args: { p_user_id: string; p_id: string; p_device_id: string }
+        Returns: boolean
+      }
+      pair_list_links: {
+        Args: { p_user_id: string; p_device_id: string }
+        Returns: Json
+      }
+      pair_revoke_link: {
+        Args: { p_user_id: string; p_link_id: string; p_device_id: string }
+        Returns: boolean
+      }
       get_assistant_memory_graph: {
         Args: {
           p_user_id: string

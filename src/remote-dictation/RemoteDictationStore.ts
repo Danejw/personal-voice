@@ -1,3 +1,4 @@
+import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import {
   REMOTE_DICTATION_CATCHUP_MS,
   REMOTE_DICTATION_HEARTBEAT_MS,
@@ -73,6 +74,7 @@ export class RemoteDictationStore {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private catchupTimer: ReturnType<typeof setInterval> | null = null;
   private unsubscribeFeed: (() => void) | null = null;
+  private unsubscribeDeviceLinkWakes: (() => void) | null = null;
   private handling = new Set<string>();
   private noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -211,6 +213,9 @@ export class RemoteDictationStore {
       throw reason;
     }
     try {
+      // Optional wake-up only. The authoritative request is already persisted and
+      // the target's existing claim/ack path still determines success.
+      void deviceLinkManager.sendWake(target.id, "remote-dictation", requestId);
       const outcome = await this.waitForResult(requestId, target.name);
       if (outcome.ok) {
         this.publish({ ...this.snapshot, active: false, error: null });
@@ -331,6 +336,9 @@ export class RemoteDictationStore {
     catchUp();
     this.catchupTimer = setInterval(catchUp, REMOTE_DICTATION_CATCHUP_MS);
 
+    this.unsubscribeDeviceLinkWakes = deviceLinkManager.subscribeWakes((family, requestId) => {
+      if (family === "remote-dictation") void this.handleRequest(requestId);
+    });
     this.unsubscribeFeed = this.feed.subscribe(userId, deviceId, (requestId) => {
       if (requestId) void this.handleRequest(requestId);
       else void this.catchUpPending();
@@ -354,6 +362,8 @@ export class RemoteDictationStore {
     this.catchupTimer = null;
     this.unsubscribeFeed?.();
     this.unsubscribeFeed = null;
+    this.unsubscribeDeviceLinkWakes?.();
+    this.unsubscribeDeviceLinkWakes = null;
     this.handling.clear();
   }
 
