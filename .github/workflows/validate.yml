@@ -2,7 +2,7 @@ name: Validate
 
 on:
   push:
-    branches: [main, 'plan/device-link-*']
+    branches: [main]
   pull_request:
     # Support stacked feature PRs (e.g. Phase B targeting the unmerged Phase A branch).
     branches: [main, 'feat/**', 'feature/**']
