@@ -93,7 +93,7 @@ fn pointer_event(flags: windows::Win32::UI::Input::KeyboardAndMouse::MOUSE_EVENT
     send_inputs(&[mouse(flags, x, y)], "pointer action")
 }
 
-fn pointer_move(from: (i32, i32), to: (i32, i32)) -> Result<(), String> {
+fn pointer_move(from: (i32, i32), to: (i32, i32), on_step: &mut impl FnMut(i32, i32)) -> Result<(), String> {
     // Move the actual Windows cursor in short visible increments, not a simulated UI indicator.
     // Every action is serialized to avoid overlapping drags or clicks.
     const STEPS: i64 = 12;
@@ -101,6 +101,7 @@ fn pointer_move(from: (i32, i32), to: (i32, i32)) -> Result<(), String> {
         let x = (from.0 as i64 + (to.0 as i64 - from.0 as i64) * i / STEPS) as i32;
         let y = (from.1 as i64 + (to.1 as i64 - from.1 as i64) * i / STEPS) as i32;
         pointer_event(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, x, y, 0)?;
+        on_step(x, y);
         std::thread::sleep(std::time::Duration::from_millis(12));
     }
     Ok(())
@@ -108,7 +109,7 @@ fn pointer_move(from: (i32, i32), to: (i32, i32)) -> Result<(), String> {
 
 /// Supervised local desktop pointer actions. Never exposed as trusted remote commands.
 /// Drag always releases the button, including when a movement fails.
-pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Option<i32>) -> Result<String, String> {
+pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Option<i32>, mut on_step: impl FnMut(i32, i32)) -> Result<String, String> {
     let _lock = POINTER_ACTION_LOCK.lock().map_err(|_| "Pointer controller unavailable.")?;
     let destination = point(x, y)?;
     let endpoint = if kind == "drag" {
@@ -125,7 +126,7 @@ pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Opt
     use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
     unsafe { GetCursorPos(&mut current) }.map_err(|e| e.to_string())?;
     let origin = to_absolute(current.x, current.y)?;
-    pointer_move(origin, destination)?;
+    pointer_move(origin, destination, &mut on_step)?;
     match kind {
         "move" => Ok("Moved the visible Windows pointer.".into()),
         "right_click" => {
@@ -135,7 +136,7 @@ pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Opt
         }
         "drag" => {
             pointer_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0)?;
-            let moved = pointer_move(destination, endpoint.expect("validated endpoint"));
+            let moved = pointer_move(destination, endpoint.expect("validated endpoint"), &mut on_step);
             let released = pointer_event(MOUSEEVENTF_LEFTUP, 0, 0, 0);
             moved?;
             released?;
