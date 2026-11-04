@@ -62,7 +62,7 @@ describe("DeviceLink local authenticated session", () => {
     const wire = await new LocalCipher(key, desktop, phone).seal(
       makeEnvelope(desktop, phone, { type: "presence", state: "ready" }),
     );
-    const altered = { ...wire, body: wire.body.slice(0, -1) + (wire.body.endsWith("A") ? "B" : "A") };
+    const altered = { ...wire, body: (wire.body.startsWith("A") ? "B" : "A") + wire.body.slice(1) };
     const receiver = new LocalCipher(await sharedLocalSessionKey(second.secret, second.hello, first.hello), phone, desktop);
     expect(await receiver.open(altered)).toBeNull();
     expect(await receiver.open(wire)).not.toBeNull();
