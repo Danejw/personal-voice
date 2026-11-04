@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AssistantController } from "@/assistant/AssistantController";
 import type { AssistantSnapshot } from "@/assistant/state";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
+import { SelectField } from "@/components/SelectField";
 import type { CompanionAssistantPhase, CompanionMonitor, DeviceLinkPayload } from "@/device-link/protocol";
 import { assistantPhase, companionGaze, defaultMonitorIndex } from "@/companion/companionGeometry";
 import "./companion.css";
@@ -122,19 +123,18 @@ export function CompanionView({
       </div>
       <footer className="companion-controls">
         {monitors.length > 1 && (
-          <label className="companion-placement">
-            <span>Phone below</span>
-            <select aria-label="Monitor for companion placement" value={Math.min(monitorIndex, monitors.length - 1)}
-              onChange={(event) => {
-                const index = Number(event.target.value);
+          <div className="companion-placement">
+            <SelectField label="Phone below" value={String(Math.min(monitorIndex, monitors.length - 1))}
+              options={[...monitors].sort((a, b) => a.x - b.x).map((_monitor, i) => ({
+                value: String(i),
+                label: monitors.length === 3 ? (["Left", "Center", "Right"][i] ?? "Center") : `Monitor ${i + 1}`,
+              }))}
+              onChange={(next) => {
+                const index = Number(next);
                 setSavedIndex(index);
                 try { localStorage.setItem(positionKey, String(index)); } catch { /* Local preference only. */ }
-              }}>
-              {[...monitors].sort((a, b) => a.x - b.x).map((_monitor, i) =>
-                <option value={i} key={i}>{monitors.length === 3
-                  ? ["Left", "Center", "Right"][i] : `Monitor ${i + 1}`}</option>)}
-            </select>
-          </label>
+              }} />
+          </div>
         )}
         <button className={active ? "companion-voice-button is-active" : "companion-voice-button"}
           type="button" disabled={!active && micBusy}
