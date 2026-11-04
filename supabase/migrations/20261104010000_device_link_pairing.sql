@@ -71,6 +71,10 @@ alter table public.device_pair_links enable row level security;
 alter table public.device_pair_proofs enable row level security;
 revoke all on public.device_pair_identities, public.device_pair_invitations,
   public.device_pair_attempts, public.device_pair_links, public.device_pair_proofs from public, anon, authenticated;
+-- The Edge Function uses the service-role client to read identities and persist proof nonces.
+grant select, insert, update, delete on public.device_pair_identities,
+  public.device_pair_invitations, public.device_pair_attempts,
+  public.device_pair_links, public.device_pair_proofs to service_role;
 
 -- Registration is immutable for a device ID. If a keystore is lost, remove/re-register
 -- the device with a new ID; the old keys cannot be overwritten through this RPC.
