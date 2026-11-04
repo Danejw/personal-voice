@@ -8,7 +8,7 @@ const cors = {
   "Content-Type": "application/json",
 };
 type JsonRecord = Record<string, unknown>;
-const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke"]);
+const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke", "signal"]);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const proofPattern = /^[A-Za-z0-9_-]{86}$/;
 const keyPart = /^[A-Za-z0-9_-]{43}$/;
@@ -160,6 +160,19 @@ Deno.serve(async (request: Request) => {
       return reply(403, { error: "approval" });
     }
     result = await admin.rpc("pair_approve_invite", { ...params, p_id: id, p_signature: approvalSignature });
+  } else if (op === "signal") {
+    const targetId = uuidArg(args.targetId);
+    const requestId = uuidArg(args.requestId);
+    const family = string(args.family);
+    if (!targetId || !requestId ||
+        !["remote-dictation","computer-action","remote-read"].includes(family ?? "")) {
+      return reply(400, { error: "bad_request" });
+    }
+    result = await admin.rpc("device_link_send_signal", {
+      p_user_id: userId, p_sender: deviceId, p_target: targetId,
+      p_request: requestId, p_family: family,
+    });
+    if (result.data !== true) return reply(403, { error: "not_paired" });
   } else if (op === "cancel") {
     const id = uuidArg(args.id);
     if (!id) return reply(400, { error: "bad_request" });
