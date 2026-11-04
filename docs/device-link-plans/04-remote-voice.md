@@ -1,9 +1,9 @@
 # DeviceLink 4/6: Phone-driven remote voice actions
 
-**Status:** Planned only. No implementation authorized.
+**Status:** Implementation underway in draft PR #39. Not merge-ready until CI, secure migration deployment and real-device tests.
 **Working branch:** `plan/device-link-04-remote-voice`
 **Merge target:** `feature/device-link-companion-mode`
-**Depends on:** PRs 1–3 merged into feature branch; PR 2's channel is available. Refresh this PR branch before coding.
+**Depends on:** PRs #36 and #37 merged; this branch is stacked on the current PR #38 companion implementation without merging PR #38.
 
 ## Objective
 Route commands spoken to the existing Android Gemini Assistant to the selected paired Windows computer, with real execution outcomes and current safeguards intact.
@@ -39,7 +39,27 @@ Persistent unattended control, broad GUI agents, shell execution, wake/unlock, n
 - Keep UI minimal, borderless, and accessible. Keep existing dictation, handoffs, clipboard, Assistant, and account sync working.
 - Add focused tests, document meaningful architecture decisions, and update README when user-visible capabilities or security change.
 - Never claim tests or live-device validation ran until results are recorded.
-- This draft PR is **PLAN ONLY**. Do not implement code or migrations until explicitly instructed.
+- Implementation has been authorized. Keep the PR as a draft until security, CI, hardware and regression gates have passed.
 
 ## PR completion report required
 When implementation is authorized, report (1) actual changes, (2) automated checks and CI, (3) 3–5 manual tests with expected/actual results, (4) blockers, and (5) readiness to merge.
+
+## Implementation record
+
+- Extended existing Gemini `remote_action` and `read_remote_device` arguments with optional exact `device_id`; a per-phone saved default is used only when the user does not name a PC. Duplicate names, offline targets and missing pairings fail rather than choosing another PC.
+- Android Devices pairing UI now offers **Use for voice** for a verified paired Windows device. The selected device ID stays local to that phone.
+- New `remoteVoiceProof` cryptographically binds request ID, source and destination device IDs, action/read kind, argument hash and signed responder outcome to PR #36 device identities. Sender verifies the PC's signed outcome instead of treating transport delivery as execution.
+- Preserved existing `ComputerActionStore` allowlist, Windows approval, `RemoteReadStore` screenshot consent, and reliable original database request/ack flow. DeviceLink only provides a wake signal.
+- SQL migration `20261105010000_remote_voice_proofs.sql` adds signing fields, 30-second expiry, immutable commands, one-way responses and paired-device RLS policies. This migration has been tested in a rollback-only transaction and has NOT been applied.
+- Added target selection, signature binding, Gemini argument, and harness regression tests. No new Gemini planner or executor was added.
+
+## Outstanding acceptance
+
+- Green Windows, Android, `pnpm check`, `pnpm eval:tools` against current head
+- Security review and application of migration only after app rollout is safe
+- Real signed pair validation on Android phone and Windows PC, same Wi-Fi and cellular
+- Explicit PC confirmation, receipt verification, real screen observation and application launch
+- Wrong PC, ambiguous names, revoked pairing, offline, denied, expired, duplicate and cancelled requests
+- Check legacy remote request compatibility and safe upgrade rollout
+
+**Do not merge or enable the backend remotely until these gates are completed.**
