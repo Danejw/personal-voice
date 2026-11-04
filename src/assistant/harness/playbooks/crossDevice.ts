@@ -20,13 +20,13 @@ export const CROSS_DEVICE: ToolPlaybook = {
       "When user wants supplied text in the other device's current focused field.",
       "Remote insertion reports result."),
     playbookStep("Perform permitted remote desktop action", ["remote_action"],
-      "When user requests a supported app launch, shortcut, or text insertion on another Windows device.",
+      "When user requests a supported app launch, shortcut, text insertion or bounded mouse action on another Windows device.",
       "The explicitly selected Windows device confirms or denies, and the requester verifies the signed receiver result."),
   ],
   branches: [
     "Read-only awareness uses read_remote_device; never use it to claim you changed the device.",
     "send_handoff is a transferable inbox item; send_remote_dictation types at a remote cursor now.",
-    "remote_action supports the existing limited commands; it is not general remote click or shell.",
+    "remote_action supports bounded click/move/drag coordinates with PC confirmation, never generic shell or unapproved mouse control.",
     "A remembered default applies only when no device was explicitly named. Never silently switch to another PC.",
   ],
   recovery: [

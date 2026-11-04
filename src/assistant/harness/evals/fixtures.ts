@@ -67,6 +67,7 @@ const BASE_TOOL_SCENARIOS = [
 
 const DISAMBIGUATION_SCENARIOS = [
   { id: "choice-phone-open-remote-v-local", request: "On my Android phone, open Calculator on my paired Desktop PC, not the phone.", expected: ["remote_action"], forbidden: ["open_app"], successCriterion: "Signed target-PC execution receipt, not local phone app launch" },
+  { id: "choice-phone-move-pc-mouse", request: "From my Android phone, move my paired desktop PC mouse to the center and click, with permission on that PC.", expected: ["remote_action"], forbidden: ["open_app"], successCriterion: "Signed exact PC executes separately confirmed pointer actions, not local Android touches" },
   { id: "choice-phone-read-pc-v-capture-local", request: "What is the active app on my paired Laptop, not on my phone?", expected: ["read_remote_device"], forbidden: ["inspect_active_app"], successCriterion: "Target Laptop supplies authenticated active-window observation" },
   { id: "choice-phone-remote-type-v-handoff", request: "Type the exact words hello world into the current field on my paired Desktop PC with its approval.", expected: ["remote_action"], forbidden: ["send_handoff"], successCriterion: "Selected desktop approves and acknowledges typed text" },
 

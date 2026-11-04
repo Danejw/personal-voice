@@ -118,6 +118,8 @@ export interface PlatformAdapter {
   computerCapture(): Promise<unknown>;
   /** Clicks a 0–999 point in the foreground window. */
   computerClick(x: number, y: number, times: number): Promise<string>;
+  /** Supervised local desktop-only motion, right click or bounded drag. Not a remote trusted action. */
+  computerPointerAction?(kind: "move" | "click" | "double_click" | "right_click" | "drag", x: number, y: number, endX?: number, endY?: number): Promise<string>;
   /** Shows Settings after a supervised screen task. */
   computerRestore(): Promise<void>;
   /** Always-visible floating control: snapshot in, clicks out. */

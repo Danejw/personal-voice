@@ -1,4 +1,4 @@
-import { executableShortcut, isTrustedRemoteAction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
+import { dragEndpoints, executableShortcut, isTrustedRemoteAction, parseRemotePointer, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
 import type { ComputerImage } from "@/assistant/computerTask";
 import type { RemoteDevice } from "@/assistant/remoteContext";
@@ -85,7 +85,21 @@ export class ComputerActionStore {
       if (typeof call.args.x !== "number" || typeof call.args.y !== "number") {
         throw new Error("The click coordinates were not valid.");
       }
+      if (this.platform.computerPointerAction) return this.platform.computerPointerAction(call.name, call.args.x, call.args.y);
       return this.platform.computerClick(call.args.x, call.args.y, call.name === "double_click" ? 2 : 1);
+    }
+    if (call.name === "drag_and_drop") {
+      const endpoints = dragEndpoints(call.args.path);
+      if (!endpoints || !this.platform.computerPointerAction) throw new Error("Cannot execute this drag path.");
+      return this.platform.computerPointerAction("drag", endpoints.x, endpoints.y, endpoints.endX, endpoints.endY);
+    }
+    if (call.name === "move" || call.name === "right_click" || call.name === "drag") {
+      if (!this.platform.computerPointerAction) throw new Error("Desktop pointer control is not available on this device.");
+      const { x, y, end_x, end_y } = call.args;
+      if (typeof x !== "number" || typeof y !== "number") throw new Error("Pointer coordinates are required.");
+      return this.platform.computerPointerAction(call.name, x, y,
+        typeof end_x === "number" ? end_x : undefined,
+        typeof end_y === "number" ? end_y : undefined);
     }
     if (call.name === "type") {
       if (typeof call.args.text !== "string") throw new Error("Text is required.");
@@ -196,6 +210,13 @@ export class ComputerActionStore {
   }
 
   private async run(action: RemoteComputerAction, argument: string): Promise<string> {
+    const pointer = parseRemotePointer(action, argument);
+    if (pointer) {
+      if (!this.platform.computerPointerAction) throw new Error("This PC cannot control its pointer.");
+      if (!await invoke<boolean>("trusted_desktop_unlocked")) throw new Error("Unlock the Windows desktop first.");
+      return this.platform.computerPointerAction(pointer.kind, pointer.x, pointer.y, pointer.endX, pointer.endY);
+    }
+    if (action.endsWith("_pointer")) throw new Error("Invalid pointer command.");
     if (action === "open_app") return this.platform.openAllowlistedApp(argument);
     if (action === "press_shortcut") return this.platform.pressAllowlistedShortcut(argument, true);
     await this.platform.insertText(argument);

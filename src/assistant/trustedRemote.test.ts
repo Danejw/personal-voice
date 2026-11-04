@@ -29,7 +29,7 @@ describe("trusted remote action safety", () => {
     for (const value of ["copy", "paste", "undo", "select-all"]) {
       expect(isTrustedRemoteAction("press_shortcut", value)).toBe(false);
     }
-    for (const action of ["insert_text", "click", "run_shell", "delete_file", "send_email"]) {
+    for (const action of ["insert_text", "click", "move_pointer", "click_pointer", "double_click_pointer", "right_click_pointer", "drag_pointer", "run_shell", "delete_file", "send_email"]) {
       expect(isTrustedRemoteAction(action, "hello")).toBe(false);
     }
   });
