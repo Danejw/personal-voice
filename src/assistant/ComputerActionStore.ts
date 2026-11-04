@@ -1,4 +1,4 @@
-import { executableShortcut, isTrustedRemoteAction, parseRemotePointer, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
+import { dragEndpoints, executableShortcut, isTrustedRemoteAction, parseRemotePointer, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
 import type { ComputerImage } from "@/assistant/computerTask";
 import type { RemoteDevice } from "@/assistant/remoteContext";
@@ -87,6 +87,11 @@ export class ComputerActionStore {
       }
       if (this.platform.computerPointerAction) return this.platform.computerPointerAction(call.name, call.args.x, call.args.y);
       return this.platform.computerClick(call.args.x, call.args.y, call.name === "double_click" ? 2 : 1);
+    }
+    if (call.name === "drag_and_drop") {
+      const endpoints = dragEndpoints(call.args.path);
+      if (!endpoints || !this.platform.computerPointerAction) throw new Error("Cannot execute this drag path.");
+      return this.platform.computerPointerAction("drag", endpoints.x, endpoints.y, endpoints.endX, endpoints.endY);
     }
     if (call.name === "move" || call.name === "right_click" || call.name === "drag") {
       if (!this.platform.computerPointerAction) throw new Error("Desktop pointer control is not available on this device.");
