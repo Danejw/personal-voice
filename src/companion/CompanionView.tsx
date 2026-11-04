@@ -75,6 +75,13 @@ export function CompanionView({
       unsubscribeState();
     };
   }, [targetId]);
+  // Pair refresh or account reconnection can restart the transport while this
+  // screen stays mounted. Re-announce only to the selected PC.
+  useEffect(() => {
+    if (document.visibilityState === "visible") {
+      deviceLinkManager.setCompanionOpen(true, targetId);
+    }
+  }, [transport.state, targetId]);
   useEffect(() => {
     setCursor(null);
     setMonitors([]);
