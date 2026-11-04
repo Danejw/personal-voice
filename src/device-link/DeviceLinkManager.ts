@@ -133,6 +133,7 @@ export class DeviceLinkManager {
         if (!active.has(peer)) this.disconnectPeer(peer);
       }
       this.pairs = updated;
+      if (this.pairs.length === 0) { this.stop(); return; }
       if (this.platform === "windows") {
         for (const peer of this.pairs) this.connectWindows(peer);
       }
