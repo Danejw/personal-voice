@@ -14,6 +14,10 @@ export interface ComputerActionRow {
   status: "pending" | "answered" | "denied";
   result: string | null;
   error: string | null;
+  version: number;
+  expiresAt: string;
+  requestSignature: string | null;
+  responseSignature: string | null;
 }
 
 export interface ComputerActionApi {
