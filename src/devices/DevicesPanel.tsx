@@ -142,6 +142,7 @@ export function DevicesPanel({ store, snapshot, onChanged }: DevicesPanelProps) 
         <DevicePairingPanel
           key={snapshot.currentDeviceId}
           deviceId={snapshot.currentDeviceId}
+          devices={snapshot.devices}
           platform={snapshot.devices.find((device) => device.id === snapshot.currentDeviceId)?.platform ?? "unknown"}
         />
       )}
