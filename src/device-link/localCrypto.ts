@@ -106,7 +106,11 @@ export class LocalCipher {
   private lastReceived = 0;
   private readonly prefix = crypto.getRandomValues(new Uint8Array(4));
 
-  constructor(private key: CryptoKey, private localId: string, private remoteId: string) {}
+  constructor(private key: CryptoKey, private localId: string, private remoteId: string) {
+    // Split the AES-GCM nonce space by direction so the two devices can never
+    // encrypt under the same key and nonce even if their random prefixes collide.
+    this.prefix[0] = (this.prefix[0]! & 0x7F) | (localId < remoteId ? 0 : 0x80);
+  }
 
   async seal(frame: DeviceLinkEnvelope): Promise<EncryptedWireFrame> {
     if (frame.sender !== this.localId || frame.target !== this.remoteId) throw new Error("Wrong frame recipient.");
