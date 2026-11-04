@@ -5,8 +5,8 @@ use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::RECT;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-    KEYEVENTF_KEYUP, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
-    MOUSEEVENTF_MOVE, MOUSEINPUT, VIRTUAL_KEY, VK_A, VK_C, VK_CONTROL, VK_ESCAPE, VK_RETURN, VK_TAB,
+    KEYEVENTF_KEYUP, MOUSEEVENTF_ABSOLUTE,
+    MOUSEEVENTF_MOVE, MOUSEEVENTF_VIRTUALDESK, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, VIRTUAL_KEY, VK_A, VK_C, VK_CONTROL, VK_ESCAPE, VK_RETURN, VK_TAB,
     VK_V, VK_Z,
 };
 use windows::Win32::UI::Shell::ShellExecuteW;
@@ -76,6 +76,76 @@ pub fn click_normalized(x: i32, y: i32, times: u32) -> Result<String, String> {
     Ok(format!("Clicked at {x}, {y}."))
 }
 
+
+static POINTER_ACTION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn point(x: i32, y: i32) -> Result<(i32, i32), String> {
+    if !(0..=999).contains(&x) || !(0..=999).contains(&y) {
+        return Err("Pointer coordinates must be between 0 and 999.".into());
+    }
+    let (left, top, width, height) = target_rect();
+    to_absolute(left.saturating_add((x as i64 * (width - 1) as i64 / 999) as i32),
+                top.saturating_add((y as i64 * (height - 1) as i64 / 999) as i32))
+}
+
+fn pointer_event(flags: windows::Win32::UI::Input::KeyboardAndMouse::MOUSE_EVENT_FLAGS, x: i32, y: i32, data: i32) -> Result<(), String> {
+    let mut input = mouse(flags, x, y);
+    input.Anonymous.mi.mouseData = data;
+    send_inputs(&[input], "pointer action")
+}
+
+fn pointer_move(from: (i32, i32), to: (i32, i32)) -> Result<(), String> {
+    // Move the actual Windows cursor in short visible increments, not a simulated UI indicator.
+    // Every action is serialized to avoid overlapping drags or clicks.
+    const STEPS: i64 = 12;
+    for i in 1..=STEPS {
+        let x = (from.0 as i64 + (to.0 as i64 - from.0 as i64) * i / STEPS) as i32;
+        let y = (from.1 as i64 + (to.1 as i64 - from.1 as i64) * i / STEPS) as i32;
+        pointer_event(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK, x, y, 0)?;
+        std::thread::sleep(std::time::Duration::from_millis(12));
+    }
+    Ok(())
+}
+
+/// Supervised local desktop pointer actions. Never exposed as trusted remote commands.
+/// Drag always releases the button, including when a movement fails.
+pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Option<i32>) -> Result<String, String> {
+    let _lock = POINTER_ACTION_LOCK.lock().map_err(|_| "Pointer controller unavailable.")?;
+    let destination = point(x, y)?;
+    let endpoint = if kind == "drag" {
+        Some(point(end_x.ok_or("Drag endpoint X is required.")?,
+                   end_y.ok_or("Drag endpoint Y is required.")?)?)
+    } else {
+        if end_x.is_some() || end_y.is_some() { return Err("Unexpected pointer endpoint.".into()); }
+        None
+    };
+    if !["move", "right_click", "drag"].contains(&kind) {
+        return Err("Unsupported pointer action.".into());
+    }
+    let mut current = windows::Win32::Foundation::POINT::default();
+    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    unsafe { GetCursorPos(&mut current) }.map_err(|e| e.to_string())?;
+    let origin = to_absolute(current.x, current.y)?;
+    pointer_move(origin, destination)?;
+    match kind {
+        "move" => Ok("Moved the visible Windows pointer.".into()),
+        "right_click" => {
+            pointer_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0)?;
+            pointer_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0)?;
+            Ok("Right-clicked the target.".into())
+        }
+        "drag" => {
+            pointer_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0)?;
+            let moved = pointer_move(destination, endpoint.expect("validated endpoint"));
+            let released = pointer_event(MOUSEEVENTF_LEFTUP, 0, 0, 0);
+            moved?;
+            released?;
+            Ok("Dragged and released the target.".into())
+        }
+        _ => unreachable!(),
+    }
+}
+
 fn target_rect() -> (i32, i32, i32, i32) {
     let hwnd = unsafe { GetForegroundWindow() };
     let mut rect = RECT::default();
@@ -99,13 +169,13 @@ fn to_absolute(x: i32, y: i32) -> Result<(i32, i32), String> {
     let width = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) }.max(1);
     let height = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) }.max(1);
     Ok((
-        (x - origin_x) * 65535 / width,
-        (y - origin_y) * 65535 / height,
+        ((x - origin_x).clamp(0, width - 1) as i64 * 65535 / (width - 1).max(1) as i64) as i32,
+        ((y - origin_y).clamp(0, height - 1) as i64 * 65535 / (height - 1).max(1) as i64) as i32,
     ))
 }
 
 fn send_click(x: i32, y: i32) -> Result<(), String> {
-    let flags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
+    let flags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | MOUSEEVENTF_MOVE;
     let down = flags | MOUSEEVENTF_LEFTDOWN;
     let up = flags | MOUSEEVENTF_LEFTUP;
     let inputs = [mouse(down, x, y), mouse(up, x, y)];
