@@ -85,6 +85,7 @@ export class DeviceLinkSeenIds {
   private entries = new Map<string, number>();
   constructor(private limit = 512) {}
   accept(frame: DeviceLinkEnvelope, now = Date.now()): boolean {
+    if (frame.expiresAt <= now || frame.issuedAt > now + DEVICE_LINK_MAX_CLOCK_SKEW_MS) return false;
     for (const [id, expiry] of this.entries) if (expiry <= now) this.entries.delete(id);
     const key = frame.sender + ":" + frame.id;
     if (this.entries.has(key)) return false;
