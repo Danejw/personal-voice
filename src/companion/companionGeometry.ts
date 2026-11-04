@@ -2,6 +2,16 @@
 import type { CompanionMonitor, CompanionAssistantPhase } from "@/device-link/protocol";
 import type { AssistantSnapshot } from "@/assistant/state";
 
+/** Never substitute a different PC when the user chose a specific target.
+ * Without a preference, Companion starts only when exactly one PC is paired.
+ */
+export function selectedCompanionPC(
+  pairedWindows: readonly { id: string }[], preferredId: string | null,
+): string | null {
+  if (preferredId) return pairedWindows.find(device => device.id === preferredId)?.id ?? null;
+  return pairedWindows.length === 1 ? pairedWindows[0].id : null;
+}
+
 export interface PointerSample {
   x: number;
   y: number;
