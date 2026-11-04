@@ -4,6 +4,7 @@ import {
   isUnsupportedAction,
   planComputerStep,
   planRemoteComputerAction,
+  parseRemotePointer,
   safetyClass,
   validateComputerCall,
   validateOpenApp,
@@ -85,6 +86,17 @@ describe("computer action safety", () => {
       action: "confirm",
       label: "Open Notepad",
     });
+  });
+
+  it("requires PC confirmation for bounded signed pointer commands", () => {
+    expect(parseRemotePointer("drag_pointer", "0,500,999,501")).toEqual({ kind: "drag", x: 0, y: 500, endX: 999, endY: 501 });
+    expect(parseRemotePointer("click_pointer", "500,500")).toEqual({ kind: "click", x: 500, y: 500 });
+    for (const invalid of ["-1,500", "1000,500", "500, 500", "500,500,500", "01,500", "500;500"]) {
+      expect(planRemoteComputerAction("click_pointer", invalid, "windows", true).action).toBe("deny");
+    }
+    expect(planRemoteComputerAction("drag_pointer", "0,0,999,999", "windows", true)).toMatchObject({ action: "confirm" });
+    expect(planRemoteComputerAction("click_pointer", "500,500", "windows", false).action).toBe("deny");
+    expect(planRemoteComputerAction("click_pointer", "500,500", "android", true).action).toBe("deny");
   });
 
   it("builds a desktop Computer Use request with prompt-injection detection and no shell tool", () => {
