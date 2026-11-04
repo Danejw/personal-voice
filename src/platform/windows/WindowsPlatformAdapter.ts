@@ -101,7 +101,7 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
     return invoke<string>("computer_click", { x, y, times });
   }
 
-  computerPointerAction(kind: "move" | "right_click" | "drag", x: number, y: number, endX?: number, endY?: number) {
+  computerPointerAction(kind: "move" | "click" | "double_click" | "right_click" | "drag", x: number, y: number, endX?: number, endY?: number) {
     return invoke<string>("computer_pointer_action", { kind, x, y, endX, endY });
   }
 
