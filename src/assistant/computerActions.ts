@@ -52,8 +52,8 @@ export function parseRemotePointer(action: string, argument: string): {
   const values = pieces.map(Number);
   if (values.some(value => value > 999)) return null;
   return kind === "drag"
-    ? { kind, x: values[0], y: values[1], endX: values[2], endY: values[3] }
-    : { kind, x: values[0], y: values[1] };
+    ? { kind, x: values[0]!, y: values[1]!, endX: values[2]!, endY: values[3]! }
+    : { kind, x: values[0]!, y: values[1]! };
 }
 
 export type SafetyClass = "read" | "low" | "high" | "unsupported";
