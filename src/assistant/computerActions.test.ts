@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computerUseBody,
+  dragEndpoints,
   isUnsupportedAction,
   planComputerStep,
   planRemoteComputerAction,
@@ -67,6 +68,12 @@ describe("computer action safety", () => {
     expect(validateComputerCall({ name: "drag", args: { x: 100, y: 100, end_x: 1000, end_y: 900 } }).ok).toBe(false);
     expect(planComputerStep({ name: "drag", args: { x: 100, y: 100, end_x: 900, end_y: 900 } }, 0, started, started, false).action).toBe("confirm");
     expect(planComputerStep({ name: "right_click", args: { x: 500, y: 500 } }, 0, started, started, true).action).toBe("stop");
+    expect(dragEndpoints([[0, 0], [500, 500], [999, 999]])).toEqual({ x: 0, y: 0, endX: 999, endY: 999 });
+    expect(dragEndpoints([{ x: 20, y: 30 }, { x: 40, y: 50 }])).toEqual({ x: 20, y: 30, endX: 40, endY: 50 });
+    expect(dragEndpoints([[0, 0], [1000, 50]])).toBeNull();
+    expect(validateComputerCall({ name: "drag_and_drop", args: { path: [[0, 0], [999, 999]] } }).ok).toBe(true);
+    expect(validateComputerCall({ name: "drag_and_drop", args: { path: [[0, 0], [-1, 999]] } }).ok).toBe(false);
+    expect(safetyClass("drag_and_drop")).toBe("high");
     expect(safetyClass("drag")).toBe("high");
     expect(safetyClass("right_click")).toBe("low");
   });
