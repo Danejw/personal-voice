@@ -1,7 +1,7 @@
 import { getSupabase } from "@/services/supabase";
 import {
-  pairingIdentity, publicPairingKey, pairingClaimText, pairingApprovalText,
-  signPairingText, verifyPairingText, publicKeyFromJwk, keysMatch,
+  nativePairPublicKey, nativeSignPairingText, pairingClaimText, pairingApprovalText,
+  deviceProofPayload, verifyPairingText, publicKeyFromJwk, keysMatch,
   type PublicPairingKey,
 } from "@/devices/pairingIdentity";
 
@@ -19,11 +19,6 @@ export interface PairInvite {
 export interface PairLink { id: string; peerDeviceId: string; createdAt: string }
 export interface PairCode { id: string; code: string; expiresAt: string }
 
-function db() {
-  const client = getSupabase();
-  if (!client) throw new Error("Device pairing requires account sync.");
-  return client;
-}
 function row(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid pairing response.");
   return value as Record<string, unknown>;
@@ -33,17 +28,6 @@ function str(value: unknown): string {
   return value;
 }
 function optional(value: unknown): string | null { return typeof value === "string" ? value : null; }
-function check(error: { message: string } | null): void {
-  if (!error) return;
-  if (error.message.includes("PAIR_TRY_LATER") || error.message.includes("PAIR_INVITE_LIMIT")) {
-    throw new Error("Pairing temporarily limited. Try again later.");
-  }
-  if (error.message.includes("PAIR_KEY_CHANGED")) throw new Error("Device identity has changed. Remove the old device registration.");
-  if (error.message.includes("PAIR_INVALID") || error.message.includes("PAIR_SELF")) {
-    throw new Error("Invalid or expired pairing code.");
-  }
-  throw new Error("Device pairing failed. Check the connection and device registration.");
-}
 function parseInvite(data: unknown): PairInvite {
   const value = row(data);
   const status = value.status;
@@ -60,36 +44,63 @@ function parseInvite(data: unknown): PairInvite {
   };
 }
 
+/** All database operations are authorized by the Edge Function, never direct RPC access.
+ * Each native signature covers the exact payload, a timestamp and a one-use nonce. */
+export async function pairServerAction<T>(
+  deviceId: string, op: string, args: Record<string, unknown> = {},
+): Promise<T> {
+  const client = getSupabase();
+  if (!client) throw new Error("Device pairing requires account sync.");
+  const payload = deviceProofPayload(op, deviceId, crypto.randomUUID(), Date.now(), args);
+  const signature = await nativeSignPairingText(deviceId, payload);
+  const { data, error } = await client.functions.invoke<{ data?: T; error?: string }>(
+    "device-pairing", { body: { payload, signature } },
+  );
+  let failure = data?.error;
+  if (error && "context" in error && error.context instanceof Response) {
+    try {
+      const body = await error.context.json() as { error?: unknown };
+      if (typeof body.error === "string") failure = body.error;
+    } catch { /* Network errors have no response body. */ }
+  }
+  if (error || failure) {
+    if (failure === "rate_limited") throw new Error("Too many pairing attempts. Try again later.");
+    if (failure === "invalid") throw new Error("Pairing code is incorrect or has expired.");
+    if (failure === "device" || failure === "identity" || failure === "proof") {
+      throw new Error("This device could not prove its identity. Re-register the device if its keys changed.");
+    }
+    if (failure === "replay") throw new Error("Pairing request was already processed.");
+    throw new Error("Device pairing is unavailable or the request was rejected.");
+  }
+  if (!data || !("data" in data)) throw new Error("Invalid pairing response.");
+  return data.data as T;
+}
+
 export const devicePairingApi = {
-  async register(deviceId: string) {
-    const key = await publicPairingKey(await pairingIdentity(deviceId));
-    const { data, error } = await db().rpc("pair_register_identity", {
-      p_device_id: deviceId, p_public_jwk: { kty: key.kty, crv: key.crv, x: key.x, y: key.y },
+  async register(deviceId: string): Promise<void> {
+    const publicJwk = await nativePairPublicKey(deviceId);
+    const result = await pairServerAction<boolean>(deviceId, "register", {
+      publicJwk: { kty: publicJwk.kty, crv: publicJwk.crv, x: publicJwk.x, y: publicJwk.y },
     });
-    check(error);
-    if (data !== true) throw new Error("Pairing identity could not be registered.");
+    if (result !== true) throw new Error("Could not register pairing identity.");
   },
   async invite(deviceId: string): Promise<PairCode> {
     await this.register(deviceId);
-    const { data, error } = await db().rpc("pair_create_invite", { p_device_id: deviceId });
-    check(error);
-    const result = row(data);
-    return { id: str(result.id), code: str(result.code), expiresAt: str(result.expires_at) };
+    const result = row(await pairServerAction<unknown>(deviceId, "invite"));
+    const code = str(result.code);
+    if (!/^[0-9]{8}$/.test(code)) throw new Error("Invalid pairing code.");
+    return { id: str(result.id), code, expiresAt: str(result.expires_at) };
   },
   async claim(deviceId: string, input: string): Promise<string> {
     const code = input.replace(/[\s-]/g, "");
-    if (!/^[0-9]{8}$/.test(code)) throw new Error("Enter an 8-digit pairing code.");
+    if (!/^[0-9]{8}$/.test(code)) throw new Error("Enter the 8-digit pairing code.");
     await this.register(deviceId);
-    const proof = await signPairingText(await pairingIdentity(deviceId), pairingClaimText(code, deviceId));
-    const { data, error } = await db().rpc("pair_claim_invite", {
-      p_device_id: deviceId, p_code: code, p_signature: proof,
-    });
-    check(error);
-    return str(row(data).id);
+    const claimSignature = await nativeSignPairingText(deviceId, pairingClaimText(code, deviceId));
+    const result = row(await pairServerAction<unknown>(deviceId, "claim", { code, claimSignature }));
+    return str(result.id);
   },
   async read(deviceId: string, id: string): Promise<PairInvite | null> {
-    const { data, error } = await db().rpc("pair_get_invite", { p_id: id, p_device_id: deviceId });
-    check(error);
+    const data = await pairServerAction<unknown>(deviceId, "read", { id });
     return data ? parseInvite(data) : null;
   },
   async approve(deviceId: string, invite: PairInvite, code: string): Promise<void> {
@@ -98,29 +109,25 @@ export const devicePairingApi = {
       throw new Error("No device is ready for approval.");
     }
     if (Date.parse(invite.expiresAt) <= Date.now()) throw new Error("Pairing code expired.");
-    if (!await verifyPairingText(invite.claimantKey, pairingClaimText(code, invite.claimantDeviceId), invite.claimSignature)) {
+    if (!await verifyPairingText(invite.claimantKey,
+      pairingClaimText(code, invite.claimantDeviceId), invite.claimSignature)) {
       throw new Error("Joining device identity could not be verified.");
     }
-    const identity = await pairingIdentity(deviceId);
-    if (!keysMatch(await publicPairingKey(identity), invite.issuerKey)) {
-      throw new Error("This device's identity does not match.");
-    }
-    const signature = await signPairingText(identity, pairingApprovalText(
+    const current = await nativePairPublicKey(deviceId);
+    if (!keysMatch(current, invite.issuerKey)) throw new Error("This device identity has changed.");
+    const approvalSignature = await nativeSignPairingText(deviceId, pairingApprovalText(
       invite.id, deviceId, invite.claimantDeviceId, invite.claimantKey,
     ));
-    const { data, error } = await db().rpc("pair_approve_invite", {
-      p_id: invite.id, p_device_id: deviceId, p_signature: signature,
+    const result = await pairServerAction<boolean>(deviceId, "approve", {
+      id: invite.id, approvalSignature,
     });
-    check(error);
-    if (data !== true) throw new Error("Pairing invitation is no longer available.");
+    if (result !== true) throw new Error("Pairing invitation is no longer available.");
   },
-  async cancel(deviceId: string, id: string) {
-    const { error } = await db().rpc("pair_cancel_invite", { p_id: id, p_device_id: deviceId });
-    check(error);
+  async cancel(deviceId: string, id: string): Promise<void> {
+    await pairServerAction<boolean>(deviceId, "cancel", { id });
   },
-  async revoke(deviceId: string, id: string) {
-    const { data, error } = await db().rpc("pair_revoke_link", { p_link_id: id, p_device_id: deviceId });
-    check(error);
-    if (data !== true) throw new Error("Pairing was already removed.");
+  async revoke(deviceId: string, id: string): Promise<void> {
+    const result = await pairServerAction<boolean>(deviceId, "revoke", { linkId: id });
+    if (result !== true) throw new Error("Pairing was already removed.");
   },
 };
