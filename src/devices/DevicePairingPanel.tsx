@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
+import { loadRemoteVoiceDefault, saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import { PairingQrCode } from "@/devices/PairingQrCode";
 import { devicePairingApi, type PairInvite, type PairCode } from "@/services/devicePairingService";
 import { verifyPairApproval, verifiedPairLinks } from "@/services/verifiedPairLinks";
@@ -16,8 +17,10 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [links, setLinks] = useState<PairLink[]>([]);
+  const [defaultVoiceTarget, setDefaultVoiceTarget] = useState(() => loadRemoteVoiceDefault(deviceId));
   const [transport, setTransport] = useState(deviceLinkManager.getSnapshot);
   useEffect(() => deviceLinkManager.subscribe(() => setTransport(deviceLinkManager.getSnapshot())), []);
+  useEffect(() => setDefaultVoiceTarget(loadRemoteVoiceDefault(deviceId)), [deviceId]);
 
 
   useEffect(() => {
@@ -127,9 +130,25 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
           <strong>{devices.find((device) => device.id === link.peerDeviceId)?.name ?? "Other device"}
             {transport.localPeers.includes(link.peerDeviceId) && <span className="note-meta"> · LAN</span>}
           </strong>
+          {platform === "android" && devices.find(d => d.id === link.peerDeviceId)?.platform === "windows" && (
+            <button type="button" className="secondary"
+              disabled={busy}
+              aria-pressed={defaultVoiceTarget === link.peerDeviceId}
+              onClick={() => void run(async () => {
+                const next = defaultVoiceTarget === link.peerDeviceId ? null : link.peerDeviceId;
+                saveRemoteVoiceDefault(deviceId, next);
+                setDefaultVoiceTarget(next);
+              })}>
+              {defaultVoiceTarget === link.peerDeviceId ? "Voice default" : "Use for voice"}
+            </button>
+          )}
           <button type="button" className="secondary" disabled={busy}
             onClick={() => void run(async () => {
               await devicePairingApi.revoke(deviceId, link.id);
+              if (defaultVoiceTarget === link.peerDeviceId) {
+                saveRemoteVoiceDefault(deviceId, null);
+                setDefaultVoiceTarget(null);
+              }
               setLinks(await verifiedPairLinks(deviceId));
               void deviceLinkManager.refresh();
             })}>Unpair</button>
