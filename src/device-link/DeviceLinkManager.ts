@@ -32,6 +32,8 @@ export class DeviceLinkManager {
   private cloudUnsubscribe: (() => void) | null = null;
   private scanTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private trustTimer: ReturnType<typeof setInterval> | null = null;
+  private trustVerifiedAt = 0;
   private generation = 0;
   private cloudReady = false;
   private relayPort: number | null = null;
@@ -75,6 +77,7 @@ export class DeviceLinkManager {
       const pairs = await verifiedPairLinks(deviceId);
       if (generation !== this.generation) return;
       this.pairs = pairs.filter(p => !!p.peerPublicKey);
+      this.trustVerifiedAt = Date.now();
       if (this.pairs.length === 0) { this.update(); return; }
       this.cloudUnsubscribe = subscribeDeviceLinkWakes(userId, deviceId,
         wake => {
@@ -95,6 +98,7 @@ export class DeviceLinkManager {
         await this.scanAndroid(generation);
         this.scanTimer = setInterval(() => { void this.scanAndroid(generation); }, 8_000);
       }
+      this.trustTimer = setInterval(() => { void this.recheckTrust(generation); }, 20_000);
       this.heartbeatTimer = setInterval(() => {
         for (const [peerId, session] of this.sessions) {
           if (!session.connected) continue;
@@ -118,9 +122,34 @@ export class DeviceLinkManager {
     }
   }
 
+  private async recheckTrust(generation: number): Promise<void> {
+    if (!this.deviceId || generation !== this.generation) return;
+    try {
+      const updated = (await verifiedPairLinks(this.deviceId)).filter(link => !!link.peerPublicKey);
+      if (generation !== this.generation) return;
+      this.trustVerifiedAt = Date.now();
+      const active = new Set(updated.map(link => link.peerDeviceId));
+      for (const peer of this.sessions.keys()) {
+        if (!active.has(peer)) this.disconnectPeer(peer);
+      }
+      this.pairs = updated;
+      if (this.platform === "windows") {
+        for (const peer of this.pairs) this.connectWindows(peer);
+      }
+      this.update();
+    } catch {
+      // Offline LAN may temporarily continue, but no new sessions may be
+      // established without a recent verified pairing. Eventually fail closed.
+      if (Date.now() - this.trustVerifiedAt > 120_000) {
+        for (const peer of [...this.sessions.keys()]) this.disconnectPeer(peer);
+      }
+    }
+  }
+
   private connectWindows(peer: PairLink): void {
     if (!this.deviceId || !peer.peerPublicKey || !this.relayPort) return;
-    if (this.sessions.has(peer.peerDeviceId) || this.connecting.has(peer.peerDeviceId)) return;
+    if (this.sessions.has(peer.peerDeviceId) || this.connecting.has(peer.peerDeviceId)
+      || Date.now() - this.trustVerifiedAt > 35_000) return;
     this.connecting.add(peer.peerDeviceId);
     try {
       const socket = new WebSocket(`ws://127.0.0.1:${this.relayPort}/device-link`);
@@ -145,7 +174,8 @@ export class DeviceLinkManager {
       for (const peer of discovered) {
         const pairing = this.pairs.find(item => item.peerDeviceId === peer.deviceId);
         if (!pairing?.peerPublicKey || this.sessions.has(peer.deviceId)
-          || this.connecting.has(peer.deviceId)) continue;
+          || this.connecting.has(peer.deviceId)
+          || Date.now() - this.trustVerifiedAt > 35_000) continue;
         this.connecting.add(peer.deviceId);
         try {
           const socket = new AndroidLanSocket(peer.host, peer.port);
@@ -204,8 +234,10 @@ export class DeviceLinkManager {
     this.generation++;
     if (this.scanTimer) clearInterval(this.scanTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    if (this.trustTimer) clearInterval(this.trustTimer);
     this.scanTimer = null;
     this.heartbeatTimer = null;
+    this.trustTimer = null;
     this.cloudUnsubscribe?.();
     this.cloudUnsubscribe = null;
     for (const session of this.sessions.values()) session.stop();
@@ -215,6 +247,7 @@ export class DeviceLinkManager {
     if (this.relayPort !== null) void invoke("device_link_stop_relay").catch(() => undefined);
     this.relayPort = null;
     this.cloudReady = false;
+    this.trustVerifiedAt = 0;
     this.pairs = [];
     this.deviceId = null;
     this.userId = null;
