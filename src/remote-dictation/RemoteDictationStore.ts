@@ -215,7 +215,7 @@ export class RemoteDictationStore {
     try {
       // Optional wake-up only. The authoritative request is already persisted and
       // the target's existing claim/ack path still determines success.
-      void signalPairedDevice(this.currentDeviceId, target.id, "remote-dictation", requestId);
+      void signalPairedDevice(this.currentDeviceId!, target.id, "remote-dictation", requestId);
       const outcome = await this.waitForResult(requestId, target.name);
       if (outcome.ok) {
         this.publish({ ...this.snapshot, active: false, error: null });
