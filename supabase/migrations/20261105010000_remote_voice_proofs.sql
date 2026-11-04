@@ -16,17 +16,6 @@ create index device_context_pending_expiry on public.device_context_requests
 
 -- An account session alone cannot create a trusted remote request. Its target
 -- and requester must be two different devices with an active pairing.
-create or replace function public.remote_voice_pair_valid(p_uid uuid,p_requester uuid,p_target uuid)
-returns boolean language sql stable security invoker set search_path = '' as $$
-  select p_uid=(select auth.uid()) and p_requester<>p_target
-    and exists (
-      select 1 from public.device_pair_links l
-        where l.user_id=p_uid and l.revoked_at is null
-          and l.left_device_id=least(p_requester,p_target)
-          and l.right_device_id=greatest(p_requester,p_target)
-    ) and exists (select 1 from public.devices d where d.id=p_requester and d.user_id=p_uid)
-      and exists (select 1 from public.devices d where d.id=p_target and d.user_id=p_uid);
-$$;
 -- This function is only used in an RLS policy. Because device_pair_links is
 -- private to the service role, its lookup needs a narrow SECURITY DEFINER.
 create or replace function public.remote_voice_pair_valid(p_uid uuid,p_requester uuid,p_target uuid)
