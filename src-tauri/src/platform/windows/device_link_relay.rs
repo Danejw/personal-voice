@@ -153,6 +153,7 @@ fn write_frame(stream: &mut TcpStream, opcode: u8, payload: &[u8]) -> Result<(),
 struct ClientRegistry {
     clients: HashMap<u64, Sender<String>>,
     names: HashMap<u64, String>,
+    hellos: HashMap<u64, (String, String)>,
 }
 fn participant(frame: &Value) -> Option<(&str, &str)> {
     let row = frame.as_object()?;
@@ -209,9 +210,19 @@ fn handle_client(id: u64, mut stream: TcpStream, registry: Arc<Mutex<ClientRegis
                     if let Some(existing) = guard.names.get(&id) {
                         if existing != from { break; }
                     } else {
-                        // The peer must still verify the signed hello. This relay's
-                        // routing label is never treated as authentication.
+                        // Labels are only routing hints. Clients authenticate signed
+                        // ephemeral key exchange before accepting any encrypted data.
                         guard.names.insert(id, from.to_string());
+                        if let Some(to_this_client) = guard.clients.get(&id).cloned() {
+                            for (other_id, (wanted, cached_hello)) in &guard.hellos {
+                                if *other_id != id && wanted == from {
+                                    let _ = to_this_client.send(cached_hello.clone());
+                                }
+                            }
+                        }
+                    }
+                    if value.get("kind").and_then(Value::as_str) == Some("hello") {
+                        guard.hellos.insert(id, (target.to_string(), text.to_string()));
                     }
                     recipients = guard.names.iter().filter(|(other, name)| **other != id && name == target)
                         .filter_map(|(other, _)| guard.clients.get(other).cloned()).collect();
@@ -224,6 +235,7 @@ fn handle_client(id: u64, mut stream: TcpStream, registry: Arc<Mutex<ClientRegis
     if let Ok(mut guard) = registry.lock() {
         guard.clients.remove(&id);
         guard.names.remove(&id);
+        guard.hellos.remove(&id);
     }
     let _ = stream.shutdown(std::net::Shutdown::Both);
     let _ = writer_thread.join();
