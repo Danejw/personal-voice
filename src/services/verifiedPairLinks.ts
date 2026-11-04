@@ -49,6 +49,7 @@ export async function verifiedPairLinks(deviceId: string): Promise<PairLink[]> {
       if (valid) result.push({
         id: string(value.id), peerDeviceId: string(value.peer_device_id),
         createdAt: string(value.created_at),
+        peerPublicKey: issuerId === deviceId ? claimantKey : issuerKey,
       });
     } catch { /* An invalid proof is not a trusted pairing. */ }
   }
