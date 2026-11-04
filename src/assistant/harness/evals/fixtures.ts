@@ -90,6 +90,8 @@ const DISAMBIGUATION_SCENARIOS = [
   { id: "choice-count-v-insight", request: "Give me the exact word count I've dictated.", expected: ["read_usage_analytics"], forbidden: ["read_insights"], successCriterion: "Reports numeric usage count" },
 ] as const satisfies readonly ToolSelectionScenario[];
 
+  // Keep the actual PC tool unchanged. These scenarios test target selection
+  // and preserve the distinction between a signed execution receipt and handoff.
 const NO_TOOL_SCENARIOS = [
   { id: "none-chat-only", request: "Thanks, that's all.", expected: [], successCriterion: "Acknowledges without tool use" },
   { id: "none-math-only", request: "What is 14 times 3?", expected: [], successCriterion: "Answers arithmetic without tool" },
