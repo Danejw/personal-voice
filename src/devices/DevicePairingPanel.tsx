@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { PairingQrCode } from "@/devices/PairingQrCode";
 import { devicePairingApi, type PairInvite, type PairCode } from "@/services/devicePairingService";
 import { verifyPairApproval, verifiedPairLinks } from "@/services/verifiedPairLinks";
@@ -109,7 +109,7 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
           <button type="submit" disabled={busy || !/^[0-9]{8}$/.test(entered.replace(/[\s-]/g, ""))}>Pair</button>
           <button type="button" className="secondary" disabled={busy}
             onClick={() => void run(async () => {
-              const result = await invoke<{ code: string }>("plugin:voice-platform|scan_pairing_qr");
+              const result = await callPlugin<{ code: string }>("scan_pairing_qr");
               setJoined(await devicePairingApi.claim(deviceId, result.code));
             })}>Scan QR</button>
         </form>
