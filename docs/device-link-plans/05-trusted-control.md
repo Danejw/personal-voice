@@ -1,9 +1,9 @@
 # DeviceLink 5/6: Scoped trusted remote-control sessions
 
-**Status:** Planned only. No implementation authorized.
+**Status:** Implementation started. Draft and not merge-ready.
 **Working branch:** `plan/device-link-05-trusted-control`
 **Merge target:** `feature/device-link-companion-mode`
-**Depends on:** PRs 1–4 merged into feature branch; refresh this PR branch before coding.
+**Depends on:** PR #39 merged into feature branch. Requires the PR #39 database migration before this phase's migration.
 
 ## Objective
 Permit explicitly authorized routine actions on an unattended but running/unlocked PC, without removing the user's safety boundaries or allowing unrestricted remote administration.
@@ -40,7 +40,21 @@ Full remote desktop, unsupervised arbitrary GUI interaction, shell/PowerShell, b
 - Keep UI minimal, borderless, and accessible. Keep existing dictation, handoffs, clipboard, Assistant, and account sync working.
 - Add focused tests, document meaningful architecture decisions, and update README when user-visible capabilities or security change.
 - Never claim tests or live-device validation ran until results are recorded.
-- This draft PR is **PLAN ONLY**. Do not implement code or migrations until explicitly instructed.
+- Implementation authorized. Keep this draft unmerged until atomic execution wiring, lock detection, security tests and real-device validation are complete.
 
 ## PR completion report required
 When implementation is authorized, report (1) actual changes, (2) automated checks and CI, (3) 3–5 manual tests with expected/actual results, (4) blockers, and (5) readiness to merge.
+
+## Implementation progress
+
+- Added `device_trusted_grants` and `device_trusted_claims` schema and service-role-only claim/validate RPCs with fixed low-risk scopes, 15-minute maximum TTL, 10 actions/minute and one-time claim fencing.
+- Extended the native-signed pairing Edge Function with Windows-only start, stop, list, claim and validate operations. Android cannot issue grants through its own signing identity.
+- Added `trustedRemoteApi` and Windows pairing UI grant/stop controls per paired Android phone.
+- Verified SQL compilation in a rollback-only transaction with the prerequisite PR #39 migration. Neither migration was deployed.
+
+### Still required
+
+- Wire claims and fresh validation to `ComputerActionStore` immediately before actual execution, with native Windows lock/unlock detection. **Until then, all actions still require per-action PC approval.**
+- Test concurrent claims, expiry, revocation, stopped grants, sign-out, offline/locked PC, rate limits, and unsafe action denials.
+- Complete Windows/Android CI and real phone-to-PC validation; review backend rollout.
+- Do not merge until these gates pass.
