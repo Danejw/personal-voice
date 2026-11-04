@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { loadRemoteVoiceDefault, saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
+import { trustedRemoteApi, type TrustedRemoteGrant } from "@/services/trustedRemoteService";
 import { PairingQrCode } from "@/devices/PairingQrCode";
 import { devicePairingApi, type PairInvite, type PairCode } from "@/services/devicePairingService";
 import { verifyPairApproval, verifiedPairLinks } from "@/services/verifiedPairLinks";
@@ -17,6 +18,7 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [links, setLinks] = useState<PairLink[]>([]);
+  const [trustedGrants, setTrustedGrants] = useState<TrustedRemoteGrant[]>([]);
   const [defaultVoiceTarget, setDefaultVoiceTarget] = useState(() => loadRemoteVoiceDefault(deviceId));
   const [transport, setTransport] = useState(deviceLinkManager.getSnapshot);
   useEffect(() => deviceLinkManager.subscribe(() => setTransport(deviceLinkManager.getSnapshot())), []);
@@ -31,6 +33,7 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
         await devicePairingApi.register(deviceId);
         const current = await verifiedPairLinks(deviceId);
         if (active) setLinks(current);
+        if (active && platform === "windows") setTrustedGrants(await trustedRemoteApi.list(deviceId));
       } catch (error) {
         if (active) setNotice(error instanceof Error ? error.message : "Pairing unavailable.");
       }
@@ -141,6 +144,25 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
               })}>
               {defaultVoiceTarget === link.peerDeviceId ? "Voice default" : "Use for voice"}
             </button>
+          )}
+          {platform === "windows" && devices.find(d => d.id === link.peerDeviceId)?.platform === "android" && (
+            <>
+              {trustedGrants.filter(g => g.phone_device_id === link.peerDeviceId && !g.stopped_at && Date.parse(g.expires_at) > Date.now()).map(grant => (
+                <button key={grant.id} type="button" className="secondary" disabled={busy}
+                  onClick={() => void run(async () => {
+                    await trustedRemoteApi.stop(deviceId, grant.id);
+                    setTrustedGrants(await trustedRemoteApi.list(deviceId));
+                  })}>Stop trusted control</button>
+              ))}
+              {!trustedGrants.some(g => g.phone_device_id === link.peerDeviceId && !g.stopped_at && Date.parse(g.expires_at) > Date.now()) && (
+                <button type="button" className="secondary" disabled={busy}
+                  onClick={() => void run(async () => {
+                    if (!window.confirm("Allow this paired phone to open Notepad or Calculator and use Escape or Tab for up to 14 minutes without approving each action?")) return;
+                    await trustedRemoteApi.start(deviceId, link.peerDeviceId);
+                    setTrustedGrants(await trustedRemoteApi.list(deviceId));
+                  })}>Allow trusted control</button>
+              )}
+            </>
           )}
           <button type="button" className="secondary" disabled={busy}
             onClick={() => void run(async () => {

@@ -118,6 +118,8 @@ pub fn run() {
             #[cfg(windows)]
             commands::companion_pointer_sample,
             #[cfg(windows)]
+            commands::trusted_desktop_unlocked,
+            #[cfg(windows)]
             commands::pairing_public_key,
             #[cfg(windows)]
             commands::pairing_sign,

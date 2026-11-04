@@ -1,4 +1,4 @@
-import { executableShortcut, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
+import { executableShortcut, isTrustedRemoteAction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
 import type { ComputerImage } from "@/assistant/computerTask";
 import type { RemoteDevice } from "@/assistant/remoteContext";
@@ -8,6 +8,8 @@ import { resolvePairedVoiceTarget } from "@/assistant/remoteVoiceTarget";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { proposeComputerStep } from "@/services/computerStep";
+import { trustedRemoteApi } from "@/services/trustedRemoteService";
+import { invoke } from "@tauri-apps/api/core";
 
 export interface ComputerApproval {
   id: string;
@@ -26,6 +28,8 @@ export class ComputerActionStore {
   private snapshot: ComputerActionSnapshot = { approval: null };
   private listeners = new Set<() => void>();
   private approvedId: string | null = null;
+  private polling = false;
+  private trustedBackendSeen = false;
 
   constructor(
     private api: ComputerActionApi & { touch(deviceId: string): Promise<void> },
@@ -106,23 +110,75 @@ export class ComputerActionStore {
   userId: string | null = null;
 
   async poll(userId: string): Promise<void> {
-    const currentId = this.getDeviceId(userId);
-    try { await this.api.touch(currentId); } catch { /* presence is best-effort */ }
-    const pending = await this.api.listPending(userId, currentId);
-    let waiting: ComputerApproval | null = null;
-    for (const row of pending) {
-      const outcome = await fulfillComputerAction(
-        this.api,
-        row,
-        this.platform.platform,
-        loadRemoteComputerActions(),
-        this.approvedId,
-        (action, argument) => this.run(action, argument),
-      );
-      if (outcome.action === "waiting" && outcome.label && !waiting) waiting = { id: row.id, label: outcome.label };
+    // Never run the same request in overlapping receiver polls or UI callbacks.
+    if (this.polling) return;
+    this.polling = true;
+    try {
+      const currentId = this.getDeviceId(userId);
+      try { await this.api.touch(currentId); } catch { /* presence is best-effort */ }
+      const pending = await this.api.listPending(userId, currentId);
+      const remoteEnabled = loadRemoteComputerActions();
+      // Backend missing, no trusted grant, account signed out, or Android:
+      // fail closed to ordinary per-action Windows confirmation.
+      let grants: Awaited<ReturnType<typeof trustedRemoteApi.list>> = [];
+      let trustedBackendAvailable = false;
+      if (remoteEnabled && this.platform.platform === "windows" && this.userId === userId && pending.length) {
+        try {
+          grants = await trustedRemoteApi.list(currentId);
+          trustedBackendAvailable = true;
+          this.trustedBackendSeen = true;
+        } catch { /* Older backends support ordinary per-action approval only. */ }
+      }
+      let waiting: ComputerApproval | null = null;
+      for (const row of pending) {
+        // Once trusted control has been available in this app process, an
+        // unavailable backend must not turn stale claimed actions into new
+        // manual approvals.
+        if (this.trustedBackendSeen && !trustedBackendAvailable) continue;
+        if (trustedBackendAvailable) {
+          try {
+            if (await trustedRemoteApi.wasClaimed(currentId, row.id)) continue;
+          } catch {
+            // Don't execute or approve if the duplicate-prevention check
+            // cannot be completed. Retry the safe read on the next poll.
+            continue;
+          }
+        }
+        const eligible = this.approvedId !== row.id &&
+          this.userId === userId && this.platform.platform === "windows" && remoteEnabled &&
+          isTrustedRemoteAction(row.action, row.argument) &&
+          grants.some(grant => grant.phone_device_id === row.requesterDeviceId &&
+            !grant.stopped_at && Date.parse(grant.expires_at) > Date.now());
+        const outcome = await fulfillComputerAction(
+          this.api, row, this.platform.platform, remoteEnabled, this.approvedId,
+          async (action, argument, trusted) => {
+            if (trusted) {
+              // Fresh remote grant, pairing, request and native lock checks
+              // immediately before the OS operation. No caches are authoritative.
+              if (this.userId !== userId ||
+                  !await trustedRemoteApi.validate(currentId, row.id) ||
+                  !await invoke<boolean>("trusted_desktop_unlocked")) {
+                throw new Error("Trusted control was stopped, expired, or the PC is locked.");
+              }
+            }
+            return this.run(action, argument);
+          },
+          eligible ? {
+            claim: async () => {
+              if (!await invoke<boolean>("trusted_desktop_unlocked")) return "none";
+              return trustedRemoteApi.claim(currentId, row.id);
+            },
+          } : null,
+        );
+        if (outcome.action === "waiting" && outcome.label && !waiting) {
+          waiting = { id: row.id, label: outcome.label };
+        }
+      }
+      if (this.approvedId && !pending.some(row => row.id === this.approvedId)) this.approvedId = null;
+      this.setApproval(waiting);
+    } finally {
+      this.polling = false;
     }
-    if (this.approvedId && !pending.some((row) => row.id === this.approvedId)) this.approvedId = null;
-    this.setApproval(waiting);
   }
 
   async approve(userId: string): Promise<void> {

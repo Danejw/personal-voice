@@ -84,9 +84,15 @@ export interface ComputerFulfillment {
   label?: string;
 }
 
+export interface TrustedRemoteExecution {
+  /** A server-atomic claim; 'already' means NEVER offer a second approval. */
+  claim(): Promise<"none" | "claimed" | "already">;
+}
+
 /**
- * The target runs the action only after a confirm plan and an explicit approval.
- * A denial does not call `execute`.
+ * Only an explicit local PC approval OR a one-use remote grant claim permits
+ * execution. Unavailable grants fall back to the existing confirmation UI.
+ * An already-claimed request must not execute twice or be offered for approval.
  */
 export async function fulfillComputerAction(
   api: ComputerActionApi,
@@ -94,16 +100,26 @@ export async function fulfillComputerAction(
   platform: string,
   remoteActions: boolean,
   approvedId: string | null,
-  execute: (action: RemoteComputerAction, argument: string) => Promise<string>,
+  execute: (action: RemoteComputerAction, argument: string, trusted: boolean) => Promise<string>,
+  trustedExecution?: TrustedRemoteExecution | null,
 ): Promise<ComputerFulfillment> {
   const plan = planRemoteComputerAction(row.action, row.argument, platform, remoteActions);
   if (plan.action === "deny") {
     await api.deny(row.userId, row.id, plan.message);
     return { action: "denied" };
   }
-  if (approvedId !== row.id) return { action: "waiting", label: plan.label };
+  let trusted = false;
+  if (approvedId !== row.id) {
+    if (!trustedExecution) return { action: "waiting", label: plan.label };
+    let claimed: "none" | "claimed" | "already";
+    try { claimed = await trustedExecution.claim(); }
+    catch { return { action: "waiting", label: plan.label }; }
+    if (claimed === "already") return { action: "waiting" };
+    if (claimed !== "claimed") return { action: "waiting", label: plan.label };
+    trusted = true;
+  }
   try {
-    const result = await execute(row.action as RemoteComputerAction, row.argument);
+    const result = await execute(row.action as RemoteComputerAction, row.argument, trusted);
     await api.answer(row.userId, row.id, result);
     return { action: "answered" };
   } catch (error) {
