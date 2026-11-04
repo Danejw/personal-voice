@@ -2217,7 +2217,7 @@ interface ConfirmedTool {
   preview: string;
   deviceId: string | null;
   label: string | null;
-  remote: { action: RemoteComputerAction; device: string } | null;
+  remote: { action: RemoteComputerAction; device: string | null } | null;
   memory: MemoryCommand | null;
   noteAttachment: NoteAttachmentInput | null;
   working: boolean;
