@@ -101,6 +101,10 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
     return invoke<string>("computer_click", { x, y, times });
   }
 
+  computerPointerAction(kind: "move" | "right_click" | "drag", x: number, y: number, endX?: number, endY?: number) {
+    return invoke<string>("computer_pointer_action", { kind, x, y, endX, endY });
+  }
+
   computerRestore() {
     return invoke<void>("computer_restore");
   }
