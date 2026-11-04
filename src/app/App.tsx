@@ -37,6 +37,9 @@ import { SelectField } from "@/components/SelectField";
 import type { SelectOption } from "@/components/SelectField";
 import { Toggle } from "@/components/Toggle";
 import { Tooltip } from "@/components/Tooltip";
+import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
+import { CompanionView } from "@/companion/CompanionView";
+import { assistantPhase } from "@/companion/companionGeometry";
 import { DevicesPanel } from "@/devices/DevicesPanel";
 import { DeviceStore } from "@/devices/DeviceStore";
 import { useDevices } from "@/devices/useDevices";
@@ -697,6 +700,18 @@ export default function App() {
   const transforms = useTransforms(transformStore, auth.userId);
   const deviceSnapshot = useDevices(devices, auth.userId);
   const handoffSnapshot = useHandoffs(handoffs, auth.userId);
+  // Start local discovery only after the account has registered this device.
+  // Sign-out and device changes close the LAN socket and private cloud channel.
+  useEffect(() => {
+    const currentId = deviceSnapshot.currentDeviceId;
+    if (auth.userId && currentId && deviceSnapshot.status === "synced") {
+      void deviceLinkManager.start(auth.userId, currentId, platform.platform);
+    } else {
+      deviceLinkManager.stop();
+    }
+    return () => deviceLinkManager.stop();
+  }, [auth.userId, deviceSnapshot.currentDeviceId, deviceSnapshot.status]);
+
   const historySnapshot = useDictationHistory(history, auth.userId, sync.data.settings.cloudDictationHistory);
   const usageSnapshot = useUsage(usage);
   const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
@@ -717,6 +732,11 @@ export default function App() {
   const computerSnapshot = useComputerActions(computerActions, auth.userId);
   const remoteDictationSnapshot = useRemoteDictation(remoteDictation, auth.userId);
   const assistantSnapshot = useAssistant(assistant);
+  useEffect(() => {
+    if (platform.platform === "windows") {
+      deviceLinkManager.publishCompanionAssistant(assistantPhase(assistantSnapshot));
+    }
+  }, [assistantSnapshot.status, assistantSnapshot.liveText, assistantSnapshot.liveUser]);
   const assistantLibrarySnapshot = useAssistantLibrary(assistantLibrary);
   const assistantMemorySnapshot = useAssistantMemory(assistantMemory);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -1131,6 +1151,12 @@ export default function App() {
         onEnter={() => setEntryPhase("app")}
       />
     );
+  }
+
+  if (platform.platform === "android" && section === "companion") {
+    return <CompanionView assistant={assistant} snapshot={assistantSnapshot}
+      micBusy={dictationLive} onStartVoice={() => { void assistantLibrary.produce(); }}
+      onExit={() => setSection("devices")} />;
   }
 
   return (

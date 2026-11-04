@@ -11,6 +11,9 @@ mod installed_apps;
 mod live_text;
 mod push_to_talk;
 mod pointer_context;
+mod companion_pointer;
+mod pairing_keys;
+mod device_link_relay;
 mod snapshot;
 mod windows_info;
 
@@ -38,6 +41,9 @@ pub use insert::{capture_selection, finish_pending_restore, insert_camera_image,
 pub use live_text::live_dictation_text;
 pub use snapshot::{capture_snapshot, capture_pointer_snapshot};
 pub use pointer_context::{pointer_position, inspect_pointer_context, PointerPosition, PointerContext};
+pub use companion_pointer::{sample as companion_pointer_sample, CompanionPointerSample};
+pub use pairing_keys::{public_key as pairing_public_key, sign as pairing_sign};
+pub use device_link_relay::{start as device_link_start_relay, stop as device_link_stop_relay};
 pub use windows_info::{describe_windows, activate_window};
 
 use push_to_talk::{DestOverride, LongPressShortcut, PttEvent, Shortcut};

@@ -2,6 +2,9 @@ package com.personal.voiceapp.platform
 
 import android.Manifest
 import android.app.Activity
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -9,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -17,6 +21,7 @@ import android.util.Base64
 import android.view.View
 import android.webkit.WebView
 import android.widget.Toast
+import org.json.JSONArray
 import org.json.JSONObject
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
@@ -100,6 +105,28 @@ class EnabledArgs {
 }
 
 @InvokeArg
+class DeviceLinkConnectArgs {
+  lateinit var host: String
+  var port: Int = 0
+}
+
+@InvokeArg
+class DeviceLinkSendArgs {
+  lateinit var message: String
+}
+
+@InvokeArg
+class PairingIdentityArgs {
+  lateinit var deviceId: String
+}
+
+@InvokeArg
+class PairingSignArgs {
+  lateinit var deviceId: String
+  lateinit var message: String
+}
+
+@InvokeArg
 class DictationCueArgs {
   var kind: String = "ready"
 }
@@ -113,12 +140,26 @@ class DictationCueArgs {
   permissions = [
     Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone"),
     Permission(strings = [Manifest.permission.CAMERA], alias = "camera"),
+    Permission(strings = ["android.permission.ACCESS_LOCAL_NETWORK"], alias = "localNetwork"),
     Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = "notifications"),
   ],
 )
 class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private val main = Handler(Looper.getMainLooper())
   private var webView: WebView? = null
+  private var deviceLinkSocket: DeviceLinkNetwork.WebSocketClient? = null
+  private var requestedLocalNetworkPermission = false
+  private fun localNetworkAllowed(): Boolean {
+    if (Build.VERSION.SDK_INT < 37) return true
+    val permission = "android.permission.ACCESS_LOCAL_NETWORK"
+    if (ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED) return true
+    if (!requestedLocalNetworkPermission) {
+      requestedLocalNetworkPermission = true
+      main.post { activity.requestPermissions(arrayOf(permission), 54017) }
+    }
+    return false
+  }
+
   private var webViewWoken = false
   private var capture: NativeMicCapture? = null
   private var captureId = 0
@@ -168,6 +209,8 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
 
   /** Without the WebView nothing can answer the bubble, so the service goes with it. */
   override fun onDestroy(activity: AppCompatActivity) {
+    deviceLinkSocket?.close()
+    deviceLinkSocket = null
     cameraSession?.stop()
     cameraSession = null
     audioSession?.close()
@@ -176,6 +219,128 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     capture = null
     FloatingMicService.listener = null
     activity.stopService(Intent(activity, FloatingMicService::class.java))
+  }
+
+  /** Wi-Fi discovery and WebSocket I/O are native; JS never holds an unencrypted socket. */
+  @Command
+  fun deviceLinkDiscover(invoke: Invoke) {
+    if (!localNetworkAllowed()) {
+      invoke.reject("Allow local network access to discover paired computers.")
+      return
+    }
+    Thread {
+      try {
+        val peers = JSONArray()
+        for (peer in DeviceLinkNetwork.discover()) {
+          peers.put(JSONObject().put("deviceId", peer.deviceId).put("host", peer.host).put("port", peer.port))
+        }
+        invoke.resolve(JSObject().put("peers", peers))
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Could not discover LAN peers.")
+      }
+    }.start()
+  }
+
+  @Command
+  fun deviceLinkConnect(invoke: Invoke) {
+    if (!localNetworkAllowed()) {
+      invoke.reject("Allow local network access before connecting.")
+      return
+    }
+    try {
+      val args = invoke.parseArgs(DeviceLinkConnectArgs::class.java)
+      deviceLinkSocket?.close()
+      deviceLinkSocket = DeviceLinkNetwork.WebSocketClient(
+        args.host, args.port,
+        onOpen = { trigger("deviceLinkOpen", JSObject()) },
+        onText = { text -> trigger("deviceLinkMessage", JSObject().put("message", text)) },
+        onClose = { trigger("deviceLinkClosed", JSObject()) },
+      ).also { it.connect() }
+      invoke.resolve(JSObject())
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Could not connect to LAN peer.")
+    }
+  }
+
+  @Command
+  fun deviceLinkSend(invoke: Invoke) {
+    try {
+      val message = invoke.parseArgs(DeviceLinkSendArgs::class.java).message
+      deviceLinkSocket?.send(message) ?: throw IllegalStateException("Not connected.")
+      invoke.resolve(JSObject())
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "LAN connection failed.")
+    }
+  }
+
+  @Command
+  fun deviceLinkClose(invoke: Invoke) {
+    deviceLinkSocket?.close()
+    deviceLinkSocket = null
+    invoke.resolve(JSObject())
+  }
+
+  /** Android Keystore operations run on a background worker; private keys never reach the WebView. */
+  @Command
+  fun pairingPublicKey(invoke: Invoke) {
+    try {
+      val deviceId = invoke.parseArgs(PairingIdentityArgs::class.java).deviceId
+      Thread {
+        try {
+          val (x, y) = DevicePairingKeys.publicKey(deviceId)
+          invoke.resolve(JSObject().put("kty", "EC").put("crv", "P-256").put("x", x).put("y", y))
+        } catch (error: Exception) {
+          invoke.reject(error.message ?: "Could not access the pairing key.")
+        }
+      }.start()
+    } catch (error: Exception) {
+      invoke.reject("Invalid pairing identity request.")
+    }
+  }
+
+  @Command
+  fun pairingSign(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(PairingSignArgs::class.java)
+      Thread {
+        try {
+          invoke.resolve(JSObject().put("signature", DevicePairingKeys.sign(args.deviceId, args.message)))
+        } catch (error: Exception) {
+          invoke.reject(error.message ?: "Could not sign the pairing request.")
+        }
+      }.start()
+    } catch (error: Exception) {
+      invoke.reject("Invalid pairing signature request.")
+    }
+  }
+
+  /** Camera permission is not required: Google Play services owns the scanner UI. */
+  @Command
+  fun scanPairingQr(invoke: Invoke) {
+    main.post {
+      bringAppForward()
+      try {
+        val options = GmsBarcodeScannerOptions.Builder()
+          .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+          .build()
+        GmsBarcodeScanning.getClient(activity, options).startScan()
+          .addOnSuccessListener { barcode ->
+            val payload = barcode.rawValue ?: ""
+            val code = payload.removePrefix("pv-pair:v1:")
+            if (payload.startsWith("pv-pair:v1:") && code.matches(Regex("[0-9]{8}"))) {
+              invoke.resolve(JSObject().put("code", code))
+            } else {
+              invoke.reject("This is not a Personal Voice pairing code.")
+            }
+          }
+          .addOnCanceledListener { invoke.reject("Scan cancelled.") }
+          .addOnFailureListener { error ->
+            invoke.reject(error.message ?: "QR scanner is unavailable. Enter the code manually.")
+          }
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "QR scanner is unavailable. Enter the code manually.")
+      }
+    }
   }
 
   @Command

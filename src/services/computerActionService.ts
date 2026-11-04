@@ -1,3 +1,4 @@
+import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import type { ComputerActionApi, ComputerActionRow } from "@/assistant/computerRemote";
 import type { RemoteComputerAction } from "@/assistant/computerActions";
 import { syncErrorMessage } from "@/services/personalSyncService";
@@ -64,6 +65,7 @@ export const computerActionApi: ComputerActionApi & { touch(deviceId: string): P
       .single();
     check(error);
     if (!data) throw new Error("The action could not be sent.");
+    void deviceLinkManager.sendWake(targetDeviceId, "computer-action", data.id);
     return data.id;
   },
 
