@@ -1,3 +1,4 @@
+import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { RemoteContextApi, RemoteRequestRow } from "@/assistant/remoteContextChannel";
 import type { RemoteKind } from "@/assistant/remoteContext";
@@ -66,6 +67,7 @@ export const remoteContextApi: RemoteContextApi & {
       .single();
     check(error);
     if (!data) throw new Error("The read could not be sent.");
+    void deviceLinkManager.sendWake(targetDeviceId, "remote-read", data.id);
     return data.id;
   },
 
