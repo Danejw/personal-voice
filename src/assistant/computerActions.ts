@@ -167,6 +167,22 @@ export function validateComputerCall(call: ComputerCall): { ok: true } | { ok: f
   return { ok: true };
 }
 
+/** Trusted mode never inherits the broader "low risk" category from local computer use.
+ * Only these two fixed app launches and two navigation keys may skip a desktop tap.
+ * The database claim applies exactly the same allowlist.
+ */
+export function isTrustedRemoteAction(action: string, argument: string): boolean {
+  if (action === "open_app") {
+    const parsed = validateOpenApp(argument);
+    return parsed.ok && (parsed.id === "notepad" || parsed.id === "calculator");
+  }
+  if (action === "press_shortcut") {
+    const parsed = validateShortcut(argument);
+    return parsed.ok && (parsed.id === "escape" || parsed.id === "tab");
+  }
+  return false;
+}
+
 /** The other device may run only the typed allowlist, and only when that PC has opted in. */
 export function planRemoteComputerAction(
   action: string,
