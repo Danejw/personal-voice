@@ -87,6 +87,14 @@ export class ComputerActionStore {
       }
       return this.platform.computerClick(call.args.x, call.args.y, call.name === "double_click" ? 2 : 1);
     }
+    if (call.name === "move" || call.name === "right_click" || call.name === "drag") {
+      if (!this.platform.computerPointerAction) throw new Error("Desktop pointer control is not available on this device.");
+      const { x, y, end_x, end_y } = call.args;
+      if (typeof x !== "number" || typeof y !== "number") throw new Error("Pointer coordinates are required.");
+      return this.platform.computerPointerAction(call.name, x, y,
+        typeof end_x === "number" ? end_x : undefined,
+        typeof end_y === "number" ? end_y : undefined);
+    }
     if (call.name === "type") {
       if (typeof call.args.text !== "string") throw new Error("Text is required.");
       await this.platform.insertText(call.args.text);
