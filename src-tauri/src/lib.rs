@@ -116,6 +116,8 @@ pub fn run() {
             #[cfg(windows)]
             commands::pointer_position,
             #[cfg(windows)]
+            commands::companion_pointer_sample,
+            #[cfg(windows)]
             commands::pairing_public_key,
             #[cfg(windows)]
             commands::pairing_sign,
