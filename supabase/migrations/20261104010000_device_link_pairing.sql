@@ -41,6 +41,16 @@ create table public.device_pair_attempts (
 );
 create index device_pair_attempts_recent on public.device_pair_attempts(user_id, attempted_at desc);
 
+-- A unique signed request ID prevents cross-network retries from replaying operations.
+create table public.device_pair_proofs (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  device_id uuid not null references public.devices(id) on delete cascade,
+  nonce uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, device_id, nonce)
+);
+create index device_pair_proofs_created on public.device_pair_proofs (created_at);
+
 create table public.device_pair_links (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -58,14 +68,15 @@ alter table public.device_pair_identities enable row level security;
 alter table public.device_pair_invitations enable row level security;
 alter table public.device_pair_attempts enable row level security;
 alter table public.device_pair_links enable row level security;
+alter table public.device_pair_proofs enable row level security;
 revoke all on public.device_pair_identities, public.device_pair_invitations,
-  public.device_pair_attempts, public.device_pair_links from public, anon, authenticated;
+  public.device_pair_attempts, public.device_pair_links, public.device_pair_proofs from public, anon, authenticated;
 
 -- Registration is immutable for a device ID. If a keystore is lost, remove/re-register
 -- the device with a new ID; the old keys cannot be overwritten through this RPC.
-create function public.pair_register_identity(p_device_id uuid, p_public_jwk jsonb)
+create function public.pair_register_identity(p_user_id uuid, p_device_id uuid, p_public_jwk jsonb)
 returns boolean language plpgsql security definer set search_path = '' as $$
-declare uid uuid := (select auth.uid());
+declare uid uuid := p_user_id;
 begin
   if uid is null or not exists (
     select 1 from public.devices where id = p_device_id and user_id = uid
@@ -81,9 +92,9 @@ begin
 end; $$;
 
 -- Codes are returned to the inviter only and never stored as plaintext.
-create function public.pair_create_invite(p_device_id uuid)
+create function public.pair_create_invite(p_user_id uuid, p_device_id uuid)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare uid uuid := (select auth.uid());
+declare uid uuid := p_user_id;
   digits text; new_id uuid; expiry timestamptz; rng bytea;
 begin
   if uid is null or not exists (
@@ -106,25 +117,26 @@ end; $$;
 
 -- Before code comparison record the attempt, including incorrect guesses. User-level
 -- throttling keeps guessing bounded across all claimed device IDs in the account.
-create function public.pair_claim_invite(p_device_id uuid, p_code text, p_signature text)
+create function public.pair_claim_invite(p_user_id uuid, p_device_id uuid, p_code text, p_signature text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare uid uuid := (select auth.uid()); inv public.device_pair_invitations;
+declare uid uuid := p_user_id; inv public.device_pair_invitations;
 begin
   if uid is null or not exists (
     select 1 from public.device_pair_identities where user_id = uid and device_id = p_device_id
   ) then raise exception 'PAIR_IDENTITY_REQUIRED' using errcode = '42501'; end if;
+  -- Serialize attempts per account before checking the limit to prevent racing claims.
+  perform 1 from auth.users where id=uid for update;
   if (select count(*) from public.device_pair_attempts
     where user_id = uid and attempted_at > now() - interval '10 minutes') >= 5
-  then raise exception 'PAIR_TRY_LATER' using errcode = '42901'; end if;
+  then return jsonb_build_object('error','rate_limited'); end if;
   insert into public.device_pair_attempts(user_id) values(uid);
-  if p_code !~ '^[0-9]{8}$' or p_signature !~ '^[A-Za-z0-9_-]{80,100}$'
-  then raise exception 'PAIR_INVALID' using errcode = '22023'; end if;
+  if p_code !~ '^[0-9]{8}
   select * into inv from public.device_pair_invitations
   where user_id = uid and status = 'open' and expires_at > now()
     and code_digest = pg_catalog.sha256(pg_catalog.convert_to(p_code, 'UTF8'))
   order by created_at desc limit 1 for update;
-  if not found then raise exception 'PAIR_INVALID' using errcode = '22023'; end if;
-  if inv.issuer_device_id = p_device_id then raise exception 'PAIR_SELF' using errcode = '22023'; end if;
+  if not found then return jsonb_build_object('error','invalid'); end if;
+  if inv.issuer_device_id = p_device_id then return jsonb_build_object('error','invalid'); end if;
   update public.device_pair_invitations
     set status = 'claimed', claimant_device_id = p_device_id, claim_signature = p_signature
     where id = inv.id;
@@ -132,9 +144,9 @@ begin
     'claimant_device_id',p_device_id);
 end; $$;
 
-create function public.pair_get_invite(p_id uuid, p_device_id uuid)
+create function public.pair_get_invite(p_user_id uuid, p_id uuid, p_device_id uuid)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare uid uuid := (select auth.uid()); inv public.device_pair_invitations;
+declare uid uuid := p_user_id; inv public.device_pair_invitations;
   issuer_key jsonb; claimant_key jsonb;
 begin
   select * into inv from public.device_pair_invitations
@@ -154,9 +166,9 @@ end; $$;
 
 -- Desktop only approves after verifying the claimant's public-key signature.
 -- The approval proof is also checked by the joining device before it reports paired.
-create function public.pair_approve_invite(p_id uuid, p_device_id uuid, p_signature text)
+create function public.pair_approve_invite(p_user_id uuid, p_id uuid, p_device_id uuid, p_signature text)
 returns boolean language plpgsql security definer set search_path = '' as $$
-declare uid uuid := (select auth.uid()); inv public.device_pair_invitations;
+declare uid uuid := p_user_id; inv public.device_pair_invitations;
   a uuid; b uuid;
 begin
   if p_signature !~ '^[A-Za-z0-9_-]{80,100}$' then return false; end if;
@@ -175,18 +187,18 @@ begin
   return true;
 end; $$;
 
-create function public.pair_cancel_invite(p_id uuid, p_device_id uuid)
+create function public.pair_cancel_invite(p_user_id uuid, p_id uuid, p_device_id uuid)
 returns boolean language plpgsql security definer set search_path = '' as $$
 begin
   update public.device_pair_invitations set status='cancelled'
-  where id=p_id and user_id=(select auth.uid()) and status in ('open','claimed')
+  where id=p_id and user_id=p_user_id and status in ('open','claimed')
     and issuer_device_id=p_device_id;
   return found;
 end; $$;
 
-create function public.pair_list_links(p_device_id uuid)
+create function public.pair_list_links(p_user_id uuid, p_device_id uuid)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare uid uuid := (select auth.uid());
+declare uid uuid := p_user_id;
 begin
   if uid is null or not exists (select 1 from public.device_pair_identities
     where device_id=p_device_id and user_id=uid) then return '[]'::jsonb; end if;
@@ -205,32 +217,34 @@ begin
       and (l.left_device_id=p_device_id or l.right_device_id=p_device_id)), '[]'::jsonb);
 end; $$;
 
-create function public.pair_revoke_link(p_link_id uuid, p_device_id uuid)
+create function public.pair_revoke_link(p_user_id uuid, p_link_id uuid, p_device_id uuid)
 returns boolean language plpgsql security definer set search_path = '' as $$
 begin
   update public.device_pair_links set revoked_at=now()
-  where id=p_link_id and user_id=(select auth.uid())
+  where id=p_link_id and user_id=p_user_id
     and (left_device_id=p_device_id or right_device_id=p_device_id)
     and revoked_at is null;
   return found;
 end; $$;
 
--- No table writes from the client. The only authorized pairing entrypoints are these RPCs.
+-- Only the server-side Edge Function, after verifying JWT + native device proof,
+-- can call the privileged pairing RPCs. An authenticated browser cannot bypass proof checks.
 revoke all on function
-  public.pair_register_identity(uuid,jsonb),
-  public.pair_create_invite(uuid),
-  public.pair_claim_invite(uuid,text,text),
-  public.pair_get_invite(uuid,uuid),
-  public.pair_approve_invite(uuid,uuid,text),
-  public.pair_cancel_invite(uuid,uuid),
-  public.pair_list_links(uuid),
-  public.pair_revoke_link(uuid,uuid) from public,anon;
+  public.pair_register_identity(uuid,uuid,jsonb),
+  public.pair_create_invite(uuid,uuid),
+  public.pair_claim_invite(uuid,uuid,text,text),
+  public.pair_get_invite(uuid,uuid,uuid),
+  public.pair_approve_invite(uuid,uuid,uuid,text),
+  public.pair_cancel_invite(uuid,uuid,uuid),
+  public.pair_list_links(uuid,uuid),
+  public.pair_revoke_link(uuid,uuid,uuid) from public, anon, authenticated;
+
 grant execute on function
-  public.pair_register_identity(uuid,jsonb),
-  public.pair_create_invite(uuid),
-  public.pair_claim_invite(uuid,text,text),
-  public.pair_get_invite(uuid,uuid),
-  public.pair_approve_invite(uuid,uuid,text),
-  public.pair_cancel_invite(uuid,uuid),
-  public.pair_list_links(uuid),
-  public.pair_revoke_link(uuid,uuid) to authenticated;
+  public.pair_register_identity(uuid,uuid,jsonb),
+  public.pair_create_invite(uuid,uuid),
+  public.pair_claim_invite(uuid,uuid,text,text),
+  public.pair_get_invite(uuid,uuid,uuid),
+  public.pair_approve_invite(uuid,uuid,uuid,text),
+  public.pair_cancel_invite(uuid,uuid,uuid),
+  public.pair_list_links(uuid,uuid),
+  public.pair_revoke_link(uuid,uuid,uuid) to service_role;
