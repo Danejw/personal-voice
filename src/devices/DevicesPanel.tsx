@@ -5,6 +5,7 @@ import { ConfirmDialog, useConfirmAction } from "@/components/ConfirmDialog";
 import type { DeviceSnapshot, DeviceStatus, DeviceStore } from "@/devices/DeviceStore";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import { MAX_DEVICE_NAME } from "@/services/deviceService";
+import { DevicePairingPanel } from "@/devices/DevicePairingPanel";
 
 interface DevicesPanelProps {
   store: DeviceStore;
@@ -137,6 +138,14 @@ export function DevicesPanel({ store, snapshot, onChanged }: DevicesPanelProps) 
         </div>
       </div>
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
+      {connected && snapshot.currentDeviceId && (
+        <DevicePairingPanel
+          key={snapshot.currentDeviceId}
+          deviceId={snapshot.currentDeviceId}
+          devices={snapshot.devices}
+          platform={snapshot.devices.find((device) => device.id === snapshot.currentDeviceId)?.platform ?? "unknown"}
+        />
+      )}
       {snapshot.devices.length ? (
         <ul className="notes hide-scrollbar">
           {snapshot.devices.map((device) => (

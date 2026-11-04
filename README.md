@@ -50,6 +50,10 @@ I built Personal Voice because I wanted more control over that. It replaced Wisp
 | --- | --- |
 | **Dictate into your apps** | Hold a shortcut, speak, and put the finished text where your cursor is. Use a floating mic on Windows or Android. |
 | **Talk on one device, type on another** | Send dictation from your phone to your computer, or between your signed-in devices. |
+| **Pair devices (preview)** | Pair a Windows computer and an Android phone with a QR or temporary code and approve on the computer. Pairing does not enable remote control. |
+| **DeviceLink (in development)** | A signed, encrypted local device connection with cloud wake-up fallback. Existing remote dictation and computer-action acknowledgments remain authoritative. |
+| **Android Companion (preview)** | Place your phone beneath a monitor and see animated eyes follow the Windows pointer over a paired local connection. Use the existing Assistant voice controls. |
+| **Remote voice actions (in development)** | Ask the phone's Assistant to perform an approved action on one paired PC, selected by name, device ID or saved default. The PC retains its confirmation requirement. |
 | **Make it sound like you** | Save words in your dictionary, expand snippets, and apply text transforms. |
 | **Keep your notes close** | Save notes, attach files, capture selections, and pick up where you left off. |
 | **Use a real voice assistant** | Have a live Gemini conversation. With your permission, the assistant can use notes, memory, screen context, and supported device controls. |
@@ -75,6 +79,10 @@ Install the app, sign in, grant the microphone and device permissions you want t
 A dictation app can see the words you send into almost everything you use. You should know where that data goes.
 
 - **Live audio:** Sent directly to Google Gemini while a voice session is active. Personal Voice does not operate its own audio-recording warehouse.
+- **Device pairing (preview):** Temporary pairing invitations and public verification keys are stored with your account. Non-exportable private signing keys remain in Android Keystore or the Windows CNG per-user key store; privileged pairing operations verify native-device signatures on the server. Real-device validation is still required before release.
+- **Remote voice (in development):** Android can choose a specific paired Windows PC as the default voice-action target. Remote requests, action arguments and PC outcomes are cryptographically bound to the paired device identities and expire. A request is not a success until the selected computer returns a verified result. The new database migration and physical phone/PC security validation remain outstanding.
+- **Android Companion (preview):** Open Companion in the Android navigation after pairing and connecting on local Wi-Fi. Monitor placement can be adjusted for different display arrangements. Windows only samples and transmits cursor coordinates and monitor bounds while the phone view is visible and actively requesting them; exiting, backgrounding, disconnecting or revoking pairing stops updates. No screen pixels, window titles, pointer history or cursor data are sent to the cloud. Physical-device acceptance is still pending.
+- **DeviceLink (in development):** Local Wi-Fi discovery shares only a device ID and port. Signed ephemeral handshakes derive AES-GCM session keys, and cloud signals contain only a request ID and request category. The app does not relay audio, transcripts, screenshots, or cursor streams through cloud signaling. Android 17 requires permission for local network discovery. LAN discovery currently uses bounded UDP broadcasts; mDNS/NSD support and real-device connectivity tests remain pending.
 - **Dictation history:** Uploading recent dictation text is a separate opt-in setting. Saved notes and assistant conversations can sync with your account.
 - **Your own deployment:** The app, Supabase migrations, and Edge Functions are in this repository. You can use a backend you control and configure your own Gemini credentials.
 

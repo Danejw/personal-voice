@@ -66,6 +66,10 @@ const BASE_TOOL_SCENARIOS = [
 ] as const satisfies readonly ToolSelectionScenario[];
 
 const DISAMBIGUATION_SCENARIOS = [
+  { id: "choice-phone-open-remote-v-local", request: "On my Android phone, open Calculator on my paired Desktop PC, not the phone.", expected: ["remote_action"], forbidden: ["open_app"], successCriterion: "Signed target-PC execution receipt, not local phone app launch" },
+  { id: "choice-phone-read-pc-v-capture-local", request: "What is the active app on my paired Laptop, not on my phone?", expected: ["read_remote_device"], forbidden: ["inspect_active_app"], successCriterion: "Target Laptop supplies authenticated active-window observation" },
+  { id: "choice-phone-remote-type-v-handoff", request: "Type the exact words hello world into the current field on my paired Desktop PC with its approval.", expected: ["remote_action"], forbidden: ["send_handoff"], successCriterion: "Selected desktop approves and acknowledges typed text" },
+
   { id: "choice-pointer-over-screen", request: "What does this icon under my pointer mean?", expected: ["inspect_pointer_context"], forbidden: ["capture_screen"], successCriterion: "Uses pointer target rather than full-screen guess" },
   { id: "choice-pointer-graphic", request: "Tell me what this unlabeled chart under the mouse shows.", expected: ["inspect_pointer_context","capture_pointer_target"], forbidden: ["inspect_active_app"], successCriterion: "Obtains image when accessibility target is inadequate" },
   { id: "choice-selection-v-pointer", request: "What does my highlighted paragraph say?", expected: ["capture_selection"], forbidden: ["inspect_pointer_context"], successCriterion: "Uses selection not pointer" },
@@ -90,6 +94,8 @@ const DISAMBIGUATION_SCENARIOS = [
   { id: "choice-count-v-insight", request: "Give me the exact word count I've dictated.", expected: ["read_usage_analytics"], forbidden: ["read_insights"], successCriterion: "Reports numeric usage count" },
 ] as const satisfies readonly ToolSelectionScenario[];
 
+  // Keep the actual PC tool unchanged. These scenarios test target selection
+  // and preserve the distinction between a signed execution receipt and handoff.
 const NO_TOOL_SCENARIOS = [
   { id: "none-chat-only", request: "Thanks, that's all.", expected: [], successCriterion: "Acknowledges without tool use" },
   { id: "none-math-only", request: "What is 14 times 3?", expected: [], successCriterion: "Answers arithmetic without tool" },
@@ -97,6 +103,7 @@ const NO_TOOL_SCENARIOS = [
   { id: "none-idea-only", request: "Suggest two concise names for a fictional app.", expected: [], successCriterion: "Brainstorms without tools" },
   { id: "none-conversation-only", request: "What does asynchronous mean in programming?", expected: [], successCriterion: "Explains common term without tool" },
   { id: "none-clarify-only", request: "What is the difference between an archive and deletion?", expected: [], successCriterion: "Explains general concept without tools" },
+  { id: "none-remote-default-explanation", request: "What should happen when I name Laptop but only Desktop is online?", expected: [], successCriterion: "Explains strict target, no silent fallback or action" },
   { id: "none-unknown-device", request: "What should you ask if I say send it to the other device but several devices are available?", expected: [], successCriterion: "Clarifies target before modifying any device" },
 ] as const satisfies readonly ToolSelectionScenario[];
 
