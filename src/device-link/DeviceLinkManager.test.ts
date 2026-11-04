@@ -87,6 +87,30 @@ describe("Companion's paired PC isolation", () => {
     manager.stop();
   });
 
+  it("serializes native relay restart after an in-flight stop", async () => {
+    const manager = new DeviceLinkManager();
+    const operations: string[] = [];
+    let release: () => void = () => undefined;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const relay = manager as unknown as {
+      withRelay<T>(task: () => Promise<T>): Promise<T>;
+    };
+    const stopping = relay.withRelay(async () => {
+      operations.push("stop started");
+      await blocked;
+      operations.push("stop finished");
+    });
+    const starting = relay.withRelay(async () => {
+      operations.push("next start");
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(operations).toEqual(["stop started"]);
+    release();
+    await Promise.all([stopping, starting]);
+    expect(operations).toEqual(["stop started", "stop finished", "next start"]);
+  });
+
   it("does not request streaming when the user has not selected a PC", () => {
     const { manager, send } = setup();
     manager.setCompanionOpen(true, null);
