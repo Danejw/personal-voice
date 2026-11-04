@@ -97,7 +97,7 @@ Deno.serve(async (request: Request) => {
     .from("devices").select("id").eq("id", deviceId).eq("user_id", userId).maybeSingle();
   if (deviceError || !device) return reply(403, { error: "device" });
 
-  let identityKey: JsonRecord | null = null;
+  let identityKey: JsonRecord | null;
   if (op === "register") {
     identityKey = normalizedKey(args.publicJwk);
   } else {
