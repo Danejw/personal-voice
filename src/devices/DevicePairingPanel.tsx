@@ -106,7 +106,7 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
         }}>
           <input aria-label="Pairing code" inputMode="numeric" maxLength={9} placeholder="8-digit code" value={entered}
             onChange={(event) => setEntered(event.target.value)} />
-          <button type="submit" disabled={busy || !/^[0-9]{8}$/.test(entered.replace(/[\\s-]/g, ""))}>Pair</button>
+          <button type="submit" disabled={busy || !/^[0-9]{8}$/.test(entered.replace(/[\s-]/g, ""))}>Pair</button>
           <button type="button" className="secondary" disabled={busy}
             onClick={() => void run(async () => {
               const result = await invoke<{ code: string }>("plugin:voice-platform|scan_pairing_qr");
