@@ -134,7 +134,9 @@ begin
     where user_id = uid and attempted_at > now() - interval '10 minutes') >= 5
   then return jsonb_build_object('error','rate_limited'); end if;
   insert into public.device_pair_attempts(user_id) values(uid);
-  if p_code !~ '^[0-9]{8} from public.device_pair_invitations
+  if p_code !~ '^[0-9]{8}$' or p_signature !~ '^[A-Za-z0-9_-]{86}$'
+  then return jsonb_build_object('error','invalid'); end if;
+  select * into inv from public.device_pair_invitations
   where user_id = uid and status = 'open' and expires_at > now()
     and code_digest = pg_catalog.sha256(pg_catalog.convert_to(p_code, 'UTF8'))
   order by created_at desc limit 1 for update;
