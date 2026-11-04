@@ -1,6 +1,6 @@
 # DeviceLink 1/6: Secure device pairing
 
-**Status:** Planned only. No implementation authorized.
+**Status:** Implementation in progress on PR #36. Still a draft, not merge-ready.
 **Working branch:** `plan/device-link-01-secure-pairing`
 **Merge target:** `feature/device-link-companion-mode`
 **Depends on:** Base feature branch only. Must merge before PR 2.
@@ -39,7 +39,7 @@ Transport, cursor streaming, AI tool routing, remote computer control, character
 - Keep UI minimal, borderless, and accessible. Keep existing dictation, handoffs, clipboard, Assistant, and account sync working.
 - Add focused tests, document meaningful architecture decisions, and update README when user-visible capabilities or security change.
 - Never claim tests or live-device validation ran until results are recorded.
-- This draft PR is **PLAN ONLY**. Do not implement code or migrations until explicitly instructed.
+- Implementation was authorized in the current workflow. Keep the PR draft until native identity storage, physical-device tests and security checks are complete.
 
 ## PR completion report required
 When implementation is authorized, report (1) actual changes, (2) automated checks and CI, (3) 3–5 manual tests with expected/actual results, (4) blockers, and (5) readiness to merge.
