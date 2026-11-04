@@ -34,7 +34,7 @@ pub use accessibility_plus::{inspect_tree as inspect_accessibility_tree, action 
 pub use accessibility_events::{start as start_accessibility_watch, stop as stop_accessibility_watch, active as accessibility_watch_active};
 pub use accessibility::{inspect_accessibility, invoke_focused_control, focus_accessible_control, control_action, list_accessible_elements, AccessibleElement, foreground_bounds, UiBounds, AccessibilityContext};
 pub use autostart::{launch_at_login, set_launch_at_login};
-pub use computer::{click_normalized, open_allowlisted_app, press_allowlisted_shortcut};
+pub use computer::{click_normalized, pointer_action, open_allowlisted_app, press_allowlisted_shortcut};
 pub use handoff_alert::{notify_handoff_click, show_handoff_alert};
 pub use hook::{set_active as set_dictation_active, set_paused};
 pub use clipboard_watch::{start_clipboard_watch, stop_clipboard_watch, write_clipboard_image};
