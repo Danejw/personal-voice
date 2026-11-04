@@ -129,14 +129,14 @@ grant execute on function public.trusted_remote_validate(uuid,uuid,uuid) to serv
 create function public.trusted_remote_seen(
   p_user_id uuid, p_pc_id uuid, p_request_id uuid
 ) returns boolean language sql stable security definer set search_path = ''
-as $
+as $trusted_seen$
   select exists(
     select 1 from public.device_trusted_claims c
     join public.device_action_requests r on r.id=c.request_id
     where c.request_id=p_request_id and c.user_id=p_user_id
       and r.user_id=p_user_id and r.target_device_id=p_pc_id
   );
-$;
+$trusted_seen$;
 revoke all on function public.trusted_remote_seen(uuid,uuid,uuid) from public,anon,authenticated;
 grant execute on function public.trusted_remote_seen(uuid,uuid,uuid) to service_role;
 
