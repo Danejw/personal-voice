@@ -32,8 +32,7 @@ export function CompanionView({
   const [cursor, setCursor] = useState<Pointer | null>(null);
   const [monitors, setMonitors] = useState<CompanionMonitor[]>([]);
   const [remotePhase, setRemotePhase] = useState<CompanionAssistantPhase>("idle");
-  const [lastReceived, setLastReceived] = useState(0);
-  const [now, setNow] = useState(Date.now());
+  const [sourceDeviceId, setSourceDeviceId] = useState<string | null>(null);
   const [savedIndex, setSavedIndex] = useState<number | null>(storedMonitor);
   const monitorIndex = savedIndex ?? defaultMonitorIndex(monitors);
   const gaze = useMemo(() => cursor && monitors.length
@@ -44,8 +43,8 @@ export function CompanionView({
     const unsubscribeState = deviceLinkManager.subscribe(
       () => setTransport(deviceLinkManager.getSnapshot()),
     );
-    const unsubscribeFrames = deviceLinkManager.subscribeCompanion((_sender, payload: DeviceLinkPayload) => {
-      setLastReceived(Date.now());
+    const unsubscribeFrames = deviceLinkManager.subscribeCompanion((sender, payload: DeviceLinkPayload) => {
+      setSourceDeviceId(sender);
       if (payload.type === "layout") setMonitors(payload.monitors);
       if (payload.type === "cursor") setCursor({ x: payload.x, y: payload.y });
       if (payload.type === "assistant-state") setRemotePhase(payload.phase);
@@ -53,19 +52,20 @@ export function CompanionView({
     const sync = () => deviceLinkManager.setCompanionOpen(document.visibilityState === "visible");
     sync();
     document.addEventListener("visibilitychange", sync);
-    const ticker = window.setInterval(() => setNow(Date.now()), 750);
     return () => {
-      window.clearInterval(ticker);
       document.removeEventListener("visibilitychange", sync);
       deviceLinkManager.setCompanionOpen(false);
       unsubscribeFrames();
       unsubscribeState();
     };
   }, []);
+  useEffect(() => {
+    if (document.visibilityState === "visible") deviceLinkManager.setCompanionOpen(true);
+  }, [transport.state]);
 
   const localPhase = assistantPhase(snapshot);
   const locallyActive = snapshot.status !== "IDLE" && snapshot.status !== "ERROR";
-  const linked = transport.localPeers.length > 0 && now - lastReceived < 3_000;
+  const linked = !!sourceDeviceId && transport.localPeers.includes(sourceDeviceId);
   const phase = locallyActive ? localPhase : linked ? remotePhase : "idle";
   const vector = linked ? gaze : { x: 0, y: 0 };
   const active = snapshot.status === "READY" || snapshot.status === "RESPONDING" ||
