@@ -10,7 +10,7 @@ export interface PublicPairingKey {
 }
 
 function android(): boolean {
-  return typeof navigator !== "undefined" && /\\bAndroid\\b/.test(navigator.userAgent);
+  return typeof navigator !== "undefined" && /\bAndroid\b/.test(navigator.userAgent);
 }
 
 export function publicKeyFromJwk(value: unknown): PublicPairingKey | null {
