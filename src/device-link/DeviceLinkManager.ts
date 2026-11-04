@@ -48,6 +48,14 @@ export class DeviceLinkManager {
   private generation = 0;
   private cloudReady = false;
   private relayPort: number | null = null;
+  private relayTransition: Promise<void> = Promise.resolve();
+
+  /** A reconnect must never let an old stop close a newly started relay. */
+  private async withRelay<T>(task: () => Promise<T>): Promise<T> {
+    const operation = this.relayTransition.then(task, task);
+    this.relayTransition = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
 
   subscribe = (cb: () => void): (() => void) => {
     this.listeners.add(cb);
@@ -202,7 +210,17 @@ export class DeviceLinkManager {
         ready => { if (generation === this.generation) { this.cloudReady = ready; this.update(); } },
       );
       if (platform === "windows") {
-        this.relayPort = await invoke<number>("device_link_start_relay", { deviceId });
+        await this.withRelay(async () => {
+          if (generation !== this.generation) return;
+          const port = await invoke<number>("device_link_start_relay", { deviceId });
+          if (generation !== this.generation) {
+            // A restart/sign-out raced with the native start. Stop the stale
+            // listener before the next queued start can proceed.
+            await invoke("device_link_stop_relay").catch(() => undefined);
+            return;
+          }
+          this.relayPort = port;
+        });
         if (generation !== this.generation) return;
         for (const peer of this.pairs) this.connectWindows(peer);
         this.scanTimer = setInterval(() => {
@@ -384,7 +402,11 @@ export class DeviceLinkManager {
     this.sessions.clear();
     this.connecting.clear();
     this.lastPeerMessage.clear();
-    if (this.relayPort !== null) void invoke("device_link_stop_relay").catch(() => undefined);
+    if (this.relayPort !== null) {
+      // Native stop is ordered after any in-flight native start and before the
+      // next start, even when React remounts or the account changes rapidly.
+      void this.withRelay(() => invoke("device_link_stop_relay")).catch(() => undefined);
+    }
     this.relayPort = null;
     this.cloudReady = false;
     this.trustVerifiedAt = 0;
