@@ -619,6 +619,13 @@ pub async fn computer_click(x: i32, y: i32, times: u32) -> Result<String, String
 }
 
 #[tauri::command]
+pub async fn computer_pointer_action(kind: String, x: i32, y: i32, end_x: Option<i32>, end_y: Option<i32>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || platform::pointer_action(&kind, x, y, end_x, end_y))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub fn computer_restore(app: AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
