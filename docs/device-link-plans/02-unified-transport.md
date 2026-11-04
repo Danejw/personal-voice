@@ -1,9 +1,9 @@
 # DeviceLink 2/6: Local + remote connection transport
 
-**Status:** Planned only. No implementation authorized.
+**Status:** Implementation underway in draft PR #37. Not yet merge-ready.
 **Working branch:** `plan/device-link-02-transport`
 **Merge target:** `feature/device-link-companion-mode`
-**Depends on:** PR 1 merged into feature branch. Refresh this branch against the integration branch before coding or merge.
+**Depends on:** Current PR #36 implementation is stacked on the PR #37 branch without merging PR #36. Reconcile against the integration branch after PR #36 is accepted.
 
 ## Objective
 Provide one narrowly scoped device-to-device API that switches between authenticated local communication and private cloud signaling without changing how existing features behave.
@@ -41,7 +41,7 @@ Companion artwork, mouse sampling, new Assistant tools, remote unattended author
 - Keep UI minimal, borderless, and accessible. Keep existing dictation, handoffs, clipboard, Assistant, and account sync working.
 - Add focused tests, document meaningful architecture decisions, and update README when user-visible capabilities or security change.
 - Never claim tests or live-device validation ran until results are recorded.
-- This draft PR is **PLAN ONLY**. Do not implement code or migrations until explicitly instructed.
+- Implementation was explicitly authorized. Keep the PR draft until platform CI, real-device Wi-Fi/cellular transitions, permission behavior and negative security tests pass.
 
 ## PR completion report required
 When implementation is authorized, report (1) actual changes, (2) automated checks and CI, (3) 3–5 manual tests with expected/actual results, (4) blockers, and (5) readiness to merge.
