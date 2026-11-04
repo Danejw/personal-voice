@@ -1155,7 +1155,8 @@ export default function App() {
 
   if (platform.platform === "android" && section === "companion") {
     return <CompanionView assistant={assistant} snapshot={assistantSnapshot}
-      micBusy={dictationLive} onExit={() => setSection("devices")} />;
+      micBusy={dictationLive} onStartVoice={() => { void assistantLibrary.produce(); }}
+      onExit={() => setSection("devices")} />;
   }
 
   return (
