@@ -9,6 +9,18 @@ pub const INDICATOR_WINDOW: &str = "indicator";
 
 #[cfg(windows)]
 #[tauri::command]
+pub fn pairing_public_key(device_id: String) -> Result<impl Serialize, String> {
+    platform::pairing_public_key(&device_id)
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn pairing_sign(device_id: String, message: String) -> Result<String, String> {
+    platform::pairing_sign(&device_id, &message)
+}
+
+#[cfg(windows)]
+#[tauri::command]
 pub fn pointer_position() -> Result<platform::PointerPosition, String> {
     platform::pointer_position()
 }
