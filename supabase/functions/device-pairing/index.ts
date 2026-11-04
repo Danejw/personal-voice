@@ -8,7 +8,7 @@ const cors = {
   "Content-Type": "application/json",
 };
 type JsonRecord = Record<string, unknown>;
-const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke", "signal"]);
+const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke", "signal", "trusted_start", "trusted_stop", "trusted_list", "trusted_claim", "trusted_validate"]);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const proofPattern = /^[A-Za-z0-9_-]{86}$/;
 const keyPart = /^[A-Za-z0-9_-]{43}$/;
@@ -94,7 +94,7 @@ Deno.serve(async (request: Request) => {
     return reply(400, { error: "bad_request" });
   }
   const { data: device, error: deviceError } = await admin
-    .from("devices").select("id").eq("id", deviceId).eq("user_id", userId).maybeSingle();
+    .from("devices").select("id,platform").eq("id", deviceId).eq("user_id", userId).maybeSingle();
   if (deviceError || !device) return reply(403, { error: "device" });
 
   let identityKey: JsonRecord | null;
@@ -173,6 +173,58 @@ Deno.serve(async (request: Request) => {
       p_request: requestId, p_family: family,
     });
     if (result.data !== true) return reply(403, { error: "not_paired" });
+  } else if (op.startsWith("trusted_")) {
+    // All trust operations require proof of the PC's native private key.
+    // A phone JWT cannot authorize itself as a trusted source.
+    if (device.platform !== "windows") return reply(403, { error: "windows_only" });
+    if (op === "trusted_start") {
+      const phoneId = uuidArg(args.phoneId);
+      if (!phoneId || phoneId === deviceId || Object.keys(args).sort().join() !== "phoneId") {
+        return reply(400, { error: "bad_request" });
+      }
+      const { data: phone, error: phoneError } = await admin.from("devices")
+        .select("id,platform").eq("id", phoneId).eq("user_id", userId).maybeSingle();
+      const [left, right] = [deviceId, phoneId].sort();
+      const { data: pairing, error: pairError } = await admin.from("device_pair_links")
+        .select("id").eq("user_id", userId).eq("left_device_id", left)
+        .eq("right_device_id", right).is("revoked_at", null).limit(1);
+      if (phoneError || pairError || phone?.platform !== "android" || !pairing?.length) {
+        return reply(403, { error: "not_paired" });
+      }
+      const { data, error } = await admin.from("device_trusted_grants").insert({
+        user_id: userId, pc_device_id: deviceId, phone_device_id: phoneId,
+        scopes: ["open_app", "press_shortcut"],
+        expires_at: new Date(Date.now() + 14 * 60_000).toISOString(),
+      }).select("id,phone_device_id,created_at,expires_at,stopped_at").single();
+      result = { data, error };
+    } else if (op === "trusted_stop") {
+      const grantId = uuidArg(args.grantId);
+      if (!grantId || Object.keys(args).sort().join() !== "grantId") {
+        return reply(400, { error: "bad_request" });
+      }
+      const { data, error } = await admin.from("device_trusted_grants")
+        .update({ stopped_at: new Date().toISOString() })
+        .eq("user_id", userId).eq("pc_device_id", deviceId)
+        .eq("id", grantId).is("stopped_at", null)
+        .select("id").maybeSingle();
+      result = { data: data !== null, error };
+    } else if (op === "trusted_list") {
+      if (Object.keys(args).length !== 0) return reply(400, { error: "bad_request" });
+      result = await admin.from("device_trusted_grants")
+        .select("id,phone_device_id,created_at,expires_at,stopped_at")
+        .eq("user_id", userId).eq("pc_device_id", deviceId)
+        .is("stopped_at", null).gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false });
+    } else {
+      const requestId = uuidArg(args.requestId);
+      if (!requestId || Object.keys(args).sort().join() !== "requestId") {
+        return reply(400, { error: "bad_request" });
+      }
+      result = await admin.rpc(op === "trusted_claim"
+        ? "trusted_remote_claim" : "trusted_remote_validate", {
+        p_user_id: userId, p_pc_id: deviceId, p_request_id: requestId,
+      });
+    }
   } else if (op === "cancel") {
     const id = uuidArg(args.id);
     if (!id) return reply(400, { error: "bad_request" });
