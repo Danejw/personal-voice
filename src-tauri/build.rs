@@ -35,6 +35,8 @@ fn main() {
                     "switch_camera",
                     "stop_camera_frames",
                     "scan_pairing_qr",
+                    "pairing_public_key",
+                    "pairing_sign",
                 ])
                 .default_permission(tauri_build::DefaultPermissionRule::AllowAllCommands),
         ),
