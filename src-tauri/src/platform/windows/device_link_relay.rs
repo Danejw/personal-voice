@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{IpAddr, TcpListener, TcpStream, UdpSocket};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -16,6 +16,8 @@ const MAX_FRAME: usize = 16_384;
 struct Relay {
     port: u16,
     online: Arc<AtomicBool>,
+    accept_thread: thread::JoinHandle<()>,
+    discover_thread: Option<thread::JoinHandle<()>>,
 }
 static SERVER: OnceLock<Mutex<Option<Relay>>> = OnceLock::new();
 static NEXT_CLIENT: AtomicU64 = AtomicU64::new(1);
@@ -258,16 +260,25 @@ pub fn start(device_id: &str) -> Result<u16, String> {
     let port = listener.local_addr().map_err(|_| io_error())?.port();
     let online = Arc::new(AtomicBool::new(true));
     let active = online.clone();
-    thread::spawn(move || {
+    let accept_thread = thread::spawn(move || {
         let registry = Arc::new(Mutex::new(ClientRegistry::default()));
+        let connections = Arc::new(AtomicUsize::new(0));
         while active.load(Ordering::Relaxed) {
             match listener.accept() {
                 Ok((socket, peer)) => {
                     if !private_address(peer.ip()) { continue; }
+                    if connections.fetch_add(1, Ordering::Relaxed) >= MAX_CLIENTS {
+                        connections.fetch_sub(1, Ordering::Relaxed);
+                        continue;
+                    }
                     let clients = registry.clone();
                     let run = active.clone();
+                    let count = connections.clone();
                     let id = NEXT_CLIENT.fetch_add(1, Ordering::Relaxed);
-                    thread::spawn(move || handle_client(id, socket, clients, run));
+                    thread::spawn(move || {
+                        handle_client(id, socket, clients, run);
+                        count.fetch_sub(1, Ordering::Relaxed);
+                    });
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock =>
                     thread::sleep(Duration::from_millis(100)),
@@ -277,11 +288,11 @@ pub fn start(device_id: &str) -> Result<u16, String> {
     });
     // UDP discovery broadcasts only a LAN address/port locator, never credentials.
     // Actual access requires signed P-256 peer authentication on the WS channel.
-    if let Ok(socket) = UdpSocket::bind("0.0.0.0:39047") {
+    let discover_thread = if let Ok(socket) = UdpSocket::bind("0.0.0.0:39047") {
         let _ = socket.set_read_timeout(Some(Duration::from_millis(750)));
         let discover_online = online.clone();
         let device = device_id.to_string();
-        thread::spawn(move || {
+        Some(thread::spawn(move || {
             let mut request = [0u8; 64];
             while discover_online.load(Ordering::Relaxed) {
                 match socket.recv_from(&mut request) {
@@ -295,15 +306,21 @@ pub fn start(device_id: &str) -> Result<u16, String> {
                     Err(_) => break,
                 }
             }
-        });
-    }
-    *state = Some(Relay { port, online });
+        }))
+    } else { None };
+    *state = Some(Relay { port, online, accept_thread, discover_thread });
     Ok(port)
 }
 
 pub fn stop() {
     if let Ok(mut state) = state().lock() {
-        if let Some(relay) = state.take() { relay.online.store(false, Ordering::Relaxed); }
+        if let Some(relay) = state.take() {
+            relay.online.store(false, Ordering::Relaxed);
+            let _ = relay.accept_thread.join();
+            if let Some(discovery) = relay.discover_thread {
+                let _ = discovery.join();
+            }
+        }
     }
 }
 
