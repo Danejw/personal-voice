@@ -1,4 +1,4 @@
-import { executableShortcut, isTrustedRemoteAction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
+import { executableShortcut, isTrustedRemoteAction, parseRemotePointer, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
 import type { ComputerImage } from "@/assistant/computerTask";
 import type { RemoteDevice } from "@/assistant/remoteContext";
@@ -205,6 +205,13 @@ export class ComputerActionStore {
   }
 
   private async run(action: RemoteComputerAction, argument: string): Promise<string> {
+    const pointer = parseRemotePointer(action, argument);
+    if (pointer) {
+      if (!this.platform.computerPointerAction) throw new Error("This PC cannot control its pointer.");
+      if (!await invoke<boolean>("trusted_desktop_unlocked")) throw new Error("Unlock the Windows desktop first.");
+      return this.platform.computerPointerAction(pointer.kind, pointer.x, pointer.y, pointer.endX, pointer.endY);
+    }
+    if (action.endsWith("_pointer")) throw new Error("Invalid pointer command.");
     if (action === "open_app") return this.platform.openAllowlistedApp(argument);
     if (action === "press_shortcut") return this.platform.pressAllowlistedShortcut(argument, true);
     await this.platform.insertText(argument);
