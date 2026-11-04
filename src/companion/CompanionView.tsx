@@ -3,8 +3,10 @@ import type { AssistantController } from "@/assistant/AssistantController";
 import type { AssistantSnapshot } from "@/assistant/state";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { SelectField } from "@/components/SelectField";
+import { loadRemoteVoiceDefault, saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
+import type { OwnedDevice } from "@/handoffs/handoff";
 import type { CompanionAssistantPhase, CompanionMonitor, DeviceLinkPayload } from "@/device-link/protocol";
-import { assistantPhase, companionGaze, defaultMonitorIndex } from "@/companion/companionGeometry";
+import { assistantPhase, companionGaze, defaultMonitorIndex, selectedCompanionPC } from "@/companion/companionGeometry";
 import "./companion.css";
 
 type Pointer = { x: number; y: number };
@@ -22,11 +24,13 @@ function storedMonitor(): number | null {
 }
 
 export function CompanionView({
-  assistant, snapshot, micBusy, onStartVoice, onExit,
+  assistant, snapshot, micBusy, onStartVoice, onExit, currentDeviceId, devices,
 }: {
   assistant: AssistantController;
   snapshot: AssistantSnapshot;
   micBusy: boolean;
+  currentDeviceId: string | null;
+  devices: OwnedDevice[];
   onStartVoice(): void;
   onExit(): void;
 }) {
@@ -36,6 +40,13 @@ export function CompanionView({
   const [remotePhase, setRemotePhase] = useState<CompanionAssistantPhase>("idle");
   const [sourceDeviceId, setSourceDeviceId] = useState<string | null>(null);
   const [savedIndex, setSavedIndex] = useState<number | null>(storedMonitor);
+  const [preferredPC, setPreferredPC] = useState<string | null>(
+    () => currentDeviceId ? loadRemoteVoiceDefault(currentDeviceId) : null,
+  );
+  const pairedWindows = devices.filter(d => d.platform === "windows"
+    && d.id !== currentDeviceId && transport.pairedPeers.includes(d.id));
+  // An explicit default which is no longer paired must not silently select another PC.
+  const targetId = selectedCompanionPC(pairedWindows, preferredPC);
   const monitorIndex = savedIndex ?? defaultMonitorIndex(monitors);
   const gaze = useMemo(() => cursor && monitors.length
     ? companionGaze(cursor, monitors, monitorIndex) : { x: 0, y: 0 },
@@ -46,12 +57,13 @@ export function CompanionView({
       () => setTransport(deviceLinkManager.getSnapshot()),
     );
     const unsubscribeFrames = deviceLinkManager.subscribeCompanion((sender, payload: DeviceLinkPayload) => {
+      if (sender !== targetId) return;
       setSourceDeviceId(sender);
       if (payload.type === "layout") setMonitors(payload.monitors);
       if (payload.type === "cursor") setCursor({ x: payload.x, y: payload.y });
       if (payload.type === "assistant-state") setRemotePhase(payload.phase);
     });
-    const sync = () => deviceLinkManager.setCompanionOpen(document.visibilityState === "visible");
+    const sync = () => deviceLinkManager.setCompanionOpen(document.visibilityState === "visible", targetId);
     sync();
     document.addEventListener("visibilitychange", sync);
     return () => {
@@ -60,14 +72,32 @@ export function CompanionView({
       unsubscribeFrames();
       unsubscribeState();
     };
-  }, []);
+  }, [targetId]);
+  // Pair refresh or account reconnection can restart the transport while this
+  // screen stays mounted. Re-announce only to the selected PC.
   useEffect(() => {
-    if (document.visibilityState === "visible") deviceLinkManager.setCompanionOpen(true);
-  }, [transport.state]);
+    if (document.visibilityState === "visible") {
+      deviceLinkManager.setCompanionOpen(true, targetId);
+    }
+  }, [transport.state, targetId]);
+  useEffect(() => {
+    setCursor(null);
+    setMonitors([]);
+    setSourceDeviceId(null);
+    setRemotePhase("idle");
+  }, [targetId]);
+  useEffect(() => {
+    if (targetId && !transport.localPeers.includes(targetId)) {
+      setCursor(null);
+      setMonitors([]);
+      setSourceDeviceId(null);
+      setRemotePhase("idle");
+    }
+  }, [targetId, transport.localPeers]);
 
   const localPhase = assistantPhase(snapshot);
   const locallyActive = snapshot.status !== "IDLE" && snapshot.status !== "ERROR";
-  const linked = !!sourceDeviceId && transport.localPeers.includes(sourceDeviceId);
+  const linked = !!targetId && sourceDeviceId === targetId && transport.localPeers.includes(targetId);
   const phase = locallyActive ? localPhase : linked ? remotePhase : "idle";
   const vector = linked ? gaze : { x: 0, y: 0 };
   const active = snapshot.status === "READY" || snapshot.status === "RESPONDING" ||
@@ -84,7 +114,8 @@ export function CompanionView({
         </button>
         <span className="companion-connection">
           <span className={linked ? "companion-dot connected" : "companion-dot"} aria-hidden="true" />
-          {linked ? "Connected" : "Waiting for PC"}
+          {linked ? "LAN connected" : pairedWindows.length === 0 ? "Pair a PC in Devices"
+            : !targetId ? "Choose a PC" : "Waiting for PC on Wi-Fi"}
         </span>
       </header>
       <div className="companion-stage">
@@ -122,6 +153,19 @@ export function CompanionView({
         <p className="companion-phase" role="status">{PHASE_LABEL[phase]}</p>
       </div>
       <footer className="companion-controls">
+        {(pairedWindows.length > 1 || (pairedWindows.length > 0 && !targetId)) && (
+          <div className="companion-placement">
+            <SelectField label="Companion PC" value={targetId ?? ""}
+              options={[
+                { value: "", label: "Choose a PC" },
+                ...pairedWindows.map(d => ({ value: d.id, label: d.name })),
+              ]}
+              onChange={(next) => {
+                setPreferredPC(next || null);
+                if (currentDeviceId) saveRemoteVoiceDefault(currentDeviceId, next || null);
+              }} />
+          </div>
+        )}
         {monitors.length > 1 && (
           <div className="companion-placement">
             <SelectField label="Phone below" value={String(Math.min(monitorIndex, monitors.length - 1))}

@@ -33,6 +33,7 @@ export class DeviceLinkManager {
   private companionListeners = new Set<(senderId: string, payload: DeviceLinkPayload) => void>();
   private companionRequesters = new Map<string, number>();
   private companionOpen = false;
+  private companionTarget: string | null = null;
   private companionTimer: ReturnType<typeof setInterval> | null = null;
   private companionRenew: ReturnType<typeof setInterval> | null = null;
   private companionSamplePending = false;
@@ -47,6 +48,14 @@ export class DeviceLinkManager {
   private generation = 0;
   private cloudReady = false;
   private relayPort: number | null = null;
+  private relayTransition: Promise<void> = Promise.resolve();
+
+  /** A reconnect must never let an old stop close a newly started relay. */
+  private async withRelay<T>(task: () => Promise<T>): Promise<T> {
+    const operation = this.relayTransition.then(task, task);
+    this.relayTransition = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
 
   subscribe = (cb: () => void): (() => void) => {
     this.listeners.add(cb);
@@ -64,22 +73,32 @@ export class DeviceLinkManager {
     return () => this.companionListeners.delete(listener);
   }
 
-  setCompanionOpen(open: boolean): void {
+  /** Only the selected PC may stream Companion data. Never activate every pair. */
+  setCompanionOpen(open: boolean, targetDeviceId: string | null = null): void {
     if (this.platform !== "android") return;
-    if (this.companionOpen === open) return;
+    const target = targetDeviceId && this.pairs.some(p => p.peerDeviceId === targetDeviceId)
+      ? targetDeviceId : null;
+    if (this.companionOpen === open && this.companionTarget === target) return;
+    const previous = this.companionTarget;
+    if (this.companionOpen && previous && (!open || previous !== target)) {
+      void this.sendEphemeral(previous, { type: "companion", action: "stop" });
+    }
     this.companionOpen = open;
+    this.companionTarget = target;
     if (this.companionRenew) clearInterval(this.companionRenew);
     this.companionRenew = null;
-    void this.announceCompanion(open ? "start" : "stop");
-    if (open) this.companionRenew = setInterval(() => {
+    if (open && target) {
       void this.announceCompanion("start");
-    }, 4_000);
+      this.companionRenew = setInterval(() => {
+        void this.announceCompanion("start");
+      }, 4_000);
+    }
   }
 
   private async announceCompanion(action: "start" | "stop"): Promise<void> {
-    for (const peer of this.pairs) {
-      if (!this.sessions.get(peer.peerDeviceId)?.connected) continue;
-      void this.sendEphemeral(peer.peerDeviceId, { type: "companion", action });
+    const target = this.companionTarget;
+    if (target && this.sessions.get(target)?.connected) {
+      await this.sendEphemeral(target, { type: "companion", action });
     }
   }
 
@@ -159,7 +178,7 @@ export class DeviceLinkManager {
     } else if (this.platform === "android" &&
       (frame.payload.type === "cursor" || frame.payload.type === "layout" ||
        frame.payload.type === "assistant-state")) {
-      if (!this.companionOpen) return;
+      if (!this.companionOpen || frame.sender !== this.companionTarget) return;
       for (const cb of this.companionListeners) cb(frame.sender, frame.payload);
     }
     if (frame.payload.type === "wake") {
@@ -191,7 +210,17 @@ export class DeviceLinkManager {
         ready => { if (generation === this.generation) { this.cloudReady = ready; this.update(); } },
       );
       if (platform === "windows") {
-        this.relayPort = await invoke<number>("device_link_start_relay", { deviceId });
+        await this.withRelay(async () => {
+          if (generation !== this.generation) return;
+          const port = await invoke<number>("device_link_start_relay", { deviceId });
+          if (generation !== this.generation) {
+            // A restart/sign-out raced with the native start. Stop the stale
+            // listener before the next queued start can proceed.
+            await invoke("device_link_stop_relay").catch(() => undefined);
+            return;
+          }
+          this.relayPort = port;
+        });
         if (generation !== this.generation) return;
         for (const peer of this.pairs) this.connectWindows(peer);
         this.scanTimer = setInterval(() => {
@@ -264,7 +293,9 @@ export class DeviceLinkManager {
           if (state === "connected") {
             this.lastPeerMessage.set(peer.peerDeviceId, Date.now());
             this.update();
-            if (this.companionOpen) void this.sendEphemeral(peer.peerDeviceId, { type: "companion", action: "start" });
+            if (this.companionOpen && this.companionTarget === peer.peerDeviceId) {
+              void this.sendEphemeral(peer.peerDeviceId, { type: "companion", action: "start" });
+            }
           }
           if (state === "closed") this.disconnectPeer(peer.peerDeviceId);
         },
@@ -295,7 +326,9 @@ export class DeviceLinkManager {
               if (state === "connected") {
                 this.lastPeerMessage.set(peer.deviceId, Date.now());
                 this.update();
-                if (this.companionOpen) void this.sendEphemeral(peer.deviceId, { type: "companion", action: "start" });
+                if (this.companionOpen && this.companionTarget === peer.deviceId) {
+                  void this.sendEphemeral(peer.deviceId, { type: "companion", action: "start" });
+                }
               }
               if (state === "closed") this.disconnectPeer(peer.deviceId);
             },
@@ -357,6 +390,7 @@ export class DeviceLinkManager {
     this.companionTimer = null;
     this.companionRenew = null;
     this.companionOpen = false;
+    this.companionTarget = null;
     this.companionRequesters.clear();
     this.lastMonitorLayout = "";
     this.lastPointer = "";
@@ -368,7 +402,11 @@ export class DeviceLinkManager {
     this.sessions.clear();
     this.connecting.clear();
     this.lastPeerMessage.clear();
-    if (this.relayPort !== null) void invoke("device_link_stop_relay").catch(() => undefined);
+    if (this.relayPort !== null) {
+      // Native stop is ordered after any in-flight native start and before the
+      // next start, even when React remounts or the account changes rapidly.
+      void this.withRelay(() => invoke("device_link_stop_relay")).catch(() => undefined);
+    }
     this.relayPort = null;
     this.cloudReady = false;
     this.trustVerifiedAt = 0;

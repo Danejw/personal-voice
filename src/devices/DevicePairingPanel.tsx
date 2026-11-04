@@ -19,6 +19,7 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
   const [notice, setNotice] = useState("");
   const [links, setLinks] = useState<PairLink[]>([]);
   const [trustedGrants, setTrustedGrants] = useState<TrustedRemoteGrant[]>([]);
+  const [trustedAvailable, setTrustedAvailable] = useState(false);
   const [defaultVoiceTarget, setDefaultVoiceTarget] = useState(() => loadRemoteVoiceDefault(deviceId));
   const [transport, setTransport] = useState(deviceLinkManager.getSnapshot);
   useEffect(() => deviceLinkManager.subscribe(() => setTransport(deviceLinkManager.getSnapshot())), []);
@@ -32,8 +33,24 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
       try {
         await devicePairingApi.register(deviceId);
         const current = await verifiedPairLinks(deviceId);
-        if (active) setLinks(current);
-        if (active && platform === "windows") setTrustedGrants(await trustedRemoteApi.list(deviceId));
+        if (!active) return;
+        setLinks(current);
+        if (platform === "windows") {
+          // Pairing is usable without the separately deployed trusted-control
+          // backend. Never claim pairing failed just because grant listing failed.
+          try {
+            const grants = await trustedRemoteApi.list(deviceId);
+            if (active) {
+              setTrustedGrants(grants);
+              setTrustedAvailable(true);
+            }
+          } catch {
+            if (active) {
+              setTrustedGrants([]);
+              setTrustedAvailable(false);
+            }
+          }
+        }
       } catch (error) {
         if (active) setNotice(error instanceof Error ? error.message : "Pairing unavailable.");
       }
@@ -145,7 +162,7 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
               {defaultVoiceTarget === link.peerDeviceId ? "Voice default" : "Use for voice"}
             </button>
           )}
-          {platform === "windows" && devices.find(d => d.id === link.peerDeviceId)?.platform === "android" && (
+          {platform === "windows" && trustedAvailable && devices.find(d => d.id === link.peerDeviceId)?.platform === "android" && (
             <>
               {trustedGrants.filter(g => g.phone_device_id === link.peerDeviceId && !g.stopped_at && Date.parse(g.expires_at) > Date.now()).map(grant => (
                 <button key={grant.id} type="button" className="secondary" disabled={busy}
