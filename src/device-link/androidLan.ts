@@ -8,7 +8,7 @@ const privateIp = (host: string): boolean => {
   if (!match) return false;
   const octets = match.slice(1).map(Number);
   if (octets.some(n => n > 255)) return false;
-  const [a, b] = octets;
+  const [a = 0, b = 0] = octets;
   return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31)
     || (a === 192 && b === 168) || (a === 169 && b === 254);
 };
