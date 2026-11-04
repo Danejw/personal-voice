@@ -64,7 +64,7 @@ export const devicePairingApi = {
   async register(deviceId: string) {
     const key = await publicPairingKey(await pairingIdentity(deviceId));
     const { data, error } = await db().rpc("pair_register_identity", {
-      p_device_id: deviceId, p_public_jwk: key,
+      p_device_id: deviceId, p_public_jwk: { kty: key.kty, crv: key.crv, x: key.x, y: key.y },
     });
     check(error);
     if (data !== true) throw new Error("Pairing identity could not be registered.");
