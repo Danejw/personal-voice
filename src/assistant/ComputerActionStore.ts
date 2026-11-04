@@ -85,6 +85,7 @@ export class ComputerActionStore {
       if (typeof call.args.x !== "number" || typeof call.args.y !== "number") {
         throw new Error("The click coordinates were not valid.");
       }
+      if (this.platform.computerPointerAction) return this.platform.computerPointerAction(call.name, call.args.x, call.args.y);
       return this.platform.computerClick(call.args.x, call.args.y, call.name === "double_click" ? 2 : 1);
     }
     if (call.name === "move" || call.name === "right_click" || call.name === "drag") {
