@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
+import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { PairingQrCode } from "@/devices/PairingQrCode";
 import { devicePairingApi, type PairInvite, type PairCode } from "@/services/devicePairingService";
 import { verifyPairApproval, verifiedPairLinks } from "@/services/verifiedPairLinks";
@@ -15,6 +16,9 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [links, setLinks] = useState<PairLink[]>([]);
+  const [transport, setTransport] = useState(deviceLinkManager.getSnapshot);
+  useEffect(() => deviceLinkManager.subscribe(() => setTransport(deviceLinkManager.getSnapshot())), []);
+
 
   useEffect(() => {
     if (!open) return;
@@ -44,7 +48,10 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
         if (state?.status === "approved") {
           const verified = await verifyPairApproval(deviceId, state);
           setNotice(verified ? "Devices paired." : "Pairing verification failed.");
-          if (verified) setLinks(await verifiedPairLinks(deviceId));
+          if (verified) {
+            setLinks(await verifiedPairLinks(deviceId));
+            void deviceLinkManager.refresh();
+          }
           setInvite(null);
           setJoined(null);
         } else if (state && Date.parse(state.expiresAt) < Date.now()) {
@@ -84,6 +91,7 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
                   await devicePairingApi.approve(deviceId, request, invite.code);
                   setInvite(null);
                   setLinks(await verifiedPairLinks(deviceId));
+                  void deviceLinkManager.refresh();
                   setNotice("Devices paired.");
                 })}>Approve {devices.find((device) => device.id === request.claimantDeviceId)?.name ?? "device"}</button>
               )}
@@ -116,11 +124,14 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
       )}
       {open && links.map((link) => (
         <div className="item-row" key={link.id}>
-          <strong>{devices.find((device) => device.id === link.peerDeviceId)?.name ?? "Other device"}</strong>
+          <strong>{devices.find((device) => device.id === link.peerDeviceId)?.name ?? "Other device"}
+            {transport.localPeers.includes(link.peerDeviceId) && <span className="note-meta"> · LAN</span>}
+          </strong>
           <button type="button" className="secondary" disabled={busy}
             onClick={() => void run(async () => {
               await devicePairingApi.revoke(deviceId, link.id);
               setLinks(await verifiedPairLinks(deviceId));
+              void deviceLinkManager.refresh();
             })}>Unpair</button>
         </div>
       ))}
