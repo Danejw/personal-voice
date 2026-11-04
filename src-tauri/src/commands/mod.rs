@@ -9,6 +9,19 @@ pub const INDICATOR_WINDOW: &str = "indicator";
 
 #[cfg(windows)]
 #[tauri::command]
+pub fn device_link_start_relay() -> Result<u16, String> {
+    platform::device_link_start_relay()
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn device_link_stop_relay() {
+    platform::device_link_stop_relay()
+}
+
+
+#[cfg(windows)]
+#[tauri::command]
 pub fn pairing_public_key(device_id: String) -> Result<impl Serialize, String> {
     platform::pairing_public_key(&device_id)
 }
