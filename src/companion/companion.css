@@ -115,15 +115,12 @@
   color: #abc1bb;
   font-size: 12px;
 }
-.companion-placement select {
-  appearance: auto;
-  min-width: 114px;
-  color: #e8f8f1;
-  background: #172c2c;
-  border: 1px solid #ffffff30;
-  border-radius: 12px;
-  padding: 8px 10px;
+.companion-placement .select-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
+.companion-placement .select-trigger { min-width: 120px; }
 .companion-voice-button {
   display: flex;
   justify-content: center;
