@@ -145,8 +145,14 @@ internal object DeviceLinkNetwork {
               else -> break
             }
             if (length > 16_384 || length < 0) break
-            val data = input.readNBytes(length)
-            if (data.size != length) break
+            val data = ByteArray(length)
+            var filled = 0
+            while (filled < length) {
+              val count = input.read(data, filled, length - filled)
+              if (count <= 0) break
+              filled += count
+            }
+            if (filled != length) break
             if (opcode == 8) break
             if (opcode == 1) onText(String(data, Charsets.UTF_8))
             if (opcode != 1 && opcode != 10 && opcode != 9) break
