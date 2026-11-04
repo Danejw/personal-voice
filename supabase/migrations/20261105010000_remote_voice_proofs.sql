@@ -1,3 +1,13 @@
+-- Preserve legacy v1 history during migration while accepting signed v2 requests.
+alter table public.device_action_requests
+  drop constraint device_action_requests_version_check;
+alter table public.device_action_requests
+  add constraint device_action_requests_version_check check (version in (1,2));
+alter table public.device_context_requests
+  drop constraint device_context_requests_version_check;
+alter table public.device_context_requests
+  add constraint device_context_requests_version_check check (version in (1,2));
+
 -- Signed, short-lived remote voice requests. Existing version-1 requests are
 -- deliberately not trusted by the new receiver and may be cancelled/expired.
 alter table public.device_action_requests
