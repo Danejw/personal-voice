@@ -89,9 +89,8 @@ fn point(x: i32, y: i32) -> Result<(i32, i32), String> {
 }
 
 fn pointer_event(flags: windows::Win32::UI::Input::KeyboardAndMouse::MOUSE_EVENT_FLAGS, x: i32, y: i32, data: i32) -> Result<(), String> {
-    let mut input = mouse(flags, x, y);
-    input.Anonymous.mi.mouseData = data;
-    send_inputs(&[input], "pointer action")
+    let _ = data;
+    send_inputs(&[mouse(flags, x, y)], "pointer action")
 }
 
 fn pointer_move(from: (i32, i32), to: (i32, i32)) -> Result<(), String> {
