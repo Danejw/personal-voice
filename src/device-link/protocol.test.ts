@@ -30,7 +30,7 @@ describe("DeviceLink protocol", () => {
     const first = makeEnvelope(laptop, phone, { type: "wake", family: "computer-action", requestId: request }, now, request);
     expect(seen.accept(first, now)).toBe(true);
     expect(seen.accept(first, now + 1)).toBe(false);
-    expect(seen.accept(first, now + 31_000)).toBe(true);
+    expect(seen.accept(first, now + 31_000)).toBe(false);
   });
   it("rejects oversized frames and payload type confusion", () => {
     const frame = makeEnvelope(laptop, phone, { type: "presence", state: "ready" }, now);
