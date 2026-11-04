@@ -1,9 +1,8 @@
-import { getSupabase } from "@/services/supabase";
 import {
-  pairingIdentity, publicPairingKey, publicKeyFromJwk,
+  nativePairPublicKey, publicKeyFromJwk,
   keysMatch, verifyPairingText, pairingApprovalText,
 } from "@/devices/pairingIdentity";
-import type { PairInvite, PairLink } from "@/services/devicePairingService";
+import { pairServerAction, type PairInvite, type PairLink } from "@/services/devicePairingService";
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid paired device.");
@@ -18,7 +17,7 @@ function string(value: unknown): string {
 export async function verifyPairApproval(deviceId: string, invite: PairInvite): Promise<boolean> {
   if (invite.status !== "approved" || !invite.claimantDeviceId ||
       !invite.claimantKey || !invite.approvalSignature) return false;
-  const local = await publicPairingKey(await pairingIdentity(deviceId));
+  const local = await nativePairPublicKey(deviceId);
   const mine = invite.issuerDeviceId === deviceId ? invite.issuerKey
     : invite.claimantDeviceId === deviceId ? invite.claimantKey : null;
   if (!mine || !keysMatch(local, mine)) return false;
@@ -29,12 +28,9 @@ export async function verifyPairApproval(deviceId: string, invite: PairInvite): 
 
 /** Only cryptographically verified approvals count as paired on this device. */
 export async function verifiedPairLinks(deviceId: string): Promise<PairLink[]> {
-  const client = getSupabase();
-  if (!client) throw new Error("Device sync is not configured.");
-  const { data, error } = await client.rpc("pair_list_links", { p_device_id: deviceId });
-  if (error) throw new Error("Couldn't load paired devices.");
+  const data = await pairServerAction<unknown>(deviceId, "list");
   if (!Array.isArray(data)) throw new Error("Invalid pairing list.");
-  const mine = await publicPairingKey(await pairingIdentity(deviceId));
+  const mine = await nativePairPublicKey(deviceId);
   const result: PairLink[] = [];
   for (const item of data) {
     try {
