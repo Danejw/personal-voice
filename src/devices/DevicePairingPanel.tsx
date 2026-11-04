@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { devicePairingApi, type PairInvite, type PairCode } from "@/services/devicePairingService";
-import { verifyPairApproval } from "@/services/verifiedPairLinks";
+import { verifyPairApproval, verifiedPairLinks } from "@/services/verifiedPairLinks";
+import type { PairLink } from "@/services/devicePairingService";
+import type { OwnedDevice } from "@/handoffs/handoff";
 
-export function DevicePairingPanel({ deviceId, platform }: { deviceId: string; platform: string }) {
+export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: string; platform: string; devices: OwnedDevice[] }) {
   const [open, setOpen] = useState(false);
   const [invite, setInvite] = useState<PairCode | null>(null);
   const [request, setRequest] = useState<PairInvite | null>(null);
@@ -10,6 +12,22 @@ export function DevicePairingPanel({ deviceId, platform }: { deviceId: string; p
   const [joined, setJoined] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [links, setLinks] = useState<PairLink[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    void (async () => {
+      try {
+        await devicePairingApi.register(deviceId);
+        const current = await verifiedPairLinks(deviceId);
+        if (active) setLinks(current);
+      } catch (error) {
+        if (active) setNotice(error instanceof Error ? error.message : "Pairing unavailable.");
+      }
+    })();
+    return () => { active = false; };
+  }, [deviceId, open]);
 
   useEffect(() => {
     if (!open || !(invite || joined)) return;
@@ -80,6 +98,16 @@ export function DevicePairingPanel({ deviceId, platform }: { deviceId: string; p
           <button type="submit" disabled={busy}>Pair</button>
         </form>
       )}
+      {open && links.map((link) => (
+        <div className="item-row" key={link.id}>
+          <strong>{devices.find((device) => device.id === link.peerDeviceId)?.name ?? "Other device"}</strong>
+          <button type="button" className="secondary" disabled={busy}
+            onClick={() => void run(async () => {
+              await devicePairingApi.revoke(deviceId, link.id);
+              setLinks(await verifiedPairLinks(deviceId));
+            })}>Unpair</button>
+        </div>
+      ))}
       {open && notice && <p role="status" className="note-meta">{notice}</p>}
     </div>
   );
