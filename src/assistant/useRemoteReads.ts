@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import type { RemoteReadSnapshot, RemoteReadStore } from "@/assistant/RemoteReadStore";
 
 const REMOTE_READ_POLL_MS = 4_000;
@@ -7,10 +8,21 @@ const REMOTE_READ_POLL_MS = 4_000;
 export function useRemoteReads(store: RemoteReadStore, userId: string | null): RemoteReadSnapshot {
   useEffect(() => {
     if (!userId) return;
-    const tick = () => { void store.poll(userId); };
+    let pending = false;
+    const tick = () => {
+      if (pending) return; // LAN + cloud + poll cannot execute the same request concurrently.
+      pending = true;
+      void store.poll(userId).catch(() => undefined).finally(() => { pending = false; });
+    };
     tick();
     const timer = window.setInterval(tick, REMOTE_READ_POLL_MS);
-    return () => window.clearInterval(timer);
+    const unsubscribe = deviceLinkManager.subscribeWakes(family => {
+      if (family === "remote-read") tick();
+    });
+    return () => {
+      window.clearInterval(timer);
+      unsubscribe();
+    };
   }, [store, userId]);
 
   return useSyncExternalStore(store.subscribe, store.getSnapshot);

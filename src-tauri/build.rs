@@ -34,6 +34,13 @@ fn main() {
                     "start_camera_frames",
                     "switch_camera",
                     "stop_camera_frames",
+                    "scan_pairing_qr",
+                    "pairing_public_key",
+                    "pairing_sign",
+                    "device_link_discover",
+                    "device_link_connect",
+                    "device_link_send",
+                    "device_link_close",
                 ])
                 .default_permission(tauri_build::DefaultPermissionRule::AllowAllCommands),
         ),
