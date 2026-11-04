@@ -620,6 +620,16 @@ pub async fn computer_click(x: i32, y: i32, times: u32) -> Result<String, String
 
 #[tauri::command]
 pub async fn computer_pointer_action(app: AppHandle, kind: String, x: i32, y: i32, end_x: Option<i32>, end_y: Option<i32>) -> Result<String, String> {
+    #[cfg(not(windows))]
+    {
+        let _ = (app, kind, x, y, end_x, end_y);
+        return Err("Desktop pointer control is Windows-only.".into());
+    }
+    #[cfg(windows)]
+    {
+    if !platform::interactive_desktop_unlocked() {
+        return Err("Unlock the Windows desktop before controlling the pointer.".into());
+    }
     use tauri::PhysicalPosition;
     let overlay = app.get_webview_window("assistant-pointer");
     if let Some(ref window) = overlay {
@@ -646,6 +656,7 @@ pub async fn computer_pointer_action(app: AppHandle, kind: String, x: i32, y: i3
         }
     }
     result
+    }
 }
 
 #[tauri::command]
