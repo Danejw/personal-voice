@@ -32,6 +32,25 @@ describe("DeviceLink protocol", () => {
     expect(seen.accept(first, now + 1)).toBe(false);
     expect(seen.accept(first, now + 31_000)).toBe(false);
   });
+  it("accepts only short-lived companion controls, geometry and assistant phases", () => {
+    const layout = makeEnvelope(laptop, phone, {
+      type: "layout", monitors: [
+        { x: -1920, y: 0, width: 1920, height: 1080 },
+        { x: 0, y: 0, width: 2560, height: 1440 },
+      ],
+    }, now);
+    expect(parseDeviceLinkEnvelope(layout, now)).toEqual(layout);
+    expect(parseDeviceLinkEnvelope({ ...layout, payload: {
+      type: "layout", monitors: [{ x: 0, y: 0, width: -1, height: 200 }],
+    } }, now)).toBeNull();
+    expect(parseDeviceLinkEnvelope(layout, now + 2_100)).toBeNull();
+    const control = makeEnvelope(phone, laptop, { type: "companion", action: "start" }, now);
+    expect(parseDeviceLinkEnvelope(control, now)).not.toBeNull();
+    expect(parseDeviceLinkEnvelope({ ...control, payload: { type: "companion", action: "send-pointer" } }, now)).toBeNull();
+    const state = makeEnvelope(laptop, phone, { type: "assistant-state", phase: "speaking" }, now);
+    expect(parseDeviceLinkEnvelope(state, now)).toEqual(state);
+    expect(parseDeviceLinkEnvelope({ ...state, payload: { type: "assistant-state", phase: "unknown" } }, now)).toBeNull();
+  });
   it("rejects oversized frames and payload type confusion", () => {
     const frame = makeEnvelope(laptop, phone, { type: "presence", state: "ready" }, now);
     expect(parseDeviceLinkEnvelope({ ...frame, payload: { type: "presence", state: "ready", text: "unsafe" } }, now)).toBeNull();
