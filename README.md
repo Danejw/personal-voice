@@ -54,6 +54,7 @@ I built Personal Voice because I wanted more control over that. It replaced Wisp
 | **DeviceLink (in development)** | A signed, encrypted local device connection with cloud wake-up fallback. Existing remote dictation and computer-action acknowledgments remain authoritative. |
 | **Android Companion (preview)** | Place your phone beneath a monitor, choose one paired PC, and see the animated eyes follow its pointer over local Wi-Fi. Use the existing Assistant voice controls. |
 | **Remote voice actions (preview)** | Ask your phone's Assistant to act on one selected paired PC. Windows approves each action unless you explicitly grant temporary trusted control for the narrow safe allowlist. |
+| **Visual desktop control (PR42 preview)** | On Windows, supervised pointer commands move the real mouse with a branded, click-through PV cursor, including clicks, right-clicks and bounded drags. Paired Android devices can request explicitly approved actions through signed DeviceLink requests after the SQL migration is applied. Physical-device validation is pending. |
 | **Make it sound like you** | Save words in your dictionary, expand snippets, and apply text transforms. |
 | **Keep your notes close** | Save notes, attach files, capture selections, and pick up where you left off. |
 | **Use a real voice assistant** | Have a live Gemini conversation. With your permission, the assistant can use notes, memory, screen context, and supported device controls. |
