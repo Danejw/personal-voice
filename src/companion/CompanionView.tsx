@@ -21,11 +21,12 @@ function storedMonitor(): number | null {
 }
 
 export function CompanionView({
-  assistant, snapshot, micBusy, onExit,
+  assistant, snapshot, micBusy, onStartVoice, onExit,
 }: {
   assistant: AssistantController;
   snapshot: AssistantSnapshot;
   micBusy: boolean;
+  onStartVoice(): void;
   onExit(): void;
 }) {
   const [transport, setTransport] = useState(() => deviceLinkManager.getSnapshot());
@@ -137,7 +138,7 @@ export function CompanionView({
         )}
         <button className={active ? "companion-voice-button is-active" : "companion-voice-button"}
           type="button" disabled={!active && micBusy}
-          onClick={() => { if (active) assistant.end(); else assistant.start(); }}>
+          onClick={() => { if (active) assistant.end(); else onStartVoice(); }}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM6 11a6 6 0 0 0 12 0M12 17v4" fill="none"
               stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
