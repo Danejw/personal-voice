@@ -5,6 +5,7 @@ import {
   planComputerStep,
   planRemoteComputerAction,
   safetyClass,
+  validateComputerCall,
   validateOpenApp,
   validateShortcut,
 } from "@/assistant/computerActions";
@@ -55,6 +56,18 @@ describe("computer action safety", () => {
     expect(planComputerStep({ name: "click", args: { x: 1, y: 1 } }, 1, started, started + 45_000, false)).toMatchObject({
       message: "Stopped because the task ran too long.",
     });
+  });
+
+  it("validates visible pointer actions, bounds and explicit drag confirmation", () => {
+    expect(validateComputerCall({ name: "move", args: { x: 0, y: 999 } }).ok).toBe(true);
+    expect(validateComputerCall({ name: "right_click", args: { x: 500, y: 500 } }).ok).toBe(true);
+    expect(validateComputerCall({ name: "right_click", args: { x: -1, y: 500 } }).ok).toBe(false);
+    expect(validateComputerCall({ name: "drag", args: { x: 100, y: 100, end_x: 900, end_y: 900 } }).ok).toBe(true);
+    expect(validateComputerCall({ name: "drag", args: { x: 100, y: 100, end_x: 1000, end_y: 900 } }).ok).toBe(false);
+    expect(planComputerStep({ name: "drag", args: { x: 100, y: 100, end_x: 900, end_y: 900 } }, 0, started, started, false).action).toBe("confirm");
+    expect(planComputerStep({ name: "right_click", args: { x: 500, y: 500 } }, 0, started, started, true).action).toBe("stop");
+    expect(safetyClass("drag")).toBe("high");
+    expect(safetyClass("right_click")).toBe("low");
   });
 
   it("denies a remote shell, an offline-style opt-out, and a phone", () => {
