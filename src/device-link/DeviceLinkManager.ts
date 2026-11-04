@@ -26,6 +26,7 @@ export class DeviceLinkManager {
   private pairs: PairLink[] = [];
   private sessions = new Map<string, LocalDeviceLink>();
   private connecting = new Set<string>();
+  private lastPeerMessage = new Map<string, number>();
   private listeners = new Set<() => void>();
   private wakeHandlers = new Set<(family: DeviceLinkWakeFamily, id: string) => void>();
   private cloudUnsubscribe: (() => void) | null = null;
@@ -55,6 +56,7 @@ export class DeviceLinkManager {
     this.emit();
   }
   private deliver(frame: DeviceLinkEnvelope) {
+    this.lastPeerMessage.set(frame.sender, Date.now());
     if (frame.payload.type === "wake") {
       for (const cb of this.wakeHandlers) cb(frame.payload.family, frame.payload.requestId);
     }
@@ -86,6 +88,9 @@ export class DeviceLinkManager {
         this.relayPort = await invoke<number>("device_link_start_relay", { deviceId });
         if (generation !== this.generation) return;
         for (const peer of this.pairs) this.connectWindows(peer);
+        this.scanTimer = setInterval(() => {
+          for (const peer of this.pairs) this.connectWindows(peer);
+        }, 8_000);
       } else {
         await this.scanAndroid(generation);
         this.scanTimer = setInterval(() => { void this.scanAndroid(generation); }, 8_000);
@@ -93,6 +98,11 @@ export class DeviceLinkManager {
       this.heartbeatTimer = setInterval(() => {
         for (const [peerId, session] of this.sessions) {
           if (!session.connected) continue;
+          const seen = this.lastPeerMessage.get(peerId) ?? 0;
+          if (seen && Date.now() - seen > 45_000) {
+            this.disconnectPeer(peerId);
+            continue;
+          }
           void session.send({ type: "presence", state: "ready" }).catch(() => this.disconnectPeer(peerId));
         }
       }, 15_000);
@@ -118,7 +128,7 @@ export class DeviceLinkManager {
         socket, deviceId: this.deviceId, peerId: peer.peerDeviceId, peerIdentity: peer.peerPublicKey,
         onMessage: frame => this.deliver(frame),
         onState: state => {
-          if (state === "connected") this.update();
+          if (state === "connected") { this.lastPeerMessage.set(peer.peerDeviceId, Date.now()); this.update(); }
           if (state === "closed") this.disconnectPeer(peer.peerDeviceId);
         },
       });
@@ -144,7 +154,7 @@ export class DeviceLinkManager {
             peerIdentity: pairing.peerPublicKey,
             onMessage: frame => this.deliver(frame),
             onState: state => {
-              if (state === "connected") this.update();
+              if (state === "connected") { this.lastPeerMessage.set(peer.deviceId, Date.now()); this.update(); }
               if (state === "closed") this.disconnectPeer(peer.deviceId);
             },
           });
@@ -159,6 +169,7 @@ export class DeviceLinkManager {
     const session = this.sessions.get(peerId);
     if (!session) return;
     this.sessions.delete(peerId);
+    this.lastPeerMessage.delete(peerId);
     session.stop();
     this.update();
   }
@@ -200,6 +211,7 @@ export class DeviceLinkManager {
     for (const session of this.sessions.values()) session.stop();
     this.sessions.clear();
     this.connecting.clear();
+    this.lastPeerMessage.clear();
     if (this.relayPort !== null) void invoke("device_link_stop_relay").catch(() => undefined);
     this.relayPort = null;
     this.cloudReady = false;
