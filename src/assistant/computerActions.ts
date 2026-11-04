@@ -44,7 +44,6 @@ const UNSUPPORTED = new Set([
   "submit",
   "send_email",
   "enter_credentials",
-  "drag_and_drop",
   "mouse_down",
   "mouse_up",
   "key_down",
@@ -66,9 +65,10 @@ export function safetyClass(name: string, args: Record<string, unknown> = {}): S
   if (name === "hotkey" && hotkeyHas(args.keys, ["delete", "del"])) return "unsupported";
   if (name === "hotkey" && hotkeyHasEnter(args.keys)) return "high";
   if (name === "open_app" || name === "press_shortcut" || name === "insert_text" || name === "copy_text") return "low";
-  if (name === "click" || name === "double_click" || name === "move" || name === "scroll" || name === "type" || name === "wait") {
+  if (name === "click" || name === "double_click" || name === "move" || name === "right_click" || name === "scroll" || name === "type" || name === "wait") {
     return "low";
   }
+  if (name === "drag") return "high";
   if (name === "press_key" || name === "hotkey") return "low";
   return "unsupported";
 }
@@ -143,8 +143,11 @@ export function planComputerStep(
 
 export function validateComputerCall(call: ComputerCall): { ok: true } | { ok: false; message: string } {
   const args = call.args;
-  if (call.name === "click" || call.name === "double_click" || call.name === "move" || call.name === "scroll") {
+  if (call.name === "click" || call.name === "double_click" || call.name === "move" || call.name === "scroll" || call.name === "right_click" || call.name === "drag") {
     if (!isCoord(args.x) || !isCoord(args.y)) return { ok: false, message: "The click coordinates were not valid." };
+  }
+  if (call.name === "drag") {
+    if (!isCoord(args.end_x) || !isCoord(args.end_y)) return { ok: false, message: "The drag endpoint was not valid." };
   }
   if (call.name === "type") {
     if (typeof args.text !== "string" || !args.text.trim()) return { ok: false, message: "Text is required." };
