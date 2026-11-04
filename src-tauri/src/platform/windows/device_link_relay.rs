@@ -3,7 +3,7 @@
 use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::net::{IpAddr, TcpListener, TcpStream};
+use std::net::{IpAddr, TcpListener, TcpStream, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -243,7 +243,10 @@ fn handle_client(id: u64, mut stream: TcpStream, registry: Arc<Mutex<ClientRegis
 
 /// Start explicitly after a signed-in user has verified at least one pairing.
 /// No port forwarding, public interface registration, or unattended auto-launch.
-pub fn start() -> Result<u16, String> {
+pub fn start(device_id: &str) -> Result<u16, String> {
+    if device_id.len() != 36 || !device_id.bytes().all(|c| c.is_ascii_hexdigit() || c == b'-') {
+        return Err("Invalid DeviceLink device ID.".into());
+    }
     let mut state = state().lock().map_err(|_| io_error())?;
     if let Some(relay) = state.as_ref() {
         if relay.online.load(Ordering::Relaxed) { return Ok(relay.port); }
@@ -270,6 +273,28 @@ pub fn start() -> Result<u16, String> {
             }
         }
     });
+    // UDP discovery broadcasts only a LAN address/port locator, never credentials.
+    // Actual access requires signed P-256 peer authentication on the WS channel.
+    if let Ok(socket) = UdpSocket::bind("0.0.0.0:39047") {
+        let _ = socket.set_read_timeout(Some(Duration::from_millis(750)));
+        let discover_online = online.clone();
+        let device = device_id.to_string();
+        thread::spawn(move || {
+            let mut request = [0u8; 64];
+            while discover_online.load(Ordering::Relaxed) {
+                match socket.recv_from(&mut request) {
+                    Ok((size, peer)) if private_address(peer.ip())
+                        && &request[..size] == b"PV-DL1:DISCOVER" => {
+                        let announcement = format!("PV-DL1:{device}:{port}");
+                        let _ = socket.send_to(announcement.as_bytes(), peer);
+                    }
+                    Ok(_) => {}
+                    Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => {}
+                    Err(_) => break,
+                }
+            }
+        });
+    }
     *state = Some(Relay { port, online });
     Ok(port)
 }
