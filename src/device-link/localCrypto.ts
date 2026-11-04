@@ -135,7 +135,7 @@ export class LocalCipher {
       if (iv.length !== 12 || decode64(v.body).length > DEVICE_LINK_MAX_FRAME_BYTES) return null;
       const aad = new TextEncoder().encode(`1:${v.from}:${v.target}:${v.seq}`);
       const plaintext = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv, additionalData: aad }, this.key, decode64(v.body) as BufferSource,
+        { name: "AES-GCM", iv: iv as BufferSource, additionalData: aad }, this.key, decode64(v.body) as BufferSource,
       );
       const frame = parseDeviceLinkEnvelope(JSON.parse(new TextDecoder().decode(plaintext)), now);
       if (!frame || frame.sender !== this.remoteId || frame.target !== this.localId) return null;
