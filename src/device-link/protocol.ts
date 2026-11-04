@@ -5,11 +5,23 @@ export const DEVICE_LINK_MAX_CLOCK_SKEW_MS = 30_000;
 export const DEVICE_LINK_EPHEMERAL_TTL_MS = 2_000;
 export const DEVICE_LINK_RELIABLE_TTL_MS = 30_000;
 
-export type DeviceLinkMessageType = "presence" | "cursor" | "wake" | "ack";
+export type DeviceLinkMessageType = "presence" | "cursor" | "wake" | "ack" | "companion" | "layout" | "assistant-state";
 export type DeviceLinkPath = "local" | "remote";
 export type DeviceLinkState = "offline" | "connecting" | "local" | "remote" | "reconnecting";
 
+export interface CompanionMonitor {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type CompanionAssistantPhase = "idle" | "listening" | "thinking" | "speaking";
+
 export type DeviceLinkPayload =
+  | { type: "companion"; action: "start" | "stop" }
+  | { type: "layout"; monitors: CompanionMonitor[] }
+  | { type: "assistant-state"; phase: CompanionAssistantPhase }
   | { type: "presence"; state: "ready" | "away" }
   | { type: "cursor"; x: number; y: number }
   | { type: "wake"; family: "remote-dictation" | "computer-action" | "remote-read"; requestId: string }
@@ -33,7 +45,9 @@ const finite = (v: unknown): v is number => typeof v === "number" && Number.isFi
 
 /** A cursor update is intentionally never a reliable side-effect request. */
 export function isEphemeral(payload: DeviceLinkPayload): boolean {
-  return payload.type === "cursor" || payload.type === "presence";
+  return payload.type === "cursor" || payload.type === "presence"
+    || payload.type === "companion" || payload.type === "layout"
+    || payload.type === "assistant-state";
 }
 export function makeEnvelope(
   sender: string, target: string, payload: DeviceLinkPayload,
@@ -67,6 +81,26 @@ export function parseDeviceLinkEnvelope(value: unknown, now = Date.now()): Devic
     if (!keys(payload, ["type","x","y"]) || !finite(payload.x) || !finite(payload.y)
       || Math.abs(payload.x) > 100_000 || Math.abs(payload.y) > 100_000
       || lifetime > DEVICE_LINK_EPHEMERAL_TTL_MS) return null;
+  } else if (payload.type === "companion") {
+    if (!keys(payload, ["type","action"])
+      || (payload.action !== "start" && payload.action !== "stop")
+      || lifetime > DEVICE_LINK_EPHEMERAL_TTL_MS) return null;
+  } else if (payload.type === "assistant-state") {
+    if (!keys(payload, ["type","phase"])
+      || !["idle","listening","thinking","speaking"].includes(String(payload.phase))
+      || lifetime > DEVICE_LINK_EPHEMERAL_TTL_MS) return null;
+  } else if (payload.type === "layout") {
+    if (!keys(payload, ["type","monitors"]) || !Array.isArray(payload.monitors)
+      || payload.monitors.length < 1 || payload.monitors.length > 8
+      || lifetime > DEVICE_LINK_EPHEMERAL_TTL_MS) return null;
+    for (const monitor of payload.monitors) {
+      if (!plain(monitor) || !keys(monitor, ["x","y","width","height"])
+        || !Number.isInteger(monitor.x) || !Number.isInteger(monitor.y)
+        || !Number.isInteger(monitor.width) || !Number.isInteger(monitor.height)
+        || monitor.width < 1 || monitor.height < 1
+        || monitor.width > 30_000 || monitor.height > 30_000
+        || Math.abs(monitor.x) > 100_000 || Math.abs(monitor.y) > 100_000) return null;
+    }
   } else if (payload.type === "wake") {
     if (!keys(payload, ["type","family","requestId"])
       || !["remote-dictation","computer-action","remote-read"].includes(String(payload.family))
