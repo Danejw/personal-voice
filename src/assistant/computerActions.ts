@@ -31,7 +31,31 @@ export const ALLOWED_SHORTCUTS = [
 
 export type AllowedAppId = (typeof ALLOWED_APPS)[number]["id"];
 export type AllowedShortcutId = (typeof ALLOWED_SHORTCUTS)[number]["id"];
-export type RemoteComputerAction = "open_app" | "press_shortcut" | "insert_text";
+export type RemoteComputerAction =
+  | "open_app" | "press_shortcut" | "insert_text"
+  | "move_pointer" | "click_pointer" | "double_click_pointer"
+  | "right_click_pointer" | "drag_pointer";
+
+export function parseRemotePointer(action: string, argument: string): {
+  kind: "move" | "click" | "double_click" | "right_click" | "drag";
+  x: number; y: number; endX?: number; endY?: number;
+} | null {
+  const kinds: Record<string, "move" | "click" | "double_click" | "right_click" | "drag"> = {
+    move_pointer: "move", click_pointer: "click", double_click_pointer: "double_click",
+    right_click_pointer: "right_click", drag_pointer: "drag",
+  };
+  const kind = kinds[action];
+  if (!kind) return null;
+  const pieces = argument.split(",");
+  if (pieces.length !== (kind === "drag" ? 4 : 2)) return null;
+  if (pieces.some(piece => !/^(0|[1-9][0-9]{0,2})$/.test(piece))) return null;
+  const values = pieces.map(Number);
+  if (values.some(value => value > 999)) return null;
+  return kind === "drag"
+    ? { kind, x: values[0], y: values[1], endX: values[2], endY: values[3] }
+    : { kind, x: values[0], y: values[1] };
+}
+
 export type SafetyClass = "read" | "low" | "high" | "unsupported";
 
 const UNSUPPORTED = new Set([
@@ -193,11 +217,16 @@ export function planRemoteComputerAction(
   platform: string,
   remoteActions: boolean,
 ): { action: "confirm"; label: string } | { action: "deny"; message: string } {
-  if (isUnsupportedAction(action) || (action !== "open_app" && action !== "press_shortcut" && action !== "insert_text")) {
+  if (isUnsupportedAction(action) || (action !== "open_app" && action !== "press_shortcut" && action !== "insert_text" && !action.endsWith("_pointer"))) {
     return { action: "deny", message: "That action is not available." };
   }
   if (platform !== "windows") return { action: "deny", message: "This device can't run desktop actions." };
   if (!remoteActions) return { action: "deny", message: "Remote actions are turned off on this PC." };
+  if (action.endsWith("_pointer")) {
+    const pointer = parseRemotePointer(action, argument);
+    if (!pointer) return { action: "deny", message: "Invalid bounded pointer coordinates." };
+    return { action: "confirm", label: pointer.kind === "drag" ? "Drag the Windows pointer" : `Windows pointer: ${pointer.kind.replace(/_/g, " ")}` };
+  }
   if (action === "open_app") {
     const app = validateOpenApp(argument);
     if (!app.ok) return { action: "deny", message: app.message };
