@@ -6,7 +6,7 @@ import { SelectField } from "@/components/SelectField";
 import { loadRemoteVoiceDefault, saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import type { CompanionAssistantPhase, CompanionMonitor, DeviceLinkPayload } from "@/device-link/protocol";
-import { assistantPhase, companionGaze, defaultMonitorIndex } from "@/companion/companionGeometry";
+import { assistantPhase, companionGaze, defaultMonitorIndex, selectedCompanionPC } from "@/companion/companionGeometry";
 import "./companion.css";
 
 type Pointer = { x: number; y: number };
@@ -46,9 +46,7 @@ export function CompanionView({
   const pairedWindows = devices.filter(d => d.platform === "windows"
     && d.id !== currentDeviceId && transport.pairedPeers.includes(d.id));
   // An explicit default which is no longer paired must not silently select another PC.
-  const targetId = preferredPC
-    ? pairedWindows.find(d => d.id === preferredPC)?.id ?? null
-    : pairedWindows.length === 1 ? pairedWindows[0].id : null;
+  const targetId = selectedCompanionPC(pairedWindows, preferredPC);
   const monitorIndex = savedIndex ?? defaultMonitorIndex(monitors);
   const gaze = useMemo(() => cursor && monitors.length
     ? companionGaze(cursor, monitors, monitorIndex) : { x: 0, y: 0 },
