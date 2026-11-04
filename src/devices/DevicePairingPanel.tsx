@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { PairingQrCode } from "@/devices/PairingQrCode";
 import { devicePairingApi, type PairInvite, type PairCode } from "@/services/devicePairingService";
 import { verifyPairApproval, verifiedPairLinks } from "@/services/verifiedPairLinks";
 import type { PairLink } from "@/services/devicePairingService";
@@ -40,7 +42,9 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
         if (!active) return;
         setRequest(state);
         if (state?.status === "approved") {
-          setNotice(await verifyPairApproval(deviceId, state) ? "Devices paired." : "Pairing verification failed.");
+          const verified = await verifyPairApproval(deviceId, state);
+          setNotice(verified ? "Devices paired." : "Pairing verification failed.");
+          if (verified) setLinks(await verifiedPairLinks(deviceId));
           setInvite(null);
           setJoined(null);
         } else if (state && Date.parse(state.expiresAt) < Date.now()) {
@@ -72,15 +76,22 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
         <>
           {invite ? (
             <>
+              <PairingQrCode code={invite.code} />
               <p className="device-title"><strong>{invite.code.slice(0, 4)} {invite.code.slice(4)}</strong></p>
               <p className="note-meta">Enter this code on your phone within five minutes.</p>
               {request?.status === "claimed" && (
                 <button type="button" disabled={busy} onClick={() => void run(async () => {
                   await devicePairingApi.approve(deviceId, request, invite.code);
                   setInvite(null);
+                  setLinks(await verifiedPairLinks(deviceId));
                   setNotice("Devices paired.");
-                })}>Approve device</button>
+                })}>Approve {devices.find((device) => device.id === request.claimantDeviceId)?.name ?? "device"}</button>
               )}
+              <button type="button" className="secondary" disabled={busy}
+                onClick={() => void run(async () => {
+                  await devicePairingApi.cancel(deviceId, invite.id);
+                  setInvite(null);
+                })}>Cancel invitation</button>
             </>
           ) : <button type="button" disabled={busy} onClick={() => void run(async () => {
             setInvite(await devicePairingApi.invite(deviceId));
@@ -89,13 +100,18 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
       )}
       {open && platform === "android" && (
         joined ? <p role="status">Waiting for computer approval…</p> :
-        <form onSubmit={(event) => {
+        <form className="stack" onSubmit={(event) => {
           event.preventDefault();
           void run(async () => setJoined(await devicePairingApi.claim(deviceId, entered)));
         }}>
-          <input aria-label="Pairing code" inputMode="numeric" maxLength={9} value={entered}
+          <input aria-label="Pairing code" inputMode="numeric" maxLength={9} placeholder="8-digit code" value={entered}
             onChange={(event) => setEntered(event.target.value)} />
-          <button type="submit" disabled={busy}>Pair</button>
+          <button type="submit" disabled={busy || !/^[0-9]{8}$/.test(entered.replace(/[\\s-]/g, ""))}>Pair</button>
+          <button type="button" className="secondary" disabled={busy}
+            onClick={() => void run(async () => {
+              const result = await invoke<{ code: string }>("plugin:voice-platform|scan_pairing_qr");
+              setJoined(await devicePairingApi.claim(deviceId, result.code));
+            })}>Scan QR</button>
         </form>
       )}
       {open && links.map((link) => (
