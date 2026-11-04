@@ -76,7 +76,7 @@ Install the app, sign in, grant the microphone and device permissions you want t
 A dictation app can see the words you send into almost everything you use. You should know where that data goes.
 
 - **Live audio:** Sent directly to Google Gemini while a voice session is active. Personal Voice does not operate its own audio-recording warehouse.
-- **Device pairing (preview):** A short-lived invitation and public verification keys are stored with your account. Private signing keys are generated as non-exportable Web Crypto keys stored locally. Native OS-keystore integration and real-device security validation are still pending before this feature is released.
+- **Device pairing (preview):** Temporary pairing invitations and public verification keys are stored with your account. Non-exportable private signing keys remain in Android Keystore or the Windows CNG per-user key store; privileged pairing operations verify native-device signatures on the server. Real-device validation is still required before release.
 - **Dictation history:** Uploading recent dictation text is a separate opt-in setting. Saved notes and assistant conversations can sync with your account.
 - **Your own deployment:** The app, Supabase migrations, and Edge Functions are in this repository. You can use a backend you control and configure your own Gemini credentials.
 
