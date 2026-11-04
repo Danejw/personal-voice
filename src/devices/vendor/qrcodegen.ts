@@ -1,3 +1,4 @@
+// @ts-nocheck -- vendored upstream TypeScript; compiled with project-specific strict flags disabled here.
 /* 
  * QR Code generator library (TypeScript)
  * 
@@ -917,7 +918,7 @@ export namespace qrcodegen {
 
 /*---- Public helper enumeration ----*/
 
-namespace qrcodegen.QrCode {
+export namespace qrcodegen.QrCode {
 	
 	type int = number;
 	
@@ -950,7 +951,7 @@ namespace qrcodegen.QrCode {
 
 /*---- Public helper enumeration ----*/
 
-namespace qrcodegen.QrSegment {
+export namespace qrcodegen.QrSegment {
 	
 	type int = number;
 	
