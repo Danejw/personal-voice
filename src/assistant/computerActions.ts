@@ -92,7 +92,7 @@ export function safetyClass(name: string, args: Record<string, unknown> = {}): S
   if (name === "click" || name === "double_click" || name === "move" || name === "right_click" || name === "scroll" || name === "type" || name === "wait") {
     return "low";
   }
-  if (name === "drag") return "high";
+  if (name === "drag" || name === "drag_and_drop") return "high";
   if (name === "press_key" || name === "hotkey") return "low";
   return "unsupported";
 }
@@ -172,6 +172,9 @@ export function validateComputerCall(call: ComputerCall): { ok: true } | { ok: f
   }
   if (call.name === "drag") {
     if (!isCoord(args.end_x) || !isCoord(args.end_y)) return { ok: false, message: "The drag endpoint was not valid." };
+  }
+  if (call.name === "drag_and_drop" && !dragEndpoints(args.path)) {
+    return { ok: false, message: "The drag path was not valid." };
   }
   if (call.name === "type") {
     if (typeof args.text !== "string" || !args.text.trim()) return { ok: false, message: "Text is required." };
@@ -334,6 +337,26 @@ function readSafety(args: Record<string, unknown>): { decision: string; explanat
     decision: typeof row.decision === "string" ? row.decision : "",
     explanation: typeof row.explanation === "string" ? row.explanation : "",
   };
+}
+
+
+/** Accept Computer Use's bounded drag path, but execute as one atomic start-to-end drag. */
+export function dragEndpoints(path: unknown): { x: number; y: number; endX: number; endY: number } | null {
+  if (!Array.isArray(path) || path.length < 2 || path.length > 40) return null;
+  const points = path.map(point => {
+    if (Array.isArray(point) && point.length === 2 && isCoord(point[0]) && isCoord(point[1])) {
+      return { x: point[0] as number, y: point[1] as number };
+    }
+    if (point && typeof point === "object" && !Array.isArray(point)) {
+      const value = point as Record<string, unknown>;
+      if (isCoord(value.x) && isCoord(value.y)) return { x: value.x as number, y: value.y as number };
+    }
+    return null;
+  });
+  if (points.some(point => point === null)) return null;
+  const start = points[0]!;
+  const end = points[points.length - 1]!;
+  return { x: start.x, y: start.y, endX: end.x, endY: end.y };
 }
 
 function isCoord(value: unknown): boolean {
