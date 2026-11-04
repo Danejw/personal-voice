@@ -23,8 +23,12 @@ export const trustedRemoteApi = {
     const stopped = await pairServerAction<boolean>(pcDeviceId, "trusted_stop", { grantId });
     if (!stopped) throw new Error("That trusted session has already stopped.");
   },
-  async claim(pcDeviceId: string, requestId: string): Promise<boolean> {
-    return pairServerAction<boolean>(pcDeviceId, "trusted_claim", { requestId });
+  async claim(pcDeviceId: string, requestId: string): Promise<"none" | "claimed" | "already"> {
+    const state = await pairServerAction<unknown>(pcDeviceId, "trusted_claim", { requestId });
+    if (state !== "none" && state !== "claimed" && state !== "already") {
+      throw new Error("Invalid trusted action claim response.");
+    }
+    return state;
   },
   async validate(pcDeviceId: string, requestId: string): Promise<boolean> {
     return pairServerAction<boolean>(pcDeviceId, "trusted_validate", { requestId });
