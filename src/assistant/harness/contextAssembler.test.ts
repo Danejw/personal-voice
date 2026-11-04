@@ -70,7 +70,8 @@ describe("context-aware assistant harness", () => {
   it("does not suggest Windows UI execution on Android", () => {
     expect(selectTaskPlaybook("Open Notepad and then click the Save button", android))
       .not.toBe("windows_control");
-    expect(deviceToolGuidance(android)).toContain("remote-device tools");
+    expect(deviceToolGuidance(android)).toContain("paired Windows PC");
+    expect(deviceToolGuidance(android)).toContain("remote_action/read_remote_device");
   });
 
   it("uses attachments as known state, never copies untrusted request data into guidance", () => {
