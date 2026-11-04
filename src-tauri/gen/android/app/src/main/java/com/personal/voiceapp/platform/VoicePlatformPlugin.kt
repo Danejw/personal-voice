@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -139,6 +140,7 @@ class DictationCueArgs {
   permissions = [
     Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone"),
     Permission(strings = [Manifest.permission.CAMERA], alias = "camera"),
+    Permission(strings = ["android.permission.ACCESS_LOCAL_NETWORK"], alias = "localNetwork"),
     Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = "notifications"),
   ],
 )
@@ -146,6 +148,18 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private val main = Handler(Looper.getMainLooper())
   private var webView: WebView? = null
   private var deviceLinkSocket: DeviceLinkNetwork.WebSocketClient? = null
+  private var requestedLocalNetworkPermission = false
+  private fun localNetworkAllowed(): Boolean {
+    if (Build.VERSION.SDK_INT < 37) return true
+    val permission = "android.permission.ACCESS_LOCAL_NETWORK"
+    if (ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED) return true
+    if (!requestedLocalNetworkPermission) {
+      requestedLocalNetworkPermission = true
+      main.post { activity.requestPermissions(arrayOf(permission), 54017) }
+    }
+    return false
+  }
+
   private var webViewWoken = false
   private var capture: NativeMicCapture? = null
   private var captureId = 0
@@ -210,6 +224,10 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   /** Wi-Fi discovery and WebSocket I/O are native; JS never holds an unencrypted socket. */
   @Command
   fun deviceLinkDiscover(invoke: Invoke) {
+    if (!localNetworkAllowed()) {
+      invoke.reject("Allow local network access to discover paired computers.")
+      return
+    }
     Thread {
       try {
         val peers = JSONArray()
@@ -225,6 +243,10 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
 
   @Command
   fun deviceLinkConnect(invoke: Invoke) {
+    if (!localNetworkAllowed()) {
+      invoke.reject("Allow local network access before connecting.")
+      return
+    }
     try {
       val args = invoke.parseArgs(DeviceLinkConnectArgs::class.java)
       deviceLinkSocket?.close()
