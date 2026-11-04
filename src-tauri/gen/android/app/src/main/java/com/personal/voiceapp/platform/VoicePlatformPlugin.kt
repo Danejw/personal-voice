@@ -2,6 +2,9 @@ package com.personal.voiceapp.platform
 
 import android.Manifest
 import android.app.Activity
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -100,6 +103,17 @@ class EnabledArgs {
 }
 
 @InvokeArg
+class PairingIdentityArgs {
+  lateinit var deviceId: String
+}
+
+@InvokeArg
+class PairingSignArgs {
+  lateinit var deviceId: String
+  lateinit var message: String
+}
+
+@InvokeArg
 class DictationCueArgs {
   var kind: String = "ready"
 }
@@ -176,6 +190,69 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     capture = null
     FloatingMicService.listener = null
     activity.stopService(Intent(activity, FloatingMicService::class.java))
+  }
+
+  /** Android Keystore operations run on a background worker; private keys never reach the WebView. */
+  @Command
+  fun pairingPublicKey(invoke: Invoke) {
+    try {
+      val deviceId = invoke.parseArgs(PairingIdentityArgs::class.java).deviceId
+      Thread {
+        try {
+          val (x, y) = DevicePairingKeys.publicKey(deviceId)
+          invoke.resolve(JSObject().put("kty", "EC").put("crv", "P-256").put("x", x).put("y", y))
+        } catch (error: Exception) {
+          invoke.reject(error.message ?: "Could not access the pairing key.")
+        }
+      }.start()
+    } catch (error: Exception) {
+      invoke.reject("Invalid pairing identity request.")
+    }
+  }
+
+  @Command
+  fun pairingSign(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(PairingSignArgs::class.java)
+      Thread {
+        try {
+          invoke.resolve(JSObject().put("signature", DevicePairingKeys.sign(args.deviceId, args.message)))
+        } catch (error: Exception) {
+          invoke.reject(error.message ?: "Could not sign the pairing request.")
+        }
+      }.start()
+    } catch (error: Exception) {
+      invoke.reject("Invalid pairing signature request.")
+    }
+  }
+
+  /** Camera permission is not required: Google Play services owns the scanner UI. */
+  @Command
+  fun scanPairingQr(invoke: Invoke) {
+    main.post {
+      bringAppForward()
+      try {
+        val options = GmsBarcodeScannerOptions.Builder()
+          .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+          .build()
+        GmsBarcodeScanning.getClient(activity, options).startScan()
+          .addOnSuccessListener { barcode ->
+            val payload = barcode.rawValue ?: ""
+            val code = payload.removePrefix("pv-pair:v1:")
+            if (payload.startsWith("pv-pair:v1:") && code.matches(Regex("[0-9]{8}"))) {
+              invoke.resolve(JSObject().put("code", code))
+            } else {
+              invoke.reject("This is not a Personal Voice pairing code.")
+            }
+          }
+          .addOnCanceledListener { invoke.reject("Scan cancelled.") }
+          .addOnFailureListener { error ->
+            invoke.reject(error.message ?: "QR scanner is unavailable. Enter the code manually.")
+          }
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "QR scanner is unavailable. Enter the code manually.")
+      }
+    }
   }
 
   @Command

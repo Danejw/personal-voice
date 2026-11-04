@@ -50,6 +50,7 @@ I built Personal Voice because I wanted more control over that. It replaced Wisp
 | --- | --- |
 | **Dictate into your apps** | Hold a shortcut, speak, and put the finished text where your cursor is. Use a floating mic on Windows or Android. |
 | **Talk on one device, type on another** | Send dictation from your phone to your computer, or between your signed-in devices. |
+| **Pair devices (preview)** | Pair a Windows computer and an Android phone with a QR or temporary code and approve on the computer. Pairing does not enable remote control. |
 | **Make it sound like you** | Save words in your dictionary, expand snippets, and apply text transforms. |
 | **Keep your notes close** | Save notes, attach files, capture selections, and pick up where you left off. |
 | **Use a real voice assistant** | Have a live Gemini conversation. With your permission, the assistant can use notes, memory, screen context, and supported device controls. |
@@ -75,6 +76,7 @@ Install the app, sign in, grant the microphone and device permissions you want t
 A dictation app can see the words you send into almost everything you use. You should know where that data goes.
 
 - **Live audio:** Sent directly to Google Gemini while a voice session is active. Personal Voice does not operate its own audio-recording warehouse.
+- **Device pairing (preview):** Temporary pairing invitations and public verification keys are stored with your account. Non-exportable private signing keys remain in Android Keystore or the Windows CNG per-user key store; privileged pairing operations verify native-device signatures on the server. Real-device validation is still required before release.
 - **Dictation history:** Uploading recent dictation text is a separate opt-in setting. Saved notes and assistant conversations can sync with your account.
 - **Your own deployment:** The app, Supabase migrations, and Edge Functions are in this repository. You can use a backend you control and configure your own Gemini credentials.
 
