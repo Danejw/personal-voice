@@ -30,6 +30,9 @@ export const trustedRemoteApi = {
     }
     return state;
   },
+  async wasClaimed(pcDeviceId: string, requestId: string): Promise<boolean> {
+    return pairServerAction<boolean>(pcDeviceId, "trusted_seen", { requestId });
+  },
   async validate(pcDeviceId: string, requestId: string): Promise<boolean> {
     return pairServerAction<boolean>(pcDeviceId, "trusted_validate", { requestId });
   },
