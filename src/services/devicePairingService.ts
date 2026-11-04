@@ -16,7 +16,7 @@ export interface PairInvite {
   claimSignature: string | null;
   approvalSignature: string | null;
 }
-export interface PairLink { id: string; peerDeviceId: string; createdAt: string }
+export interface PairLink { id: string; peerDeviceId: string; createdAt: string; peerPublicKey?: PublicPairingKey }
 export interface PairCode { id: string; code: string; expiresAt: string }
 
 function row(value: unknown): Record<string, unknown> {
