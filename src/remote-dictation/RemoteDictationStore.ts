@@ -1,4 +1,4 @@
-import { signalPairedDevice, subscribeDeviceLinkWakes } from "@/device-link/cloudSignaling";
+import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import {
   REMOTE_DICTATION_CATCHUP_MS,
   REMOTE_DICTATION_HEARTBEAT_MS,
@@ -215,7 +215,7 @@ export class RemoteDictationStore {
     try {
       // Optional wake-up only. The authoritative request is already persisted and
       // the target's existing claim/ack path still determines success.
-      void signalPairedDevice(this.currentDeviceId!, target.id, "remote-dictation", requestId);
+      void deviceLinkManager.sendWake(target.id, "remote-dictation", requestId);
       const outcome = await this.waitForResult(requestId, target.name);
       if (outcome.ok) {
         this.publish({ ...this.snapshot, active: false, error: null });
@@ -336,8 +336,8 @@ export class RemoteDictationStore {
     catchUp();
     this.catchupTimer = setInterval(catchUp, REMOTE_DICTATION_CATCHUP_MS);
 
-    this.unsubscribeDeviceLinkWakes = subscribeDeviceLinkWakes(userId, deviceId, (wake) => {
-      if (wake.family === "remote-dictation") void this.handleRequest(wake.requestId);
+    this.unsubscribeDeviceLinkWakes = deviceLinkManager.subscribeWakes((family, requestId) => {
+      if (family === "remote-dictation") void this.handleRequest(requestId);
     });
     this.unsubscribeFeed = this.feed.subscribe(userId, deviceId, (requestId) => {
       if (requestId) void this.handleRequest(requestId);
