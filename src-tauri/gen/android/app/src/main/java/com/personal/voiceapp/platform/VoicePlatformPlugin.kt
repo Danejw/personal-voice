@@ -20,6 +20,7 @@ import android.util.Base64
 import android.view.View
 import android.webkit.WebView
 import android.widget.Toast
+import org.json.JSONArray
 import org.json.JSONObject
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
@@ -103,6 +104,17 @@ class EnabledArgs {
 }
 
 @InvokeArg
+class DeviceLinkConnectArgs {
+  lateinit var host: String
+  var port: Int = 0
+}
+
+@InvokeArg
+class DeviceLinkSendArgs {
+  lateinit var message: String
+}
+
+@InvokeArg
 class PairingIdentityArgs {
   lateinit var deviceId: String
 }
@@ -133,6 +145,7 @@ class DictationCueArgs {
 class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private val main = Handler(Looper.getMainLooper())
   private var webView: WebView? = null
+  private var deviceLinkSocket: DeviceLinkNetwork.WebSocketClient? = null
   private var webViewWoken = false
   private var capture: NativeMicCapture? = null
   private var captureId = 0
@@ -182,6 +195,8 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
 
   /** Without the WebView nothing can answer the bubble, so the service goes with it. */
   override fun onDestroy(activity: AppCompatActivity) {
+    deviceLinkSocket?.close()
+    deviceLinkSocket = null
     cameraSession?.stop()
     cameraSession = null
     audioSession?.close()
@@ -190,6 +205,57 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     capture = null
     FloatingMicService.listener = null
     activity.stopService(Intent(activity, FloatingMicService::class.java))
+  }
+
+  /** Wi-Fi discovery and WebSocket I/O are native; JS never holds an unencrypted socket. */
+  @Command
+  fun deviceLinkDiscover(invoke: Invoke) {
+    Thread {
+      try {
+        val peers = JSONArray()
+        for (peer in DeviceLinkNetwork.discover()) {
+          peers.put(JSONObject().put("deviceId", peer.deviceId).put("host", peer.host).put("port", peer.port))
+        }
+        invoke.resolve(JSObject().put("peers", peers))
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Could not discover LAN peers.")
+      }
+    }.start()
+  }
+
+  @Command
+  fun deviceLinkConnect(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(DeviceLinkConnectArgs::class.java)
+      deviceLinkSocket?.close()
+      deviceLinkSocket = DeviceLinkNetwork.WebSocketClient(
+        args.host, args.port,
+        onOpen = { trigger("deviceLinkOpen", JSObject()) },
+        onText = { text -> trigger("deviceLinkMessage", JSObject().put("message", text)) },
+        onClose = { trigger("deviceLinkClosed", JSObject()) },
+      ).also { it.connect() }
+      invoke.resolve(JSObject())
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Could not connect to LAN peer.")
+    }
+  }
+
+  @Command
+  fun deviceLinkSend(invoke: Invoke) {
+    try {
+      val message = invoke.parseArgs(DeviceLinkSendArgs::class.java).message
+      deviceLinkSocket?.send(message) ?: throw IllegalStateException("Not connected.")
+      invoke.resolve(JSObject())
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "LAN connection failed.")
+    }
+  }
+
+  @Command
+  fun deviceLinkClose(invoke: Invoke) {
+    deviceLinkSocket?.close()
+    deviceLinkSocket = null
+    invoke.resolve(JSObject())
   }
 
   /** Android Keystore operations run on a background worker; private keys never reach the WebView. */
