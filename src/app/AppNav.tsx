@@ -281,7 +281,7 @@ export function AppNav({
       </div>
       <nav className="app-nav" aria-label="Personal Voice">
         {TOP_SECTIONS.map((id) => {
-          if (id === "companion" && !/\\bAndroid\\b/.test(navigator.userAgent)) return null;
+          if (id === "companion" && !/\bAndroid\b/.test(navigator.userAgent)) return null;
           const label = TOP_LABELS[id];
           if (id === "voice") {
             const groupClass = [
