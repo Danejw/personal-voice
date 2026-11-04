@@ -85,7 +85,7 @@ Deno.serve(async (request: Request) => {
   const issuedAt = command?.issuedAt;
   const args = object(command?.args);
   if (command?.v !== 1 || !op || !operations.has(op) || !deviceId || !nonce
-    || !Number.isSafeInteger(issuedAt) || Math.abs(Date.now() - (issuedAt as number)) > 120000
+    || typeof issuedAt !== "number" || !Number.isSafeInteger(issuedAt) || Math.abs(Date.now() - issuedAt) > 120000
     || !args || Object.keys(command ?? {}).sort().join() !== "args,deviceId,issuedAt,nonce,op,v") {
     return reply(400, { error: "bad_request" });
   }
@@ -115,6 +115,12 @@ Deno.serve(async (request: Request) => {
   // Even a verified signature cannot bypass this one-time check.
   const { error: replay } = await admin.from("device_pair_proofs")
     .insert({ user_id: userId, device_id: deviceId, nonce });
+  // Nonces older than the maximum signed-request time window can never be replayed.
+  // Expire old metadata without retaining a permanent per-command history.
+  if (!replay && Math.random() < 0.02) {
+    await admin.from("device_pair_proofs").delete().eq("user_id", userId)
+      .lt("created_at", new Date(Date.now() - 86_400_000).toISOString());
+  }
   if (replay) return reply(409, { error: "replay" });
 
   const params = { p_user_id: userId, p_device_id: deviceId };
