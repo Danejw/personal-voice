@@ -29,6 +29,7 @@ export class ComputerActionStore {
   private listeners = new Set<() => void>();
   private approvedId: string | null = null;
   private polling = false;
+  private trustedBackendSeen = false;
 
   constructor(
     private api: ComputerActionApi & { touch(deviceId: string): Promise<void> },
@@ -120,12 +121,29 @@ export class ComputerActionStore {
       // Backend missing, no trusted grant, account signed out, or Android:
       // fail closed to ordinary per-action Windows confirmation.
       let grants: Awaited<ReturnType<typeof trustedRemoteApi.list>> = [];
+      let trustedBackendAvailable = false;
       if (remoteEnabled && this.platform.platform === "windows" && this.userId === userId && pending.length) {
-        try { grants = await trustedRemoteApi.list(currentId); }
-        catch { /* Explicit PC approval remains available. */ }
+        try {
+          grants = await trustedRemoteApi.list(currentId);
+          trustedBackendAvailable = true;
+          this.trustedBackendSeen = true;
+        } catch { /* Older backends support ordinary per-action approval only. */ }
       }
       let waiting: ComputerApproval | null = null;
       for (const row of pending) {
+        // Once trusted control has been available in this app process, an
+        // unavailable backend must not turn stale claimed actions into new
+        // manual approvals.
+        if (this.trustedBackendSeen && !trustedBackendAvailable) continue;
+        if (trustedBackendAvailable) {
+          try {
+            if (await trustedRemoteApi.wasClaimed(currentId, row.id)) continue;
+          } catch {
+            // Don't execute or approve if the duplicate-prevention check
+            // cannot be completed. Retry the safe read on the next poll.
+            continue;
+          }
+        }
         const eligible = this.approvedId !== row.id &&
           this.userId === userId && this.platform.platform === "windows" && remoteEnabled &&
           isTrustedRemoteAction(row.action, row.argument) &&
