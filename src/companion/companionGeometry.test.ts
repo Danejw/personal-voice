@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  assistantPhase, companionGaze, defaultMonitorIndex, isPointerSample, monitorFromIndex,
+  assistantPhase, companionGaze, defaultMonitorIndex, isPointerSample, monitorFromIndex, selectedCompanionPC,
 } from "@/companion/companionGeometry";
 import { initialAssistantState } from "@/assistant/state";
 
@@ -9,6 +9,20 @@ const monitors = [
   { x: 0, y: 0, width: 3840, height: 2160 },
   { x: 3840, y: 180, width: 1920, height: 1080 },
 ];
+
+describe("Companion target choice", () => {
+  const desktop = { id: "desktop" };
+  const laptop = { id: "laptop" };
+  it("never starts random PC streaming when two Windows devices are paired", () => {
+    expect(selectedCompanionPC([desktop, laptop], null)).toBeNull();
+    expect(selectedCompanionPC([desktop, laptop], laptop.id)).toBe(laptop.id);
+  });
+  it("does not silently reroute after the selected pairing is revoked", () => {
+    expect(selectedCompanionPC([desktop], laptop.id)).toBeNull();
+    expect(selectedCompanionPC([desktop], null)).toBe(desktop.id);
+    expect(selectedCompanionPC([], null)).toBeNull();
+  });
+});
 
 describe("Android companion monitor geometry", () => {
   it("defaults below the horizontal center screen, even with negative desktop origins", () => {
