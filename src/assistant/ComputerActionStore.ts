@@ -4,6 +4,7 @@ import type { ComputerImage } from "@/assistant/computerTask";
 import type { RemoteDevice } from "@/assistant/remoteContext";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import { loadRemoteComputerActions } from "@/settings/deviceSettings";
+import { resolvePairedVoiceTarget } from "@/assistant/remoteVoiceTarget";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { proposeComputerStep } from "@/services/computerStep";
@@ -48,16 +49,18 @@ export class ComputerActionStore {
     return this.platform.pressAllowlistedShortcut(id, true);
   }
 
-  async remoteAction(action: RemoteComputerAction, argument: string, deviceName: string): Promise<string> {
+  async remoteAction(action: RemoteComputerAction, argument: string, deviceName: string | null): Promise<string> {
     const userId = this.userId;
     if (!userId) throw new Error("Sign in to use another device.");
     const devices = await this.listDevices(userId);
+    const currentId = this.getDeviceId(userId);
+    const target = await resolvePairedVoiceTarget(devices, currentId, deviceName);
     return askComputerAction(
       this.api,
       userId,
       this.getDeviceId(userId),
       devices,
-      deviceName,
+      target.id,
       action,
       argument,
       { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },

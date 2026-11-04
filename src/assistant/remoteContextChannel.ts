@@ -17,6 +17,10 @@ export interface RemoteRequestRow {
   status: "pending" | "answered" | "denied";
   response: string | null;
   error: string | null;
+  version: number;
+  expiresAt: string;
+  requestSignature: string | null;
+  responseSignature: string | null;
 }
 
 export interface RemoteContextApi {

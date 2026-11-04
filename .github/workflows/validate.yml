@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
     # Support stacked feature PRs (e.g. Phase B targeting the unmerged Phase A branch).
-    branches: [main, 'feat/**']
+    branches: [main, 'feat/**', 'feature/**']
 
 permissions:
   contents: read
