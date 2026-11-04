@@ -11,6 +11,8 @@ create table public.device_pair_identities (
     and (public_jwk->>'x') ~ '^[A-Za-z0-9_-]{43}$'
     and (public_jwk->>'y') ~ '^[A-Za-z0-9_-]{43}$'
     and jsonb_typeof(public_jwk) = 'object'
+    and not (public_jwk ? 'd')
+    and public_jwk - 'kty' - 'crv' - 'x' - 'y' = '{}'::jsonb
   )
 );
 create index device_pair_identities_owner on public.device_pair_identities(user_id);
@@ -91,13 +93,13 @@ begin
   if (select count(*) from public.device_pair_invitations
       where user_id = uid and created_at > now() - interval '10 minutes') >= 6
   then raise exception 'PAIR_INVITE_LIMIT' using errcode = '42901'; end if;
-  rng := pg_catalog.gen_random_bytes(4);
+  rng := pg_catalog.decode(pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', ''), 'hex');
   digits := lpad(((get_byte(rng, 0)::bigint * 16777216
     + get_byte(rng, 1)::bigint * 65536
     + get_byte(rng, 2)::bigint * 256
     + get_byte(rng, 3)::bigint) % 100000000)::text, 8, '0');
   insert into public.device_pair_invitations(user_id, issuer_device_id, code_digest)
-  values (uid, p_device_id, extensions.digest(digits, 'sha256'))
+  values (uid, p_device_id, pg_catalog.sha256(pg_catalog.convert_to(digits, 'UTF8')))
   returning id, expires_at into new_id, expiry;
   return jsonb_build_object('id',new_id,'code',digits,'expires_at',expiry);
 end; $$;
@@ -119,7 +121,7 @@ begin
   then raise exception 'PAIR_INVALID' using errcode = '22023'; end if;
   select * into inv from public.device_pair_invitations
   where user_id = uid and status = 'open' and expires_at > now()
-    and code_digest = extensions.digest(p_code, 'sha256')
+    and code_digest = pg_catalog.sha256(pg_catalog.convert_to(p_code, 'UTF8'))
   order by created_at desc limit 1 for update;
   if not found then raise exception 'PAIR_INVALID' using errcode = '22023'; end if;
   if inv.issuer_device_id = p_device_id then raise exception 'PAIR_SELF' using errcode = '22023'; end if;
