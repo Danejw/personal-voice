@@ -94,12 +94,15 @@ export function parseDeviceLinkEnvelope(value: unknown, now = Date.now()): Devic
       || payload.monitors.length < 1 || payload.monitors.length > 8
       || lifetime > DEVICE_LINK_EPHEMERAL_TTL_MS) return null;
     for (const monitor of payload.monitors) {
-      if (!plain(monitor) || !keys(monitor, ["x","y","width","height"])
-        || !Number.isInteger(monitor.x) || !Number.isInteger(monitor.y)
-        || !Number.isInteger(monitor.width) || !Number.isInteger(monitor.height)
-        || monitor.width < 1 || monitor.height < 1
-        || monitor.width > 30_000 || monitor.height > 30_000
-        || Math.abs(monitor.x) > 100_000 || Math.abs(monitor.y) > 100_000) return null;
+      if (!plain(monitor) || !keys(monitor, ["x","y","width","height"])) return null;
+      const { x, y, width, height } = monitor;
+      if (typeof x !== "number" || typeof y !== "number"
+        || typeof width !== "number" || typeof height !== "number"
+        || !Number.isInteger(x) || !Number.isInteger(y)
+        || !Number.isInteger(width) || !Number.isInteger(height)
+        || width < 1 || height < 1
+        || width > 30_000 || height > 30_000
+        || Math.abs(x) > 100_000 || Math.abs(y) > 100_000) return null;
     }
   } else if (payload.type === "wake") {
     if (!keys(payload, ["type","family","requestId"])
