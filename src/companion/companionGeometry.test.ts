@@ -41,6 +41,7 @@ describe("Android companion monitor geometry", () => {
     expect(assistantPhase(initialAssistantState)).toBe("idle");
     expect(assistantPhase({ ...initialAssistantState, status: "CONNECTING" })).toBe("thinking");
     expect(assistantPhase({ ...initialAssistantState, status: "READY" })).toBe("listening");
-    expect(assistantPhase({ ...initialAssistantState, status: "RESPONDING" })).toBe("speaking");
+    expect(assistantPhase({ ...initialAssistantState, status: "RESPONDING" })).toBe("thinking");
+    expect(assistantPhase({ ...initialAssistantState, status: "RESPONDING", liveText: "Hello" })).toBe("speaking");
   });
 });
