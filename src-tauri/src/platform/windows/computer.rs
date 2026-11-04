@@ -119,7 +119,7 @@ pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Opt
         if end_x.is_some() || end_y.is_some() { return Err("Unexpected pointer endpoint.".into()); }
         None
     };
-    if !["move", "right_click", "drag"].contains(&kind) {
+    if !["move", "click", "double_click", "right_click", "drag"].contains(&kind) {
         return Err("Unsupported pointer action.".into());
     }
     let mut current = windows::Win32::Foundation::POINT::default();
@@ -129,6 +129,13 @@ pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Opt
     pointer_move(origin, destination, &mut on_step)?;
     match kind {
         "move" => Ok("Moved the visible Windows pointer.".into()),
+        "click" | "double_click" => {
+            for _ in 0..if kind == "double_click" { 2 } else { 1 } {
+                pointer_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0)?;
+                pointer_event(MOUSEEVENTF_LEFTUP, 0, 0, 0)?;
+            }
+            Ok("Clicked the target with visible pointer movement.".into())
+        }
         "right_click" => {
             pointer_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0)?;
             pointer_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0)?;
