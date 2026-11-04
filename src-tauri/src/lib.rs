@@ -149,6 +149,7 @@ pub fn run() {
             commands::press_allowlisted_shortcut,
             commands::computer_capture,
             commands::computer_click,
+            commands::computer_pointer_action,
             commands::computer_restore,
             commands::set_push_to_talk_shortcut,
             commands::set_hotkeys,
