@@ -634,6 +634,9 @@ pub async fn computer_pointer_action(app: AppHandle, kind: String, x: i32, y: i3
     let overlay = app.get_webview_window("assistant-pointer");
     if let Some(ref window) = overlay {
         window.set_ignore_cursor_events(true).map_err(|error| error.to_string())?;
+        if let Ok(pointer) = platform::companion_pointer_sample() {
+            let _ = window.set_position(PhysicalPosition::new(pointer.x - 12, pointer.y - 5));
+        }
         window.show().map_err(|error| error.to_string())?;
     }
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -643,7 +646,7 @@ pub async fn computer_pointer_action(app: AppHandle, kind: String, x: i32, y: i3
                 use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
                 let mut point = POINT::default();
                 if unsafe { GetCursorPos(&mut point) }.is_ok() {
-                    let _ = window.set_position(PhysicalPosition::new(point.x - 12, point.y - 12));
+                    let _ = window.set_position(PhysicalPosition::new(point.x - 12, point.y - 5));
                 }
             }
         })
