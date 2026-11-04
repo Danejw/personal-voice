@@ -130,7 +130,8 @@ pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Opt
     match kind {
         "move" => Ok("Moved the visible Windows pointer.".into()),
         "click" | "double_click" => {
-            for _ in 0..if kind == "double_click" { 2 } else { 1 } {
+            let click_count = if kind == "double_click" { 2 } else { 1 };
+            for _ in 0..click_count {
                 pointer_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0)?;
                 pointer_event(MOUSEEVENTF_LEFTUP, 0, 0, 0)?;
             }
