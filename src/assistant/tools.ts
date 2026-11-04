@@ -405,14 +405,14 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "remote_action",
-      description: "Ask a paired Windows PC to open an allowed app, press an allowlisted shortcut, or insert text. The PC must explicitly approve. Give the exact device or device_id, or omit only when a default is selected. Never silently switch PCs or treat a queued request as executed. No shell, delete, click or unattended control.",
+      description: "Ask a paired Windows PC to open an allowed app, press an allowlisted shortcut, insert text or move/click/drag the Windows mouse. Every pointer action needs approval on the PC. Give the exact device or device_id, or omit only when a default is selected. Never silently switch PCs or treat a queued request as executed. No shell, delete or unattended pointer control.",
       parameters: {
         type: "object",
         properties: {
           device: { type: "string", description: "Exact paired Windows device name. Omit to use the phone's saved default." },
           device_id: { type: "string", description: "Exact paired Windows device UUID; omit when supplying a name." },
-          action: { type: "string", description: "open_app, press_shortcut, or insert_text." },
-          argument: { type: "string", description: "App id, shortcut id, or the exact text." },
+          action: { type: "string", description: "open_app, press_shortcut, insert_text, move_pointer, click_pointer, double_click_pointer, right_click_pointer, or drag_pointer." },
+          argument: { type: "string", description: "App id, shortcut id, exact text, or comma-separated 0–999 pointer coordinates (x,y; drag uses x,y,endX,endY)." },
         },
         required: ["action", "argument"],
       },
