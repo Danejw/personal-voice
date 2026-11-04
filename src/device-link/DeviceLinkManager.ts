@@ -90,7 +90,11 @@ export class DeviceLinkManager {
     for (const [id, expiry] of this.companionRequesters) {
       if (expiry < now || !this.sessions.get(id)?.connected) this.companionRequesters.delete(id);
     }
-    if (!this.companionRequesters.size) return;
+    if (!this.companionRequesters.size) {
+      if (this.companionTimer) clearInterval(this.companionTimer);
+      this.companionTimer = null;
+      return;
+    }
     this.companionSamplePending = true;
     try {
       const sample: unknown = await invoke("companion_pointer_sample");
@@ -116,6 +120,7 @@ export class DeviceLinkManager {
   }
 
   publishCompanionAssistant(phase: CompanionAssistantPhase): void {
+    if (this.companionPhase === phase) return;
     this.companionPhase = phase;
     if (this.platform !== "windows") return;
     for (const peerId of this.companionRequesters.keys()) {
