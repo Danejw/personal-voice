@@ -1960,6 +1960,8 @@ export class AssistantController {
         },
         propose: (body) => this.actions.computer.propose(body),
         execute: async (call, image) => {
+          // A pairing revocation or locked desktop after model reasoning must stop the action.
+          if (validate) await validate();
           if (navigator.userAgent.includes("Windows")) {
             await invoke("show_computer_visual", { label: `Running ${call.name}`, phase: "action" }).catch(() => undefined);
           }
