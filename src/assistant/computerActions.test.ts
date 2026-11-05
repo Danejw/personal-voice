@@ -3,6 +3,7 @@ import {
   computerUseBody,
   dragEndpoints,
   isUnsupportedAction,
+  isTrustedRemoteAction,
   planComputerStep,
   planRemoteComputerAction,
   parseRemotePointer,
@@ -104,6 +105,26 @@ describe("computer action safety", () => {
     expect(planRemoteComputerAction("drag_pointer", "0,0,999,999", "windows", true)).toMatchObject({ action: "confirm" });
     expect(planRemoteComputerAction("click_pointer", "500,500", "windows", false).action).toBe("deny");
     expect(planRemoteComputerAction("click_pointer", "500,500", "android", true).action).toBe("deny");
+  });
+
+  it("permits one signed remote Computer Use goal, with exact status/stop arguments", () => {
+    expect(planRemoteComputerAction("start_computer_goal", "Organize the open windows.", "windows", true))
+      .toMatchObject({ action: "confirm", label: expect.stringContaining("Computer Use") });
+    expect(planRemoteComputerAction("computer_goal_status", "current", "windows", true).action).toBe("confirm");
+    expect(planRemoteComputerAction("stop_computer_goal", "current", "windows", true).action).toBe("confirm");
+    expect(planRemoteComputerAction("computer_goal_status", "any", "windows", true).action).toBe("deny");
+    expect(planRemoteComputerAction("start_computer_goal", "a".repeat(1001), "windows", true).action).toBe("deny");
+    expect(planRemoteComputerAction("start_computer_goal", "Do useful work", "windows", false).action).toBe("deny");
+    expect(planRemoteComputerAction("start_computer_goal", "Do useful work", "android", true).action).toBe("deny");
+    expect(isTrustedRemoteAction("start_computer_goal", "Organize notes")).toBe(false);
+  });
+
+  it("supports a bounded longer goal without weakening blocked-action decisions", () => {
+    const limits = { maxSteps: 240, maxDurationMs: 30 * 60_000 };
+    expect(planComputerStep({ name: "click", args: { x: 10, y: 20 } }, 100, started, started + 60_000, false, limits).action).toBe("execute");
+    expect(planComputerStep({ name: "click", args: { x: 10, y: 20 } }, 240, started, started, false, limits).action).toBe("stop");
+    expect(planComputerStep({ name: "delete_file", args: {} }, 4, started, started + 500, false, limits).action).toBe("stop");
+    expect(planComputerStep({ name: "click", args: { x: 10, y: 20 } }, 2, started, started + limits.maxDurationMs, false, limits).action).toBe("stop");
   });
 
   it("builds a desktop Computer Use request with prompt-injection detection and no shell tool", () => {
