@@ -107,6 +107,10 @@ export function CompanionView({
   const phase = locallyActive ? localPhase : linked ? remotePhase : "idle";
   const vector = linked ? gaze : wander;
   useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setMouth(0);
+      return;
+    }
     // Sample the audio envelope without rerendering the rest of the Companion on
     // every PCM chunk. Never lip-sync to text timing or use microphone input.
     const timer = window.setInterval(() => {
