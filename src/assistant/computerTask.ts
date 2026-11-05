@@ -152,6 +152,7 @@ export async function runComputerTaskReport(
         const fresh = await host.capture();
         if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
         const evidence = await host.verify(goal, fresh, said);
+        if (await syncInstructions()) continue;
         if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
         if (evidence && evidence.trim().length >= 12) {
           host.onTrace?.({ stage: "verified", step: executed });

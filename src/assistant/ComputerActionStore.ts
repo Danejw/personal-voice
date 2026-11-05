@@ -75,7 +75,9 @@ export class ComputerActionStore {
     this.tracedReceiver.add(marker);
     // Status/stop observations belong to their autonomous goal.
     // Direct commands use their own signed request ID on both devices.
-    const traceId = row.action === "computer_goal_status" || row.action === "stop_computer_goal"
+    const traceId = row.action === "computer_goal_status" || row.action === "stop_computer_goal" ||
+      row.action === "pause_computer_goal" || row.action === "resume_computer_goal" ||
+      row.action === "redirect_computer_goal"
       ? this.remoteGoal?.jobId ?? row.id : row.id;
     this.trace(traceId, stage, row.action, undefined, code);
   }
@@ -90,6 +92,7 @@ export class ComputerActionStore {
     validate: () => Promise<void>, trace: (event: ComputerTaskTraceEvent) => void,
     beforeAction: (step: number, action: string) => Promise<void>,
     beforeVerify: (step: number) => Promise<void>,
+    instructions: () => Promise<string>,
   ) => Promise<ComputerTaskReport>) | null = null;
   private reconciledFor: string | null = null;
   private workerHeartbeat: ReturnType<typeof setInterval> | null = null;
@@ -116,6 +119,7 @@ export class ComputerActionStore {
       validate: () => Promise<void>, trace: (event: ComputerTaskTraceEvent) => void,
       beforeAction: (step: number, action: string) => Promise<void>,
       beforeVerify: (step: number) => Promise<void>,
+      instructions: () => Promise<string>,
     ) => Promise<ComputerTaskReport>,
     stop: () => void,
   ): void {
@@ -187,7 +191,9 @@ export class ComputerActionStore {
     const currentId = this.getDeviceId(userId);
     const target = await resolvePairedVoiceTarget(devices, currentId, deviceName);
     const isGoalCommand = action === "start_computer_goal"
-      || action === "computer_goal_status" || action === "stop_computer_goal";
+      || action === "computer_goal_status" || action === "stop_computer_goal"
+      || action === "pause_computer_goal" || action === "resume_computer_goal"
+      || action === "redirect_computer_goal";
     const goalId = this.snapshot.remoteGoal?.targetDeviceId === target.id
       ? this.snapshot.remoteGoal.requestId : null;
     let requestId: string | null = null;
@@ -197,7 +203,9 @@ export class ComputerActionStore {
         { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
         receipt => {
           requestId = action === "start_computer_goal" ? receipt.requestId : goalId ?? receipt.requestId;
-          const traceId = action === "computer_goal_status" || action === "stop_computer_goal"
+          const traceId = action === "computer_goal_status" || action === "stop_computer_goal" ||
+            action === "pause_computer_goal" || action === "resume_computer_goal" ||
+            action === "redirect_computer_goal"
             ? goalId ?? receipt.requestId : receipt.requestId;
           if (traceId) {
             if (receipt.stage === "queued") this.trace(traceId, "queued", action);
@@ -377,7 +385,8 @@ export class ComputerActionStore {
             continue;
           }
           if (!await invoke<boolean>("trusted_desktop_unlocked") &&
-            row.action !== "stop_computer_goal" && row.action !== "computer_goal_status") {
+            row.action !== "stop_computer_goal" && row.action !== "computer_goal_status" &&
+            row.action !== "pause_computer_goal") {
             // Do not execute on a locked desktop. Explain why the request is pending.
             pollIssue = "Windows is locked. Unlock it to run remote computer actions.";
             this.traceReceiverOnce(row, "blocked", "locked");
@@ -401,6 +410,7 @@ export class ComputerActionStore {
             if (this.userId !== userId || !loadRemoteComputerActions() ||
                 !await remoteAutoActionApi.validate(currentId, row.id) ||
                 (action !== "computer_goal_status" && action !== "stop_computer_goal" &&
+                  action !== "pause_computer_goal" &&
                   !await invoke<boolean>("trusted_desktop_unlocked"))) {
               throw new Error("Automatic remote control disabled, locked or pairing revoked.");
             }
@@ -408,7 +418,8 @@ export class ComputerActionStore {
           },
         );
         if (outcome.action === "answered") {
-          if (!["start_computer_goal", "computer_goal_status", "stop_computer_goal"].includes(row.action)) {
+          if (!["start_computer_goal", "computer_goal_status", "stop_computer_goal",
+            "pause_computer_goal","resume_computer_goal","redirect_computer_goal"].includes(row.action)) {
             this.traceReceiverOnce(row, "acted");
           }
           this.traceReceiverOnce(row, "acknowledged");
@@ -559,6 +570,22 @@ export class ComputerActionStore {
         throw new Error("Computer Use was stopped.");
       }
     };
+    const instructions = async (): Promise<string> => {
+      await validate();
+      let latest = await computerJobsApi.latest(ownerId, pcId);
+      if (!latest || latest.id !== requestId) throw new Error("The active Computer Use job changed.");
+      // A paused worker continues its heartbeat but performs no new desktop step.
+      while (latest.control_state === "paused") {
+        if (state.stopRequested || this.remoteGoal !== state) {
+          throw new Error("Computer Use stopped while paused.");
+        }
+        await new Promise(resolve => setTimeout(resolve, 900));
+        await validate();
+        latest = await computerJobsApi.latest(ownerId, pcId);
+        if (!latest || latest.id !== requestId) throw new Error("Computer Use job changed.");
+      }
+      return latest.goal;
+    };
     // Keep the server lease fresh during a slow model request; a lost lease
     // stops the worker before the next desktop side effect.
     if (this.workerHeartbeat) clearInterval(this.workerHeartbeat);
@@ -584,6 +611,7 @@ export class ComputerActionStore {
       async (step) => checkpoint({
         status: "running", phase: "verifying", steps: step, lastAction: state.lastAction,
       }),
+      instructions,
     ).then(async report => {
       const status = state.status === "stopping" ? "stopped"
         : report.status === "verified" && report.evidence ? "completed"
@@ -622,6 +650,14 @@ export class ComputerActionStore {
   }
 
   private async run(action: RemoteComputerAction, argument: string, requesterDeviceId: string, requestId: string): Promise<string> {
+    if (action === "pause_computer_goal" || action === "resume_computer_goal" ||
+        action === "redirect_computer_goal") {
+      const owner = this.userId;
+      if (!owner) throw new Error("Sign in to control Computer Use.");
+      const job = await computerJobsApi.control(this.getDeviceId(owner), requestId);
+      if (job.requester_device_id !== requesterDeviceId) throw new Error("Goal requester identity changed.");
+      return `Computer Use job ${job.id}: ${job.control_state}; ${job.steps} actions; ${job.goal.slice(0,120)}`;
+    }
     if (action === "computer_goal_status" || action === "stop_computer_goal") {
       const owner = this.userId;
       if (!owner) throw new Error("Sign in to check Computer Use.");
@@ -639,7 +675,7 @@ export class ComputerActionStore {
         }
         this.stopRemoteGoal(false);
       }
-      return `Computer Use job ${job.id}: ${this.remoteGoal?.jobId === job.id && this.remoteGoal.status === "stopping" ? "stopping" : job.status}; ${job.steps} steps; ${job.last_action || "no actions yet"}; ${job.result}${job.evidence ? `; Verified visual evidence: ${job.evidence}` : "; No verified completion evidence"}`.slice(0, 1500);
+      return `Computer Use job ${job.id}: ${this.remoteGoal?.jobId === job.id && this.remoteGoal.status === "stopping" ? "stopping" : job.status}${job.control_state === "paused" ? " (paused)" : ""}; ${job.steps} steps; ${job.last_action || "no actions yet"}; ${job.result}${job.evidence ? `; Verified visual evidence: ${job.evidence}` : "; No verified completion evidence"}`.slice(0, 1500);
     }
     if (action === "start_computer_goal") {
       if (!this.remoteGoalRunner) throw new Error("Computer Use is not ready on this PC.");

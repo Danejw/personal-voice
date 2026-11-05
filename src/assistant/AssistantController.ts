@@ -1999,9 +1999,10 @@ export class AssistantController {
   runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => Promise<void>, validate: () => Promise<void>,
     trace?: (event: ComputerTaskTraceEvent) => void,
     beforeAction?: (step: number, action: string) => Promise<void>,
-    beforeVerify?: (step: number) => Promise<void>): Promise<ComputerTaskReport> {
+    beforeVerify?: (step: number) => Promise<void>,
+    instructions?: () => Promise<string>): Promise<ComputerTaskReport> {
     if (!navigator.userAgent.includes("Windows")) throw new Error("Remote Computer Use requires Windows.");
-    return this.runSupervisedReport(goal, true, onProgress, validate, trace, beforeAction, beforeVerify);
+    return this.runSupervisedReport(goal, true, onProgress, validate, trace, beforeAction, beforeVerify, instructions);
   }
 
   private async runSupervised(goal: string, remote = false, onProgress?: (step: number, action: string) => void, validate?: () => Promise<void>): Promise<string> {
@@ -2012,7 +2013,8 @@ export class AssistantController {
   private async runSupervisedReport(goal: string, remote = false, onProgress?: (step: number, action: string) => Promise<void> | void,
     validate?: () => Promise<void>, trace?: (event: ComputerTaskTraceEvent) => void,
     beforeAction?: (step: number, action: string) => Promise<void>,
-    beforeVerify?: (step: number) => Promise<void>): Promise<ComputerTaskReport> {
+    beforeVerify?: (step: number) => Promise<void>,
+    instructions?: () => Promise<string>): Promise<ComputerTaskReport> {
     if (this.computerTaskActive) throw new Error("Another Computer Use task is already active.");
     this.computerTaskActive = true;
     this.remoteComputerTaskActive = remote;
@@ -2080,6 +2082,7 @@ export class AssistantController {
         onBeforeAction: beforeAction,
         onProgress,
         onBeforeVerify: beforeVerify,
+        instructions,
         onTrace: reportEvent,
       }, remote ? REMOTE_COMPUTER_LIMITS : undefined);
       if (lastStage !== report.status) reportEvent({ stage: report.status, step: report.steps });
