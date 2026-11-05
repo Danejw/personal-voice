@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
   }
 
   let response: Response;
-  let model = selected;
+  let model: ComputerUseModel;
   try {
     const outcome = await requestComputerUseWithFallback(
       (candidate) => fetch(INTERACTIONS_URL, {
