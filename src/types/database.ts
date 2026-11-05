@@ -362,6 +362,63 @@ export type Database = {
         }
         Relationships: []
       }
+      computer_jobs: {
+        Row: {
+          id: string
+          user_id: string
+          requester_device_id: string
+          target_device_id: string
+          goal: string
+          status: "pending_ack" | "running" | "completed" | "needs_review" | "blocked" | "failed" | "stopped" | "interrupted"
+          phase: "observing" | "applying" | "verifying" | "done"
+          steps: number
+          last_action: string
+          result: string
+          evidence: string | null
+          worker_token: string | null
+          lease_until: string | null
+          heartbeat_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          user_id: string
+          requester_device_id: string
+          target_device_id: string
+          goal: string
+          status?: "pending_ack" | "running" | "completed" | "needs_review" | "blocked" | "failed" | "stopped" | "interrupted"
+          phase?: "observing" | "applying" | "verifying" | "done"
+          steps?: number
+          last_action?: string
+          result?: string
+          evidence?: string | null
+          worker_token?: string | null
+          lease_until?: string | null
+          heartbeat_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          requester_device_id?: string
+          target_device_id?: string
+          goal?: string
+          status?: "pending_ack" | "running" | "completed" | "needs_review" | "blocked" | "failed" | "stopped" | "interrupted"
+          phase?: "observing" | "applying" | "verifying" | "done"
+          steps?: number
+          last_action?: string
+          result?: string
+          evidence?: string | null
+          worker_token?: string | null
+          lease_until?: string | null
+          heartbeat_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       computer_task_events: {
         Row: {
           id: string
