@@ -67,6 +67,41 @@ function controller() {
 afterEach(() => { FakeSession.opened = []; vi.useRealTimers(); });
 
 describe("AssistantController", () => {
+  it("routes a whole paired desktop task directly to the Windows Computer Use session", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{
+      id: "goal-1", name: "remote_computer_goal",
+      args: { action: "start", goal: "Open Chrome, compare pages and write a note.", device: "Desktop" },
+    }] });
+    await settle();
+    expect(actions.computer.remoteAction).toHaveBeenCalledWith(
+      "start_computer_goal", "Open Chrome, compare pages and write a note.", "Desktop",
+    );
+    expect(created.getSnapshot().pendingAction).toBeNull();
+    created.end();
+  });
+
+  it("runs routine signed remote commands without a second phone-side confirmation", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.setAutoRun(false);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{
+      id: "remote-click", name: "remote_action",
+      args: { action: "click_pointer", argument: "500,500", device: "Desktop" },
+    }] });
+    await settle();
+    expect(actions.computer.remoteAction).toHaveBeenCalledWith("click_pointer", "500,500", "Desktop");
+    expect(created.getSnapshot().pendingAction).toBeNull();
+    created.end();
+  });
+
   it("records opted-in tool traces from real controller events without capturing text or arguments", async () => {
     const { created } = controller();
     const actions = toolActions();
