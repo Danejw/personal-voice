@@ -42,6 +42,8 @@ export class DeviceLinkManager {
   private companionPhase: CompanionAssistantPhase = "idle";
   private cloudUnsubscribe: (() => void) | null = null;
   private scanTimer: ReturnType<typeof setInterval> | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryAttempts = 0;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private trustTimer: ReturnType<typeof setInterval> | null = null;
   private trustVerifiedAt = 0;
@@ -197,7 +199,24 @@ export class DeviceLinkManager {
     }
   }
   async start(userId: string | null, deviceId: string | null, platform: string): Promise<void> {
-    this.stop();
+    this.retryAttempts = 0;
+    await this.startInternal(userId, deviceId, platform);
+  }
+
+  /** Retry connection setup, never side-effecting remote action requests. */
+  private scheduleRetry(generation: number): void {
+    if (generation !== this.generation || !this.deviceId || !this.userId || !this.platform) return;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    const delay = Math.min(30_000, 2_000 * 2 ** Math.min(this.retryAttempts++, 4));
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (generation !== this.generation) return;
+      void this.startInternal(this.userId, this.deviceId, this.platform);
+    }, delay);
+  }
+
+  private async startInternal(userId: string | null, deviceId: string | null, platform: string | null): Promise<void> {
+    this.stop(false);
     if (!userId || !deviceId || (platform !== "windows" && platform !== "android")) return;
     const generation = this.generation;
     this.userId = userId;
@@ -211,7 +230,12 @@ export class DeviceLinkManager {
       if (generation !== this.generation) return;
       this.pairs = pairs.filter(p => !!p.peerPublicKey);
       this.trustVerifiedAt = Date.now();
-      if (this.pairs.length === 0) { this.update(); return; }
+      if (this.pairs.length === 0) {
+        // First-time pairing may occur after the manager starts.
+        this.update();
+        this.scheduleRetry(generation);
+        return;
+      }
       this.cloudUnsubscribe = subscribeDeviceLinkWakes(userId, deviceId,
         wake => {
           // The recipient still fetches the canonical request row before executing.
@@ -255,7 +279,10 @@ export class DeviceLinkManager {
       }, 15_000);
       this.update();
     } catch {
-      if (generation === this.generation) this.update();
+      if (generation === this.generation) {
+        this.update();
+        this.scheduleRetry(generation);
+      }
     }
   }
 
@@ -388,8 +415,11 @@ export class DeviceLinkManager {
     }
   }
 
-  stop(): void {
+  stop(resetRetries = true): void {
     this.generation++;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    if (resetRetries) this.retryAttempts = 0;
     if (this.scanTimer) clearInterval(this.scanTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     if (this.trustTimer) clearInterval(this.trustTimer);
