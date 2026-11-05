@@ -747,6 +747,14 @@ export default function App() {
       deviceLinkManager.publishCompanionAssistant(assistantPhase(assistantSnapshot));
     }
   }, [assistantSnapshot.status, assistantSnapshot.liveText, assistantSnapshot.liveUser]);
+  useEffect(() => {
+    if (platform.platform !== "windows") return;
+    // Only the authenticated Companion viewer receives energy, never PCM audio.
+    const timer = window.setInterval(() => {
+      deviceLinkManager.publishCompanionSpeech(assistant.speechLevel());
+    }, 90);
+    return () => window.clearInterval(timer);
+  }, []);
   const assistantLibrarySnapshot = useAssistantLibrary(assistantLibrary);
   const assistantMemorySnapshot = useAssistantMemory(assistantMemory);
   const [drawerOpen, setDrawerOpen] = useState(false);
