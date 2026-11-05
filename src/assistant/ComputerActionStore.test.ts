@@ -101,4 +101,40 @@ describe("Windows signed remote action receiver", () => {
     expect(platform.openAllowlistedApp).not.toHaveBeenCalled();
     expect(store.getSnapshot().approval).toBeNull();
   });
+  it("runs scroll through the visible pointer controller", async () => {
+    const pointer = vi.fn(async () => "Scrolled down.");
+    const store = new ComputerActionStore(
+      {} as ConstructorParameters<typeof ComputerActionStore>[0],
+      async () => [], () => "pc",
+      { platform: "windows", computerPointerAction: pointer } as unknown as PlatformAdapter,
+    );
+    await expect(store.execute({ name: "scroll", args: { x: 400, y: 600, direction: "down" } }))
+      .resolves.toBe("Scrolled down.");
+    expect(pointer).toHaveBeenCalledWith("scroll_down", 400, 600);
+    await expect(store.execute({ name: "scroll", args: { x: 400, y: 600, direction: "diagonal" } }))
+      .rejects.toThrow(/direction/);
+    expect(pointer).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the requested duration rather than returning immediately", async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new ComputerActionStore(
+        {} as ConstructorParameters<typeof ComputerActionStore>[0],
+        async () => [], () => "pc", { platform: "windows" } as PlatformAdapter,
+      );
+      let resolved = false;
+      const action = store.execute({ name: "wait", args: { seconds: 1 } })
+        .then(result => { resolved = true; return result; });
+      await vi.advanceTimersByTimeAsync(999);
+      expect(resolved).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(action).resolves.toBe("Waited 1 seconds.");
+      await expect(store.execute({ name: "wait", args: { seconds: 3 } }))
+        .rejects.toThrow(/between 0 and 2/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
 });
