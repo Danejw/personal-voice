@@ -84,7 +84,7 @@ export function recordComputerEvent(input: FlightInput): void {
     actor: input.actor,
     stage: input.stage,
     action_kind: flightActionName(input.action),
-    step: Number.isSafeInteger(input.step) && input.step! >= 0 && input.step! <= 240
+    step: typeof input.step === "number" && Number.isSafeInteger(input.step) && input.step >= 0 && input.step <= 240
       ? input.step : null,
     failure_code: input.code ?? null,
     occurred_at: new Date().toISOString(),
@@ -139,14 +139,16 @@ export async function readComputerTimeline(userId: string, limit = 160): Promise
 /** Never infer success from request acceptance or a native action receipt. */
 export function flightDiagnosis(events: readonly Pick<FlightEvent, "stage" | "actor" | "failure_code">[]): string {
   if (!events.length) return "No events recorded";
-  const ordered = events;
-  const terminal = ordered.find(e => ["verified", "failed", "blocked", "unverified", "stopped", "timeout"].includes(e.stage));
-  if (terminal?.stage === "verified") return "Verified on Windows";
+  // A later Android status-read timeout must never override a Windows-verified outcome.
+  if (events.some(e => e.stage === "verified" && e.actor === "windows")) return "Verified on Windows";
+  const terminal = events.find(e => e.actor === "windows"
+    && ["failed", "blocked", "unverified", "stopped"].includes(e.stage))
+    ?? events.find(e => ["failed", "blocked", "unverified", "stopped", "timeout"].includes(e.stage));
   if (terminal) {
     const where = terminal.actor === "android" ? "Android" : "Windows";
     return `${where}: ${terminal.stage}${terminal.failure_code ? ` (${terminal.failure_code})` : ""}`;
   }
-  const latest = ordered[0]!;
+  const latest = events[0]!;
   return latest.stage === "queued" ? "Waiting for Windows"
     : latest.stage === "acknowledged" ? "Command acknowledged, result not verified"
       : "Task in progress";
