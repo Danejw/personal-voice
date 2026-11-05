@@ -305,6 +305,8 @@ export function CompanionView({
       <div className="companion-stage">
         <svg className="companion-face" viewBox="0 0 360 370" role="button" tabIndex={0}
           aria-label="Press and hold Companion to speak" aria-pressed={holding}
+          onContextMenu={(event) => event.preventDefault()}
+          onDragStart={(event) => event.preventDefault()}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
             event.preventDefault();

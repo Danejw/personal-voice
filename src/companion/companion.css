@@ -12,6 +12,19 @@
   padding: max(env(safe-area-inset-top), 18px) 22px max(env(safe-area-inset-bottom), 22px);
   overflow: hidden;
 }
+/* Companion is a touch-first control surface, not selectable page content.
+   Scope this to Companion so editing and selection elsewhere still work. */
+.companion-view,
+.companion-view * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.companion-face,
+.companion-face * {
+  -webkit-user-drag: none;
+}
+
 .companion-header {
   display: flex;
   align-items: center;
