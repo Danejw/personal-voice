@@ -110,17 +110,15 @@ export function CompanionView({
     // Sample the audio envelope without rerendering the rest of the Companion on
     // every PCM chunk. Never lip-sync to text timing or use microphone input.
     const timer = window.setInterval(() => {
-      const audible = phase === "speaking"
-        ? locallyActive ? assistant.speechLevel()
-          : linked && Date.now() - remoteSpeech.current.at < 350 ? remoteSpeech.current.level : 0
-        : 0;
+      const audible = locallyActive ? assistant.speechLevel()
+        : linked && Date.now() - remoteSpeech.current.at < 350 ? remoteSpeech.current.level : 0;
       setMouth(previous => {
         const next = previous * 0.35 + Math.min(1, Math.max(0, audible)) * 0.65;
         return next < 0.015 ? 0 : next;
       });
     }, 45);
     return () => window.clearInterval(timer);
-  }, [assistant, phase, locallyActive, linked]);
+  }, [assistant, locallyActive, linked]);
 
   useEffect(() => {
     if (linked) {
@@ -134,11 +132,12 @@ export function CompanionView({
     return () => window.clearInterval(timer);
   }, [linked]);
 
+  const expressivePhase = mouth > 0.085 ? "speaking" : phase;
   const active = snapshot.status === "READY" || snapshot.status === "RESPONDING" ||
     snapshot.status === "CONNECTING";
 
   return (
-    <main className={`companion-view is-${phase}`} aria-label="Companion mode">
+    <main className={`companion-view is-${expressivePhase}`} aria-label="Companion mode">
       <header className="companion-header">
         <button type="button" className="companion-exit" onClick={onExit} aria-label="Exit companion mode">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -154,7 +153,7 @@ export function CompanionView({
       </header>
       <div className="companion-stage">
         <svg className="companion-face" viewBox="0 0 360 260" role="img"
-          aria-label={`Companion is ${PHASE_LABEL[phase].toLowerCase()}`}>
+          aria-label={`Companion is ${PHASE_LABEL[expressivePhase].toLowerCase()}`}>
           <defs>
             <radialGradient id="companion-iris">
               <stop offset="0%" stopColor="#b5ffde" />
@@ -196,7 +195,7 @@ export function CompanionView({
               opacity={Math.min(1, mouth * 4)} />
           </g>
         </svg>
-        <p className="companion-phase" role="status">{PHASE_LABEL[phase]}</p>
+        <p className="companion-phase" role="status">{PHASE_LABEL[expressivePhase]}</p>
       </div>
       <footer className="companion-controls">
         {(pairedWindows.length > 1 || (pairedWindows.length > 0 && !targetId)) && (
