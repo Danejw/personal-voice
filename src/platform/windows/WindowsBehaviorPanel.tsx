@@ -72,7 +72,7 @@ export function WindowsBehaviorPanel({
       />
       <Toggle
         label="Allow remote actions"
-        title="Other devices on this account can ask this PC to open Notepad or Calculator, press Copy, Paste, Select all, Undo, Escape, or Tab, or insert text. Each one still needs confirmation. There is no shell."
+        title="Paired devices can use the unlocked Windows desktop without approving each click, app launch, or goal. Turn this off to stop remote control. Sensitive Computer Use steps still require approval; shells remain blocked."
         checked={remoteComputerActions}
         onChange={(enabled) => {
           saveRemoteComputerActions(enabled);

@@ -26,7 +26,7 @@ export const CROSS_DEVICE: ToolPlaybook = {
   branches: [
     "Read-only awareness uses read_remote_device; never use it to claim you changed the device.",
     "send_handoff is a transferable inbox item; send_remote_dictation types at a remote cursor now.",
-    "remote_action supports start_computer_goal with a whole goal, computer_goal_status and stop_computer_goal with argument current. Ordinary goal steps run on Windows after one approval; explicit sensitive-step confirmation remains.",
+    "remote_action supports start_computer_goal with a whole goal, computer_goal_status and stop_computer_goal with argument current. Ordinary goal steps run on the opted-in PC without repeated approvals; explicit sensitive-step confirmation remains.",
     "A remembered default applies only when no device was explicitly named. Never silently switch to another PC.",
   ],
   recovery: [
