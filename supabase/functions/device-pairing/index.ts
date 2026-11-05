@@ -178,7 +178,7 @@ Deno.serve(async (request: Request) => {
     // Authenticated phone sessions can SELECT their jobs but cannot write them.
     if (device.platform !== "windows") return reply(403, { error: "windows_only" });
     const event = string(args?.event);
-    if (!event || !["create","activate","cancel_pending","heartbeat","checkpoint","reconcile"].includes(event)) {
+    if (!event || !["create","activate","cancel_pending","heartbeat","checkpoint","reconcile","request_stop"].includes(event)) {
       return reply(400, { error: "bad_request" });
     }
     const requestId = uuidArg(args?.requestId);
