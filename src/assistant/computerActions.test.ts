@@ -80,7 +80,7 @@ describe("computer action safety", () => {
       0, started, started, false, { maxSteps: 240, maxDurationMs: 1800000, allowRoutineDrag: true }).action)
       .toBe("execute");
     expect(planComputerStep({ name: "drag", args: { x: 100, y: 100, end_x: 900, end_y: 900,
-      safety_decision: "require_confirmation" } },
+      safety_decision: { decision: "require_confirmation", explanation: "User approval required." } } },
       0, started, started, false, { maxSteps: 240, maxDurationMs: 1800000, allowRoutineDrag: true }).action)
       .toBe("confirm");
 
