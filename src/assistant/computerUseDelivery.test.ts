@@ -4,10 +4,10 @@ import { ComputerActionStore } from "@/assistant/ComputerActionStore";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import type { RemoteDevice } from "@/assistant/remoteContext";
 
-const claimState = vi.hoisted(() => ({ alreadyClaimed: false }));
-afterEach(() => { claimState.alreadyClaimed = false; });
+const claimState = vi.hoisted(() => ({ alreadyClaimed: false, locked: false }));
+afterEach(() => { claimState.alreadyClaimed = false; claimState.locked = false; });
 vi.mock("@/settings/deviceSettings", () => ({ loadRemoteComputerActions: () => true }));
-vi.mock("@tauri-apps/api/core", () => ({ invoke: async () => true }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: async () => !claimState.locked }));
 vi.mock("@/services/remoteAutoActionService", () => ({
   remoteAutoActionApi: {
     wasClaimed: async () => claimState.alreadyClaimed,
@@ -105,6 +105,16 @@ describe("Android command to Windows receipt contract", () => {
     await windows.poll("account");
     expect(row.status).toBe("denied");
     expect(row.error).toMatch(/outcome is unknown/i);
+    expect(open).not.toHaveBeenCalled();
+
+    // A locked PC returns a signed, explicit denial after claiming, never executes.
+    claimState.alreadyClaimed = false;
+    claimState.locked = true;
+    row.status = "pending";
+    row.error = null;
+    await windows.poll("account");
+    expect(row.status).toBe("denied");
+    expect(row.error).toMatch(/locked/i);
     expect(open).not.toHaveBeenCalled();
   });
 
