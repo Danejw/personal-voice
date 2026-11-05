@@ -47,6 +47,7 @@ export function flightFailureCode(reason: unknown, fallback: FlightFailure = "un
   if (/network|fetch|connection|internet|offline|unreachable/i.test(message)) return "network";
   if (/screen|capture|snapshot/i.test(message)) return "capture";
   if (/model|rate.limit|computer.use.service/i.test(message)) return "model";
+  if (/could not open|not installed|app(?:lication)? not found|app(?:lication)? is unavailable|not ready/i.test(message)) return "unavailable";
   if (/denied|blocked|not allowed/i.test(message)) return "refused";
   return fallback;
 }

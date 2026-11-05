@@ -182,4 +182,18 @@ describe("remote computer actions", () => {
     expect(done.action).toBe("answered");
     expect(api.rows[0]?.result).toBe("Opened Notepad.");
   });
+  it("distinguishes policy refusal from failed Windows execution without retrying either", async () => {
+    const api = memoryApi();
+    const id = await api.create("user-1", "phone", "pc", "open_app", "notepad");
+    const row = await api.get("user-1", id);
+    if (!row) throw new Error("missing");
+    const refused = await fulfillComputerAction(api, row, "windows", false, id, async () => "never");
+    expect(refused).toMatchObject({ action: "denied", failureKind: "policy" });
+    const failed = await fulfillComputerAction(api, row, "windows", true, id, async () => {
+      throw new Error("Windows could not open Notepad.");
+    });
+    expect(failed).toMatchObject({
+      action: "denied", failureKind: "execution", reason: "Windows could not open Notepad.",
+    });
+  });
 });

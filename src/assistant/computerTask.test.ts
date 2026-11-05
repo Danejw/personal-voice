@@ -211,4 +211,39 @@ describe("computer task loop", () => {
     expect(events).toEqual(["failed:capture"]);
   });
 
+  it("keeps the initial fallback model for every continuation after an action", async () => {
+    let calls = 0;
+    let continuation: Record<string, unknown> = {};
+    const task = host({
+      propose: async (body) => {
+        if (++calls === 1) return {
+          model: "gemini-3.7-flash", id: "fallback-step",
+          steps: [{ type: "function_call", id: "call-1", name: "click", arguments: { x: 2, y: 3 } }],
+        };
+        continuation = body;
+        return { model: "gemini-3.7-flash", id: "final", steps: [], text: "Clicked." };
+      },
+    });
+    await runComputerTaskReport("Click the button.", task);
+    expect(task.executed).toEqual(["click"]);
+    expect(continuation).toMatchObject({
+      model: "gemini-3.7-flash", supportsModelFallback: true, previousInteractionId: "fallback-step",
+      functionResult: { callId: "call-1" },
+    });
+  });
+
+  it("traces one typed model failure rather than two terminal failures", async () => {
+    const events: Array<{ stage: string; code?: string }> = [];
+    const task = host({
+      propose: async () => { throw new Error("Computer Use upstream HTTP 503"); },
+      onTrace: event => events.push({ stage: event.stage, code: event.code }),
+    });
+    await expect(runComputerTaskReport("Open Notepad.", task)).rejects.toMatchObject({
+      failureCode: "model", message: "Computer Use upstream HTTP 503",
+    });
+    expect(events.filter(event => event.stage === "failed")).toEqual([
+      { stage: "failed", code: "model" },
+    ]);
+    expect(task.executed).toHaveLength(0);
+  });
 });

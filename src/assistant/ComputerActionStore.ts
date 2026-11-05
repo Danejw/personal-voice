@@ -1,6 +1,6 @@
 import { dragEndpoints, executableShortcut, parseRemotePointer, planRemoteComputerAction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
-import type { ComputerImage, ComputerTaskReport, ComputerTaskTraceEvent } from "@/assistant/computerTask";
+import { ComputerTaskFailure, type ComputerImage, type ComputerTaskReport, type ComputerTaskTraceEvent } from "@/assistant/computerTask";
 import { recordComputerEvent, flightFailureCode, type FlightStage, type FlightFailure } from "@/services/computerFlightRecorder";
 import type { RemoteDevice } from "@/assistant/remoteContext";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
@@ -374,7 +374,11 @@ export class ComputerActionStore {
           }
           this.traceReceiverOnce(row, "acknowledged");
         }
-        if (outcome.action === "denied") this.traceReceiverOnce(row, "blocked", "refused");
+        if (outcome.action === "denied") {
+          const code = outcome.failureKind === "policy" ? "refused"
+            : flightFailureCode(new Error(outcome.reason ?? ""), "tool");
+          this.traceReceiverOnce(row, "blocked", code);
+        }
         // Start the background task only AFTER the signed start acknowledgment is committed.
         // A timed-out or rejected request must never leave an unauthorized running task.
         if (row.action === "start_computer_goal" && outcome.action === "answered") {
@@ -439,7 +443,10 @@ export class ComputerActionStore {
     }).catch(error => {
       state.status = state.status === "stopping" ? "stopped" : "failed";
       state.result = error instanceof Error ? error.message.slice(0, 1000) : "The Computer Use task failed.";
-      this.trace(requestId, "failed", undefined, state.steps, flightFailureCode(error));
+      // The computer task already traced typed capture/model/tool failures.
+      if (!(error instanceof ComputerTaskFailure)) {
+        this.trace(requestId, "failed", undefined, state.steps, flightFailureCode(error));
+      }
       this.persistRemoteGoal();
     });
   }

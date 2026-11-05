@@ -27,6 +27,14 @@ export interface ComputerTaskTraceEvent {
   code?: "capture" | "model" | "tool" | "verification";
 }
 
+/** One typed failure, traced at its source. An outer task handler must not log it again. */
+export class ComputerTaskFailure extends Error {
+  constructor(readonly failureCode: "capture" | "model" | "tool", cause: unknown) {
+    super(cause instanceof Error ? cause.message : "Computer Use failed.");
+    this.name = "ComputerTaskFailure";
+  }
+}
+
 export interface ComputerTaskHost {
   now(): number;
   stopped(): boolean;
@@ -69,6 +77,7 @@ export async function runComputerTaskReport(
 ): Promise<ComputerTaskReport> {
   const startedAt = host.now();
   let previousId: string | null = null;
+  let selectedModel: string | undefined;
   let result: { name: string; callId: string; result: string; acknowledgement: boolean; imageBase64: string | null } | null = null;
   let executed = 0;
   for (let step = 0; step < limits.maxSteps; step += 1) {
@@ -80,23 +89,33 @@ export async function runComputerTaskReport(
     try { image = await host.capture(); }
     catch (error) {
       host.onTrace?.({ stage: "failed", step: executed, code: "capture" });
-      throw error;
+      throw new ComputerTaskFailure("capture", error);
     }
     host.onTrace?.({ stage: "screen", step: executed });
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     let interaction;
     try {
-      interaction = parseInteraction(await host.propose({
+      const response = await host.propose({
         goal,
         image: previousId ? null : image.jpeg,
         previousInteractionId: previousId,
+        model: selectedModel,
+        supportsModelFallback: true,
         functionResult: result
           ? { name: result.name, callId: result.callId, result: result.result, acknowledgement: result.acknowledgement, image: image.jpeg }
           : null,
-      }));
+      });
+      // Only recognized models returned by our server can pin a continuation.
+      if (response && typeof response === "object") {
+        const proposedModel = (response as { model?: unknown }).model;
+        if (proposedModel === "gemini-3.8-flash" || proposedModel === "gemini-3.7-flash") {
+          selectedModel = proposedModel;
+        }
+      }
+      interaction = parseInteraction(response);
     } catch (error) {
       host.onTrace?.({ stage: "failed", step: executed, code: "model" });
-      throw error;
+      throw new ComputerTaskFailure("model", error);
     }
     host.onTrace?.({ stage: "model", step: executed, action: interaction.call?.name });
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
@@ -147,7 +166,7 @@ export async function runComputerTaskReport(
     try { outcome = await host.execute(decision.call, image); }
     catch (error) {
       host.onTrace?.({ stage: "failed", step: executed, action: decision.call.name, code: "tool" });
-      throw error;
+      throw new ComputerTaskFailure("tool", error);
     }
     executed += 1;
     host.onTrace?.({ stage: "acted", step: executed, action: decision.call.name });
