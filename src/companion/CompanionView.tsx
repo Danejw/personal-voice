@@ -110,8 +110,10 @@ export function CompanionView({
     // Sample the audio envelope without rerendering the rest of the Companion on
     // every PCM chunk. Never lip-sync to text timing or use microphone input.
     const timer = window.setInterval(() => {
-      const audible = locallyActive ? assistant.speechLevel()
-        : linked && Date.now() - remoteSpeech.current.at < 350 ? remoteSpeech.current.level : 0;
+      const localLevel = locallyActive ? assistant.speechLevel() : 0;
+      const remoteLevel = linked && Date.now() - remoteSpeech.current.at < 350
+        ? remoteSpeech.current.level : 0;
+      const audible = Math.max(localLevel, remoteLevel);
       setMouth(previous => {
         const next = previous * 0.35 + Math.min(1, Math.max(0, audible)) * 0.65;
         return next < 0.015 ? 0 : next;
