@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AssistantController } from "@/assistant/AssistantController";
+import type { ComputerActionStore } from "@/assistant/ComputerActionStore";
 import type { AssistantSnapshot } from "@/assistant/state";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { SelectField } from "@/components/SelectField";
@@ -25,9 +26,10 @@ function storedMonitor(): number | null {
 }
 
 export function CompanionView({
-  assistant, snapshot, micBusy, onStartVoice, onExit, currentDeviceId, devices,
+  assistant, computerActions, snapshot, micBusy, onStartVoice, onExit, currentDeviceId, devices,
 }: {
   assistant: AssistantController;
+  computerActions: ComputerActionStore;
   snapshot: AssistantSnapshot;
   micBusy: boolean;
   currentDeviceId: string | null;
@@ -36,6 +38,9 @@ export function CompanionView({
   onExit(): void;
 }) {
   const [transport, setTransport] = useState(() => deviceLinkManager.getSnapshot());
+  const [remoteGoal, setRemoteGoal] = useState(() => computerActions.getSnapshot().remoteGoal);
+  const [goalError, setGoalError] = useState<string | null>(null);
+  const goalRequestPending = useRef(false);
   const [cursor, setCursor] = useState<Pointer | null>(null);
   const [monitors, setMonitors] = useState<CompanionMonitor[]>([]);
   const [remotePhase, setRemotePhase] = useState<CompanionAssistantPhase>("idle");
@@ -58,6 +63,29 @@ export function CompanionView({
     && d.id !== currentDeviceId && transport.pairedPeers.includes(d.id));
   // An explicit default which is no longer paired must not silently select another PC.
   const targetId = selectedCompanionPC(pairedWindows, preferredPC);
+  const currentGoal = remoteGoal?.targetDeviceId === targetId ? remoteGoal : null;
+  const goalIsActive = !!currentGoal && !/\b(completed|stopped|failed|blocked|interrupted|needs_review)\b/i.test(currentGoal.message);
+  const refreshGoal = async (action: "computer_goal_status" | "stop_computer_goal") => {
+    const target = pairedWindows.find(d => d.id === targetId);
+    if (!target || goalRequestPending.current) return;
+    goalRequestPending.current = true;
+    try {
+      await computerActions.remoteAction(action, "current", target.name);
+      setGoalError(null);
+    } catch (error) {
+      setGoalError(error instanceof Error ? error.message : "Cannot reach the selected computer.");
+    } finally { goalRequestPending.current = false; }
+  };
+  useEffect(() => computerActions.subscribe(() => {
+    setRemoteGoal(computerActions.getSnapshot().remoteGoal);
+  }), [computerActions]);
+  useEffect(() => {
+    if (!goalIsActive || !targetId) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshGoal("computer_goal_status");
+    }, 20_000);
+    return () => window.clearInterval(interval);
+  }, [goalIsActive, targetId, computerActions, pairedWindows.map(d => d.id).join(",")]);
   const monitorIndex = savedIndex ?? defaultMonitorIndex(monitors);
   const gaze = useMemo(() => cursor && monitors.length
     ? companionGaze(cursor, monitors, monitorIndex) : { x: 0, y: 0 },
@@ -345,6 +373,17 @@ export function CompanionView({
           </g>
         </svg>
         <p className="companion-phase" role="status">{PHASE_LABEL[expressivePhase]}</p>
+        {currentGoal && (
+          <div className="companion-goal" role="status" aria-live="polite">
+            <p>{currentGoal.phase === "accepted" ? "Computer task accepted" : "Computer task update"}</p>
+            <p>{currentGoal.message.slice(0, 250)}</p>
+            {goalError && <p>{goalError}</p>}
+            <div className="companion-goal-actions">
+              <button type="button" onClick={() => { void refreshGoal("computer_goal_status"); }}>Update</button>
+              {goalIsActive && <button type="button" onClick={() => { void refreshGoal("stop_computer_goal"); }}>Stop</button>}
+            </div>
+          </div>
+        )}
       </div>
       <footer className="companion-controls">
         {(pairedWindows.length > 1 || (pairedWindows.length > 0 && !targetId)) && (
