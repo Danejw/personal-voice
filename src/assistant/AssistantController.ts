@@ -1991,8 +1991,8 @@ export class AssistantController {
           if (validate) await validate();
           const prompt = [
             "Verify the RESULT using only this final screenshot. Do not act or call tools.",
-            `Task: ${objective.slice(0, 190)}`,
-            `Agent claim: ${candidate.slice(0, 90)}`,
+            `Task: ${objective.slice(0, 130)}`,
+            `Agent claim: ${candidate.slice(0, 70)}`,
             "Only if every requested result is visibly demonstrated, reply VERIFIED: with concrete visual evidence.",
             "Otherwise reply NOT_VERIFIED: and explain what remains unknown.",
           ].join("\n");
