@@ -12,7 +12,7 @@ export function useComputerActions(store: ComputerActionStore, userId: string | 
     const tick = () => {
       if (pending) return; // LAN + cloud + poll cannot execute the same request concurrently.
       pending = true;
-      void store.poll(userId).catch(() => undefined).finally(() => { pending = false; });
+      void store.poll(userId).catch(error => store.reportPollFailure(error)).finally(() => { pending = false; });
     };
     tick();
     const timer = window.setInterval(tick, COMPUTER_ACTION_POLL_MS);
