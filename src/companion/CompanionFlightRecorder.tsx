@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  flightDiagnosis, readComputerTimeline, type FlightEvent, type FlightTimelineResult,
+  flightDiagnosis, readComputerTimeline, readComputerTrace, type FlightEvent, type FlightTimelineResult,
 } from "@/services/computerFlightRecorder";
 
 const LABELS: Record<string, string> = {
@@ -35,6 +35,7 @@ export function CompanionFlightRecorder({ userId, activeTraceId }: {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<FlightTimelineResult>({ events: [], synced: true });
+  const [detail, setDetail] = useState<FlightTimelineResult>({ events: [], synced: true });
   const refresh = useCallback(() => {
     if (!userId) return;
     void readComputerTimeline(userId).then(setTimeline).catch(() => {
@@ -64,6 +65,23 @@ export function CompanionFlightRecorder({ userId, activeTraceId }: {
   const focusId = selected ?? (activeTraceId && traces.some(t => t.id === activeTraceId)
     ? activeTraceId : traces[0]?.id ?? null);
   const focused = traces.find(group => group.id === focusId) ?? null;
+  const refreshDetail = useCallback(() => {
+    if (!userId || !focusId) return;
+    void readComputerTrace(userId, focusId).then(setDetail).catch(() => {
+      setDetail(current => ({ ...current, synced: false }));
+    });
+  }, [userId, focusId]);
+  useEffect(() => {
+    if (!open || !focusId || !userId) return;
+    refreshDetail();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") refreshDetail();
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [open, focusId, userId, refreshDetail]);
+  const displayedEvents = detail.events.some(event => event.trace_id === focusId)
+    ? detail.events.filter(event => event.trace_id === focusId)
+    : [...(focused?.events ?? [])].reverse();
 
   return (
     <>
@@ -77,7 +95,7 @@ export function CompanionFlightRecorder({ userId, activeTraceId }: {
             <strong>Computer activity</strong>
             <button type="button" onClick={refresh} aria-label="Refresh activity">Refresh</button>
           </div>
-          {!timeline.synced && <p className="companion-flight-warning" role="status">
+          {(!timeline.synced || !detail.synced) && <p className="companion-flight-warning" role="status">
             Sync unavailable. Showing locally queued events only.
           </p>}
           {!traces.length && <p className="companion-flight-empty">No recorded computer tasks yet.</p>}
@@ -96,7 +114,7 @@ export function CompanionFlightRecorder({ userId, activeTraceId }: {
               </div>
               {focused && (
                 <ol className="companion-flight-events" aria-label="Task events">
-                  {[...focused.events].reverse().map(event => (
+                  {displayedEvents.map(event => (
                     <li key={event.id}>
                       <time dateTime={event.occurred_at}>{clock(event.occurred_at)}</time>
                       <span>{event.actor === "windows" ? "PC" : "Phone"}</span>
