@@ -1,6 +1,6 @@
 import { dragEndpoints, executableShortcut, parseRemotePointer, planRemoteComputerAction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
-import type { ComputerImage } from "@/assistant/computerTask";
+import type { ComputerImage, ComputerTaskReport } from "@/assistant/computerTask";
 import type { RemoteDevice } from "@/assistant/remoteContext";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import { loadRemoteComputerActions } from "@/settings/deviceSettings";
@@ -19,10 +19,11 @@ export interface ComputerApproval {
 
 export interface RemoteGoalState {
   requesterDeviceId: string;
-  status: "starting" | "running" | "stopping" | "stopped" | "completed" | "failed";
+  status: "starting" | "running" | "stopping" | "stopped" | "completed" | "needs_review" | "blocked" | "failed";
   steps: number;
   lastAction: string;
   result: string;
+  evidence: string | null;
 }
 
 export interface ComputerActionSnapshot {
@@ -40,12 +41,12 @@ export class ComputerActionStore {
   private polling = false;
   private remoteGoal: RemoteGoalState | null = null;
   private pendingGoalStart: { requestId: string; goal: string; requesterDeviceId: string; ownerId: string } | null = null;
-  private remoteGoalRunner: ((goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<string>) | null = null;
+  private remoteGoalRunner: ((goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<ComputerTaskReport>) | null = null;
   private remoteGoalStop: (() => void) | null = null;
 
   /** The Windows Assistant owns the executor. This store only routes signed session commands. */
   setRemoteGoalRunner(
-    runner: (goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<string>,
+    runner: (goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<ComputerTaskReport>,
     stop: () => void,
   ): void {
     this.remoteGoalRunner = runner;
@@ -252,9 +253,14 @@ export class ComputerActionStore {
     };
     void this.remoteGoalRunner(pending.goal,
       (step, name) => { state.steps = step; state.lastAction = name; }, validate,
-    ).then(result => {
-      state.status = state.status === "stopping" ? "stopped" : "completed";
-      state.result = result.slice(0, 1000);
+    ).then(report => {
+      state.status = state.status === "stopping" ? "stopped"
+        : report.status === "verified" ? "completed"
+        : report.status === "unverified" ? "needs_review"
+        : report.status === "blocked" ? "blocked" : "stopped";
+      state.steps = report.steps;
+      state.result = report.summary.slice(0, 1000);
+      state.evidence = report.evidence;
     }).catch(error => {
       state.status = state.status === "stopping" ? "stopped" : "failed";
       state.result = error instanceof Error ? error.message.slice(0, 1000) : "The Computer Use task failed.";
@@ -267,7 +273,7 @@ export class ComputerActionStore {
       if (!goal) return "No Computer Use session has been started on this PC.";
       if (goal.requesterDeviceId !== requesterDeviceId) throw new Error("This session belongs to a different paired device.");
       if (action === "stop_computer_goal") this.stopRemoteGoal();
-      return `Computer Use ${goal.status}; ${goal.steps} steps; ${goal.lastAction || "no actions yet"}; ${goal.result}`.slice(0,1500);
+      return `Computer Use ${goal.status}; ${goal.steps} steps; ${goal.lastAction || "no actions yet"}; ${goal.result}${goal.evidence ? `; Verified visual evidence: ${goal.evidence}` : "; No verified completion evidence"}`.slice(0,1500);
     }
     if (action === "start_computer_goal") {
       if (!this.remoteGoalRunner) throw new Error("Computer Use is not ready on this PC.");
@@ -277,7 +283,7 @@ export class ComputerActionStore {
       const owner = this.userId;
       if (!owner) throw new Error("Sign in before using remote Computer Use.");
       await pairedPublicKey(this.getDeviceId(owner), requesterDeviceId);
-      this.remoteGoal = { requesterDeviceId, status: "starting", steps: 0, lastAction: "", result: "" };
+      this.remoteGoal = { requesterDeviceId, status: "starting", steps: 0, lastAction: "", result: "", evidence: null };
       this.pendingGoalStart = { requestId, goal: argument, requesterDeviceId, ownerId: owner };
       return "Computer Use goal accepted on Windows. Check computer_goal_status for progress or use stop_computer_goal to stop.";
     }
