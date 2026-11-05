@@ -202,7 +202,7 @@ describe("Windows signed remote action receiver", () => {
     goal: "Open Notepad and type Hello World.", status, phase, steps,
     last_action: steps ? "type" : "", result: "", evidence: null,
     worker_token: status === "running" ? "lease-token" : null,
-    lease_until: null, heartbeat_at: null, created_at: "2026-11-05T20:00:00Z",
+    lease_until: null, heartbeat_at: null, stop_requested_at: null, created_at: "2026-11-05T20:00:00Z",
     updated_at: "2026-11-05T20:01:00Z",
   });
 
