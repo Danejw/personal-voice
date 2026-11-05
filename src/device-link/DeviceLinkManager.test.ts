@@ -113,6 +113,7 @@ describe("Companion's paired PC isolation", () => {
 
 
   it("backs off setup retries and never retries after stop", async () => {
+    vi.useFakeTimers();
     const manager = new DeviceLinkManager();
     const internal = manager as unknown as {
       deviceId: string | null; userId: string | null; platform: "android" | null;
