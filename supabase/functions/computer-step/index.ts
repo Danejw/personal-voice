@@ -1,14 +1,14 @@
 // One supervised Computer Use step. The permanent key stays here.
-// The client cannot choose the model, the tool, or a shell command.
+// The client cannot choose an arbitrary model, the tool, or a shell command.
 // Docs checked 2026-09-28: https://ai.google.dev/gemini-api/docs/computer-use
 // Model gemini-3.8-flash, Interactions API, desktop environment, prompt-injection detection on.
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@6.2.12";
-import { retryTransientModelRequest } from "./retry.ts";
+import { PRIMARY_COMPUTER_MODEL, FALLBACK_COMPUTER_MODEL, requestComputerUseWithFallback, type ComputerUseModel } from "./retry.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const jwks = createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`));
 const INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
-const MODEL = "gemini-3.8-flash";
+
 const IMAGE_LIMIT = 2_000_000;
 
 const cors = {
@@ -63,12 +63,22 @@ Deno.serve(async (req) => {
     goal?: unknown;
     image?: unknown;
     previousInteractionId?: unknown;
+    model?: unknown;
     functionResult?: { name?: unknown; callId?: unknown; result?: unknown; acknowledgement?: unknown; image?: unknown };
   };
   const goal = typeof fields.goal === "string" ? fields.goal.trim() : "";
   if (!fields.previousInteractionId && (!goal || goal.length > 500)) {
     return reply(400, { error: "Say what the screen task should do." });
   }
+  // A continuation must use the same model that produced its call ID.
+  // The initial request always starts with the primary model.
+  const continuation = typeof fields.previousInteractionId === "string" && !!fields.previousInteractionId;
+  if (continuation && fields.model !== undefined &&
+      fields.model !== PRIMARY_COMPUTER_MODEL && fields.model !== FALLBACK_COMPUTER_MODEL) {
+    return reply(400, { error: "Invalid Computer Use continuation model." });
+  }
+  const selected: ComputerUseModel = continuation && fields.model === FALLBACK_COMPUTER_MODEL
+    ? FALLBACK_COMPUTER_MODEL : PRIMARY_COMPUTER_MODEL;
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return reply(500, { error: "Computer Use is not configured." });
 
@@ -83,7 +93,7 @@ Deno.serve(async (req) => {
     }
     const image = imageData(fields.functionResult.image);
     body = {
-      model: MODEL,
+      model: selected,
       previous_interaction_id: fields.previousInteractionId,
       tools: [tool],
       input: [{
@@ -101,25 +111,31 @@ Deno.serve(async (req) => {
     const image = imageData(fields.image);
     const input: unknown[] = [{ type: "text", text: goal }];
     if (image) input.push({ type: "image", data: image, mime_type: "image/jpeg" });
-    body = { model: MODEL, tools: [tool], input };
+    body = { model: selected, tools: [tool], input };
   }
 
   let response: Response;
+  let model = selected;
   try {
-    const payload = JSON.stringify(body);
-    response = await retryTransientModelRequest(
-      () => fetch(INTERACTIONS_URL, {
+    const outcome = await requestComputerUseWithFallback(
+      (candidate) => fetch(INTERACTIONS_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: payload,
+        body: JSON.stringify({ ...body, model: candidate }),
         signal: AbortSignal.timeout(20_000),
       }),
+      selected, !continuation,
       {
         onRetry: (status, attempt) => console.warn(
           `computer-step: transient provider ${status}; retry ${attempt}/2`,
         ),
       },
     );
+    response = outcome.response;
+    model = outcome.model;
+    if (!continuation && model === FALLBACK_COMPUTER_MODEL) {
+      console.warn("computer-step: primary model unavailable; used fallback model");
+    }
   } catch {
     console.error("computer-step: request did not complete");
     return reply(502, { error: "Could not reach Computer Use." });
@@ -129,7 +145,7 @@ Deno.serve(async (req) => {
     const upstream = await response.json().catch(() => null) as { error?: { status?: unknown; code?: unknown } } | null;
     const code = typeof upstream?.error?.status === "string"
       && /^[A-Z][A-Z_]{2,50}$/.test(upstream.error.status) ? upstream.error.status : "UNKNOWN";
-    console.error(`computer-step: upstream HTTP ${response.status}; code=${code}`);
+    console.error(`computer-step: upstream HTTP ${response.status}; model=${model}; code=${code}`);
     if (response.status === 429) return reply(503, { error: "Computer Use is rate-limited. The task was not completed." });
     if (response.status === 401 || response.status === 403) {
       return reply(502, { error: "Computer Use upstream authentication or access failed. Check the server API key and model access." });
@@ -141,6 +157,7 @@ Deno.serve(async (req) => {
   }
   const interaction = await response.json().catch(() => null) as { id?: unknown; steps?: unknown; text?: unknown } | null;
   return reply(200, {
+    model,
     id: interaction && typeof interaction.id === "string" ? interaction.id : null,
     steps: interaction && Array.isArray(interaction.steps) ? interaction.steps : [],
     text: interaction && typeof interaction.text === "string" ? interaction.text.slice(0, 1200) : "",

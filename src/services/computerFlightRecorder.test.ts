@@ -18,6 +18,7 @@ describe("Computer Use flight recorder metadata", () => {
     expect(flightFailureCode(new Error("Computer Use rate-limited"))).toBe("model");
     expect(flightFailureCode(new Error("Signature could not be authenticated"))).toBe("auth");
     expect(flightFailureCode(new Error("Database secret token: do not store"), "tool")).toBe("tool");
+    expect(flightFailureCode(new Error("Windows could not open Notepad."), "tool")).toBe("unavailable");
   });
 
   it("never treats receipt delivery or executed clicks as verified success", () => {

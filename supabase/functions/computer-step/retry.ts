@@ -30,3 +30,27 @@ export async function retryTransientModelRequest(
   }
   throw new Error("Model retry attempts exhausted.");
 }
+
+/** The only failover is a model proposal before the first native desktop action.
+ * Continuations must keep their original model and interaction ID.
+ */
+export const PRIMARY_COMPUTER_MODEL = "gemini-3.8-flash" as const;
+export const FALLBACK_COMPUTER_MODEL = "gemini-3.7-flash" as const;
+export type ComputerUseModel = typeof PRIMARY_COMPUTER_MODEL | typeof FALLBACK_COMPUTER_MODEL;
+
+export async function requestComputerUseWithFallback(
+  send: (model: ComputerUseModel) => Promise<Response>,
+  model: ComputerUseModel,
+  firstStep: boolean,
+  options: Parameters<typeof retryTransientModelRequest>[1] = {},
+): Promise<{ response: Response; model: ComputerUseModel }> {
+  const response = await retryTransientModelRequest(() => send(model), options);
+  // Never switch the model for a continuation, even if the provider fails.
+  if (!firstStep || model !== PRIMARY_COMPUTER_MODEL ||
+      ![429, 500, 502, 503, 504].includes(response.status)) {
+    return { response, model };
+  }
+  await response.body?.cancel().catch(() => undefined);
+  const fallback = await retryTransientModelRequest(() => send(FALLBACK_COMPUTER_MODEL), options);
+  return { response: fallback, model: FALLBACK_COMPUTER_MODEL };
+}

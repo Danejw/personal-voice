@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { retryTransientModelRequest } from "../../supabase/functions/computer-step/retry";
+import { PRIMARY_COMPUTER_MODEL, FALLBACK_COMPUTER_MODEL, requestComputerUseWithFallback, retryTransientModelRequest } from "../../supabase/functions/computer-step/retry";
 
 describe("Computer Use model recovery", () => {
   it("recovers after provider 503s without creating any native action", async () => {
@@ -45,5 +45,40 @@ describe("Computer Use model recovery", () => {
     await expect(retryTransientModelRequest(permanent, { sleep: async () => undefined }))
       .rejects.toThrow("Invalid request state");
     expect(permanent).toHaveBeenCalledTimes(1);
+  });
+  it("fails over a first proposal after three provider 503s, preserving the selected model", async () => {
+    const attempts: string[] = [];
+    const send = vi.fn(async (model: string) => {
+      attempts.push(model);
+      return new Response(null, { status: model === PRIMARY_COMPUTER_MODEL ? 503 : 200 });
+    });
+    const result = await requestComputerUseWithFallback(send, PRIMARY_COMPUTER_MODEL, true, {
+      sleep: async () => undefined,
+    });
+    expect(result.model).toBe(FALLBACK_COMPUTER_MODEL);
+    expect(result.response.status).toBe(200);
+    expect(attempts).toEqual([
+      PRIMARY_COMPUTER_MODEL, PRIMARY_COMPUTER_MODEL, PRIMARY_COMPUTER_MODEL, FALLBACK_COMPUTER_MODEL,
+    ]);
+  });
+
+  it("does not switch models on a continuation or an invalid/authentication response", async () => {
+    const send = vi.fn(async () => new Response(null, { status: 503 }));
+    const continued = await requestComputerUseWithFallback(send, PRIMARY_COMPUTER_MODEL, false, {
+      sleep: async () => undefined,
+    });
+    expect(continued.response.status).toBe(503);
+    expect(continued.model).toBe(PRIMARY_COMPUTER_MODEL);
+    expect(send).toHaveBeenCalledTimes(3);
+    const invalid = vi.fn(async () => new Response(null, { status: 403 }));
+    const denied = await requestComputerUseWithFallback(invalid, PRIMARY_COMPUTER_MODEL, true);
+    expect(denied.response.status).toBe(403);
+    expect(invalid).toHaveBeenCalledTimes(1);
+    const fallback = vi.fn(async () => new Response(null, { status: 503 }));
+    const fallbackContinuation = await requestComputerUseWithFallback(fallback, FALLBACK_COMPUTER_MODEL, false, {
+      sleep: async () => undefined,
+    });
+    expect(fallbackContinuation.model).toBe(FALLBACK_COMPUTER_MODEL);
+    expect(fallback).toHaveBeenCalledTimes(3);
   });
 });

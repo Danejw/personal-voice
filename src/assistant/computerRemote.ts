@@ -105,6 +105,8 @@ export async function askComputerAction(
 export interface ComputerFulfillment {
   action: "answered" | "denied" | "waiting";
   label?: string;
+  failureKind?: "policy" | "execution";
+  reason?: string;
 }
 
 export interface TrustedRemoteExecution {
@@ -129,7 +131,7 @@ export async function fulfillComputerAction(
   const plan = planRemoteComputerAction(row.action, row.argument, platform, remoteActions);
   if (plan.action === "deny") {
     await api.deny(row.userId, row.id, plan.message);
-    return { action: "denied" };
+    return { action: "denied", failureKind: "policy", reason: plan.message };
   }
   let trusted = false;
   if (approvedId !== row.id) {
@@ -148,6 +150,6 @@ export async function fulfillComputerAction(
   } catch (error) {
     const message = error instanceof Error && error.message ? error.message : "The action failed.";
     await api.deny(row.userId, row.id, message);
-    return { action: "denied" };
+    return { action: "denied", failureKind: "execution", reason: message };
   }
 }
