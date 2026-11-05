@@ -1,6 +1,6 @@
 import { dragEndpoints, executableShortcut, parseRemotePointer, planRemoteComputerAction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
-import type { ComputerImage } from "@/assistant/computerTask";
+import type { ComputerImage, ComputerTaskReport } from "@/assistant/computerTask";
 import type { RemoteDevice } from "@/assistant/remoteContext";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import { loadRemoteComputerActions } from "@/settings/deviceSettings";
@@ -11,6 +11,7 @@ import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { proposeComputerStep } from "@/services/computerStep";
 import { remoteAutoActionApi } from "@/services/remoteAutoActionService";
 import { invoke } from "@tauri-apps/api/core";
+import { restoreRemoteGoal, saveRemoteGoal } from "@/assistant/remoteGoalJournal";
 
 export interface ComputerApproval {
   id: string;
@@ -18,11 +19,13 @@ export interface ComputerApproval {
 }
 
 export interface RemoteGoalState {
+  jobId: string;
   requesterDeviceId: string;
-  status: "starting" | "running" | "stopping" | "stopped" | "completed" | "failed";
+  status: "starting" | "running" | "stopping" | "stopped" | "completed" | "needs_review" | "blocked" | "failed" | "interrupted";
   steps: number;
   lastAction: string;
   result: string;
+  evidence: string | null;
 }
 
 export interface RemoteGoalNotice {
@@ -48,12 +51,24 @@ export class ComputerActionStore {
   private polling = false;
   private remoteGoal: RemoteGoalState | null = null;
   private pendingGoalStart: { requestId: string; goal: string; requesterDeviceId: string; ownerId: string } | null = null;
-  private remoteGoalRunner: ((goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<string>) | null = null;
+  private remoteGoalRunner: ((goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<ComputerTaskReport>) | null = null;
   private remoteGoalStop: (() => void) | null = null;
+
+  private persistRemoteGoal(): void {
+    if (!this.remoteGoal || !this.userId || this.platform.platform !== "windows") return;
+    try {
+      saveRemoteGoal(localStorage, this.userId, this.getDeviceId(this.userId), {
+        jobId: this.remoteGoal.jobId, requesterDeviceId: this.remoteGoal.requesterDeviceId,
+        status: this.remoteGoal.status, steps: this.remoteGoal.steps,
+        lastAction: this.remoteGoal.lastAction, result: this.remoteGoal.result,
+        updatedAt: Date.now(),
+      });
+    } catch { /* Storage unavailable: execution is in-memory only. */ }
+  }
 
   /** The Windows Assistant owns the executor. This store only routes signed session commands. */
   setRemoteGoalRunner(
-    runner: (goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<string>,
+    runner: (goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<ComputerTaskReport>,
     stop: () => void,
   ): void {
     this.remoteGoalRunner = runner;
@@ -64,9 +79,11 @@ export class ComputerActionStore {
     if (this.remoteGoal?.status === "starting") {
       this.remoteGoal.status = "stopped";
       this.pendingGoalStart = null;
+      this.persistRemoteGoal();
     } else if (this.remoteGoal?.status === "running") {
       this.remoteGoal.status = "stopping";
       this.remoteGoalStop?.();
+      this.persistRemoteGoal();
     }
   }
 
@@ -171,7 +188,20 @@ export class ComputerActionStore {
   }
 
   /** Set by App when the signed-in user changes. Remote asks need it. */
-  userId: string | null = null;
+  private accountUserId: string | null = null;
+  get userId(): string | null { return this.accountUserId; }
+  set userId(userId: string | null) {
+    if (this.accountUserId === userId) return;
+    this.accountUserId = userId;
+    this.pendingGoalStart = null;
+    this.remoteGoal = null;
+    if (userId && this.platform.platform === "windows") {
+      try {
+        const saved = restoreRemoteGoal(localStorage, userId, this.getDeviceId(userId));
+        this.remoteGoal = saved ? { ...saved, evidence: null } : null;
+      } catch { /* Storage unavailable. */ }
+    }
+  }
 
   async poll(userId: string): Promise<void> {
     // Never run the same request in overlapping receiver polls or UI callbacks.
@@ -264,19 +294,27 @@ export class ComputerActionStore {
     this.pendingGoalStart = null;
     const state = this.remoteGoal;
     state.status = "running";
+    this.persistRemoteGoal();
     const validate = async () => {
       if (this.userId !== pending.ownerId || !loadRemoteComputerActions() ||
         !await invoke<boolean>("trusted_desktop_unlocked")) throw new Error("Computer Use stopped: PC locked, signed out, or remote actions disabled.");
       await pairedPublicKey(this.getDeviceId(pending.ownerId), pending.requesterDeviceId);
     };
     void this.remoteGoalRunner(pending.goal,
-      (step, name) => { state.steps = step; state.lastAction = name; }, validate,
-    ).then(result => {
-      state.status = state.status === "stopping" ? "stopped" : "completed";
-      state.result = result.slice(0, 1000);
+      (step, name) => { state.steps = step; state.lastAction = name; this.persistRemoteGoal(); }, validate,
+    ).then(report => {
+      state.status = state.status === "stopping" ? "stopped"
+        : report.status === "verified" ? "completed"
+        : report.status === "unverified" ? "needs_review"
+        : report.status === "blocked" ? "blocked" : "stopped";
+      state.steps = report.steps;
+      state.result = report.summary.slice(0, 1000);
+      state.evidence = report.evidence;
+      this.persistRemoteGoal();
     }).catch(error => {
       state.status = state.status === "stopping" ? "stopped" : "failed";
       state.result = error instanceof Error ? error.message.slice(0, 1000) : "The Computer Use task failed.";
+      this.persistRemoteGoal();
     });
   }
 
@@ -286,7 +324,7 @@ export class ComputerActionStore {
       if (!goal) return "No Computer Use session has been started on this PC.";
       if (goal.requesterDeviceId !== requesterDeviceId) throw new Error("This session belongs to a different paired device.");
       if (action === "stop_computer_goal") this.stopRemoteGoal();
-      return `Computer Use ${goal.status}; ${goal.steps} steps; ${goal.lastAction || "no actions yet"}; ${goal.result}`.slice(0,1500);
+      return `Computer Use job ${goal.jobId}: ${goal.status}; ${goal.steps} steps; ${goal.lastAction || "no actions yet"}; ${goal.result}${goal.evidence ? `; Verified visual evidence: ${goal.evidence}` : "; No verified completion evidence"}`.slice(0,1500);
     }
     if (action === "start_computer_goal") {
       if (!this.remoteGoalRunner) throw new Error("Computer Use is not ready on this PC.");
@@ -296,7 +334,8 @@ export class ComputerActionStore {
       const owner = this.userId;
       if (!owner) throw new Error("Sign in before using remote Computer Use.");
       await pairedPublicKey(this.getDeviceId(owner), requesterDeviceId);
-      this.remoteGoal = { requesterDeviceId, status: "starting", steps: 0, lastAction: "", result: "" };
+      this.remoteGoal = { jobId: requestId, requesterDeviceId, status: "starting", steps: 0, lastAction: "", result: "", evidence: null };
+      this.persistRemoteGoal();
       this.pendingGoalStart = { requestId, goal: argument, requesterDeviceId, ownerId: owner };
       return "Computer Use goal accepted on Windows. Check computer_goal_status for progress or use stop_computer_goal to stop.";
     }

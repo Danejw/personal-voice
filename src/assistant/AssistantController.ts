@@ -57,8 +57,8 @@ import { playbookToolText } from "@/assistant/harness/playbooks";
 import { interpretToolResult, ToolFailureHistory, type ToolResultAssessment } from "@/assistant/harness/toolResults";
 import { ToolTraceRecorder, type ToolEvalTrace, type TraceMetadata } from "@/assistant/harness/evals/traceRecorder";
 import { assembleTaskGuidance, deviceToolGuidance, UNKNOWN_DEVICE_CONTEXT, type AssistantDeviceContext } from "@/assistant/harness/contextAssembler";
-import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
-import { REMOTE_COMPUTER_LIMITS, runComputerTask, type ComputerImage } from "@/assistant/computerTask";
+import { parseInteraction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
+import { REMOTE_COMPUTER_LIMITS, runComputerTaskReport, type ComputerImage, type ComputerTaskReport } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
 import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import {
@@ -1989,18 +1989,23 @@ export class AssistantController {
   }
 
   /** The existing Windows Computer Use executor, available to a paired phone after a single PC approval. */
-  runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => void, validate: () => Promise<void>): Promise<string> {
+  runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => void, validate: () => Promise<void>): Promise<ComputerTaskReport> {
     if (!navigator.userAgent.includes("Windows")) throw new Error("Remote Computer Use requires Windows.");
-    return this.runSupervised(goal, true, onProgress, validate);
+    return this.runSupervisedReport(goal, true, onProgress, validate);
   }
 
   private async runSupervised(goal: string, remote = false, onProgress?: (step: number, action: string) => void, validate?: () => Promise<void>): Promise<string> {
+    const report = await this.runSupervisedReport(goal, remote, onProgress, validate);
+    return `${report.status.toUpperCase()}: ${report.summary}${report.evidence ? ` Evidence: ${report.evidence}` : ""}`;
+  }
+
+  private async runSupervisedReport(goal: string, remote = false, onProgress?: (step: number, action: string) => void, validate?: () => Promise<void>): Promise<ComputerTaskReport> {
     if (this.computerTaskActive) throw new Error("Another Computer Use task is already active.");
     this.computerTaskActive = true;
     this.computerStopped = false;
     this.dispatch({ type: "computer", running: true, prompt: null });
     try {
-      return await runComputerTask(goal, {
+      return await runComputerTaskReport(goal, {
         now: () => Date.now(),
         stopped: () => this.computerStopped,
         capture: async () => {
@@ -2029,6 +2034,23 @@ export class AssistantController {
           }
         },
         confirm: (explanation) => this.confirmComputerStep(explanation, remote),
+        verify: async (objective, freshImage, candidate) => {
+          // New independent model interaction with a fresh screenshot, not the click receipt.
+          // A hidden/background side effect cannot be asserted from a visible screenshot.
+          if (validate) await validate();
+          const prompt = [
+            "Verify the RESULT using only this final screenshot. Do not act or call tools.",
+            `Task: ${objective.slice(0, 130)}`,
+            `Agent claim: ${candidate.slice(0, 70)}`,
+            "Only if every requested result is visibly demonstrated, reply VERIFIED: with concrete visual evidence.",
+            "Otherwise reply NOT_VERIFIED: and explain what remains unknown.",
+          ].join("\n");
+          const response = parseInteraction(await this.actions.computer.propose({
+            goal: prompt, image: freshImage.jpeg, previousInteractionId: null, functionResult: null,
+          }));
+          if (response.call || !/^VERIFIED:\s+.{12,}/i.test(response.text.trim())) return null;
+          return response.text.trim().replace(/^VERIFIED:\s*/i, "");
+        },
         onProgress,
       }, remote ? REMOTE_COMPUTER_LIMITS : undefined);
     } finally {

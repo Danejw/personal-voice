@@ -111,6 +111,31 @@ describe("Companion's paired PC isolation", () => {
     expect(operations).toEqual(["stop started", "stop finished", "next start"]);
   });
 
+
+  it("backs off setup retries and never retries after stop", async () => {
+    vi.useFakeTimers();
+    const manager = new DeviceLinkManager();
+    const internal = manager as unknown as {
+      deviceId: string | null; userId: string | null; platform: "android" | null;
+      generation: number; retryAttempts: number;
+      retryTimer: ReturnType<typeof setTimeout> | null;
+      scheduleRetry(generation: number): void;
+    };
+    internal.deviceId = phone;
+    internal.userId = "user-1";
+    internal.platform = "android";
+    internal.scheduleRetry(internal.generation);
+    expect(internal.retryTimer).not.toBeNull();
+    expect(internal.retryAttempts).toBe(1);
+    internal.scheduleRetry(internal.generation);
+    expect(internal.retryAttempts).toBe(2);
+    manager.stop();
+    expect(internal.retryTimer).toBeNull();
+    expect(internal.retryAttempts).toBe(0);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(manager.getSnapshot().state).toBe("offline");
+  });
+
   it("does not request streaming when the user has not selected a PC", () => {
     const { manager, send } = setup();
     manager.setCompanionOpen(true, null);
