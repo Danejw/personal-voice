@@ -1,14 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { askComputerAction, type ComputerActionApi, type ComputerActionRow } from "@/assistant/computerRemote";
 import { ComputerActionStore } from "@/assistant/ComputerActionStore";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import type { RemoteDevice } from "@/assistant/remoteContext";
 
+const claimState = vi.hoisted(() => ({ alreadyClaimed: false }));
+afterEach(() => { claimState.alreadyClaimed = false; });
 vi.mock("@/settings/deviceSettings", () => ({ loadRemoteComputerActions: () => true }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: async () => true }));
 vi.mock("@/services/remoteAutoActionService", () => ({
   remoteAutoActionApi: {
-    wasClaimed: async () => false,
+    wasClaimed: async () => claimState.alreadyClaimed,
     claim: async () => "claimed",
     validate: async () => true,
   },
@@ -75,4 +77,35 @@ describe("Android command to Windows receipt contract", () => {
     expect(open).toHaveBeenCalledTimes(1);
     expect(windows.getSnapshot().receiverError).toBeNull();
   });
+  it("reports a previously claimed request as unknown without replaying it", async () => {
+    claimState.alreadyClaimed = true;
+    const row: ComputerActionRow = {
+      id: "orphaned-claim", userId: "account", requesterDeviceId: "phone", targetDeviceId: "pc",
+      action: "open_app", argument: "notepad", status: "pending",
+      result: null, error: null, version: 2, expiresAt: "2099-01-01T00:00:00Z",
+      requestSignature: "signed-test-request", responseSignature: null,
+    };
+    const open = vi.fn(async () => "Opened Notepad.");
+    const api = {
+      touch: async () => undefined,
+      create: async () => row.id,
+      get: async () => row,
+      listPending: async () => row.status === "pending" ? [row] : [],
+      answer: async () => { throw new Error("Must not answer without execution"); },
+      deny: async (_user: string, _id: string, error: string) => {
+        row.status = "denied";
+        row.error = error;
+      },
+      remove: async () => undefined,
+    };
+    const windows = new ComputerActionStore(api, async () => [], () => "pc", {
+      platform: "windows", openAllowlistedApp: open,
+    } as unknown as PlatformAdapter);
+    windows.userId = "account";
+    await windows.poll("account");
+    expect(row.status).toBe("denied");
+    expect(row.error).toMatch(/outcome is unknown/i);
+    expect(open).not.toHaveBeenCalled();
+  });
+
 });
