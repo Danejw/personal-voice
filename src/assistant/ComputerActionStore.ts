@@ -288,6 +288,7 @@ export class ComputerActionStore {
         }
         if (this.userId !== userId) continue;
         let claimed: "none" | "claimed" | "already";
+        let desktopUnlocked = true;
         try {
           // Fail closed rather than replaying commands after a crash or reconnect.
           if (await remoteAutoActionApi.wasClaimed(currentId, row.id)) {
@@ -304,12 +305,10 @@ export class ComputerActionStore {
             }
             continue;
           }
-          if (!await invoke<boolean>("trusted_desktop_unlocked") &&
-            row.action !== "stop_computer_goal" && row.action !== "computer_goal_status") {
-            // Do not execute on a locked desktop. Explain why the request is pending.
-            pollIssue = "Windows is locked. Unlock it to run remote computer actions.";
-            continue;
+          if (row.action !== "stop_computer_goal" && row.action !== "computer_goal_status") {
+            desktopUnlocked = await invoke<boolean>("trusted_desktop_unlocked");
           }
+          // Claim exactly once before returning a signed refusal. Never execute while locked.
           claimed = await remoteAutoActionApi.claim(currentId, row.id);
         } catch (error) {
           // Never bypass a failed claim. Expose the failure for diagnosis and retry on the next poll.
@@ -320,6 +319,11 @@ export class ComputerActionStore {
           pollIssue = "Windows could not claim the remote command.";
         }
         if (claimed !== "claimed") continue;
+        if (!desktopUnlocked) {
+          pollIssue = "Windows is locked. Unlock it to run remote computer actions.";
+          await this.api.deny(userId, row.id, "Windows is locked. Unlock the desktop to run this command.");
+          continue;
+        }
         const outcome = await fulfillComputerAction(
           this.api, row, this.platform.platform, remoteEnabled, row.id,
           async (action, argument) => {
