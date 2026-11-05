@@ -460,9 +460,10 @@ export class ComputerActionStore {
     if (this.remoteGoal?.status === "starting" || this.remoteGoal?.status === "running" ||
         this.remoteGoal?.status === "stopping") { this.reconciledFor = userId; return; }
     const pcId = this.getDeviceId(userId);
+    const hadStopRequest = this.remoteGoal?.stopRequested === true;
     const unlocked = await invoke<boolean>("trusted_desktop_unlocked").catch(() => false);
     const recovery = await computerJobsApi.reconcile(pcId,
-      unlocked && loadRemoteComputerActions() && this.remoteGoal?.stopRequested !== true);
+      unlocked && loadRemoteComputerActions() && !hadStopRequest);
     if (this.userId !== userId) return;
     this.reconciledFor = userId;
     if (!recovery) return;
@@ -475,7 +476,7 @@ export class ComputerActionStore {
     };
     this.persistRemoteGoal();
     if (recovery.resumed && unlocked && loadRemoteComputerActions() &&
-        this.remoteGoal?.stopRequested !== true && job.stop_requested_at === null &&
+        !hadStopRequest && job.stop_requested_at === null &&
         job.status === "running" && job.phase === "observing" && job.steps === 0) {
       this.startRemoteWorker(job, userId);
     }
@@ -597,9 +598,9 @@ export class ComputerActionStore {
     }).catch(async error => {
       // If the most recent action was in-flight, execution may have happened.
       // Never claim it did not happen and never try it a second time.
-      const status = phase === "applying" ? "needs_review" : "failed";
-      const message = phase === "applying"
-        ? "Desktop action outcome is unknown. Inspect Windows before resuming."
+      const status = state.stopRequested ? "stopped" : phase === "applying" ? "needs_review" : "failed";
+      const message = state.stopRequested ? "Computer Use stopped by the user. Completion was not verified."
+        : phase === "applying" ? "Desktop action outcome is unknown. Inspect Windows before resuming."
         : error instanceof Error ? error.message.slice(0, 1000) : "The Computer Use task failed.";
       try {
         await checkpoint({ status, phase: "done", steps: state.steps,
