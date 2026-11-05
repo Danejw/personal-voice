@@ -111,6 +111,7 @@ export interface AssistantActions {
   listNotes(includeArchived: boolean): Promise<string>;
   /** Received handoffs and the names of other devices. */
   listHandoffs(): Promise<string>;
+  pairDevice(action: "open" | "show_code" | "scan_qr" | "enter_code" | "status", code?: string): Promise<string>;
   /** Short text for a confirm card. Throws when the id is not in the current list. */
   describeItem(kind: "note" | "handoff", id: string): string;
   archiveNote(id: string, archived: boolean): Promise<void>;
@@ -273,6 +274,7 @@ export class AssistantController {
       capturePointerTarget: async () => { throw new Error("Pointed screenshot capture is Windows-only."); },
       listNotes: async () => { throw new Error("Assistant actions are not available."); },
       listHandoffs: async () => { throw new Error("Assistant actions are not available."); },
+      pairDevice: async () => { throw new Error("Pairing is not ready."); },
       describeItem: () => { throw new Error("Assistant actions are not available."); },
       archiveNote: unavailable,
       deleteNote: unavailable,
@@ -1447,6 +1449,16 @@ export class AssistantController {
         }
         if (decision.kind === "handoffs") {
           await this.runHandoffs(decision);
+          continue;
+        }
+        if (decision.kind === "pairing") {
+          const epoch = this.toolEpoch;
+          try {
+            const result = await this.actions.pairDevice(decision.action, decision.code);
+            if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, result);
+          } catch (error) {
+            if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
+          }
           continue;
         }
         if (decision.kind === "remote") {
