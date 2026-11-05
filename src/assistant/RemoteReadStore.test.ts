@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   allowActions: true,
   unlocked: true,
   paired: true,
-  fulfill: vi.fn(async () => ({ action: "answered" as const })),
+  fulfill: vi.fn(async (_api: unknown, _row: unknown, _local: unknown) => ({ action: "answered" as const })),
 }));
 
 vi.mock("@/settings/deviceSettings", () => ({
