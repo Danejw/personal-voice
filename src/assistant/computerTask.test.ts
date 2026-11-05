@@ -177,4 +177,60 @@ describe("computer task loop", () => {
     expect(outcome.summary).not.toContain("Nothing further was done");
   });
 
+  it("recovers from transient model reads without repeating a click and verifies the final screen", async () => {
+    let requests = 0;
+    let frames = 0;
+    let executions = 0;
+    const delays: number[] = [];
+    const task = host({
+      capture: async () => ({ jpeg: `frame-${++frames}`, width: 100, height: 100 }),
+      propose: async () => {
+        requests += 1;
+        if (requests === 1) throw new TypeError("Failed to fetch");
+        if (requests === 2) return { id: "interaction-1", steps: [{
+          type: "function_call", id: "call-1", name: "click", arguments: { x: 200, y: 300 },
+        }] };
+        return { id: "interaction-2", steps: [], text: "Notepad contains the requested line." };
+      },
+      execute: async () => { executions += 1; return "Clicked"; },
+      verify: async (_, image) => image.jpeg === "frame-3"
+        ? "The requested sentence is visibly present in Notepad." : null,
+      sleep: async (ms) => { delays.push(ms); },
+    });
+    const outcome = await runComputerTaskReport("Type the line in Notepad.", task);
+    expect(outcome.status).toBe("verified");
+    expect(outcome.steps).toBe(1);
+    expect(executions).toBe(1);
+    expect(requests).toBe(3);
+    expect(delays).toEqual([250]);
+    expect(frames).toBe(3);
+  });
+
+  it("never replays a native action whose result is uncertain", async () => {
+    let executions = 0;
+    const task = host({
+      propose: async () => ({ id: "interaction", steps: [{
+        type: "function_call", id: "call-1", name: "click", arguments: { x: 100, y: 100 },
+      }] }),
+      execute: async () => {
+        executions += 1;
+        throw new TypeError("Failed to fetch after the click.");
+      },
+      sleep: async () => { throw new Error("Native actions must not retry"); },
+    });
+    await expect(runComputerTaskReport("Click the button.", task)).rejects.toThrow(/Failed to fetch/);
+    expect(executions).toBe(1);
+  });
+
+  it("stops retrying model requests after two transient failures", async () => {
+    let reads = 0;
+    const task = host({
+      propose: async () => { reads += 1; throw new Error("Computer Use is rate-limited"); },
+      sleep: async () => undefined,
+    });
+    await expect(runComputerTaskReport("Inspect the desktop.", task)).rejects.toThrow(/rate-limited/);
+    expect(reads).toBe(3);
+    expect(task.executed).toHaveLength(0);
+  });
+
 });
