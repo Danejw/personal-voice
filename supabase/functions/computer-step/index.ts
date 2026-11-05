@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     goal?: unknown;
     image?: unknown;
     previousInteractionId?: unknown;
-    functionResult?: { name?: unknown; result?: unknown; acknowledgement?: unknown; image?: unknown };
+    functionResult?: { name?: unknown; callId?: unknown; result?: unknown; acknowledgement?: unknown; image?: unknown };
   };
   const goal = typeof fields.goal === "string" ? fields.goal.trim() : "";
   if (!fields.previousInteractionId && (!goal || goal.length > 500)) {
@@ -74,8 +74,10 @@ Deno.serve(async (req) => {
   let body: Record<string, unknown>;
   if (typeof fields.previousInteractionId === "string" && fields.previousInteractionId && fields.functionResult) {
     const name = fields.functionResult.name;
+    const callId = fields.functionResult.callId;
     const result = fields.functionResult.result;
-    if (typeof name !== "string" || typeof result !== "string" || name === "run_shell") {
+    if (typeof name !== "string" || typeof callId !== "string" || !callId ||
+        typeof result !== "string" || name === "run_shell") {
       return reply(400, { error: "That action is not available." });
     }
     const image = imageData(fields.functionResult.image);
@@ -86,9 +88,12 @@ Deno.serve(async (req) => {
       input: [{
         type: "function_result",
         name,
-        result: [{ type: "text", text: result.slice(0, 2000) }],
+        call_id: callId,
+        result: [
+          { type: "text", text: result.slice(0, 2000) },
+          ...(image ? [{ type: "image", data: image, mime_type: "image/jpeg" }] : []),
+        ],
         ...(fields.functionResult.acknowledgement === true ? { safety_acknowledgement: true } : {}),
-        ...(image ? { parts: [{ type: "image", data: image, mime_type: "image/jpeg" }] } : {}),
       }],
     };
   } else {
@@ -111,8 +116,19 @@ Deno.serve(async (req) => {
     return reply(502, { error: "Could not reach Computer Use." });
   }
   if (!response.ok) {
-    console.error(`computer-step: interactions status ${response.status}`);
-    return reply(502, { error: "Computer Use did not accept that step." });
+    // No raw upstream body, screenshots, prompts or credentials in logs.
+    const upstream = await response.json().catch(() => null) as { error?: { status?: unknown; code?: unknown } } | null;
+    const code = typeof upstream?.error?.status === "string"
+      && /^[A-Z][A-Z_]{2,50}$/.test(upstream.error.status) ? upstream.error.status : "UNKNOWN";
+    console.error(`computer-step: upstream HTTP ${response.status}; code=${code}`);
+    if (response.status === 429) return reply(503, { error: "Computer Use is rate-limited. The task was not completed." });
+    if (response.status === 401 || response.status === 403) {
+      return reply(502, { error: "Computer Use upstream authentication or access failed. Check the server API key and model access." });
+    }
+    if (response.status === 400 || response.status === 404) {
+      return reply(502, { error: `Computer Use rejected the request (upstream HTTP ${response.status}, ${code}). No action was completed.` });
+    }
+    return reply(502, { error: `Computer Use service failed (upstream HTTP ${response.status}). The task was not completed.` });
   }
   const interaction = await response.json().catch(() => null) as { id?: unknown; steps?: unknown; text?: unknown } | null;
   return reply(200, {
