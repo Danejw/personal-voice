@@ -27,6 +27,8 @@ export interface ComputerTaskHost {
   propose(body: Record<string, unknown>): Promise<unknown>;
   execute(call: ComputerCall, image: ComputerImage): Promise<string>;
   confirm(explanation: string): Promise<boolean>;
+  /** Injectable for deterministic tests; only observation calls are retried. */
+  sleep?(ms: number): Promise<void>;
   onProgress?(step: number, action: string): void;
   /** A fresh post-action screenshot is inspected independently of the action receipt. */
   verify?(goal: string, image: ComputerImage, modelSummary: string): Promise<string | null>;
@@ -43,6 +45,30 @@ export const REMOTE_COMPUTER_LIMITS: ComputerTaskLimits = {
   maxDurationMs: 30 * 60 * 1000,
   allowRoutineDrag: true,
 };
+
+function retryableObservationError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error instanceof TypeError
+    || /(?:network|fetch|timed? out|temporarily unavailable|rate-limited|could not reach|couldn't reach|service failed|HTTP 5[0-9][0-9])/i.test(error.message);
+}
+
+/** Retrying screen/model *reads* is safe; replaying a native action is not. */
+async function readWithRetry<T>(
+  read: () => Promise<T>,
+  host: ComputerTaskHost,
+  startedAt: number,
+  maxDurationMs: number,
+): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await read(); }
+    catch (error) {
+      if (attempt >= 2 || !retryableObservationError(error) || host.stopped()) throw error;
+      const pause = 250 * (attempt + 1);
+      if (host.now() - startedAt + pause >= maxDurationMs) throw error;
+      await (host.sleep ? host.sleep(pause) : new Promise<void>(resolve => setTimeout(resolve, pause)));
+    }
+  }
+}
 
 function report(status: ComputerTaskStatus, steps: number, summary: string, evidence: string | null = null): ComputerTaskReport {
   return { status, steps, summary, evidence };
@@ -67,25 +93,25 @@ export async function runComputerTaskReport(
     if (host.now() - startedAt >= limits.maxDurationMs) {
       return report("blocked", executed, `Time limit reached after ${executed} actions. The goal was not verified.`);
     }
-    const image = await host.capture();
+    const image = await readWithRetry(() => host.capture(), host, startedAt, limits.maxDurationMs);
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
-    const interaction = parseInteraction(await host.propose({
+    const interaction = parseInteraction(await readWithRetry(() => host.propose({
       goal,
       image: previousId ? null : image.jpeg,
       previousInteractionId: previousId,
       functionResult: result
         ? { name: result.name, callId: result.callId, result: result.result, acknowledgement: result.acknowledgement, image: image.jpeg }
         : null,
-    }));
+    }), host, startedAt, limits.maxDurationMs));
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     if (!interaction.call) {
       const said = interaction.text.trim();
       if (!said) return report("unverified", executed, "Computer Use ended without an action or completion evidence.");
       if (!host.verify) return report("unverified", executed, `Model reported: ${said}`);
       try {
-        const fresh = await host.capture();
+        const fresh = await readWithRetry(() => host.capture(), host, startedAt, limits.maxDurationMs);
         if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
-        const evidence = await host.verify(goal, fresh, said);
+        const evidence = await readWithRetry(() => host.verify!(goal, fresh, said), host, startedAt, limits.maxDurationMs);
         if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
         if (evidence && evidence.trim().length >= 12) {
           return report("verified", executed, said, evidence.trim().slice(0, 500));
