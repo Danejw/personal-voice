@@ -1524,7 +1524,10 @@ export class AssistantController {
         if (decision.kind === "remoteComputerGoal") {
           const epoch = this.toolEpoch;
           const remoteAction = decision.action === "start" ? "start_computer_goal"
-            : decision.action === "status" ? "computer_goal_status" : "stop_computer_goal";
+            : decision.action === "status" ? "computer_goal_status"
+            : decision.action === "pause" ? "pause_computer_goal"
+            : decision.action === "resume" ? "resume_computer_goal"
+            : decision.action === "redirect" ? "redirect_computer_goal" : "stop_computer_goal";
           try {
             const result = await this.actions.computer.remoteAction(remoteAction, decision.goal, decision.device);
             if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, result);
