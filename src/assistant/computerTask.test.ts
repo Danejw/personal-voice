@@ -177,4 +177,38 @@ describe("computer task loop", () => {
     expect(outcome.summary).not.toContain("Nothing further was done");
   });
 
+  it("records the full observe/reason/act/verify sequence without sensitive values", async () => {
+    let reads = 0;
+    const events: Array<{ stage: string; step: number; action?: string; code?: string }> = [];
+    const task = host({
+      propose: async () => ++reads === 1
+        ? { id: "step-1", steps: [{ type: "function_call", id: "click-1",
+          name: "click", arguments: { x: 33, y: 22 } }] }
+        : { id: "step-2", text: "A requested sentence is visible.", steps: [] },
+      verify: async () => "The sentence is visibly present in Notepad.",
+      onTrace: event => events.push(event),
+    });
+    const report = await runComputerTaskReport("Type a private sentence.", task);
+    expect(report.status).toBe("verified");
+    expect(events.map(event => event.stage)).toEqual([
+      "screen", "model", "acted", "screen", "model", "verified",
+    ]);
+    expect(events.find(event => event.stage === "acted")).toMatchObject({
+      stage: "acted", step: 1, action: "click",
+    });
+    expect(JSON.stringify(events)).not.toContain("private sentence");
+    expect(JSON.stringify(events)).not.toContain('"x"');
+  });
+
+  it("records the failing stage when screen capture is unavailable", async () => {
+    const events: string[] = [];
+    const task = host({
+      capture: async () => { throw new Error("capture failed with private details"); },
+      propose: async () => ({ steps: [] }),
+      onTrace: event => events.push(`${event.stage}:${event.code ?? "none"}`),
+    });
+    await expect(runComputerTaskReport("Inspect screen.", task)).rejects.toThrow(/capture failed/);
+    expect(events).toEqual(["failed:capture"]);
+  });
+
 });
