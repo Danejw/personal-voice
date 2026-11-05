@@ -362,6 +362,48 @@ export type Database = {
         }
         Relationships: []
       }
+      computer_task_events: {
+        Row: {
+          id: string
+          user_id: string
+          trace_id: string
+          device_id: string
+          actor: "android" | "windows"
+          stage: string
+          action_kind: string | null
+          step: number | null
+          failure_code: string | null
+          occurred_at: string
+          recorded_at: string
+        }
+        Insert: {
+          id: string
+          user_id: string
+          trace_id: string
+          device_id: string
+          actor: "android" | "windows"
+          stage: string
+          action_kind?: string | null
+          step?: number | null
+          failure_code?: string | null
+          occurred_at?: string
+          recorded_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          trace_id?: string
+          device_id?: string
+          actor?: "android" | "windows"
+          stage?: string
+          action_kind?: string | null
+          step?: number | null
+          failure_code?: string | null
+          occurred_at?: string
+          recorded_at?: string
+        }
+        Relationships: []
+      }
       device_action_requests: {
         Row: {
           action: string
