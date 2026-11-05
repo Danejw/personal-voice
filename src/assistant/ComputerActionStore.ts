@@ -30,7 +30,8 @@ export interface RemoteGoalState {
 
 export interface RemoteGoalNotice {
   targetDeviceId: string;
-  phase: "accepted" | "reported" | "connection-error";
+  phase: "queued" | "accepted" | "reported" | "connection-error";
+  requestId: string | null;
   message: string;
   receivedAt: number;
 }
@@ -128,17 +129,31 @@ export class ComputerActionStore {
     const target = await resolvePairedVoiceTarget(devices, currentId, deviceName);
     const isGoalCommand = action === "start_computer_goal"
       || action === "computer_goal_status" || action === "stop_computer_goal";
+    let requestId: string | null = null;
     try {
       const result = await askComputerAction(
         this.api, userId, currentId, devices, target.id, action, argument,
         { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
+        receipt => {
+          requestId = receipt.requestId;
+          if (action !== "start_computer_goal" || receipt.stage !== "queued") return;
+          this.snapshot = {
+            ...this.snapshot,
+            remoteGoal: {
+              targetDeviceId: target.id, phase: "queued", requestId,
+              message: "Waiting for Windows to acknowledge the task.",
+              receivedAt: Date.now(),
+            },
+          };
+          for (const listener of this.listeners) listener();
+        },
       );
       if (isGoalCommand) {
         this.snapshot = {
           ...this.snapshot,
           remoteGoal: {
             targetDeviceId: target.id, phase: action === "start_computer_goal" ? "accepted" : "reported",
-            message: result.slice(0, 1500), receivedAt: Date.now(),
+            message: result.slice(0, 1500), requestId, receivedAt: Date.now(),
           },
         };
         for (const listener of this.listeners) listener();
@@ -153,7 +168,7 @@ export class ComputerActionStore {
           remoteGoal: {
             targetDeviceId: target.id, phase: "connection-error",
             message: `Command response unavailable: ${message} Check status before trying again.`.slice(0, 1500),
-            receivedAt: Date.now(),
+            requestId, receivedAt: Date.now(),
           },
         };
         for (const listener of this.listeners) listener();
