@@ -35,7 +35,8 @@ export type RemoteComputerAction =
   | "open_app" | "press_shortcut" | "insert_text"
   | "move_pointer" | "click_pointer" | "double_click_pointer"
   | "right_click_pointer" | "drag_pointer"
-  | "start_computer_goal" | "computer_goal_status" | "stop_computer_goal";
+  | "start_computer_goal" | "computer_goal_status" | "stop_computer_goal"
+  | "pause_computer_goal" | "resume_computer_goal" | "redirect_computer_goal";
 
 export function parseRemotePointer(action: string, argument: string): {
   kind: "move" | "click" | "double_click" | "right_click" | "drag";
@@ -223,7 +224,7 @@ export function planRemoteComputerAction(
   platform: string,
   remoteActions: boolean,
 ): { action: "confirm"; label: string } | { action: "deny"; message: string } {
-  if (isUnsupportedAction(action) || (action !== "open_app" && action !== "press_shortcut" && action !== "insert_text" && !action.endsWith("_pointer") && action !== "start_computer_goal" && action !== "computer_goal_status" && action !== "stop_computer_goal")) {
+  if (isUnsupportedAction(action) || (action !== "open_app" && action !== "press_shortcut" && action !== "insert_text" && !action.endsWith("_pointer") && action !== "start_computer_goal" && action !== "computer_goal_status" && action !== "stop_computer_goal" && action !== "pause_computer_goal" && action !== "resume_computer_goal" && action !== "redirect_computer_goal")) {
     return { action: "deny", message: "That action is not available." };
   }
   if (platform !== "windows") return { action: "deny", message: "This device can't run desktop actions." };
@@ -232,9 +233,18 @@ export function planRemoteComputerAction(
     if (argument !== argument.trim() || argument.length < 3 || argument.length > 1000) return { action: "deny", message: "Provide a goal between 3 and 1000 characters." };
     return { action: "confirm", label: "Start an autonomous Computer Use goal on Windows" };
   }
-  if (action === "computer_goal_status" || action === "stop_computer_goal") {
+  if (action === "redirect_computer_goal") {
+    if (argument !== argument.trim() || argument.length < 3 || argument.length > 1000) {
+      return { action: "deny", message: "Provide a revised goal between 3 and 1000 characters." };
+    }
+    return { action: "confirm", label: "Redirect the paused Computer Use task" };
+  }
+  if (action === "computer_goal_status" || action === "stop_computer_goal" ||
+      action === "pause_computer_goal" || action === "resume_computer_goal") {
     if (argument !== "current") return { action: "deny", message: "Invalid remote Computer Use session reference." };
-    return { action: "confirm", label: action === "computer_goal_status" ? "Check Computer Use progress" : "Stop Computer Use" };
+    return { action: "confirm", label: action === "computer_goal_status" ? "Check Computer Use progress"
+      : action === "pause_computer_goal" ? "Pause Computer Use"
+      : action === "resume_computer_goal" ? "Resume Computer Use" : "Stop Computer Use" };
   }
   if (action.endsWith("_pointer")) {
     const pointer = parseRemotePointer(action, argument);

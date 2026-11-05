@@ -379,6 +379,8 @@ export type Database = {
           lease_until: string | null
           heartbeat_at: string | null
           stop_requested_at: string | null
+          control_state: "active" | "paused"
+          instruction_revision: number
           created_at: string
           updated_at: string
         }
@@ -398,6 +400,8 @@ export type Database = {
           lease_until?: string | null
           heartbeat_at?: string | null
           stop_requested_at?: string | null
+          control_state?: "active" | "paused"
+          instruction_revision?: number
           created_at?: string
           updated_at?: string
         }
@@ -417,6 +421,8 @@ export type Database = {
           lease_until?: string | null
           heartbeat_at?: string | null
           stop_requested_at?: string | null
+          control_state?: "active" | "paused"
+          instruction_revision?: number
           created_at?: string
           updated_at?: string
         }
