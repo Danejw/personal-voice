@@ -215,7 +215,7 @@ export class DeviceLinkManager {
     }, delay);
   }
 
-  private async startInternal(userId: string | null, deviceId: string | null, platform: string): Promise<void> {
+  private async startInternal(userId: string | null, deviceId: string | null, platform: string | null): Promise<void> {
     this.stop(false);
     if (!userId || !deviceId || (platform !== "windows" && platform !== "android")) return;
     const generation = this.generation;
