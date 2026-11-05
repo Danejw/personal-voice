@@ -12,6 +12,7 @@ const job = {
   status: "running", phase: "observing", steps: 0, last_action: "",
   result: "", evidence: null, worker_token: "lease-1",
   lease_until: "2026-11-05T23:00:00Z", heartbeat_at: "2026-11-05T22:59:00Z",
+  stop_requested_at: null,
   created_at: "2026-11-05T22:58:00Z", updated_at: "2026-11-05T22:59:00Z",
 };
 
@@ -64,6 +65,14 @@ describe("durable signed Computer Use jobs", () => {
     });
     vi.mocked(pairServerAction).mockResolvedValueOnce({ resumed: "yes", job });
     await expect(computerJobsApi.reconcile("pc", true)).rejects.toThrow("Invalid recovery decision");
+  });
+
+  it("sends a signed stop intent through native Windows identity", async () => {
+    vi.mocked(pairServerAction).mockResolvedValue(job);
+    await computerJobsApi.requestStop("pc", "job-1", "lease-1");
+    expect(pairServerAction).toHaveBeenCalledWith("pc", "job_mutate", {
+      event: "request_stop", requestId: "job-1", token: "lease-1",
+    });
   });
 
   it("reads durable progress on the phone without granting write access", async () => {

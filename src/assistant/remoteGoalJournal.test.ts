@@ -22,6 +22,13 @@ describe("Windows remote goal crash journal", () => {
     expect(recovered?.jobId).toBe("goal-7");
     expect(restoreRemoteGoal(db, "u1", "pc1")?.status).toBe("interrupted");
   });
+  it("retains explicit stop intent across Windows process restarts", () => {
+    const db = storage();
+    saveRemoteGoal(db, "u1", "pc1", { ...base, status: "stopping", stopRequested: true });
+    const recovered = restoreRemoteGoal(db, "u1", "pc1");
+    expect(recovered?.status).toBe("interrupted");
+    expect(recovered?.stopRequested).toBe(true);
+  });
   it("keeps completed terminal records but isolates account and device", () => {
     const db = storage();
     saveRemoteGoal(db, "u1", "pc1", { ...base, status: "needs_review" });
