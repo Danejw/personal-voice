@@ -60,7 +60,7 @@ export async function runComputerTaskReport(
 ): Promise<ComputerTaskReport> {
   const startedAt = host.now();
   let previousId: string | null = null;
-  let result: { name: string; result: string; acknowledgement: boolean; imageBase64: string | null } | null = null;
+  let result: { name: string; callId: string; result: string; acknowledgement: boolean; imageBase64: string | null } | null = null;
   let executed = 0;
   for (let step = 0; step < limits.maxSteps; step += 1) {
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
@@ -74,7 +74,7 @@ export async function runComputerTaskReport(
       image: previousId ? null : image.jpeg,
       previousInteractionId: previousId,
       functionResult: result
-        ? { name: result.name, result: result.result, acknowledgement: result.acknowledgement, image: image.jpeg }
+        ? { name: result.name, callId: result.callId, result: result.result, acknowledgement: result.acknowledgement, image: image.jpeg }
         : null,
     }));
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
@@ -95,6 +95,9 @@ export async function runComputerTaskReport(
         return report("unverified", executed, `Model reported: ${said}. Final screen verification was unavailable.`);
       }
     }
+    if (!interaction.id || !interaction.callId) {
+      return report("blocked", executed, "Computer Use returned an action without its interaction or call ID. No action was executed.");
+    }
     const decision = planComputerStep(interaction.call, step, startedAt, host.now(), host.stopped(), limits);
     if (decision.action === "stop") return report("blocked", executed, decision.message);
     let acknowledgement = false;
@@ -110,7 +113,7 @@ export async function runComputerTaskReport(
     host.onProgress?.(executed, decision.call.name);
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     previousId = interaction.id;
-    result = { name: decision.call.name, result: outcome, acknowledgement, imageBase64: null };
+    result = { name: decision.call.name, callId: interaction.callId, result: outcome, acknowledgement, imageBase64: null };
   }
   return report("blocked", executed, `Step limit reached after ${executed} actions. The goal was not verified.`);
 }
