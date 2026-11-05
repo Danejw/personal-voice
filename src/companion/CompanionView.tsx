@@ -44,8 +44,11 @@ export function CompanionView({
   const faceRef = useRef<SVGGElement>(null);
   const hairRef = useRef<SVGGElement>(null);
   const tieRef = useRef<SVGGElement>(null);
+  const noseRef = useRef<SVGGElement>(null);
+  const pressedRef = useRef(false);
+  const [holding, setHolding] = useState(false);
+  const [waiting, setWaiting] = useState(false);
   const motionTarget = useRef<Pointer>({ x: 0, y: 0 });
-  const [wander, setWander] = useState<Pointer>({ x: 0, y: 0 });
   const [sourceDeviceId, setSourceDeviceId] = useState<string | null>(null);
   const [savedIndex, setSavedIndex] = useState<number | null>(storedMonitor);
   const [preferredPC, setPreferredPC] = useState<string | null>(
@@ -110,67 +113,95 @@ export function CompanionView({
   const locallyActive = snapshot.status !== "IDLE" && snapshot.status !== "ERROR";
   const linked = !!targetId && sourceDeviceId === targetId && transport.localPeers.includes(targetId);
   const phase = locallyActive ? localPhase : linked ? remotePhase : "idle";
-  const vector = linked ? gaze : wander;
+  const vector = linked ? gaze : { x: 0, y: 0 };
   useEffect(() => { motionTarget.current = vector; }, [vector]);
+  useEffect(() => {
+    assistant.setCompanionHoldMode(true);
+    return () => assistant.setCompanionHoldMode(false);
+  }, [assistant]);
+  useEffect(() => {
+    if (snapshot.status === "IDLE" || snapshot.status === "ERROR"
+      || (snapshot.status === "RESPONDING" && snapshot.liveText.trim())) {
+      setWaiting(false);
+    }
+  }, [snapshot.status, snapshot.liveText]);
 
-  // One damped motion rig: eyes, nose and mouth share the face movement.
-  // Hair and tie react to face velocity with independent spring inertia.
+  // A single head rig with independent gaze, nose, curl and tie inertia.
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    const resting = () => ({ value: 0, velocity: 0 });
-    const motion = { x: resting(), y: resting(), hair: resting(), tie: resting() };
+    const rest = () => ({ value: 0, velocity: 0 });
+    const motion = {
+      faceX: rest(), faceY: rest(), eyeX: rest(), eyeY: rest(),
+      noseX: rest(), noseY: rest(), hairX: rest(), hairY: rest(),
+      tieX: rest(), tieY: rest(),
+    };
     let frame = 0;
     let previousTime = 0;
 
     const tick = (time: number) => {
       const dt = previousTime ? (time - previousTime) / 1000 : 1 / 60;
       previousTime = time;
-      const seconds = time / 1000;
-      const target = motionTarget.current;
-      motion.x = stepCompanionSpring(motion.x,
-        target.x * 10 + Math.sin(seconds * 0.85) * 1.5, dt, 90, 18);
-      motion.y = stepCompanionSpring(motion.y,
-        target.y * 6 + Math.sin(seconds * 1.1) * 1.8, dt, 90, 18);
-      const hairLean = Math.max(-13, Math.min(13,
-        -motion.x.velocity * 0.3 - motion.y.velocity * 0.1));
-      const tieLean = Math.max(-10, Math.min(10,
-        -motion.x.velocity * 0.19 + motion.y.velocity * 0.11));
-      motion.hair = stepCompanionSpring(motion.hair, hairLean, dt, 135, 13);
-      motion.tie = stepCompanionSpring(motion.tie, tieLean, dt, 75, 11);
+      const sec = time / 1000;
+      const cursorTarget = motionTarget.current;
+      const lookX = linked ? cursorTarget.x
+        : Math.sin(sec * 0.95) * 0.42 + Math.sin(sec * 0.43 + 1.2) * 0.14;
+      const lookY = linked ? cursorTarget.y
+        : Math.sin(sec * 1.12 + 0.6) * 0.24 + Math.sin(sec * 0.37) * 0.08;
+      const step = (key: keyof typeof motion, target: number, k: number, d: number) => {
+        motion[key] = stepCompanionSpring(motion[key], target, dt, k, d);
+      };
+      step("eyeX", lookX * 20, 110, 18);
+      step("eyeY", lookY * 18, 110, 18);
+      step("noseX", lookX * 4.6, 95, 16);
+      step("noseY", lookY * 4.2, 95, 16);
+      step("faceX", lookX * 12 + Math.sin(sec * 0.78) * 2.8, 90, 18);
+      step("faceY", lookY * 8 + Math.sin(sec * 1.07) * 2.8, 90, 18);
+      const hairLean = Math.max(-16, Math.min(16, -motion.faceX.velocity * 0.3));
+      const hairBounce = Math.max(-9, Math.min(9,
+        motion.faceY.velocity * 0.52 + Math.sin(sec * 2.9) * 4.1));
+      step("hairX", hairLean, 100, 10);
+      step("hairY", hairBounce, 118, 9);
+      step("tieX", Math.max(-10, Math.min(10, -motion.faceX.velocity * 0.18)), 80, 10);
+      step("tieY", Math.max(-5, Math.min(9, motion.faceY.velocity * 0.12)), 80, 10);
       faceRef.current?.setAttribute("transform",
-        "translate(" + motion.x.value.toFixed(2) + " " + motion.y.value.toFixed(2)
-        + ") rotate(" + (motion.x.value * 0.22).toFixed(2) + " 180 155)");
+        `translate(${motion.faceX.value.toFixed(2)} ${motion.faceY.value.toFixed(2)}) rotate(${(motion.faceX.value * 0.24).toFixed(2)} 180 167)`);
+      const stretch = Math.max(0.83, Math.min(1.16, 1 + motion.hairY.value * 0.023));
+      // (179,68) is the curl's attachment. Only the free coil squashes and rotates.
       hairRef.current?.setAttribute("transform",
-        "rotate(" + motion.hair.value.toFixed(2) + " 179 54)");
+        `translate(179 68) rotate(${motion.hairX.value.toFixed(2)}) scale(1 ${stretch.toFixed(3)})`);
       tieRef.current?.setAttribute("transform",
-        "rotate(" + motion.tie.value.toFixed(2) + " 180 244)");
+        `translate(0 ${motion.tieY.value.toFixed(2)}) rotate(${motion.tieX.value.toFixed(2)} 180 268)`);
+      noseRef.current?.setAttribute("transform",
+        `translate(${motion.noseX.value.toFixed(2)} ${motion.noseY.value.toFixed(2)})`);
+      faceRef.current?.querySelectorAll(".companion-pupil").forEach((pupil) => {
+        pupil.setAttribute("transform",
+          `translate(${motion.eyeX.value.toFixed(2)} ${motion.eyeY.value.toFixed(2)})`);
+      });
       frame = window.requestAnimationFrame(tick);
     };
-
-    const syncMotion = () => {
+    const sync = () => {
       window.cancelAnimationFrame(frame);
       if (media?.matches) {
-        motion.x = resting();
-        motion.y = resting();
-        motion.hair = resting();
-        motion.tie = resting();
+        for (const key of Object.keys(motion) as (keyof typeof motion)[]) motion[key] = rest();
         faceRef.current?.removeAttribute("transform");
-        hairRef.current?.removeAttribute("transform");
+        hairRef.current?.setAttribute("transform", "translate(179 68)");
         tieRef.current?.removeAttribute("transform");
+        noseRef.current?.removeAttribute("transform");
+        faceRef.current?.querySelectorAll(".companion-pupil").forEach(p => p.removeAttribute("transform"));
       } else if (document.visibilityState === "visible") {
         previousTime = 0;
         frame = window.requestAnimationFrame(tick);
       }
     };
-    media?.addEventListener("change", syncMotion);
-    document.addEventListener("visibilitychange", syncMotion);
-    syncMotion();
+    media?.addEventListener("change", sync);
+    document.addEventListener("visibilitychange", sync);
+    sync();
     return () => {
       window.cancelAnimationFrame(frame);
-      media?.removeEventListener("change", syncMotion);
-      document.removeEventListener("visibilitychange", syncMotion);
+      media?.removeEventListener("change", sync);
+      document.removeEventListener("visibilitychange", sync);
     };
-  }, []);
+  }, [linked]);
 
   useEffect(() => {
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
@@ -192,28 +223,34 @@ export function CompanionView({
     return () => window.clearInterval(timer);
   }, [assistant, locallyActive, linked]);
 
-  useEffect(() => {
-    if (linked) {
-      setWander({ x: 0, y: 0 });
-      return;
-    }
-    // Small, infrequent glances when no live PC cursor is available.
-    const timer = window.setInterval(() => {
-      setWander({ x: (Math.random() - 0.5) * 0.65, y: (Math.random() - 0.5) * 0.28 });
-    }, 2600);
-    return () => window.clearInterval(timer);
-  }, [linked]);
-
-  const expressivePhase = mouth > 0.085 && (locallyActive || linked) ? "speaking" : phase;
+  const displayedPhase = holding ? "listening"
+    : locallyActive && phase === "listening" ? (waiting ? "thinking" : "idle")
+      : phase;
+  const expressivePhase = mouth > 0.085 && (locallyActive || linked) ? "speaking" : displayedPhase;
   const mouthVisible = companionMouthVisible(expressivePhase);
   const mouthOpen = expressivePhase === "speaking" ? Math.max(0.13, mouth) : 0;
   // One continuous path covers a small listening smile and an audio-responsive open mouth.
   const mouthWidth = 15 + mouthOpen * 11;
-  const mouthPath = "M " + (180 - mouthWidth) + " 215 Q 180 " + (223 - mouthOpen * 18)
-    + " " + (180 + mouthWidth) + " 215 Q 180 " + (223 + mouthOpen * 34)
-    + " " + (180 - mouthWidth) + " 215 Z";
+  const mouthPath = "M " + (180 - mouthWidth) + " 228 Q 180 " + (236 - mouthOpen * 18)
+    + " " + (180 + mouthWidth) + " 228 Q 180 " + (236 + mouthOpen * 34)
+    + " " + (180 - mouthWidth) + " 228 Z";
   const active = snapshot.status === "READY" || snapshot.status === "RESPONDING" ||
     snapshot.status === "CONNECTING";
+  const beginHold = () => {
+    if (pressedRef.current || micBusy) return;
+    pressedRef.current = true;
+    setHolding(true);
+    setWaiting(false);
+    assistant.setCompanionPressed(true);
+    if (!active) onStartVoice();
+  };
+  const endHold = () => {
+    if (!pressedRef.current) return;
+    pressedRef.current = false;
+    assistant.setCompanionPressed(false);
+    setHolding(false);
+    setWaiting(true);
+  };
 
   return (
     <main className={`companion-view is-${expressivePhase}`} aria-label="Companion mode">
@@ -237,8 +274,30 @@ export function CompanionView({
         )}
       </header>
       <div className="companion-stage">
-        <svg className="companion-face" viewBox="0 0 360 340" role="img"
-          aria-label={`Companion is ${PHASE_LABEL[expressivePhase].toLowerCase()}`}>
+        <svg className="companion-face" viewBox="0 0 360 370" role="button" tabIndex={0}
+          aria-label="Press and hold Companion to speak" aria-pressed={holding}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            beginHold();
+          }}
+          onPointerUp={endHold}
+          onPointerCancel={endHold}
+          onLostPointerCapture={endHold}
+          onKeyDown={(event) => {
+            if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+              event.preventDefault();
+              beginHold();
+            }
+          }}
+          onKeyUp={(event) => {
+            if (event.key === " " || event.key === "Enter") {
+              event.preventDefault();
+              endHold();
+            }
+          }}
+          onBlur={endHold}>
           <defs>
             <radialGradient id="companion-iris">
               <stop offset="0%" stopColor="#b5ffde" />
@@ -246,42 +305,42 @@ export function CompanionView({
             </radialGradient>
           </defs>
           <g ref={faceRef} className="companion-character">
-            <g ref={hairRef} className="companion-hair" aria-hidden="true">
-              <path d="M179 54 C192 40 193 28 181 27 C163 24 158 42 171 42 C191 44 199 25 194 7" />
+            <g ref={hairRef} className="companion-hair" transform="translate(179 68)" aria-hidden="true">
+              <path d="M0 0 C-4 -8 -14 -11 -12 -19 C-10 -28 0 -30 7 -26 C16 -21 11 -12 3 -13 C-6 -14 -9 -22 -6 -30 C-2 -39 13 -40 17 -32 C21 -24 10 -19 5 -24 C-1 -29 1 -42 10 -46 C21 -50 27 -41 20 -35 C13 -30 7 -38 10 -46 C13 -55 18 -57 13 -60" />
             </g>
             <g className="companion-eye companion-eye-left">
-              <rect x="60" y="55" width="105" height="130" rx="53" className="companion-eye-shell" />
-              <g className="companion-pupil" style={{
-                transform: `translate(${vector.x * 24}px, ${vector.y * 24}px)`,
-              }}>
-                <ellipse cx="112" cy="120" rx="20" ry="28" fill="url(#companion-iris)" />
-                <ellipse cx="112" cy="120" rx="10" ry="17" fill="#10251f" />
-                <circle cx="105" cy="110" r="5" fill="#f0fff9" opacity=".85" />
+              <rect x="60" y="68" width="105" height="130" rx="53" className="companion-eye-shell" />
+              <g className="companion-pupil">
+                <ellipse cx="112" cy="133" rx="20" ry="28" fill="url(#companion-iris)" />
+                <ellipse cx="112" cy="133" rx="10" ry="17" fill="#10251f" />
+                <circle cx="105" cy="123" r="5" fill="#f0fff9" opacity=".85" />
               </g>
             </g>
             <g className="companion-eye companion-eye-right">
-              <rect x="195" y="55" width="105" height="130" rx="53" className="companion-eye-shell" />
-              <g className="companion-pupil" style={{
-                transform: `translate(${vector.x * 24}px, ${vector.y * 24}px)`,
-              }}>
-                <ellipse cx="247" cy="120" rx="20" ry="28" fill="url(#companion-iris)" />
-                <ellipse cx="247" cy="120" rx="10" ry="17" fill="#10251f" />
-                <circle cx="240" cy="110" r="5" fill="#f0fff9" opacity=".85" />
+              <rect x="195" y="68" width="105" height="130" rx="53" className="companion-eye-shell" />
+              <g className="companion-pupil">
+                <ellipse cx="247" cy="133" rx="20" ry="28" fill="url(#companion-iris)" />
+                <ellipse cx="247" cy="133" rx="10" ry="17" fill="#10251f" />
+                <circle cx="240" cy="123" r="5" fill="#f0fff9" opacity=".85" />
               </g>
             </g>
-            <g className="companion-nose" aria-hidden="true">
-              <ellipse cx="173" cy="199" rx="2.8" ry="4.1" transform="rotate(25 173 199)" />
-              <ellipse cx="187" cy="199" rx="2.8" ry="4.1" transform="rotate(-25 187 199)" />
+            <g ref={noseRef} className="companion-nose" aria-hidden="true">
+              <ellipse cx="173" cy="212" rx="2.8" ry="4.1" transform="rotate(25 173 212)" />
+              <ellipse cx="187" cy="212" rx="2.8" ry="4.1" transform="rotate(-25 187 212)" />
             </g>
             <g className={mouthVisible ? "companion-mouth-group is-visible" : "companion-mouth-group"}
               aria-hidden="true">
               <path className="companion-mouth" d={mouthPath} />
             </g>
             <g ref={tieRef} className="companion-tie" aria-hidden="true">
-              <path className="companion-tie-knot" d="M171 243 Q180 238 189 243 L185 256 Q180 259 175 256 Z" />
-              <path className="companion-tie-body" d="M175 256 Q180 259 185 256 L194 296 L180 317 L166 296 Z" />
-              <path className="companion-tie-shine" d="M177 266 L173 293 L180 307"
-                fill="none" strokeWidth="2.5" strokeLinecap="round" />
+              <g transform="translate(0 18)">
+                <path className="companion-tie-wrap-shadow" d="M153 249 Q180 235 207 249" />
+                <path className="companion-tie-wrap" d="M158 248 Q180 237 202 248" />
+                <path className="companion-tie-knot" d="M171 254 Q180 248 189 254 L185 267 Q180 271 175 267 Z" />
+                <path className="companion-tie-body" d="M175 267 Q180 271 185 267 L195 309 L180 336 L165 309 Z" />
+                <path className="companion-tie-shine" d="M177 277 L173 304 L180 320"
+                  fill="none" strokeWidth="2.5" strokeLinecap="round" />
+              </g>
             </g>
           </g>
         </svg>
@@ -315,15 +374,7 @@ export function CompanionView({
               }} />
           </div>
         )}
-        <button className={active ? "companion-voice-button is-active" : "companion-voice-button"}
-          type="button" disabled={!active && micBusy}
-          onClick={() => { if (active) assistant.end(); else onStartVoice(); }}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM6 11a6 6 0 0 0 12 0M12 17v4" fill="none"
-              stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
-          {active ? "End voice" : "Talk"}
-        </button>
+
       </footer>
     </main>
   );
