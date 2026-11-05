@@ -6,7 +6,7 @@ use windows::Win32::Foundation::RECT;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
     KEYEVENTF_KEYUP, MOUSEEVENTF_ABSOLUTE,
-    MOUSEEVENTF_MOVE, MOUSEEVENTF_VIRTUALDESK, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, VIRTUAL_KEY, VK_A, VK_C, VK_CONTROL, VK_ESCAPE, VK_RETURN, VK_TAB,
+    MOUSEEVENTF_MOVE, MOUSEEVENTF_VIRTUALDESK, MOUSEEVENTF_WHEEL, MOUSEEVENTF_HWHEEL, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, VIRTUAL_KEY, VK_A, VK_C, VK_CONTROL, VK_ESCAPE, VK_RETURN, VK_TAB,
     VK_V, VK_Z,
 };
 use windows::Win32::UI::Shell::ShellExecuteW;
@@ -119,7 +119,7 @@ pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Opt
         if end_x.is_some() || end_y.is_some() { return Err("Unexpected pointer endpoint.".into()); }
         None
     };
-    if !["move", "click", "double_click", "right_click", "drag"].contains(&kind) {
+    if !["move", "click", "double_click", "right_click", "drag", "scroll_up", "scroll_down", "scroll_left", "scroll_right"].contains(&kind) {
         return Err("Unsupported pointer action.".into());
     }
     let mut current = windows::Win32::Foundation::POINT::default();
@@ -149,6 +149,19 @@ pub fn pointer_action(kind: &str, x: i32, y: i32, end_x: Option<i32>, end_y: Opt
             moved?;
             released?;
             Ok("Dragged and released the target.".into())
+        }
+        "scroll_up" | "scroll_down" | "scroll_left" | "scroll_right" => {
+            // Wheel events are sent at the visible cursor after the same serialized move
+            // as clicks and drags. Vertical and horizontal delta are one standard notch.
+            let (flags, delta) = match kind {
+                "scroll_up" => (MOUSEEVENTF_WHEEL, 120),
+                "scroll_down" => (MOUSEEVENTF_WHEEL, -120),
+                "scroll_left" => (MOUSEEVENTF_HWHEEL, -120),
+                "scroll_right" => (MOUSEEVENTF_HWHEEL, 120),
+                _ => unreachable!(),
+            };
+            send_inputs(&[wheel_input(flags, delta)], "scroll")?;
+            Ok(format!("Scrolled {}.", &kind[7..]))
         }
         _ => unreachable!(),
     }
@@ -206,6 +219,18 @@ fn mouse(flags: windows::Win32::UI::Input::KeyboardAndMouse::MOUSE_EVENT_FLAGS, 
                 dwFlags: flags,
                 time: 0,
                 dwExtraInfo: SYNTHETIC_INPUT_MARK,
+            },
+        },
+    }
+}
+
+fn wheel_input(flags: windows::Win32::UI::Input::KeyboardAndMouse::MOUSE_EVENT_FLAGS, delta: i32) -> INPUT {
+    INPUT {
+        r#type: INPUT_MOUSE,
+        Anonymous: INPUT_0 {
+            mi: MOUSEINPUT {
+                dx: 0, dy: 0, mouseData: delta as u32,
+                dwFlags: flags, time: 0, dwExtraInfo: SYNTHETIC_INPUT_MARK,
             },
         },
     }
