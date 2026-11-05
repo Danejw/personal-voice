@@ -63,6 +63,8 @@ const BASE_TOOL_SCENARIOS = [
   { id: "tool-forget_memory", request: "Forget my saved preference for responses.", expected: ["list_memories","forget_memory"], successCriterion: "Memory deactivated" },
   { id: "tool-get_tool_playbook", request: "Retrieve the Windows control workflow before a multi-step UI task.", expected: ["get_tool_playbook"], successCriterion: "Named workflow guidance returned without device action" },
   { id: "tool-remote_action", request: "Open Calculator on my paired home Windows PC.", expected: ["remote_action"], successCriterion: "Remote device reports app opened" },
+  { id: "choice-phone-remote-multistep-goal", request: "On my Android phone, take control of my paired laptop and work through several windows to organize notes, checking the screen between actions.", expected: ["remote_action"], forbidden: ["supervise_screen"], successCriterion: "A signed Computer Use goal-start receipt is followed by separate progress or final completion, not per-click phone commands" },
+  { id: "choice-phone-remote-goal-stop", request: "Stop the Computer Use goal that my paired laptop is currently running.", expected: ["remote_action"], successCriterion: "Signed stop request targets the same paired phone session" },
 ] as const satisfies readonly ToolSelectionScenario[];
 
 const DISAMBIGUATION_SCENARIOS = [

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runComputerTask, type ComputerTaskHost } from "@/assistant/computerTask";
+import { REMOTE_COMPUTER_LIMITS, runComputerTask, type ComputerTaskHost } from "@/assistant/computerTask";
 
 function host(partial: Partial<ComputerTaskHost> & Pick<ComputerTaskHost, "propose">): ComputerTaskHost & { executed: string[]; confirmed: string[] } {
   const executed: string[] = [];
@@ -58,6 +58,37 @@ describe("computer task loop", () => {
     });
     await expect(runComputerTask("Keep going.", task)).resolves.toBe("Stopped. Nothing further was done.");
     expect(task.executed).toEqual([]);
+  });
+
+  it("runs a longer remote goal using the same executor without confirming every click", async () => {
+    const progress: number[] = [];
+    let count = 0;
+    const task = host({
+      propose: async () => {
+        count += 1;
+        return { id: `step-${count}`, steps: [{ type: "function_call", name: "click", arguments: { x: 50, y: 50 } }] };
+      },
+      onProgress: step => progress.push(step),
+    });
+    await expect(runComputerTask("Work through the visible UI.", task,
+      { maxSteps: 12, maxDurationMs: REMOTE_COMPUTER_LIMITS.maxDurationMs })).resolves.toContain("12 steps");
+    expect(task.executed).toHaveLength(12);
+    expect(task.confirmed).toHaveLength(0);
+    expect(progress).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
+  });
+
+  it("stops an extended task as soon as Windows revokes the goal", async () => {
+    let stopped = false;
+    const task = host({
+      stopped: () => stopped,
+      propose: async () => ({
+        id: "step",
+        steps: [{ type: "function_call", name: "click", arguments: { x: 100, y: 100 } }],
+      }),
+      execute: async () => { stopped = true; return "Done"; },
+    });
+    await expect(runComputerTask("Stop on request.", task, REMOTE_COMPUTER_LIMITS))
+      .resolves.toBe("Stopped. Nothing further was done.");
   });
 
   it("stops on the step cap without a ninth action", async () => {

@@ -34,7 +34,8 @@ export type AllowedShortcutId = (typeof ALLOWED_SHORTCUTS)[number]["id"];
 export type RemoteComputerAction =
   | "open_app" | "press_shortcut" | "insert_text"
   | "move_pointer" | "click_pointer" | "double_click_pointer"
-  | "right_click_pointer" | "drag_pointer";
+  | "right_click_pointer" | "drag_pointer"
+  | "start_computer_goal" | "computer_goal_status" | "stop_computer_goal";
 
 export function parseRemotePointer(action: string, argument: string): {
   kind: "move" | "click" | "double_click" | "right_click" | "drag";
@@ -144,10 +145,11 @@ export function planComputerStep(
   startedAt: number,
   now: number,
   stopped: boolean,
+  limits: { maxSteps: number; maxDurationMs: number } = { maxSteps: COMPUTER_STEP_LIMIT, maxDurationMs: COMPUTER_TIME_LIMIT_MS },
 ): StepDecision {
   if (stopped) return { action: "stop", message: "Stopped. Nothing further was done." };
-  if (stepIndex >= COMPUTER_STEP_LIMIT) return { action: "stop", message: "Stopped after 8 steps." };
-  if (now - startedAt >= COMPUTER_TIME_LIMIT_MS) return { action: "stop", message: "Stopped because the task ran too long." };
+  if (stepIndex >= limits.maxSteps) return { action: "stop", message: `Stopped after ${limits.maxSteps} steps.` };
+  if (now - startedAt >= limits.maxDurationMs) return { action: "stop", message: "Stopped because the task ran too long." };
   const safety = readSafety(call.args);
   if (safety.decision === "blocked") {
     return { action: "stop", message: safety.explanation || "Computer Use blocked that action." };
@@ -220,11 +222,19 @@ export function planRemoteComputerAction(
   platform: string,
   remoteActions: boolean,
 ): { action: "confirm"; label: string } | { action: "deny"; message: string } {
-  if (isUnsupportedAction(action) || (action !== "open_app" && action !== "press_shortcut" && action !== "insert_text" && !action.endsWith("_pointer"))) {
+  if (isUnsupportedAction(action) || (action !== "open_app" && action !== "press_shortcut" && action !== "insert_text" && !action.endsWith("_pointer") && action !== "start_computer_goal" && action !== "computer_goal_status" && action !== "stop_computer_goal")) {
     return { action: "deny", message: "That action is not available." };
   }
   if (platform !== "windows") return { action: "deny", message: "This device can't run desktop actions." };
   if (!remoteActions) return { action: "deny", message: "Remote actions are turned off on this PC." };
+  if (action === "start_computer_goal") {
+    if (argument !== argument.trim() || argument.length < 3 || argument.length > 1000) return { action: "deny", message: "Provide a goal between 3 and 1000 characters." };
+    return { action: "confirm", label: "Start an autonomous Computer Use goal on Windows" };
+  }
+  if (action === "computer_goal_status" || action === "stop_computer_goal") {
+    if (argument !== "current") return { action: "deny", message: "Invalid remote Computer Use session reference." };
+    return { action: "confirm", label: action === "computer_goal_status" ? "Check Computer Use progress" : "Stop Computer Use" };
+  }
   if (action.endsWith("_pointer")) {
     const pointer = parseRemotePointer(action, argument);
     if (!pointer) return { action: "deny", message: "Invalid bounded pointer coordinates." };

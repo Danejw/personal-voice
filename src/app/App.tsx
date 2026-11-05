@@ -323,6 +323,12 @@ const computerActions = new ComputerActionStore(
   (userId) => localDeviceId(localStorage, userId, createId),
   platform,
 );
+if (platform.platform === "windows") {
+  computerActions.setRemoteGoalRunner(
+    (goal, progress, validate) => assistant.runRemoteComputerGoal(goal, progress, validate),
+    () => assistant.stopComputer(),
+  );
+}
 const remoteDictation = new RemoteDictationStore(
   remoteDictationApi,
   (userId) => deviceApi.list(userId),
@@ -699,6 +705,10 @@ export default function App() {
   const snippets = useSnippets(snippetStore, auth.userId);
   const transforms = useTransforms(transformStore, auth.userId);
   const deviceSnapshot = useDevices(devices, auth.userId);
+  // Ending the account session revokes any in-process remote Computer Use authorization.
+  useEffect(() => {
+    if (!auth.userId && platform.platform === "windows") computerActions.stopRemoteGoal();
+  }, [auth.userId]);
   const handoffSnapshot = useHandoffs(handoffs, auth.userId);
   // Start local discovery only after the account has registered this device.
   // Sign-out and device changes close the LAN socket and private cloud channel.

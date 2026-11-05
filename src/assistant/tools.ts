@@ -405,14 +405,14 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "remote_action",
-      description: "Ask a paired Windows PC to open an allowed app, press an allowlisted shortcut, insert text or move/click/drag the Windows mouse. Every pointer action needs approval on the PC. Give the exact device or device_id, or omit only when a default is selected. Never silently switch PCs or treat a queued request as executed. No shell, delete or unattended pointer control.",
+      description: "Control a paired Windows PC. For a multi-step goal use start_computer_goal with the complete goal as argument: the PC approves once, then its existing Computer Use agent works through screenshots and actions automatically. Use computer_goal_status or stop_computer_goal with argument current to check or stop that session without PC approval. Single mouse, app and text actions still need PC approval. Select an exact paired PC or the saved default. No shell, destructive tasks or unapproved unattended access.",
       parameters: {
         type: "object",
         properties: {
           device: { type: "string", description: "Exact paired Windows device name. Omit to use the phone's saved default." },
           device_id: { type: "string", description: "Exact paired Windows device UUID; omit when supplying a name." },
-          action: { type: "string", description: "open_app, press_shortcut, insert_text, move_pointer, click_pointer, double_click_pointer, right_click_pointer, or drag_pointer." },
-          argument: { type: "string", description: "App id, shortcut id, exact text, or comma-separated 0–999 pointer coordinates (x,y; drag uses x,y,endX,endY)." },
+          action: { type: "string", description: "start_computer_goal for a multi-step Windows goal; computer_goal_status or stop_computer_goal for its session; or open_app, press_shortcut, insert_text and *_pointer for individual actions." },
+          argument: { type: "string", description: "Complete goal text (3–1000 chars) for start_computer_goal; literal current for status/stop; otherwise app id, shortcut, text or bounded pointer coordinates." },
         },
         required: ["action", "argument"],
       },
