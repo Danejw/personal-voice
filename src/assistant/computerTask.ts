@@ -23,12 +23,14 @@ export interface ComputerTaskHost {
 export interface ComputerTaskLimits {
   maxSteps: number;
   maxDurationMs: number;
+  allowRoutineDrag?: boolean;
 }
 
 /** Remote sessions get a bounded longer horizon, while local defaults remain unchanged. */
 export const REMOTE_COMPUTER_LIMITS: ComputerTaskLimits = {
   maxSteps: 240,
   maxDurationMs: 30 * 60 * 1000,
+  allowRoutineDrag: true,
 };
 
 /**
