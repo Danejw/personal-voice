@@ -22,6 +22,7 @@ class FakeSession implements AssistantSessionHandle {
   sendVideo() {}
   sendToolResponse() {}
   sendAudio(pcm: ArrayBuffer) { this.audio.push(pcm); }
+  endAudioStream() {}
   close() { this.closed = true; }
   emit(event: AssistantEvent) { this.onEvent(event); }
 }

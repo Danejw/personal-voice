@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  assistantPhase, companionGaze, defaultMonitorIndex, isPointerSample, monitorFromIndex, selectedCompanionPC,
+  assistantPhase, companionGaze, companionMouthVisible, defaultMonitorIndex, isPointerSample, monitorFromIndex, selectedCompanionPC, stepCompanionSpring,
 } from "@/companion/companionGeometry";
 import { initialAssistantState } from "@/assistant/state";
 
@@ -57,5 +57,32 @@ describe("Android companion monitor geometry", () => {
     expect(assistantPhase({ ...initialAssistantState, status: "READY" })).toBe("listening");
     expect(assistantPhase({ ...initialAssistantState, status: "RESPONDING" })).toBe("thinking");
     expect(assistantPhase({ ...initialAssistantState, status: "RESPONDING", liveText: "Hello" })).toBe("speaking");
+  });
+});
+
+
+describe("Companion character presentation", () => {
+  it("shows one mouth only during listening or speaking, never idle or thinking", () => {
+    expect(companionMouthVisible("idle")).toBe(false);
+    expect(companionMouthVisible("thinking")).toBe(false);
+    expect(companionMouthVisible("listening")).toBe(true);
+    expect(companionMouthVisible("speaking")).toBe(true);
+  });
+
+  it("smoothly approaches head targets and settles without perpetual overshoot", () => {
+    let motion = { value: 0, velocity: 0 };
+    for (let frame = 0; frame < 240; frame++) {
+      motion = stepCompanionSpring(motion, 10, 1 / 60, 90, 18);
+    }
+    expect(motion.value).toBeCloseTo(10, 2);
+    expect(Math.abs(motion.velocity)).toBeLessThan(0.01);
+  });
+
+  it("bounds a stalled frame and damps a spring when direction reverses", () => {
+    const started = stepCompanionSpring({ value: 0, velocity: 0 }, 10, 1, 90, 18);
+    expect(started.value).toBeLessThan(2);
+    expect(stepCompanionSpring(started, -10, 1 / 60, 90, 18).velocity)
+      .toBeLessThan(started.velocity);
+    expect(stepCompanionSpring(started, 0, Number.NaN, 90, 18)).toEqual(started);
   });
 });

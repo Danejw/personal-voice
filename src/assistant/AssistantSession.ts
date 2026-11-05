@@ -4,6 +4,7 @@ import { CredentialError } from "@/voice/provider/gemini/GeminiTokenSource";
 import {
   ASSISTANT_ENDPOINT,
   assistantAudioChunk,
+  assistantAudioStreamEnd,
   assistantContextNote,
   assistantHistorySeed,
   assistantSetupMessage,
@@ -69,6 +70,12 @@ export class AssistantSession {
   sendAudio(pcm: ArrayBuffer): void {
     if (this.phase !== "ready" || pcm.byteLength === 0) throw new Error("Assistant is not ready.");
     this.send(assistantAudioChunk(encodeBase64(pcm)));
+  }
+
+  /** Flushes a released hold-to-talk burst using automatic server-side VAD. */
+  endAudioStream(): void {
+    if (this.phase !== "ready") throw new Error("Assistant is not ready.");
+    this.send(assistantAudioStreamEnd());
   }
 
   /** Seeds a new session with earlier turns. Does not ask for a reply. */
