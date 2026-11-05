@@ -1,5 +1,6 @@
 import type { AssistantPlayback } from "@/assistant/playback";
 import { ASSISTANT_PCM_RATE } from "@/assistant/protocol";
+import { SpeechEnvelope } from "@/assistant/speechEnvelope";
 
 interface PlaybackBuffer {
   duration: number;
@@ -31,6 +32,7 @@ export class PcmPlayback implements AssistantPlayback {
   private ctx?: PlaybackContext;
   private nextStart = 0;
   private active: PlaybackSource[] = [];
+  private readonly envelope = new SpeechEnvelope();
 
   constructor(private createContext: () => PlaybackContext = defaultContext) {}
 
@@ -66,6 +68,7 @@ export class PcmPlayback implements AssistantPlayback {
       source.buffer = buffer;
       source.connect(ctx.destination);
       const startAt = Math.max(ctx.currentTime, this.nextStart);
+      this.envelope.enqueue(pcm, sampleRate, Date.now(), (startAt - ctx.currentTime) * 1000);
       source.start(startAt);
       this.nextStart = startAt + buffer.duration;
       this.active.push(source);
@@ -81,8 +84,13 @@ export class PcmPlayback implements AssistantPlayback {
     return Math.max(0, (this.nextStart - ctx.currentTime) * 1000);
   }
 
+  speechLevel(now = Date.now()): number {
+    return this.pendingMs() > 0 ? this.envelope.level(now) : 0;
+  }
+
   /** Stops queued audio immediately. Used when Assistant ends or a reply is interrupted. */
   clear(): void {
+    this.envelope.clear();
     const ctx = this.ctx;
     this.ctx = undefined;
     this.nextStart = 0;
