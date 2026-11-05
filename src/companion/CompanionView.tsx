@@ -9,6 +9,7 @@ import { loadRemoteVoiceDefault, saveRemoteVoiceDefault } from "@/assistant/remo
 import type { OwnedDevice } from "@/handoffs/handoff";
 import type { CompanionAssistantPhase, CompanionMonitor, DeviceLinkPayload } from "@/device-link/protocol";
 import { assistantPhase, companionGaze, companionMouthVisible, defaultMonitorIndex, selectedCompanionPC, stepCompanionSpring } from "@/companion/companionGeometry";
+import { remoteGoalStillActive } from "@/companion/remoteGoalStatus";
 import "./companion.css";
 
 type Pointer = { x: number; y: number };
@@ -64,7 +65,7 @@ export function CompanionView({
   // An explicit default which is no longer paired must not silently select another PC.
   const targetId = selectedCompanionPC(pairedWindows, preferredPC);
   const currentGoal = remoteGoal?.targetDeviceId === targetId ? remoteGoal : null;
-  const goalIsActive = !!currentGoal && !/\b(completed|stopped|failed|blocked|interrupted|needs_review)\b/i.test(currentGoal.message);
+  const goalIsActive = !!currentGoal && remoteGoalStillActive(currentGoal.message);
   const refreshGoal = async (action: "computer_goal_status" | "stop_computer_goal") => {
     const target = pairedWindows.find(d => d.id === targetId);
     if (!target || goalRequestPending.current) return;
