@@ -62,12 +62,14 @@ const BASE_TOOL_SCENARIOS = [
   { id: "tool-change_memory", request: "Update my remembered answer-length preference to detailed.", expected: ["list_memories","change_memory"], successCriterion: "Existing memory corrected" },
   { id: "tool-forget_memory", request: "Forget my saved preference for responses.", expected: ["list_memories","forget_memory"], successCriterion: "Memory deactivated" },
   { id: "tool-get_tool_playbook", request: "Retrieve the Windows control workflow before a multi-step UI task.", expected: ["get_tool_playbook"], successCriterion: "Named workflow guidance returned without device action" },
+  { id: "tool-pair_device", request: "Pair my Android phone with my Windows laptop. Show me the QR code.", expected: ["pair_device"], successCriterion: "Windows shows a valid short-lived pairing invitation and requires approval after claim" },
   { id: "tool-remote_action", request: "Open Calculator on my paired home Windows PC.", expected: ["remote_action"], successCriterion: "Remote device reports app opened" },
   { id: "choice-phone-remote-multistep-goal", request: "On my Android phone, take control of my paired laptop and work through several windows to organize notes, checking the screen between actions.", expected: ["remote_action"], forbidden: ["supervise_screen"], successCriterion: "A signed Computer Use goal-start receipt is followed by separate progress or final completion, not per-click phone commands" },
   { id: "choice-phone-remote-goal-stop", request: "Stop the Computer Use goal that my paired laptop is currently running.", expected: ["remote_action"], successCriterion: "Signed stop request targets the same paired phone session" },
 ] as const satisfies readonly ToolSelectionScenario[];
 
 const DISAMBIGUATION_SCENARIOS = [
+  { id: "choice-pair-v-remote", request: "My new Android is not paired yet; scan the Personal Voice QR code to pair it with my laptop.", expected: ["pair_device"], forbidden: ["remote_action"], successCriterion: "Android native scanner submits verified claim, not a remote control command" },
   { id: "choice-phone-open-remote-v-local", request: "On my Android phone, open Calculator on my paired Desktop PC, not the phone.", expected: ["remote_action"], forbidden: ["open_app"], successCriterion: "Signed target-PC execution receipt, not local phone app launch" },
   { id: "choice-phone-move-pc-mouse", request: "From my Android phone, move my paired desktop PC mouse to the center and click, with permission on that PC.", expected: ["remote_action"], forbidden: ["open_app"], successCriterion: "Signed exact PC executes separately confirmed pointer actions, not local Android touches" },
   { id: "choice-phone-read-pc-v-capture-local", request: "What is the active app on my paired Laptop, not on my phone?", expected: ["read_remote_device"], forbidden: ["inspect_active_app"], successCriterion: "Target Laptop supplies authenticated active-window observation" },

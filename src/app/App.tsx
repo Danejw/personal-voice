@@ -41,6 +41,8 @@ import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { CompanionView } from "@/companion/CompanionView";
 import { assistantPhase } from "@/companion/companionGeometry";
 import { DevicesPanel } from "@/devices/DevicesPanel";
+import { PairingDialog } from "@/devices/PairingDialog";
+import { pairingAction } from "@/devices/pairingFlow";
 import { DeviceStore } from "@/devices/DeviceStore";
 import { useDevices } from "@/devices/useDevices";
 import { HandoffPanel, HandoffToolbar } from "@/handoffs/HandoffPanel";
@@ -451,6 +453,10 @@ assistant.setActions({
     if (snap.status !== "synced" && snap.notes.length === 0) throw new Error("Notes are unavailable until sync reconnects.");
     const body = formatNoteList(snap.notes, includeArchived);
     return snap.status === "synced" ? body : `Notes may be out of date.\n${body}`;
+  },
+  pairDevice: async (action, code) => {
+    const current = devices.getSnapshot().currentDeviceId;
+    return pairingAction(current, platform.platform, action, code);
   },
   listHandoffs: async () => {
     const snap = handoffs.getSnapshot();
@@ -1172,11 +1178,15 @@ export default function App() {
   }
 
   if (platform.platform === "android" && section === "companion") {
-    return <CompanionView assistant={assistant} snapshot={assistantSnapshot}
-      micBusy={dictationLive} currentDeviceId={deviceSnapshot.currentDeviceId}
-      devices={deviceSnapshot.devices}
-      onStartVoice={() => { void assistantLibrary.produce(); }}
-      onExit={() => setSection("devices")} />;
+    return <>
+      <CompanionView assistant={assistant} snapshot={assistantSnapshot}
+        micBusy={dictationLive} currentDeviceId={deviceSnapshot.currentDeviceId}
+        devices={deviceSnapshot.devices}
+        onStartVoice={() => { void assistantLibrary.produce(); }}
+        onExit={() => setSection("devices")} />
+      <PairingDialog deviceId={deviceSnapshot.currentDeviceId}
+        platform={platform.platform} devices={deviceSnapshot.devices} />
+    </>;
   }
 
   return (
@@ -1647,6 +1657,8 @@ export default function App() {
           />
         </div>
       </main>
+      <PairingDialog deviceId={deviceSnapshot.currentDeviceId}
+        platform={platform.platform} devices={deviceSnapshot.devices} />
     </div>
   );
 }

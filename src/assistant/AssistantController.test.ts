@@ -1698,6 +1698,7 @@ function toolActions() {
     })),
     listNotes: vi.fn(async () => "Notes (1):\n1. id: n1\nBuy milk"),
     listHandoffs: vi.fn(async () => "Devices you can send to: Phone.\nNo received handoffs."),
+    pairDevice: vi.fn(async () => "Pairing invitation displayed."),
     describeItem: vi.fn((_kind: "note" | "handoff", id: string) => `Preview ${id}`),
     archiveNote: vi.fn(async () => {}),
     deleteNote: vi.fn(async () => {}),

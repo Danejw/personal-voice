@@ -3,6 +3,7 @@ import type { AssistantController } from "@/assistant/AssistantController";
 import type { AssistantSnapshot } from "@/assistant/state";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { SelectField } from "@/components/SelectField";
+import { openPairingUI } from "@/devices/pairingFlow";
 import { loadRemoteVoiceDefault, saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import type { CompanionAssistantPhase, CompanionMonitor, DeviceLinkPayload } from "@/device-link/protocol";
@@ -156,6 +157,12 @@ export function CompanionView({
           {linked ? "LAN connected" : pairedWindows.length === 0 ? "Pair a PC in Devices"
             : !targetId ? "Choose a PC" : "Waiting for PC on Wi-Fi"}
         </span>
+        {pairedWindows.length === 0 && (
+          <button type="button" className="companion-pair-button"
+            onClick={() => openPairingUI()} aria-label="Pair a Windows computer">
+            Pair
+          </button>
+        )}
       </header>
       <div className="companion-stage">
         <svg className="companion-face" viewBox="0 0 360 260" role="img"

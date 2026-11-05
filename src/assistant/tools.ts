@@ -404,6 +404,18 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
+      name: "pair_device",
+      description: "Help connect this device to another Personal Voice device using the existing secure code/QR flow. action=open opens the centered pairing dialog; show_code generates and displays an expiring QR and 8-digit code on Windows; scan_qr opens the Android camera scanner; enter_code submits an 8-digit code on Android; status checks verified pairs. Pairing is never complete until the Windows user approves the request.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["open", "show_code", "scan_qr", "enter_code", "status"] },
+          code: { type: "string", description: "Eight-digit code required only for enter_code." },
+        },
+        required: ["action"],
+      },
+    },
+    {
       name: "remote_action",
       description: "Control a paired Windows PC. For a multi-step goal use start_computer_goal with the complete goal as argument: the Windows PC runs its existing Computer Use agent with screenshots and actions automatically when Allow remote actions is enabled. Use computer_goal_status or stop_computer_goal with argument current to check or stop that session without PC approval. Single mouse, app and text actions run without repeated PC approval when that switch is enabled. Select an exact paired PC or the saved default. Only explicitly paired devices can control an unlocked PC; shell and unsupported destructive commands remain blocked.",
       parameters: {
@@ -492,6 +504,7 @@ export type ToolDecision =
   | { kind: "memorySearch"; id: string; name: "search_memory"; query: string }
   | { kind: "playbook"; id: string; name: "get_tool_playbook"; playbookId: ToolPlaybookId }
   | { kind: "handoffs"; id: string; name: "list_handoffs" }
+  | { kind: "pairing"; id: string; name: "pair_device"; action: "open" | "show_code" | "scan_qr" | "enter_code" | "status"; code?: string }
   | {
     kind: "confirm";
     id: string;
@@ -600,6 +613,23 @@ export function decideToolCall(
       return { kind: "notes", id: call.id, name: "list_notes", includeArchived: args.include_archived === true || args.includeArchived === true };
     case "list_handoffs":
       return { kind: "handoffs", id: call.id, name: "list_handoffs" };
+    case "pair_device": {
+      const action = args.action;
+      if (action !== "open" && action !== "show_code" && action !== "scan_qr" &&
+          action !== "enter_code" && action !== "status") {
+        return { kind: "reject", id: call.id, name: call.name, message: "Choose a supported pairing action." };
+      }
+      if (action === "enter_code") {
+        if (typeof args.code !== "string" || !/^[0-9]{8}$/.test(args.code.replace(/[\\s-]/g, ""))) {
+          return { kind: "reject", id: call.id, name: call.name, message: "Enter the eight-digit pairing code." };
+        }
+        return { kind: "pairing", id: call.id, name: "pair_device", action, code: args.code };
+      }
+      if (args.code !== undefined) {
+        return { kind: "reject", id: call.id, name: call.name, message: "Only enter_code accepts a code." };
+      }
+      return { kind: "pairing", id: call.id, name: "pair_device", action };
+    }
     case "list_past_conversations": {
       if ((args.query !== undefined && (typeof args.query !== "string" || args.query.length > 160)) ||
           (args.cursor !== undefined && (typeof args.cursor !== "string" || args.cursor.length > 180)) ||
