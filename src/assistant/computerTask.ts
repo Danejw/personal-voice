@@ -42,7 +42,11 @@ export interface ComputerTaskHost {
   propose(body: Record<string, unknown>): Promise<unknown>;
   execute(call: ComputerCall, image: ComputerImage): Promise<string>;
   confirm(explanation: string): Promise<boolean>;
-  onProgress?(step: number, action: string): void;
+  /** Persist an in-flight marker before any native side effect. Failure prevents execution. */
+  onBeforeAction?(step: number, action: string): Promise<void> | void;
+  /** Save the completed-action checkpoint before proceeding to another step. */
+  onProgress?(step: number, action: string): Promise<void> | void;
+  onBeforeVerify?(step: number): Promise<void> | void;
   /** Diagnostic metadata only, never screenshots, prompts, coordinates, or tool arguments. */
   onTrace?(event: ComputerTaskTraceEvent): void;
   /** A fresh post-action screenshot is inspected independently of the action receipt. */
@@ -130,6 +134,7 @@ export async function runComputerTaskReport(
         return report("unverified", executed, `Model reported: ${said}`);
       }
       try {
+        await host.onBeforeVerify?.(executed);
         const fresh = await host.capture();
         if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
         const evidence = await host.verify(goal, fresh, said);
@@ -163,14 +168,22 @@ export async function runComputerTaskReport(
       acknowledgement = true;
     }
     let outcome: string;
-    try { outcome = await host.execute(decision.call, image); }
+    try {
+      await host.onBeforeAction?.(executed, decision.call.name);
+      outcome = await host.execute(decision.call, image);
+    }
     catch (error) {
       host.onTrace?.({ stage: "failed", step: executed, action: decision.call.name, code: "tool" });
       throw new ComputerTaskFailure("tool", error);
     }
     executed += 1;
     host.onTrace?.({ stage: "acted", step: executed, action: decision.call.name });
-    host.onProgress?.(executed, decision.call.name);
+    try { await host.onProgress?.(executed, decision.call.name); }
+    catch (error) {
+      // The action already happened. Never replay it after checkpoint failure.
+      host.onTrace?.({ stage: "failed", step: executed, action: decision.call.name, code: "tool" });
+      throw new ComputerTaskFailure("tool", error);
+    }
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     previousId = interaction.id;
     result = { name: decision.call.name, callId: interaction.callId, result: outcome, acknowledgement, imageBase64: null };

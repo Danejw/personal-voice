@@ -241,6 +241,8 @@ export class AssistantController {
   private onRevised: ((turn: AssistantTurn) => void) | null = null;
   private computerStopped = false;
   private computerTaskActive = false;
+  /** Remote Windows tasks outlive Gemini Live voice sessions. */
+  private remoteComputerTaskActive = false;
   private computerConfirm: ((allowed: boolean) => void) | null = null;
   /** Off shows a confirm card. On runs the action when the tool is called. */
   private autoRun = true;
@@ -820,7 +822,7 @@ export class AssistantController {
 
   /** Closes the session and stops the microphone and playback. An unfinished line is kept as interrupted. */
   end(): void {
-    this.haltComputer();
+    if (!this.remoteComputerTaskActive) this.haltComputer();
     this.dispatch({ type:"toolActivity",activity:null });
     if (navigator.userAgent.includes("Windows")) {
       void invoke("accessibility_watch", {enabled:false}).catch(() => undefined);
@@ -1994,10 +1996,12 @@ export class AssistantController {
   }
 
   /** The existing Windows Computer Use executor, available to a paired phone after a single PC approval. */
-  runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => void, validate: () => Promise<void>,
-    trace?: (event: ComputerTaskTraceEvent) => void): Promise<ComputerTaskReport> {
+  runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => Promise<void>, validate: () => Promise<void>,
+    trace?: (event: ComputerTaskTraceEvent) => void,
+    beforeAction?: (step: number, action: string) => Promise<void>,
+    beforeVerify?: (step: number) => Promise<void>): Promise<ComputerTaskReport> {
     if (!navigator.userAgent.includes("Windows")) throw new Error("Remote Computer Use requires Windows.");
-    return this.runSupervisedReport(goal, true, onProgress, validate, trace);
+    return this.runSupervisedReport(goal, true, onProgress, validate, trace, beforeAction, beforeVerify);
   }
 
   private async runSupervised(goal: string, remote = false, onProgress?: (step: number, action: string) => void, validate?: () => Promise<void>): Promise<string> {
@@ -2005,10 +2009,13 @@ export class AssistantController {
     return `${report.status.toUpperCase()}: ${report.summary}${report.evidence ? ` Evidence: ${report.evidence}` : ""}`;
   }
 
-  private async runSupervisedReport(goal: string, remote = false, onProgress?: (step: number, action: string) => void,
-    validate?: () => Promise<void>, trace?: (event: ComputerTaskTraceEvent) => void): Promise<ComputerTaskReport> {
+  private async runSupervisedReport(goal: string, remote = false, onProgress?: (step: number, action: string) => Promise<void> | void,
+    validate?: () => Promise<void>, trace?: (event: ComputerTaskTraceEvent) => void,
+    beforeAction?: (step: number, action: string) => Promise<void>,
+    beforeVerify?: (step: number) => Promise<void>): Promise<ComputerTaskReport> {
     if (this.computerTaskActive) throw new Error("Another Computer Use task is already active.");
     this.computerTaskActive = true;
+    this.remoteComputerTaskActive = remote;
     this.computerStopped = false;
     const localTraceId = !remote && this.onComputerFlight ? crypto.randomUUID() : null;
     let lastStage: ComputerTaskTraceEvent["stage"] | null = null;
@@ -2070,7 +2077,9 @@ export class AssistantController {
           if (response.call || !/^VERIFIED:\s+.{12,}/i.test(response.text.trim())) return null;
           return response.text.trim().replace(/^VERIFIED:\s*/i, "");
         },
+        onBeforeAction: beforeAction,
         onProgress,
+        onBeforeVerify: beforeVerify,
         onTrace: reportEvent,
       }, remote ? REMOTE_COMPUTER_LIMITS : undefined);
       if (lastStage !== report.status) reportEvent({ stage: report.status, step: report.steps });
@@ -2082,6 +2091,7 @@ export class AssistantController {
       this.computerConfirm = null;
       this.computerStopped = true;
       this.computerTaskActive = false;
+      this.remoteComputerTaskActive = false;
       this.dispatch({ type: "computer", running: false, prompt: null });
       await this.actions.computer.restore().catch(() => undefined);
       if (navigator.userAgent.includes("Windows")) await invoke("hide_computer_visual").catch(() => undefined);

@@ -10,6 +10,7 @@ import type { OwnedDevice } from "@/handoffs/handoff";
 import type { CompanionAssistantPhase, CompanionMonitor, DeviceLinkPayload } from "@/device-link/protocol";
 import { assistantPhase, companionGaze, companionMouthVisible, defaultMonitorIndex, selectedCompanionPC, stepCompanionSpring } from "@/companion/companionGeometry";
 import { remoteGoalStillActive } from "@/companion/remoteGoalStatus";
+import { computerJobsApi, type ComputerJob } from "@/services/computerJobsService";
 import { CompanionFlightRecorder } from "@/companion/CompanionFlightRecorder";
 import "./companion.css";
 
@@ -42,6 +43,7 @@ export function CompanionView({
 }) {
   const [transport, setTransport] = useState(() => deviceLinkManager.getSnapshot());
   const [remoteGoal, setRemoteGoal] = useState(() => computerActions.getSnapshot().remoteGoal);
+  const [persistedJob, setPersistedJob] = useState<ComputerJob | null>(null);
   const [goalError, setGoalError] = useState<string | null>(null);
   const goalRequestPending = useRef(false);
   const [cursor, setCursor] = useState<Pointer | null>(null);
@@ -67,13 +69,16 @@ export function CompanionView({
   // An explicit default which is no longer paired must not silently select another PC.
   const targetId = selectedCompanionPC(pairedWindows, preferredPC);
   const currentGoal = remoteGoal?.targetDeviceId === targetId ? remoteGoal : null;
-  const goalIsActive = !!currentGoal && remoteGoalStillActive(currentGoal.message);
+  const goalIsActive = persistedJob && persistedJob.target_device_id === targetId
+    ? ["pending_ack", "running"].includes(persistedJob.status)
+    : !!currentGoal && remoteGoalStillActive(currentGoal.message);
   const refreshGoal = async (action: "computer_goal_status" | "stop_computer_goal") => {
     const target = pairedWindows.find(d => d.id === targetId);
     if (!target || goalRequestPending.current) return;
     goalRequestPending.current = true;
     try {
       await computerActions.remoteAction(action, "current", target.name);
+      if (userId && targetId) setPersistedJob(await computerJobsApi.latest(userId, targetId));
       setGoalError(null);
     } catch (error) {
       setGoalError(error instanceof Error ? error.message : "Cannot reach the selected computer.");
@@ -83,12 +88,19 @@ export function CompanionView({
     setRemoteGoal(computerActions.getSnapshot().remoteGoal);
   }), [computerActions]);
   useEffect(() => {
-    if (!goalIsActive || !targetId) return;
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refreshGoal("computer_goal_status");
-    }, 20_000);
-    return () => window.clearInterval(interval);
-  }, [goalIsActive, targetId, computerActions, pairedWindows.map(d => d.id).join(",")]);
+    if (!userId || !targetId) { setPersistedJob(null); return; }
+    let cancelled = false;
+    setPersistedJob(null);
+    const read = () => {
+      if (document.visibilityState !== "visible") return;
+      void computerJobsApi.latest(userId, targetId)
+        .then(job => { if (!cancelled) setPersistedJob(job); })
+        .catch(() => undefined); // Preserve the last signed state while offline.
+    };
+    read();
+    const interval = window.setInterval(read, 15_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [userId, targetId, remoteGoal?.receivedAt]);
   const monitorIndex = savedIndex ?? defaultMonitorIndex(monitors);
   const gaze = useMemo(() => cursor && monitors.length
     ? companionGaze(cursor, monitors, monitorIndex) : { x: 0, y: 0 },
@@ -297,7 +309,7 @@ export function CompanionView({
           {linked ? "LAN connected" : pairedWindows.length === 0 ? "Pair a PC in Devices"
             : !targetId ? "Choose a PC" : "Waiting for PC on Wi-Fi"}
         </span>
-        <CompanionFlightRecorder userId={userId} activeTraceId={currentGoal?.requestId ?? null} />
+        <CompanionFlightRecorder userId={userId} activeTraceId={persistedJob?.id ?? currentGoal?.requestId ?? null} />
         {pairedWindows.length === 0 && (
           <button type="button" className="companion-pair-button"
             onClick={() => openPairingUI()} aria-label="Pair a Windows computer">
@@ -379,10 +391,19 @@ export function CompanionView({
           </g>
         </svg>
         <p className="companion-phase" role="status">{PHASE_LABEL[expressivePhase]}</p>
-        {currentGoal && (
+        {(persistedJob?.target_device_id === targetId || currentGoal) && (
           <div className="companion-goal" role="status" aria-live="polite">
-            <p>{currentGoal.phase === "queued" ? "Contacting Windows" : currentGoal.phase === "accepted" ? "Computer task accepted" : currentGoal.phase === "connection-error" ? "Computer connection issue" : "Computer task update"}</p>
-            <p>{currentGoal.message.slice(0, 250)}</p>
+            {persistedJob?.target_device_id === targetId ? (
+              <>
+                <p>{persistedJob.status.replace(/_/g, " ")} · {persistedJob.steps} actions</p>
+                <p>{(persistedJob.result || persistedJob.last_action || persistedJob.goal).slice(0, 250)}</p>
+              </>
+            ) : currentGoal ? (
+              <>
+                <p>{currentGoal.phase === "queued" ? "Contacting Windows" : currentGoal.phase === "accepted" ? "Computer task accepted" : currentGoal.phase === "connection-error" ? "Computer connection issue" : "Computer task update"}</p>
+                <p>{currentGoal.message.slice(0, 250)}</p>
+              </>
+            ) : null}
             {goalError && <p>{goalError}</p>}
             <div className="companion-goal-actions">
               <button type="button" onClick={() => { void refreshGoal("computer_goal_status"); }}>Update</button>
