@@ -145,3 +145,13 @@
     transition: none !important;
   }
 }
+
+.companion-pair-button {
+  min-height: 38px;
+  padding: 8px 15px;
+  border: 0;
+  border-radius: 14px;
+  background: #88d8c1;
+  color: #10251f;
+  font-weight: 650;
+}
