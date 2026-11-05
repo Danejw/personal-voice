@@ -13,6 +13,7 @@ export interface JournalGoal {
   steps: number;
   lastAction: string;
   result: string;
+  stopRequested?: boolean;
   updatedAt: number;
 }
 
@@ -53,6 +54,7 @@ export function restoreRemoteGoal(
       status: v.status as JournalGoalStatus, steps: v.steps,
       lastAction: v.lastAction.slice(0, 200), result: v.result.slice(0, 1000),
       updatedAt: v.updatedAt,
+      stopRequested: v.stopRequested === true,
     };
     if (ACTIVE.has(record.status)) {
       record.status = "interrupted";

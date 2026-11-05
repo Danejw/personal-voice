@@ -327,7 +327,8 @@ const computerActions = new ComputerActionStore(
 );
 if (platform.platform === "windows") {
   computerActions.setRemoteGoalRunner(
-    (goal, progress, validate, trace) => assistant.runRemoteComputerGoal(goal, progress, validate, trace),
+    (goal, progress, validate, trace, beforeAction, beforeVerify) =>
+      assistant.runRemoteComputerGoal(goal, progress, validate, trace, beforeAction, beforeVerify),
     () => assistant.stopComputer(),
   );
   assistant.setComputerFlightRecorder((traceId, event) => computerActions.recordLocalComputerTrace(traceId, event));

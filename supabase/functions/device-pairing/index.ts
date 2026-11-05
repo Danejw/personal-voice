@@ -8,7 +8,7 @@ const cors = {
   "Content-Type": "application/json",
 };
 type JsonRecord = Record<string, unknown>;
-const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke", "signal", "trusted_start", "trusted_stop", "trusted_list", "trusted_claim", "trusted_validate", "trusted_seen", "auto_claim", "auto_validate", "auto_seen"]);
+const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke", "signal", "trusted_start", "trusted_stop", "trusted_list", "trusted_claim", "trusted_validate", "trusted_seen", "auto_claim", "auto_validate", "auto_seen", "job_mutate"]);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const proofPattern = /^[A-Za-z0-9_-]{86}$/;
 const keyPart = /^[A-Za-z0-9_-]{43}$/;
@@ -173,6 +173,27 @@ Deno.serve(async (request: Request) => {
       p_request: requestId, p_family: family,
     });
     if (result.data !== true) return reply(403, { error: "not_paired" });
+  } else if (op === "job_mutate") {
+    // Signed native Windows identity, then a service-only atomic job transition.
+    // Authenticated phone sessions can SELECT their jobs but cannot write them.
+    if (device.platform !== "windows") return reply(403, { error: "windows_only" });
+    const event = string(args?.event);
+    if (!event || !["create","activate","cancel_pending","heartbeat","checkpoint","reconcile","request_stop"].includes(event)) {
+      return reply(400, { error: "bad_request" });
+    }
+    const requestId = uuidArg(args?.requestId);
+    const recovery = event === "reconcile";
+    if (recovery) {
+      if (typeof args?.canResume !== "boolean" ||
+          Object.keys(args ?? {}).sort().join() !== "canResume,event") {
+        return reply(400, { error: "bad_request" });
+      }
+    } else if (!requestId) {
+      return reply(400, { error: "bad_request" });
+    }
+    result = await admin.rpc("computer_job_mutate", {
+      p_user_id: userId, p_pc_id: deviceId, p_args: args,
+    });
   } else if (op === "auto_claim" || op === "auto_validate" || op === "auto_seen") {
     // Only a signed, registered native Windows identity can claim a paired request.
     // The RPC atomically verifies the exact request, pairing and allowed command.
