@@ -378,6 +378,7 @@ export type Database = {
           worker_token: string | null
           lease_until: string | null
           heartbeat_at: string | null
+          stop_requested_at: string | null
           created_at: string
           updated_at: string
         }
@@ -396,6 +397,7 @@ export type Database = {
           worker_token?: string | null
           lease_until?: string | null
           heartbeat_at?: string | null
+          stop_requested_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -414,6 +416,7 @@ export type Database = {
           worker_token?: string | null
           lease_until?: string | null
           heartbeat_at?: string | null
+          stop_requested_at?: string | null
           created_at?: string
           updated_at?: string
         }
