@@ -10,6 +10,16 @@ export interface ComputerImage {
   height: number;
 }
 
+export type ComputerTaskStatus = "verified" | "unverified" | "stopped" | "blocked";
+
+export interface ComputerTaskReport {
+  status: ComputerTaskStatus;
+  steps: number;
+  summary: string;
+  /** Screenshot-derived verification evidence, not an action acknowledgement. */
+  evidence: string | null;
+}
+
 export interface ComputerTaskHost {
   now(): number;
   stopped(): boolean;
@@ -18,6 +28,8 @@ export interface ComputerTaskHost {
   execute(call: ComputerCall, image: ComputerImage): Promise<string>;
   confirm(explanation: string): Promise<boolean>;
   onProgress?(step: number, action: string): void;
+  /** A fresh post-action screenshot is inspected independently of the action receipt. */
+  verify?(goal: string, image: ComputerImage, modelSummary: string): Promise<string | null>;
 }
 
 export interface ComputerTaskLimits {
@@ -26,26 +38,37 @@ export interface ComputerTaskLimits {
   allowRoutineDrag?: boolean;
 }
 
-/** Remote sessions get a bounded longer horizon, while local defaults remain unchanged. */
 export const REMOTE_COMPUTER_LIMITS: ComputerTaskLimits = {
   maxSteps: 240,
   maxDurationMs: 30 * 60 * 1000,
   allowRoutineDrag: true,
 };
 
+function report(status: ComputerTaskStatus, steps: number, summary: string, evidence: string | null = null): ComputerTaskReport {
+  return { status, steps, summary, evidence };
+}
+
 /**
- * Screenshot, one proposed action, execute, screenshot again.
- * Gemini 3.8 Live is not this loop. Stop and the step and time caps end it.
+ * A goal is never complete merely because a model stops calling tools.
+ * Completion requires a fresh screenshot and an explicit postcondition verifier.
+ * A stopped/blocked run reports progress without claiming that nothing happened.
  */
-export async function runComputerTask(goal: string, host: ComputerTaskHost, limits: ComputerTaskLimits = { maxSteps: 8, maxDurationMs: 45_000 }): Promise<string> {
+export async function runComputerTaskReport(
+  goal: string,
+  host: ComputerTaskHost,
+  limits: ComputerTaskLimits = { maxSteps: 8, maxDurationMs: 45_000 },
+): Promise<ComputerTaskReport> {
   const startedAt = host.now();
   let previousId: string | null = null;
   let result: { name: string; result: string; acknowledgement: boolean; imageBase64: string | null } | null = null;
-  let lastImage: ComputerImage | null = null;
+  let executed = 0;
   for (let step = 0; step < limits.maxSteps; step += 1) {
-    if (host.stopped()) return "Stopped. Nothing further was done.";
+    if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
+    if (host.now() - startedAt >= limits.maxDurationMs) {
+      return report("blocked", executed, `Time limit reached after ${executed} actions. The goal was not verified.`);
+    }
     const image = await host.capture();
-    lastImage = image;
+    if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     const interaction = parseInteraction(await host.propose({
       goal,
       image: previousId ? null : image.jpeg,
@@ -54,24 +77,50 @@ export async function runComputerTask(goal: string, host: ComputerTaskHost, limi
         ? { name: result.name, result: result.result, acknowledgement: result.acknowledgement, image: image.jpeg }
         : null,
     }));
+    if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     if (!interaction.call) {
       const said = interaction.text.trim();
-      return said || "The screen task finished. The latest screen was checked.";
+      if (!said) return report("unverified", executed, "Computer Use ended without an action or completion evidence.");
+      if (!host.verify) return report("unverified", executed, `Model reported: ${said}`);
+      try {
+        const fresh = await host.capture();
+        if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
+        const evidence = await host.verify(goal, fresh, said);
+        if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
+        if (evidence && evidence.trim().length >= 12) {
+          return report("verified", executed, said, evidence.trim().slice(0, 500));
+        }
+        return report("unverified", executed, `Model reported: ${said}. Fresh-screen verification did not confirm the goal.`);
+      } catch {
+        return report("unverified", executed, `Model reported: ${said}. Final screen verification was unavailable.`);
+      }
     }
     const decision = planComputerStep(interaction.call, step, startedAt, host.now(), host.stopped(), limits);
-    if (decision.action === "stop") return decision.message;
+    if (decision.action === "stop") return report("blocked", executed, decision.message);
     let acknowledgement = false;
     if (decision.action === "confirm") {
       const allowed = await host.confirm(decision.explanation);
-      if (!allowed || host.stopped()) return "Stopped. Nothing further was done.";
+      if (!allowed || host.stopped()) {
+        return report("stopped", executed, `Stopped after ${executed} actions because confirmation was declined or the task was cancelled.`);
+      }
       acknowledgement = true;
     }
     const outcome = await host.execute(decision.call, image);
-    host.onProgress?.(step + 1, decision.call.name);
-    if (host.stopped()) return "Stopped. Nothing further was done.";
+    executed += 1;
+    host.onProgress?.(executed, decision.call.name);
+    if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     previousId = interaction.id;
     result = { name: decision.call.name, result: outcome, acknowledgement, imageBase64: null };
   }
-  if (lastImage) await host.capture();
-  return `Stopped after ${limits.maxSteps} steps. The latest screen was checked.`;
+  return report("blocked", executed, `Step limit reached after ${executed} actions. The goal was not verified.`);
+}
+
+/** Existing local Assistant tooling expects text; include the actual verification state. */
+export async function runComputerTask(
+  goal: string,
+  host: ComputerTaskHost,
+  limits?: ComputerTaskLimits,
+): Promise<string> {
+  const outcome = await runComputerTaskReport(goal, host, limits);
+  return `${outcome.status.toUpperCase()}: ${outcome.summary}${outcome.evidence ? ` Evidence: ${outcome.evidence}` : ""}`;
 }
