@@ -178,7 +178,7 @@ Deno.serve(async (request: Request) => {
     // Authenticated phone sessions can SELECT their jobs but cannot write them.
     if (device.platform !== "windows") return reply(403, { error: "windows_only" });
     const event = string(args?.event);
-    if (!event || !["create","activate","cancel_pending","heartbeat","checkpoint","reconcile","request_stop"].includes(event)) {
+    if (!event || !["create","activate","cancel_pending","heartbeat","checkpoint","reconcile","request_stop","job_control"].includes(event)) {
       return reply(400, { error: "bad_request" });
     }
     const requestId = uuidArg(args?.requestId);
@@ -193,6 +193,15 @@ Deno.serve(async (request: Request) => {
     }
     result = await admin.rpc("computer_job_mutate", {
       p_user_id: userId, p_pc_id: deviceId, p_args: args,
+    });
+  } else if (op === "job_control") {
+    if (device.platform !== "windows") return reply(403, { error: "windows_only" });
+    const requestId = uuidArg(args?.requestId);
+    if (!requestId || Object.keys(args ?? {}).sort().join() !== "requestId") {
+      return reply(400, { error: "bad_request" });
+    }
+    result = await admin.rpc("computer_job_control", {
+      p_user_id: userId, p_pc_id: deviceId, p_request_id: requestId,
     });
   } else if (op === "auto_claim" || op === "auto_validate" || op === "auto_seen") {
     // Only a signed, registered native Windows identity can claim a paired request.
