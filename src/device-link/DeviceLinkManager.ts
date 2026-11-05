@@ -147,6 +147,17 @@ export class DeviceLinkManager {
     }
   }
 
+  /** Voice animation data only; never sends audio samples or transcript text. */
+  publishCompanionSpeech(level: number): void {
+    if (this.platform !== "windows" || !this.companionRequesters.size) return;
+    const safe = Math.max(0, Math.min(1, Number.isFinite(level) ? level : 0));
+    for (const peerId of this.companionRequesters.keys()) {
+      if (this.sessions.get(peerId)?.connected) {
+        void this.sendEphemeral(peerId, { type: "assistant-level", level: safe });
+      }
+    }
+  }
+
   private emit() { for (const listener of this.listeners) listener(); }
   private update() {
     const localPeers = [...this.sessions].filter(([, session]) => session.connected).map(([id]) => id);
@@ -177,7 +188,7 @@ export class DeviceLinkManager {
       }
     } else if (this.platform === "android" &&
       (frame.payload.type === "cursor" || frame.payload.type === "layout" ||
-       frame.payload.type === "assistant-state")) {
+       frame.payload.type === "assistant-state" || frame.payload.type === "assistant-level")) {
       if (!this.companionOpen || frame.sender !== this.companionTarget) return;
       for (const cb of this.companionListeners) cb(frame.sender, frame.payload);
     }
