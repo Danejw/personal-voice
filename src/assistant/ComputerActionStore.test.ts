@@ -10,7 +10,7 @@ vi.mock("@/services/computerFlightRecorder", () => ({
   flightFailureCode: () => "unknown",
 }));
 vi.mock("@/assistant/remoteVoiceTarget", () => ({
-  resolvePairedVoiceTarget: async () => ({ id: "pc", name: "Desk PC", platform: "windows" }),
+  resolvePairedVoiceTarget: async () => ({ id: "11111111-1111-4111-8111-111111111111", name: "Desk PC", platform: "windows" }),
 }));
 vi.mock("@/settings/deviceSettings", () => ({
   loadRemoteComputerActions: () => true,
@@ -168,7 +168,7 @@ describe("Windows signed remote action receiver", () => {
     } as unknown as ConstructorParameters<typeof ComputerActionStore>[0];
     const devices = [
       { id: "phone", name: "Phone", platform: "android", lastSeen: new Date().toISOString() },
-      { id: "pc", name: "Desk PC", platform: "windows", lastSeen: new Date().toISOString() },
+      { id: "11111111-1111-4111-8111-111111111111", name: "Desk PC", platform: "windows", lastSeen: new Date().toISOString() },
     ];
     const store = new ComputerActionStore(
       api, async () => devices as RemoteDevice[],
