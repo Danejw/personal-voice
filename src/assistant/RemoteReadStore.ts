@@ -10,7 +10,9 @@ import { snapshotFromNative } from "@/assistant/snapshot";
 import type { ScreenSnapshot } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
-import { loadRemoteReads } from "@/settings/deviceSettings";
+import { loadRemoteReads, loadRemoteComputerActions } from "@/settings/deviceSettings";
+import { pairedPublicKey } from "@/assistant/remoteVoiceProof";
+import { invoke } from "@tauri-apps/api/core";
 import { resolvePairedVoiceTarget } from "@/assistant/remoteVoiceTarget";
 
 export interface RemoteApproval {
@@ -30,6 +32,7 @@ export class RemoteReadStore {
   private snapshot: RemoteReadSnapshot = { approval: null };
   private listeners = new Set<() => void>();
   private notified = new Set<string>();
+  private polling = false;
 
   constructor(
     private api: RemoteContextApi & { touch(deviceId: string): Promise<void> },
@@ -65,6 +68,9 @@ export class RemoteReadStore {
 
   /** Answers pending reads for this device and refreshes last_seen. */
   async poll(userId: string): Promise<void> {
+    if (this.polling) return;
+    this.polling = true;
+    try {
     const currentId = this.getDeviceId(userId);
     try { await this.api.touch(currentId); } catch { /* presence is best-effort */ }
     const devices = await this.listDevices(userId);
@@ -74,6 +80,29 @@ export class RemoteReadStore {
     for (const row of pending) {
       const plan = planRemoteRead(row.kind, this.platform.platform, loadRemoteReads());
       if (plan.action === "approve-screenshot") {
+        // A signed paired device may observe its opted-in, unlocked Windows PC.
+        // Existing individual screenshot prompts remain for PCs without remote control enabled.
+        if (this.platform.platform === "windows" && loadRemoteComputerActions()) {
+          try {
+            if (!await invoke<boolean>("trusted_desktop_unlocked")) continue;
+            await pairedPublicKey(currentId, row.requesterDeviceId);
+            const capture = this.local(userId, mine?.name ?? "This device", row.id);
+            await fulfillRemoteRequest(this.api, row, {
+              ...capture,
+              capture: async () => {
+                if (!loadRemoteReads() || !loadRemoteComputerActions() ||
+                    !await invoke<boolean>("trusted_desktop_unlocked")) {
+                  throw new Error("Remote screen sharing is no longer enabled.");
+                }
+                await pairedPublicKey(currentId, row.requesterDeviceId);
+                return capture.capture();
+              },
+            });
+          } catch {
+            // Never fall back to an unverified screenshot.
+          }
+          continue;
+        }
         if (!waiting) waiting = { id: row.id };
         continue;
       }
@@ -93,6 +122,9 @@ export class RemoteReadStore {
     if (this.snapshot.approval) {
       this.snapshot = { approval: null };
       this.publish();
+    }
+    } finally {
+      this.polling = false;
     }
   }
 

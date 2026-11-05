@@ -145,7 +145,7 @@ export function planComputerStep(
   startedAt: number,
   now: number,
   stopped: boolean,
-  limits: { maxSteps: number; maxDurationMs: number } = { maxSteps: COMPUTER_STEP_LIMIT, maxDurationMs: COMPUTER_TIME_LIMIT_MS },
+  limits: { maxSteps: number; maxDurationMs: number; allowRoutineDrag?: boolean } = { maxSteps: COMPUTER_STEP_LIMIT, maxDurationMs: COMPUTER_TIME_LIMIT_MS },
 ): StepDecision {
   if (stopped) return { action: "stop", message: "Stopped. Nothing further was done." };
   if (stepIndex >= limits.maxSteps) return { action: "stop", message: `Stopped after ${limits.maxSteps} steps.` };
@@ -158,7 +158,8 @@ export function planComputerStep(
   if (!validated.ok) return { action: "stop", message: validated.message };
   const kind = safetyClass(call.name, call.args);
   if (kind === "unsupported") return { action: "stop", message: "That action is not available." };
-  const needsConfirm = kind === "high" || safety.decision === "require_confirmation";
+  const routineDrag = limits.allowRoutineDrag === true && (call.name === "drag" || call.name === "drag_and_drop");
+  const needsConfirm = (kind === "high" && !routineDrag) || safety.decision === "require_confirmation";
   if (needsConfirm) {
     const explanation = safety.explanation
       || (kind === "high" ? "This can submit or send. Confirm before it runs." : "Computer Use asked for confirmation.");

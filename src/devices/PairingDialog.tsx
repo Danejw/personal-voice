@@ -5,6 +5,7 @@ import { PAIRING_FINISHED_EVENT, PAIRING_UI_EVENT, pairingAction,
 import { devicePairingApi, type PairCode, type PairInvite } from "@/services/devicePairingService";
 import { verifyPairApproval, verifiedPairLinks } from "@/services/verifiedPairLinks";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
+import { saveRemoteComputerActions, saveRemoteReads } from "@/settings/deviceSettings";
 import { loadRemoteVoiceDefault, saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import "./pairingDialog.css";
@@ -165,12 +166,19 @@ export function PairingDialog({ deviceId, platform, devices }: {
                   hour: "numeric", minute: "2-digit",
                 })}</p>
                 {request?.status === "claimed" && (
+                  <p className="pv-pair-hint">Enabling Companion control allows verified paired devices to control and view this unlocked PC. Disable it in Windows settings at any time.</p>
+                )}
+                {request?.status === "claimed" && (
                   <button className="pv-pair-primary" type="button" disabled={busy}
                     onClick={() => void run(async () => {
                       if (!deviceId) return;
                       await devicePairingApi.approve(deviceId, request, invite.code);
-                      setNotice("Pairing approved. Verifying…");
-                    })}>Approve {peerName}</button>
+                      // Explicit pairing consent includes Companion control of this unlocked PC.
+                      // Both permissions remain independently revocable in Windows settings.
+                      saveRemoteComputerActions(true);
+                      saveRemoteReads(true);
+                      setNotice("Pairing approved. Companion control enabled.");
+                    })}>Approve {peerName} & enable control</button>
                 )}
                 <button className="pv-pair-secondary" type="button" disabled={busy}
                   onClick={() => void run(async () => {

@@ -79,6 +79,7 @@ describe("assistant tool schema", () => {
       "forget_memory",
       "get_tool_playbook",
       "pair_device",
+      "remote_computer_goal",
       "remote_action",
     ]);
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
@@ -95,6 +96,17 @@ describe("assistant tool schema", () => {
       .toMatchObject({ kind: "pairing", action: "enter_code", code: "12345678" });
     expect(decideToolCall({ id: "bad", name: "pair_device", args: { action: "enter_code", code: "1234" } }, plan).kind).toBe("reject");
     expect(decideToolCall({ id: "bad", name: "pair_device", args: { action: "approve" } }, plan).kind).toBe("reject");
+  });
+
+  it("routes complete remote desktop goals without asking for individual mouse steps", () => {
+    expect(decideToolCall({ id: "g", name: "remote_computer_goal",
+      args: { action: "start", goal: "Open Chrome and organize my notes." } }, plan))
+      .toMatchObject({ kind: "remoteComputerGoal", action: "start", device: null });
+    expect(decideToolCall({ id: "s", name: "remote_computer_goal",
+      args: { action: "status" } }, plan))
+      .toMatchObject({ kind: "remoteComputerGoal", action: "status", goal: "current" });
+    expect(decideToolCall({ id: "bad", name: "remote_computer_goal",
+      args: { action: "start", goal: "" } }, plan).kind).toBe("reject");
   });
 
   it("validates note image source and keeps old text-only calls compatible", () => {

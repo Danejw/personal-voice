@@ -107,6 +107,7 @@ describe("assistant setup and typed turns", () => {
       "forget_memory",
       "get_tool_playbook",
       "pair_device",
+      "remote_computer_goal",
       "remote_action",
     ]);
     expect(ASSISTANT_PCM_RATE).toBe(24_000);

@@ -416,6 +416,16 @@ export function assistantFunctionDeclarations() {
       },
     },
     {
+      name: "remote_computer_goal",
+      description: "For a multi-step goal on a paired Windows PC, pass the whole objective to the existing Windows Computer Use loop. Use action=start, status or stop. The start acknowledgement is not proof of completion. Prefer this over making the phone plan individual pointer commands. The target PC enforces the existing pairing and control permissions.",
+      parameters: { type: "object", properties: {
+        action: { type: "string", enum: ["start", "status", "stop"] },
+        goal: { type: "string", description: "Required whole goal for start, 3–1000 characters." },
+        device: { type: "string", description: "Exact paired device name; optional if a default is saved." },
+        device_id: { type: "string", description: "Exact paired device UUID instead of name." },
+      }, required: ["action"] },
+    },
+    {
       name: "remote_action",
       description: "Control a paired Windows PC. For a multi-step goal use start_computer_goal with the complete goal as argument: the Windows PC runs its existing Computer Use agent with screenshots and actions automatically when Allow remote actions is enabled. Use computer_goal_status or stop_computer_goal with argument current to check or stop that session without PC approval. Single mouse, app and text actions run without repeated PC approval when that switch is enabled. Select an exact paired PC or the saved default. Only explicitly paired devices can control an unlocked PC; shell and unsupported destructive commands remain blocked.",
       parameters: {
@@ -505,6 +515,7 @@ export type ToolDecision =
   | { kind: "playbook"; id: string; name: "get_tool_playbook"; playbookId: ToolPlaybookId }
   | { kind: "handoffs"; id: string; name: "list_handoffs" }
   | { kind: "pairing"; id: string; name: "pair_device"; action: "open" | "show_code" | "scan_qr" | "enter_code" | "status"; code?: string }
+  | { kind: "remoteComputerGoal"; id: string; name: "remote_computer_goal"; action: "start" | "status" | "stop"; goal: string; device: string | null }
   | {
     kind: "confirm";
     id: string;
@@ -834,6 +845,21 @@ export function decideToolCall(
       const goal = readGoal(args);
       if ("error" in goal) return { kind: "reject", id: call.id, name: call.name, message: goal.error };
       return confirm(call.id, "supervise_screen", goal.text, "Start a supervised screen task", null, null);
+    }
+    case "remote_computer_goal": {
+      const action = args.action;
+      if (action !== "start" && action !== "status" && action !== "stop")
+        return { kind: "reject", id: call.id, name: call.name, message: "Choose start, status or stop." };
+      const device = readDevice(args);
+      if ("error" in device) return { kind: "reject", id: call.id, name: call.name, message: device.error };
+      if (action === "start") {
+        if (typeof args.goal !== "string" || args.goal.trim().length < 3 || args.goal.trim().length > 1000)
+          return { kind: "reject", id: call.id, name: call.name, message: "Provide a goal between 3 and 1000 characters." };
+        return { kind: "remoteComputerGoal", id: call.id, name: "remote_computer_goal", action, goal: args.goal.trim(), device: device.name };
+      }
+      if (args.goal !== undefined)
+        return { kind: "reject", id: call.id, name: call.name, message: "Omit goal for status or stop." };
+      return { kind: "remoteComputerGoal", id: call.id, name: "remote_computer_goal", action, goal: "current", device: device.name };
     }
     case "remote_action": {
       const remote = readRemoteAction(args);
