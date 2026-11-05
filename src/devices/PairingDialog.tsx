@@ -126,6 +126,12 @@ export function PairingDialog({ deviceId, platform, devices }: {
   };
   const close = () => {
     setVisible(false);
+    if (invite && deviceId) {
+      void devicePairingApi.cancel(deviceId, invite.id).catch(() => undefined);
+    }
+    setInvite(null);
+    setJoined(null);
+    setRequest(null);
     previousFocus.current?.focus();
   };
   if (!visible) return null;
