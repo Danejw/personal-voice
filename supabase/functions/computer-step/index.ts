@@ -114,9 +114,10 @@ Deno.serve(async (req) => {
     console.error(`computer-step: interactions status ${response.status}`);
     return reply(502, { error: "Computer Use did not accept that step." });
   }
-  const interaction = await response.json().catch(() => null) as { id?: unknown; steps?: unknown } | null;
+  const interaction = await response.json().catch(() => null) as { id?: unknown; steps?: unknown; text?: unknown } | null;
   return reply(200, {
     id: interaction && typeof interaction.id === "string" ? interaction.id : null,
     steps: interaction && Array.isArray(interaction.steps) ? interaction.steps : [],
+    text: interaction && typeof interaction.text === "string" ? interaction.text.slice(0, 1200) : "",
   });
 });
