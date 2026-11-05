@@ -1995,7 +1995,7 @@ export class AssistantController {
 
   /** The existing Windows Computer Use executor, available to a paired phone after a single PC approval. */
   runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => void, validate: () => Promise<void>,
-    trace: (event: ComputerTaskTraceEvent) => void): Promise<ComputerTaskReport> {
+    trace?: (event: ComputerTaskTraceEvent) => void): Promise<ComputerTaskReport> {
     if (!navigator.userAgent.includes("Windows")) throw new Error("Remote Computer Use requires Windows.");
     return this.runSupervisedReport(goal, true, onProgress, validate, trace);
   }
