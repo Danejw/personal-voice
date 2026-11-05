@@ -58,7 +58,7 @@ import { interpretToolResult, ToolFailureHistory, type ToolResultAssessment } fr
 import { ToolTraceRecorder, type ToolEvalTrace, type TraceMetadata } from "@/assistant/harness/evals/traceRecorder";
 import { assembleTaskGuidance, deviceToolGuidance, UNKNOWN_DEVICE_CONTEXT, type AssistantDeviceContext } from "@/assistant/harness/contextAssembler";
 import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
-import { runComputerTask, type ComputerImage } from "@/assistant/computerTask";
+import { REMOTE_COMPUTER_LIMITS, runComputerTask, type ComputerImage } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
 import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import {
@@ -232,6 +232,7 @@ export class AssistantController {
   private voiceUsageIds = new Set<string>();
   private onRevised: ((turn: AssistantTurn) => void) | null = null;
   private computerStopped = false;
+  private computerTaskActive = false;
   private computerConfirm: ((allowed: boolean) => void) | null = null;
   /** Off shows a confirm card. On runs the action when the tool is called. */
   private autoRun = true;
@@ -1891,9 +1892,9 @@ export class AssistantController {
     }
   }
 
-  private confirmComputerStep(explanation: string): Promise<boolean> {
+  private confirmComputerStep(explanation: string, remote: boolean): Promise<boolean> {
     if (this.computerStopped) return Promise.resolve(false);
-    if (this.autoRun) return Promise.resolve(true);
+    if (this.autoRun && !remote) return Promise.resolve(true);
     this.dispatch({ type: "computer", running: true, prompt: explanation });
     return new Promise((resolve) => {
       this.computerConfirm = (allowed) => {
@@ -1904,7 +1905,15 @@ export class AssistantController {
     });
   }
 
-  private async runSupervised(goal: string): Promise<string> {
+  /** The existing Windows Computer Use executor, available to a paired phone after a single PC approval. */
+  runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => void, validate: () => Promise<void>): Promise<string> {
+    if (!navigator.userAgent.includes("Windows")) throw new Error("Remote Computer Use requires Windows.");
+    return this.runSupervised(goal, true, onProgress, validate);
+  }
+
+  private async runSupervised(goal: string, remote = false, onProgress?: (step: number, action: string) => void, validate?: () => Promise<void>): Promise<string> {
+    if (this.computerTaskActive) throw new Error("Another Computer Use task is already active.");
+    this.computerTaskActive = true;
     this.computerStopped = false;
     this.dispatch({ type: "computer", running: true, prompt: null });
     try {
@@ -1912,6 +1921,7 @@ export class AssistantController {
         now: () => Date.now(),
         stopped: () => this.computerStopped,
         capture: async () => {
+          if (validate) await validate();
           if (navigator.userAgent.includes("Windows")) await invoke("hide_computer_visual").catch(() => undefined);
           return this.actions.computer.capture();
         },
@@ -1933,11 +1943,13 @@ export class AssistantController {
             throw error;
           }
         },
-        confirm: (explanation) => this.confirmComputerStep(explanation),
-      });
+        confirm: (explanation) => this.confirmComputerStep(explanation, remote),
+        onProgress,
+      }, remote ? REMOTE_COMPUTER_LIMITS : undefined);
     } finally {
       this.computerConfirm = null;
       this.computerStopped = true;
+      this.computerTaskActive = false;
       this.dispatch({ type: "computer", running: false, prompt: null });
       await this.actions.computer.restore().catch(() => undefined);
       if (navigator.userAgent.includes("Windows")) await invoke("hide_computer_visual").catch(() => undefined);
