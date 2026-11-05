@@ -1,4 +1,5 @@
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { pairingCodeFromQr } from "@/devices/PairingQrCode";
 import { devicePairingApi, type PairCode } from "@/services/devicePairingService";
 import { verifiedPairLinks } from "@/services/verifiedPairLinks";
@@ -15,6 +16,10 @@ export type PairingViewRequest =
 
 export function openPairingUI(request: PairingViewRequest = { kind: "open" }): void {
   window.dispatchEvent(new CustomEvent<PairingViewRequest>(PAIRING_UI_EVENT, { detail: request }));
+  if (navigator.userAgent.includes("Windows")) {
+    const appWindow = getCurrentWindow();
+    void appWindow.show().then(() => appWindow.setFocus()).catch(() => undefined);
+  }
 }
 
 /** Existing signed pairing backend and native QR scanner; never auto-approves another device. */
@@ -35,6 +40,7 @@ export async function pairingAction(
   }
   if (action === "show_code") {
     if (platform !== "windows") throw new Error("Show a pairing QR on the Windows computer.");
+    openPairingUI();
     const invite = await devicePairingApi.invite(deviceId);
     openPairingUI({ kind: "invite", invite });
     return `Pairing QR and eight-digit code ${invite.code.slice(0, 4)} ${invite.code.slice(4)} are displayed on this computer. Expires ${invite.expiresAt}. Waiting for Android to scan or enter the code, then approve on this computer.`;
