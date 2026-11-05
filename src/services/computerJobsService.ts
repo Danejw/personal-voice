@@ -52,6 +52,9 @@ export const computerJobsApi = {
       result: point.result ?? "", evidence: point.evidence ?? null,
     });
   },
+  requestStop(pcDeviceId: string, requestId: string, token: string): Promise<ComputerJob> {
+    return mutate(pcDeviceId, { event: "request_stop", requestId, token });
+  },
   heartbeat(pcDeviceId: string, requestId: string, token: string): Promise<ComputerJob> {
     return mutate(pcDeviceId, { event: "heartbeat", requestId, token });
   },
