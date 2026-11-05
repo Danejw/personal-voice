@@ -1251,6 +1251,10 @@ export default function App() {
           {section === "insights" && <InsightsToolbar store={insightsStore} snapshot={insightsSnapshot} onRefreshAssistant={() => setAssistantInsightsRefreshToken(n => n + 1)} />}
           <div id="page-header-actions" className="page-header-actions" hidden={section !== "capture"} />
         </header>
+        {platform.platform === "windows" && computerSnapshot.receiverError &&
+          (section === "assistant" || section === "devices") && (
+          <p className="status" role="alert">Remote Computer Use: {computerSnapshot.receiverError}</p>
+        )}
         {computerSnapshot.approval && (
           <div className="assistant-action" role="region" aria-label="Remote action">
             <p>{computerSnapshot.approval.label}</p>
