@@ -1179,7 +1179,7 @@ export default function App() {
 
   if (platform.platform === "android" && section === "companion") {
     return <>
-      <CompanionView assistant={assistant} snapshot={assistantSnapshot}
+      <CompanionView assistant={assistant} computerActions={computerActions} snapshot={assistantSnapshot}
         micBusy={dictationLive} currentDeviceId={deviceSnapshot.currentDeviceId}
         devices={deviceSnapshot.devices}
         onStartVoice={() => { void assistantLibrary.produce(); }}

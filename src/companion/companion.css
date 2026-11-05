@@ -178,3 +178,28 @@
   color: #10251f;
   font-weight: 650;
 }
+
+/* A compact status surface. Signed Windows receipts are the only source of updates. */
+.companion-goal {
+  width: min(90vw, 340px);
+  padding: 13px 16px;
+  border-radius: 16px;
+  background: #ffffff10;
+  box-shadow: 0 8px 24px #00000016;
+  color: #d7eee7;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.companion-goal p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.companion-goal p:first-child { font-weight: 650; color: #b7f7df; }
+.companion-goal-actions { display: flex; gap: 8px; margin-top: 10px; }
+.companion-goal-actions button {
+  background: #ffffff18;
+  color: inherit;
+  border: 0;
+  border-radius: 10px;
+  min-height: 35px;
+  padding: 7px 12px;
+  font: inherit;
+}
+.companion-goal-actions button:focus-visible { outline: 2px solid #88d8c1; outline-offset: 2px; }
