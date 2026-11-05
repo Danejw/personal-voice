@@ -1465,6 +1465,19 @@ export class AssistantController {
           await this.runRemote(decision);
           continue;
         }
+        if (decision.kind === "remoteComputerGoal") {
+          const epoch = this.toolEpoch;
+          const remoteAction = decision.action === "start" ? "start_computer_goal"
+            : decision.action === "status" ? "computer_goal_status" : "stop_computer_goal";
+          try {
+            const result = await this.actions.computer.remoteAction(remoteAction, decision.goal, decision.device);
+            if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, result);
+          } catch (error) {
+            if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
+          }
+          continue;
+        }
+
         if (this.pending) {
           this.replyTool(decision.id, decision.name, false, ACTION_BUSY);
           continue;
@@ -1517,6 +1530,9 @@ export class AssistantController {
   }
 
   private shouldAutoRun(decision: Extract<ToolDecision, {kind:"confirm"}>): boolean {
+    // Paired remote command authorization is enforced by the receiving Windows PC.
+    // Do not gate each mobile remote command behind a second Assistant UI confirmation.
+    if (decision.name === "remote_action") return true;
     // Saving any note attachment always requires explicit consent.
     if (decision.name === "attach_file_to_note" ||
         decision.title === "Save note with attachment" ||
