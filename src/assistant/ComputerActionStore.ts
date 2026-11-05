@@ -1,4 +1,4 @@
-import { dragEndpoints, executableShortcut, parseRemotePointer, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
+import { dragEndpoints, executableShortcut, parseRemotePointer, planRemoteComputerAction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
 import type { ComputerImage } from "@/assistant/computerTask";
 import type { RemoteDevice } from "@/assistant/remoteContext";
@@ -173,14 +173,14 @@ export class ComputerActionStore {
         // A signed v2 request is already verified by listPending. The service
         // additionally authenticates this Windows PC's native pairing identity
         // and atomically claims the exact request before any native action.
-        if (this.userId !== userId || this.platform.platform !== "windows" || !remoteEnabled) {
-          const denied = await fulfillComputerAction(
-            this.api, row, this.platform.platform, remoteEnabled, null,
-            async () => { throw new Error("Remote control is not enabled on this Windows PC."); },
-          );
-          if (denied.action === "waiting") continue;
+        const decision = planRemoteComputerAction(
+          row.action, row.argument, this.platform.platform, remoteEnabled,
+        );
+        if (decision.action === "deny") {
+          await this.api.deny(userId, row.id, decision.message);
           continue;
         }
+        if (this.userId !== userId) continue;
         let claimed: "none" | "claimed" | "already";
         try {
           // Fail closed rather than replaying commands after a crash or reconnect.
