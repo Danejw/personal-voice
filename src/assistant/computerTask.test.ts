@@ -246,4 +246,55 @@ describe("computer task loop", () => {
     ]);
     expect(task.executed).toHaveLength(0);
   });
+  it("persists an in-flight checkpoint before the first native action", async () => {
+    const order: string[] = [];
+    const task = host({
+      propose: async () => ({ id: "one", steps: [{
+        type: "function_call", id: "call-1", name: "click", arguments: { x: 1, y: 2 },
+      }] }),
+      onBeforeAction: async (step, name) => { order.push(`before:${step}:${name}`); },
+      execute: async () => { order.push("click"); return "Clicked"; },
+      onProgress: async (step, name) => { order.push(`after:${step}:${name}`); },
+    });
+    await runComputerTaskReport("Click.", task, { maxSteps: 1, maxDurationMs: 10000 });
+    expect(order).toEqual(["before:0:click", "click", "after:1:click"]);
+  });
+
+  it("never executes if the pre-action durable checkpoint is unavailable", async () => {
+    const task = host({
+      propose: async () => ({ id: "one", steps: [{
+        type: "function_call", id: "call-1", name: "click", arguments: { x: 1, y: 2 },
+      }] }),
+      onBeforeAction: async () => { throw new Error("Failed to write in-flight checkpoint."); },
+    });
+    await expect(runComputerTaskReport("Click.", task)).rejects.toMatchObject({ failureCode: "tool" });
+    expect(task.executed).toHaveLength(0);
+  });
+
+  it("never repeats an action when its post-action checkpoint fails", async () => {
+    let proposals = 0;
+    const task = host({
+      propose: async () => { proposals++; return { id: "one", steps: [{
+        type: "function_call", id: "call-1", name: "click", arguments: { x: 1, y: 2 },
+      }] }; },
+      onProgress: async () => { throw new Error("Checkpoint unavailable after click."); },
+    });
+    await expect(runComputerTaskReport("Click.", task)).rejects.toMatchObject({ failureCode: "tool" });
+    expect(proposals).toBe(1);
+    expect(task.executed).toEqual(["click"]);
+  });
+
+  it("marks the independent verifier before taking its final screenshot", async () => {
+    const phases: string[] = [];
+    const task = host({
+      propose: async () => ({ id: "done", steps: [], text: "Finished." }),
+      onBeforeVerify: async () => { phases.push("verifying"); },
+      capture: async () => { phases.push("capture"); return { jpeg: "img", width: 100, height: 100 }; },
+      verify: async () => "The requested text is visible in Notepad.",
+    });
+    const result = await runComputerTaskReport("Type text.", task);
+    expect(result.status).toBe("verified");
+    expect(phases).toEqual(["capture", "verifying", "capture"]);
+  });
+
 });
