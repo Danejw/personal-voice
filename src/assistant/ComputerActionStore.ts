@@ -163,6 +163,12 @@ export class ComputerActionStore {
       const currentId = this.getDeviceId(userId);
       try { await this.api.touch(currentId); } catch { /* presence is best-effort */ }
       const pending = await this.api.listPending(userId, currentId);
+      // A start command that expired or was deleted before its signed reply may not launch later.
+      if (this.pendingGoalStart && this.remoteGoal?.status === "starting" &&
+          !pending.some(row => row.id === this.pendingGoalStart?.requestId)) {
+        this.pendingGoalStart = null;
+        this.remoteGoal = null;
+      }
       const remoteEnabled = loadRemoteComputerActions();
       // Backend missing, no trusted grant, account signed out, or Android:
       // fail closed to ordinary per-action Windows confirmation.
