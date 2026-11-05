@@ -25,8 +25,16 @@ export interface RemoteGoalState {
   result: string;
 }
 
+export interface RemoteGoalNotice {
+  targetDeviceId: string;
+  phase: "accepted" | "reported";
+  message: string;
+  receivedAt: number;
+}
+
 export interface ComputerActionSnapshot {
   approval: ComputerApproval | null;
+  remoteGoal: RemoteGoalNotice | null;
 }
 
 /**
@@ -34,7 +42,7 @@ export interface ComputerActionSnapshot {
  * Shell is not a method on this store.
  */
 export class ComputerActionStore {
-  private snapshot: ComputerActionSnapshot = { approval: null };
+  private snapshot: ComputerActionSnapshot = { approval: null, remoteGoal: null };
   private listeners = new Set<() => void>();
   private approvedId: string | null = null;
   private polling = false;
@@ -90,7 +98,7 @@ export class ComputerActionStore {
     const devices = await this.listDevices(userId);
     const currentId = this.getDeviceId(userId);
     const target = await resolvePairedVoiceTarget(devices, currentId, deviceName);
-    return askComputerAction(
+    const result = await askComputerAction(
       this.api,
       userId,
       this.getDeviceId(userId),
@@ -100,6 +108,17 @@ export class ComputerActionStore {
       argument,
       { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
     );
+    if (action === "start_computer_goal" || action === "computer_goal_status" || action === "stop_computer_goal") {
+      this.snapshot = {
+        ...this.snapshot,
+        remoteGoal: {
+          targetDeviceId: target.id, phase: action === "start_computer_goal" ? "accepted" : "reported",
+          message: result.slice(0, 1500), receivedAt: Date.now(),
+        },
+      };
+      for (const listener of this.listeners) listener();
+    }
+    return result;
   }
 
   async capture(): Promise<ComputerImage> {
@@ -296,7 +315,7 @@ export class ComputerActionStore {
 
   private setApproval(approval: ComputerApproval | null): void {
     if (this.snapshot.approval?.id === approval?.id && this.snapshot.approval?.label === approval?.label) return;
-    this.snapshot = { approval };
+    this.snapshot = { ...this.snapshot, approval };
     for (const listener of this.listeners) listener();
   }
 }
