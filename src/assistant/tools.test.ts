@@ -78,11 +78,23 @@ describe("assistant tool schema", () => {
       "change_memory",
       "forget_memory",
       "get_tool_playbook",
+      "pair_device",
       "remote_action",
     ]);
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("replace_selection");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
+  });
+
+  it("validates pairing tool actions and eight-digit codes", () => {
+    expect(decideToolCall({ id: "code", name: "pair_device", args: { action: "show_code" } }, plan))
+      .toMatchObject({ kind: "pairing", action: "show_code" });
+    expect(decideToolCall({ id: "scan", name: "pair_device", args: { action: "scan_qr" } }, plan))
+      .toMatchObject({ kind: "pairing", action: "scan_qr" });
+    expect(decideToolCall({ id: "enter", name: "pair_device", args: { action: "enter_code", code: "12345678" } }, plan))
+      .toMatchObject({ kind: "pairing", action: "enter_code", code: "12345678" });
+    expect(decideToolCall({ id: "bad", name: "pair_device", args: { action: "enter_code", code: "1234" } }, plan).kind).toBe("reject");
+    expect(decideToolCall({ id: "bad", name: "pair_device", args: { action: "approve" } }, plan).kind).toBe("reject");
   });
 
   it("validates note image source and keeps old text-only calls compatible", () => {
