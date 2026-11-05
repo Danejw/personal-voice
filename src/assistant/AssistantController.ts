@@ -79,6 +79,7 @@ export interface AssistantSessionHandle {
   sendVideo(jpegBase64: string): void;
   sendToolResponse(message: unknown): void;
   sendAudio(pcm: ArrayBuffer): void;
+  endAudioStream(): void;
   close(): void;
 }
 
@@ -165,6 +166,11 @@ export class AssistantController {
   private capture?: AudioCapture;
   private pendingAudio: ArrayBuffer[] = [];
   private streaming = false;
+  /** Companion only: gate microphone frames while the character is not held. */
+  private companionHoldMode = false;
+  private companionPressed = false;
+  private companionPendingEnd = false;
+  private companionHasAudio = false;
   private generation = 0;
   private connection = 0;
   private resumeHandle: string | null = null;
@@ -417,6 +423,39 @@ export class AssistantController {
   subscribe(listener: (snapshot: AssistantSnapshot) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** The character, unlike the normal Assistant UI, uses press-to-speak. */
+  setCompanionHoldMode(enabled: boolean): void {
+    if (this.companionHoldMode === enabled) return;
+    this.companionHoldMode = enabled;
+    this.companionPressed = false;
+    this.companionPendingEnd = false;
+    this.companionHasAudio = false;
+    this.pendingAudio = [];
+    // Never leave an open microphone running after exiting Companion.
+    if (!enabled && this.snapshot.status !== "IDLE") this.end();
+  }
+
+  setCompanionPressed(pressed: boolean): void {
+    if (!this.companionHoldMode || this.companionPressed === pressed) return;
+    this.companionPressed = pressed;
+    if (pressed) {
+      this.companionPendingEnd = false;
+      this.companionHasAudio = false;
+      if (this.snapshot.status === "RESPONDING") this.interruptPlayback();
+      return;
+    }
+    if (!this.companionHasAudio) return;
+    if (!this.streaming) {
+      this.companionPendingEnd = true;
+      return;
+    }
+    try {
+      this.session?.endAudioStream();
+    } catch {
+      this.failActive("Couldn't finish voice input.");
+    }
   }
 
   /** Opens one Live session and starts the microphone. Ignored while one is already running. */
@@ -1123,8 +1162,10 @@ export class AssistantController {
 
   private onMic(generation: number, chunk: ArrayBuffer) {
     if (generation !== this.generation || chunk.byteLength === 0) return;
+    if (this.companionHoldMode && !this.companionPressed) return;
     this.syncEcho(Date.now());
     if (!shouldForwardMicrophone(this.echo, Date.now())) return;
+    if (this.companionHoldMode) this.companionHasAudio = true;
     if (!this.streaming) {
       this.pendingAudio.push(chunk);
       return;
@@ -1149,11 +1190,19 @@ export class AssistantController {
     this.pendingAudio = [];
     this.streaming = true;
     for (const chunk of queued) this.forward(chunk);
+    if (this.companionHoldMode && this.companionPendingEnd) {
+      this.companionPendingEnd = false;
+      try { this.session?.endAudioStream(); }
+      catch { this.failActive("Couldn't finish voice input."); }
+    }
   }
 
   private stopCapture() {
     this.streaming = false;
     this.pendingAudio = [];
+    this.companionPressed = false;
+    this.companionPendingEnd = false;
+    this.companionHasAudio = false;
     const capture = this.capture;
     this.capture = undefined;
     if (capture) void capture.stop(false).catch(() => undefined);
