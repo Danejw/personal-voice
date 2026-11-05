@@ -227,7 +227,7 @@ describe("computer task loop", () => {
     await runComputerTaskReport("Click the button.", task);
     expect(task.executed).toEqual(["click"]);
     expect(continuation).toMatchObject({
-      model: "gemini-3.7-flash", previousInteractionId: "fallback-step",
+      model: "gemini-3.7-flash", supportsModelFallback: true, previousInteractionId: "fallback-step",
       functionResult: { callId: "call-1" },
     });
   });
