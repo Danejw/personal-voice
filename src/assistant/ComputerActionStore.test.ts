@@ -4,7 +4,17 @@ import type { ComputerActionRow } from "@/assistant/computerRemote";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import type { RemoteDevice } from "@/assistant/remoteContext";
 import { recordComputerEvent } from "@/services/computerFlightRecorder";
+import { computerJobsApi, type ComputerJob } from "@/services/computerJobsService";
 
+vi.mock("@/services/computerJobsService", () => ({
+  computerJobsApi: {
+    create: vi.fn(), activate: vi.fn(), cancelPending: vi.fn(),
+    checkpoint: vi.fn(), heartbeat: vi.fn(), reconcile: vi.fn(), latest: vi.fn(),
+  },
+}));
+vi.mock("@/assistant/remoteVoiceProof", () => ({
+  pairedPublicKey: vi.fn(async () => ({})),
+}));
 vi.mock("@/services/computerFlightRecorder", () => ({
   recordComputerEvent: vi.fn(),
   flightFailureCode: () => "unknown",
@@ -184,6 +194,100 @@ describe("Windows signed remote action receiver", () => {
     expect(recordComputerEvent).not.toHaveBeenCalledWith(expect.objectContaining({
       actor: "android", traceId: "remote-1", action: "open_app",
     }));
+  });
+
+  const durable = (status: ComputerJob["status"] = "running",
+    phase: ComputerJob["phase"] = "observing", steps = 0): ComputerJob => ({
+    id: "goal-1", user_id: "account", requester_device_id: "phone", target_device_id: "pc",
+    goal: "Open Notepad and type Hello World.", status, phase, steps,
+    last_action: steps ? "type" : "", result: "", evidence: null,
+    worker_token: status === "running" ? "lease-token" : null,
+    lease_until: null, heartbeat_at: null, created_at: "2026-11-05T20:00:00Z",
+    updated_at: "2026-11-05T20:01:00Z",
+  });
+
+  it("durably creates before acknowledging, and checkpoints before/after desktop input", async () => {
+    const row = request("goal-1", "start_computer_goal", "Open Notepad and type Hello World.");
+    const messages: string[] = [];
+    const api = {
+      touch: async () => undefined,
+      listPending: async () => row.status === "pending" ? [row] : [],
+      answer: async (_user: string, _id: string, result: string) => {
+        expect(computerJobsApi.create).toHaveBeenCalledTimes(1);
+        messages.push("ack");
+        row.status = "answered";
+        row.result = result;
+      },
+      deny: async () => { throw new Error("Unexpected denial"); },
+    } as unknown as ConstructorParameters<typeof ComputerActionStore>[0];
+    vi.mocked(computerJobsApi.reconcile).mockResolvedValue(null);
+    vi.mocked(computerJobsApi.create).mockResolvedValue(durable("pending_ack"));
+    vi.mocked(computerJobsApi.activate).mockResolvedValue(durable());
+    vi.mocked(computerJobsApi.heartbeat).mockResolvedValue(durable());
+    vi.mocked(computerJobsApi.checkpoint).mockImplementation(async (_pc, _id, _token, point) => {
+      messages.push(`checkpoint:${point.phase}:${point.steps}`);
+      return durable(point.status, point.phase, point.steps);
+    });
+    const store = new ComputerActionStore(api, async () => [], () => "pc",
+      { platform: "windows" } as PlatformAdapter);
+    store.setRemoteGoalRunner(async (_goal, progress, validate, _trace, beforeAction, beforeVerify) => {
+      await validate();
+      await beforeAction(0, "type");
+      messages.push("native action");
+      await progress(1, "type");
+      await beforeVerify(1);
+      return { status: "verified", steps: 1,
+        summary: "Hello World was typed.", evidence: "Hello World is visibly present in Notepad." };
+    }, () => undefined);
+    store.userId = "account";
+    await store.poll("account");
+    await vi.waitFor(() => {
+      expect(messages).toContain("checkpoint:done:1");
+    });
+    expect(messages).toEqual([
+      "ack", "checkpoint:applying:0", "native action",
+      "checkpoint:observing:1", "checkpoint:verifying:1", "checkpoint:done:1",
+    ]);
+    expect(computerJobsApi.activate).toHaveBeenCalledWith("pc", "goal-1");
+  });
+
+  it("never replays an in-flight action after restart, even with a bad resume flag", async () => {
+    vi.mocked(computerJobsApi.reconcile).mockResolvedValue({
+      resumed: true, job: durable("running", "applying", 1),
+    });
+    const store = new ComputerActionStore({
+      touch: async () => undefined, listPending: async () => [],
+    } as unknown as ConstructorParameters<typeof ComputerActionStore>[0],
+    async () => [], () => "pc", { platform: "windows" } as PlatformAdapter);
+    const runner = vi.fn(async () => ({ status: "unverified" as const,
+      steps: 1, summary: "Unknown action outcome.", evidence: null }));
+    store.setRemoteGoalRunner(runner, () => undefined);
+    store.userId = "account";
+    await store.poll("account");
+    expect(computerJobsApi.reconcile).toHaveBeenCalledWith("pc", true);
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it("may restart only a zero-action observing checkpoint using a new screenshot", async () => {
+    vi.mocked(computerJobsApi.reconcile).mockResolvedValue({
+      resumed: true, job: durable("running", "observing", 0),
+    });
+    vi.mocked(computerJobsApi.checkpoint).mockResolvedValue(durable("needs_review", "done"));
+    const store = new ComputerActionStore({
+      touch: async () => undefined, listPending: async () => [],
+    } as unknown as ConstructorParameters<typeof ComputerActionStore>[0],
+    async () => [], () => "pc", { platform: "windows" } as PlatformAdapter);
+    const runner = vi.fn(async () => ({ status: "unverified" as const,
+      steps: 0, summary: "No result proven.", evidence: null }));
+    store.setRemoteGoalRunner(runner, () => undefined);
+    store.userId = "account";
+    await store.poll("account");
+    await vi.waitFor(() => expect(runner).toHaveBeenCalledTimes(1));
+    expect(runner).toHaveBeenCalledWith(
+      "Open Notepad and type Hello World.",
+      expect.any(Function), expect.any(Function), expect.any(Function),
+      expect.any(Function), expect.any(Function),
+    );
   });
 
 });
