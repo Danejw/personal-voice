@@ -9,6 +9,8 @@ export interface AssistantPlayback {
   clear(): void;
   /** Milliseconds still audible. Zero once the device has finished this audio. */
   pendingMs?(now?: number): number;
+  /** Transient 0–1 speech energy for expressive Companion mouth animation. */
+  speechLevel?(now?: number): number;
   /** `ready` false plays through the local sink and the mic gate must stay closed while it plays. */
   setNativeRoute?(ready: boolean): void;
   onAudibleChange?(listener: () => void): void;

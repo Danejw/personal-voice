@@ -50,6 +50,12 @@ describe("DeviceLink protocol", () => {
     const state = makeEnvelope(laptop, phone, { type: "assistant-state", phase: "speaking" }, now);
     expect(parseDeviceLinkEnvelope(state, now)).toEqual(state);
     expect(parseDeviceLinkEnvelope({ ...state, payload: { type: "assistant-state", phase: "unknown" } }, now)).toBeNull();
+    const energy = makeEnvelope(laptop, phone, { type: "assistant-level", level: .62 }, now);
+    expect(parseDeviceLinkEnvelope(energy, now)).toEqual(energy);
+    expect(parseDeviceLinkEnvelope(energy, now + 2_100)).toBeNull();
+    expect(parseDeviceLinkEnvelope({ ...energy, payload: { type: "assistant-level", level: 1.2 } }, now)).toBeNull();
+    expect(parseDeviceLinkEnvelope({ ...energy, payload: { type: "assistant-level", level: -.1 } }, now)).toBeNull();
+    expect(parseDeviceLinkEnvelope({ ...energy, payload: { type: "assistant-level", level: .5, text: "secret" } }, now)).toBeNull();
   });
   it("rejects oversized frames and payload type confusion", () => {
     const frame = makeEnvelope(laptop, phone, { type: "presence", state: "ready" }, now);

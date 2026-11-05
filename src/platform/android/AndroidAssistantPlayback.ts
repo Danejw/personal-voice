@@ -1,6 +1,7 @@
 import type { AssistantPlayback } from "@/assistant/playback";
 import { ASSISTANT_PCM_RATE } from "@/assistant/protocol";
 import { PcmPlayback } from "@/assistant/PcmPlayback";
+import { SpeechEnvelope } from "@/assistant/speechEnvelope";
 import { callPlugin, listenPlugin } from "@/platform/android/voicePlatformPlugin";
 
 /** Keep the mic closed this long after a local estimate hits zero if the device never reports drained. */
@@ -21,6 +22,7 @@ interface PlaybackEvent {
  */
 export class AndroidAssistantPlayback implements AssistantPlayback {
   private readonly web = new PcmPlayback();
+  private readonly envelope = new SpeechEnvelope();
   private route: "pending" | "native" | "web" = "pending";
   private queued: ArrayBuffer[] = [];
   private token = 0;
@@ -58,12 +60,19 @@ export class AndroidAssistantPlayback implements AssistantPlayback {
 
   enqueue(pcm: ArrayBuffer, sampleRate = ASSISTANT_PCM_RATE): void {
     if (pcm.byteLength < 2) return;
+    const now = Date.now();
+    this.envelope.enqueue(pcm, sampleRate, now, this.pendingMs(now));
     this.account(pcm.byteLength, sampleRate);
     this.send(pcm, sampleRate);
     this.audible();
   }
 
+  speechLevel(now = Date.now()): number {
+    return this.pendingMs(now) > 0 ? this.envelope.level(now) : 0;
+  }
+
   clear(): void {
+    this.envelope.clear();
     this.token += 1;
     this.clearToken = this.token;
     this.queued = [];
