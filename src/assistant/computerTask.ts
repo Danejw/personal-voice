@@ -100,6 +100,7 @@ export async function runComputerTaskReport(
         image: previousId ? null : image.jpeg,
         previousInteractionId: previousId,
         model: selectedModel,
+        supportsModelFallback: true,
         functionResult: result
           ? { name: result.name, callId: result.callId, result: result.result, acknowledgement: result.acknowledgement, image: image.jpeg }
           : null,
