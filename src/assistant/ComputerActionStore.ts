@@ -30,7 +30,7 @@ export interface RemoteGoalState {
 
 export interface RemoteGoalNotice {
   targetDeviceId: string;
-  phase: "accepted" | "reported";
+  phase: "accepted" | "reported" | "connection-error";
   message: string;
   receivedAt: number;
 }
@@ -126,27 +126,40 @@ export class ComputerActionStore {
     const devices = await this.listDevices(userId);
     const currentId = this.getDeviceId(userId);
     const target = await resolvePairedVoiceTarget(devices, currentId, deviceName);
-    const result = await askComputerAction(
-      this.api,
-      userId,
-      this.getDeviceId(userId),
-      devices,
-      target.id,
-      action,
-      argument,
-      { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
-    );
-    if (action === "start_computer_goal" || action === "computer_goal_status" || action === "stop_computer_goal") {
-      this.snapshot = {
-        ...this.snapshot,
-        remoteGoal: {
-          targetDeviceId: target.id, phase: action === "start_computer_goal" ? "accepted" : "reported",
-          message: result.slice(0, 1500), receivedAt: Date.now(),
-        },
-      };
-      for (const listener of this.listeners) listener();
+    const isGoalCommand = action === "start_computer_goal"
+      || action === "computer_goal_status" || action === "stop_computer_goal";
+    try {
+      const result = await askComputerAction(
+        this.api, userId, currentId, devices, target.id, action, argument,
+        { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
+      );
+      if (isGoalCommand) {
+        this.snapshot = {
+          ...this.snapshot,
+          remoteGoal: {
+            targetDeviceId: target.id, phase: action === "start_computer_goal" ? "accepted" : "reported",
+            message: result.slice(0, 1500), receivedAt: Date.now(),
+          },
+        };
+        for (const listener of this.listeners) listener();
+      }
+      return result;
+    } catch (error) {
+      // A timeout is an unknown outcome, not proof that Windows never executed the task.
+      if (isGoalCommand) {
+        const message = error instanceof Error ? error.message : "Command response unavailable.";
+        this.snapshot = {
+          ...this.snapshot,
+          remoteGoal: {
+            targetDeviceId: target.id, phase: "connection-error",
+            message: `Command response unavailable: ${message} Check status before trying again.`.slice(0, 1500),
+            receivedAt: Date.now(),
+          },
+        };
+        for (const listener of this.listeners) listener();
+      }
+      throw error;
     }
-    return result;
   }
 
   async capture(): Promise<ComputerImage> {
