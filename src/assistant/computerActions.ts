@@ -185,7 +185,7 @@ export function validateComputerCall(call: ComputerCall): { ok: true } | { ok: f
   }
   if (call.name === "wait") {
     const seconds = args.seconds === undefined ? 1 : args.seconds;
-    if (typeof seconds !== "number" || seconds < 0 || seconds > COMPUTER_WAIT_LIMIT_SECONDS) {
+    if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0 || seconds > COMPUTER_WAIT_LIMIT_SECONDS) {
       return { ok: false, message: "The wait was not a short pause." };
     }
   }

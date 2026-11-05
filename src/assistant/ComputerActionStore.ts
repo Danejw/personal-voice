@@ -207,6 +207,16 @@ export class ComputerActionStore {
         typeof end_x === "number" ? end_x : undefined,
         typeof end_y === "number" ? end_y : undefined);
     }
+    if (call.name === "scroll") {
+      if (!this.platform.computerPointerAction) throw new Error("Desktop scrolling is unavailable on this device.");
+      const { x, y, direction } = call.args;
+      if (typeof x !== "number" || typeof y !== "number" ||
+        (direction !== "up" && direction !== "down" && direction !== "left" && direction !== "right")) {
+        throw new Error("Scroll requires valid coordinates and a direction.");
+      }
+      const kind = `scroll_${direction}` as const;
+      return this.platform.computerPointerAction(kind, x, y);
+    }
     if (call.name === "type") {
       if (typeof call.args.text !== "string") throw new Error("Text is required.");
       await this.platform.insertText(call.args.text);
@@ -218,7 +228,14 @@ export class ComputerActionStore {
       return this.platform.pressAllowlistedShortcut(shortcut, false);
     }
     if (call.name === "take_screenshot") return "Captured the screen.";
-    if (call.name === "wait") return "Paused.";
+    if (call.name === "wait") {
+      const seconds = call.args.seconds === undefined ? 1 : call.args.seconds;
+      if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0 || seconds > 2) {
+        throw new Error("Computer Use wait must be between 0 and 2 seconds.");
+      }
+      await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+      return `Waited ${seconds} seconds.`;
+    }
     throw new Error("That action is not available.");
   }
 
