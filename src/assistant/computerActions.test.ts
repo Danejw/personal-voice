@@ -6,6 +6,7 @@ import {
   isTrustedRemoteAction,
   planComputerStep,
   planRemoteComputerAction,
+  parseInteraction,
   parseRemotePointer,
   safetyClass,
   validateComputerCall,
@@ -133,6 +134,21 @@ describe("computer action safety", () => {
     expect(planComputerStep({ name: "click", args: { x: 10, y: 20 } }, 240, started, started, false, limits).action).toBe("stop");
     expect(planComputerStep({ name: "delete_file", args: {} }, 4, started, started + 500, false, limits).action).toBe("stop");
     expect(planComputerStep({ name: "click", args: { x: 10, y: 20 } }, 2, started, started + limits.maxDurationMs, false, limits).action).toBe("stop");
+  });
+
+  it("uses the exact function-call id and places the screenshot inside result contents", () => {
+    const parsed = parseInteraction({ id: "inter-1", steps: [{
+      type: "function_call", id: "call-123", name: "click", arguments: { x: 1, y: 2 },
+    }] });
+    expect(parsed.callId).toBe("call-123");
+    const body = computerUseBody("Click.", null, "inter-1", {
+      name: "click", callId: parsed.callId!, result: "Clicked", acknowledgement: false, imageBase64: "jpeg",
+    });
+    expect(body).toMatchObject({ previous_interaction_id: "inter-1", input: [{
+      type: "function_result", call_id: "call-123", name: "click",
+      result: [{ type: "text", text: "Clicked" }, { type: "image", data: "jpeg", mime_type: "image/jpeg" }],
+    }] });
+    expect(JSON.stringify(body)).not.toContain('"parts"');
   });
 
   it("builds a desktop Computer Use request with prompt-injection detection and no shell tool", () => {
