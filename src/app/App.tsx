@@ -327,9 +327,10 @@ const computerActions = new ComputerActionStore(
 );
 if (platform.platform === "windows") {
   computerActions.setRemoteGoalRunner(
-    (goal, progress, validate) => assistant.runRemoteComputerGoal(goal, progress, validate),
+    (goal, progress, validate, trace) => assistant.runRemoteComputerGoal(goal, progress, validate, trace),
     () => assistant.stopComputer(),
   );
+  assistant.setComputerFlightRecorder((traceId, event) => computerActions.recordLocalComputerTrace(traceId, event));
 }
 const remoteDictation = new RemoteDictationStore(
   remoteDictationApi,
@@ -1180,7 +1181,7 @@ export default function App() {
   if (platform.platform === "android" && section === "companion") {
     return <>
       <CompanionView assistant={assistant} computerActions={computerActions} snapshot={assistantSnapshot}
-        micBusy={dictationLive} currentDeviceId={deviceSnapshot.currentDeviceId}
+        micBusy={dictationLive} currentDeviceId={deviceSnapshot.currentDeviceId} userId={auth.userId}
         devices={deviceSnapshot.devices}
         onStartVoice={() => { void assistantLibrary.produce(); }}
         onExit={() => setSection("devices")} />

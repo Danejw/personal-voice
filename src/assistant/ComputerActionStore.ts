@@ -1,6 +1,7 @@
 import { dragEndpoints, executableShortcut, parseRemotePointer, planRemoteComputerAction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
-import type { ComputerImage, ComputerTaskReport } from "@/assistant/computerTask";
+import type { ComputerImage, ComputerTaskReport, ComputerTaskTraceEvent } from "@/assistant/computerTask";
+import { recordComputerEvent, flightFailureCode, type FlightStage, type FlightFailure } from "@/services/computerFlightRecorder";
 import type { RemoteDevice } from "@/assistant/remoteContext";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
 import { loadRemoteComputerActions } from "@/settings/deviceSettings";
@@ -51,9 +52,36 @@ export class ComputerActionStore {
   private listeners = new Set<() => void>();
   private approvedId: string | null = null;
   private polling = false;
+  private tracedReceiver = new Set<string>();
+
+  private trace(traceId: string, stage: FlightStage, action?: string, step?: number, code?: FlightFailure): void {
+    const userId = this.userId;
+    if (!userId) return;
+    try {
+      recordComputerEvent({
+        userId, deviceId: this.getDeviceId(userId), traceId,
+        actor: this.platform.platform === "windows" ? "windows" : "android",
+        stage, action, step, code,
+      });
+    } catch { /* Diagnostics never interrupt desktop execution. */ }
+  }
+
+  private traceReceiverOnce(row: { id: string; action: string }, stage: FlightStage, code?: FlightFailure): void {
+    const marker = `${row.id}:${stage}:${code ?? ""}`;
+    if (this.tracedReceiver.has(marker)) return;
+    if (this.tracedReceiver.size > 1200) this.tracedReceiver.clear();
+    this.tracedReceiver.add(marker);
+    const traceId = (row.action === "computer_goal_status" || row.action === "stop_computer_goal")
+      ? this.remoteGoal?.jobId ?? row.id : row.id;
+    this.trace(traceId, stage, row.action, undefined, code);
+  }
+
+  recordLocalComputerTrace(traceId: string, event: ComputerTaskTraceEvent): void {
+    this.trace(traceId, event.stage, event.action, event.step, event.code);
+  }
   private remoteGoal: RemoteGoalState | null = null;
   private pendingGoalStart: { requestId: string; goal: string; requesterDeviceId: string; ownerId: string } | null = null;
-  private remoteGoalRunner: ((goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<ComputerTaskReport>) | null = null;
+  private remoteGoalRunner: ((goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>, trace: (event: ComputerTaskTraceEvent) => void) => Promise<ComputerTaskReport>) | null = null;
   private remoteGoalStop: (() => void) | null = null;
 
   private persistRemoteGoal(): void {
@@ -70,7 +98,7 @@ export class ComputerActionStore {
 
   /** The Windows Assistant owns the executor. This store only routes signed session commands. */
   setRemoteGoalRunner(
-    runner: (goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<ComputerTaskReport>,
+    runner: (goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>, trace: (event: ComputerTaskTraceEvent) => void) => Promise<ComputerTaskReport>,
     stop: () => void,
   ): void {
     this.remoteGoalRunner = runner;
@@ -129,13 +157,22 @@ export class ComputerActionStore {
     const target = await resolvePairedVoiceTarget(devices, currentId, deviceName);
     const isGoalCommand = action === "start_computer_goal"
       || action === "computer_goal_status" || action === "stop_computer_goal";
+    const goalId = this.snapshot.remoteGoal?.targetDeviceId === target.id
+      ? this.snapshot.remoteGoal.requestId : null;
     let requestId: string | null = null;
     try {
       const result = await askComputerAction(
         this.api, userId, currentId, devices, target.id, action, argument,
         { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
         receipt => {
-          requestId = receipt.requestId;
+          requestId = action === "start_computer_goal" ? receipt.requestId : goalId ?? receipt.requestId;
+          const traceId = requestId;
+          if (traceId) {
+            if (receipt.stage === "queued") this.trace(traceId, "queued", action);
+            if (receipt.stage === "answered") this.trace(traceId, "acknowledged", action);
+            if (receipt.stage === "denied") this.trace(traceId, "blocked", action, undefined, "refused");
+            if (receipt.stage === "timed_out") this.trace(traceId, "timeout", action, undefined, "timeout");
+          }
           if (action !== "start_computer_goal" || receipt.stage !== "queued") return;
           this.snapshot = {
             ...this.snapshot,
@@ -249,6 +286,7 @@ export class ComputerActionStore {
   set userId(userId: string | null) {
     if (this.accountUserId === userId) return;
     this.accountUserId = userId;
+    this.tracedReceiver.clear();
     this.pendingGoalStart = null;
     this.remoteGoal = null;
     if (userId && this.platform.platform === "windows") {
@@ -276,6 +314,7 @@ export class ComputerActionStore {
       }
       const remoteEnabled = loadRemoteComputerActions();
       for (const row of pending) {
+        this.traceReceiverOnce(row, "received");
         // A signed v2 request is already verified by listPending. The service
         // additionally authenticates this Windows PC's native pairing identity
         // and atomically claims the exact request before any native action.
@@ -283,6 +322,7 @@ export class ComputerActionStore {
           row.action, row.argument, this.platform.platform, remoteEnabled,
         );
         if (decision.action === "deny") {
+          this.traceReceiverOnce(row, "blocked", "refused");
           await this.api.deny(userId, row.id, decision.message);
           continue;
         }
@@ -290,23 +330,29 @@ export class ComputerActionStore {
         let claimed: "none" | "claimed" | "already";
         try {
           // Fail closed rather than replaying commands after a crash or reconnect.
-          if (await remoteAutoActionApi.wasClaimed(currentId, row.id)) continue;
+          if (await remoteAutoActionApi.wasClaimed(currentId, row.id)) {
+            this.traceReceiverOnce(row, "blocked", "unknown");
+            continue;
+          }
           if (!await invoke<boolean>("trusted_desktop_unlocked") &&
             row.action !== "stop_computer_goal" && row.action !== "computer_goal_status") {
             // Do not execute on a locked desktop. Explain why the request is pending.
             pollIssue = "Windows is locked. Unlock it to run remote computer actions.";
+            this.traceReceiverOnce(row, "blocked", "locked");
             continue;
           }
           claimed = await remoteAutoActionApi.claim(currentId, row.id);
         } catch (error) {
           // Never bypass a failed claim. Expose the failure for diagnosis and retry on the next poll.
           pollIssue = error instanceof Error ? `Command authorization: ${error.message}` : "Command authorization unavailable.";
+          this.traceReceiverOnce(row, "blocked", flightFailureCode(error, "auth"));
           continue;
         }
         if (claimed === "none") {
           pollIssue = "Windows could not claim the remote command.";
         }
         if (claimed !== "claimed") continue;
+        this.traceReceiverOnce(row, "authorized");
         const outcome = await fulfillComputerAction(
           this.api, row, this.platform.platform, remoteEnabled, row.id,
           async (action, argument) => {
@@ -319,6 +365,8 @@ export class ComputerActionStore {
             return this.run(action, argument, row.requesterDeviceId, row.id);
           },
         );
+        if (outcome.action === "answered") this.traceReceiverOnce(row, "acknowledged");
+        if (outcome.action === "denied") this.traceReceiverOnce(row, "blocked", "refused");
         // Start the background task only AFTER the signed start acknowledgment is committed.
         // A timed-out or rejected request must never leave an unauthorized running task.
         if (row.action === "start_computer_goal" && outcome.action === "answered") {
@@ -358,13 +406,16 @@ export class ComputerActionStore {
     const state = this.remoteGoal;
     state.status = "running";
     this.persistRemoteGoal();
+    this.trace(requestId, "started", "start_computer_goal", 0);
     const validate = async () => {
       if (this.userId !== pending.ownerId || !loadRemoteComputerActions() ||
         !await invoke<boolean>("trusted_desktop_unlocked")) throw new Error("Computer Use stopped: PC locked, signed out, or remote actions disabled.");
       await pairedPublicKey(this.getDeviceId(pending.ownerId), pending.requesterDeviceId);
     };
     void this.remoteGoalRunner(pending.goal,
-      (step, name) => { state.steps = step; state.lastAction = name; this.persistRemoteGoal(); }, validate,
+      (step, name) => { state.steps = step; state.lastAction = name; this.persistRemoteGoal(); },
+      validate,
+      event => this.trace(requestId, event.stage, event.action, event.step, event.code),
     ).then(report => {
       state.status = state.status === "stopping" ? "stopped"
         : report.status === "verified" ? "completed"
@@ -374,9 +425,13 @@ export class ComputerActionStore {
       state.result = report.summary.slice(0, 1000);
       state.evidence = report.evidence;
       this.persistRemoteGoal();
+      // Final status is authoritative only when independent screen verification passed.
+      if (report.status === "stopped") this.trace(requestId, "stopped", undefined, report.steps);
+      if (report.status === "blocked") this.trace(requestId, "blocked", undefined, report.steps);
     }).catch(error => {
       state.status = state.status === "stopping" ? "stopped" : "failed";
       state.result = error instanceof Error ? error.message.slice(0, 1000) : "The Computer Use task failed.";
+      this.trace(requestId, "failed", undefined, state.steps, flightFailureCode(error));
       this.persistRemoteGoal();
     });
   }

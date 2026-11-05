@@ -216,3 +216,95 @@
   font: inherit;
 }
 .companion-goal-actions button:focus-visible { outline: 2px solid #88d8c1; outline-offset: 2px; }
+
+/* Activity stays out of the character's touch target until explicitly opened. */
+.companion-flight-toggle {
+  position: absolute;
+  z-index: 3;
+  top: calc(max(env(safe-area-inset-top), 18px) + 60px);
+  right: 22px;
+  padding: 8px 12px;
+  border: 1px solid #ffffff26;
+  border-radius: 12px;
+  background: #ffffff0e;
+  color: #d1e4df;
+  font: inherit;
+  font-size: 12px;
+}
+.companion-flight-sheet {
+  position: absolute;
+  z-index: 5;
+  top: calc(max(env(safe-area-inset-top), 18px) + 102px);
+  left: 16px;
+  right: 16px;
+  max-height: min(57dvh, 480px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 16px;
+  border: 1px solid #ffffff24;
+  border-radius: 18px;
+  background: #142a2d;
+  box-shadow: 0 16px 60px #0008;
+  color: #eaf8f3;
+  font-size: 12px;
+}
+.companion-flight-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.companion-flight-head strong { font-weight: 650; font-size: 13px; }
+.companion-flight-head button {
+  padding: 6px 9px;
+  border: 1px solid #ffffff24;
+  border-radius: 8px;
+  background: #ffffff12;
+  color: inherit;
+}
+.companion-flight-warning { margin: 10px 0; color: #f2c9a3; }
+.companion-flight-empty { margin: 16px 0 4px; color: #b5cbc5; }
+.companion-flight-traces {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 14px 0 10px;
+  padding-bottom: 6px;
+  touch-action: pan-x;
+}
+.companion-flight-traces button {
+  min-width: 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  padding: 9px;
+  border: 1px solid #ffffff1c;
+  border-radius: 10px;
+  background: #ffffff09;
+  color: #cde4dc;
+  text-align: left;
+  font: inherit;
+}
+.companion-flight-traces button.is-active {
+  border-color: #88d8c1aa;
+  background: #88d8c117;
+}
+.companion-flight-traces button span:first-child { opacity: .7; font-size: 11px; }
+.companion-flight-events {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 36dvh;
+  overflow: auto;
+  touch-action: pan-y;
+}
+.companion-flight-events li {
+  display: grid;
+  grid-template-columns: 70px 39px minmax(0, 1fr);
+  gap: 7px;
+  padding: 9px 2px;
+  border-top: 1px solid #ffffff12;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.companion-flight-events time { color: #adc3bb; font-size: 10px; }
+.companion-flight-events li span:nth-child(2) { color: #88d8c1; }
+.companion-flight-sheet button:focus-visible,
+.companion-flight-toggle:focus-visible { outline: 2px solid #88d8c1; outline-offset: 2px; }

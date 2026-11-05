@@ -58,7 +58,7 @@ import { interpretToolResult, ToolFailureHistory, type ToolResultAssessment } fr
 import { ToolTraceRecorder, type ToolEvalTrace, type TraceMetadata } from "@/assistant/harness/evals/traceRecorder";
 import { assembleTaskGuidance, deviceToolGuidance, UNKNOWN_DEVICE_CONTEXT, type AssistantDeviceContext } from "@/assistant/harness/contextAssembler";
 import { parseInteraction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
-import { REMOTE_COMPUTER_LIMITS, runComputerTaskReport, type ComputerImage, type ComputerTaskReport } from "@/assistant/computerTask";
+import { REMOTE_COMPUTER_LIMITS, runComputerTaskReport, type ComputerImage, type ComputerTaskReport, type ComputerTaskTraceEvent } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
 import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import {
@@ -218,6 +218,7 @@ export class AssistantController {
   /** True when this socket was opened with a resumption handle. That socket already has the history. */
   private openedWithHandle = false;
   private onToolRecord: ((record: { name: string; outcome: string }) => void) | null = null;
+  private onComputerFlight: ((traceId: string, event: ComputerTaskTraceEvent) => void) | null = null;
   /** Metadata-only production tool observer; does not expose arguments or result payloads. */
   private onToolMetrics: ((event: {type:"calls"; calls:readonly {id:string|null;name:string}[]} |
     {type:"result"; id:string; name:string; assessment:ToolResultAssessment}) => void) | null = null;
@@ -407,6 +408,10 @@ export class AssistantController {
   /** Records a finished tool result so a later session can describe it without running it again. */
   setToolRecordHandler(handler: ((record: { name: string; outcome: string }) => void) | null): void {
     this.onToolRecord = handler;
+  }
+
+  setComputerFlightRecorder(handler: ((traceId: string, event: ComputerTaskTraceEvent) => void) | null): void {
+    this.onComputerFlight = handler;
   }
 
   /**
@@ -1989,9 +1994,10 @@ export class AssistantController {
   }
 
   /** The existing Windows Computer Use executor, available to a paired phone after a single PC approval. */
-  runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => void, validate: () => Promise<void>): Promise<ComputerTaskReport> {
+  runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => void, validate: () => Promise<void>,
+    trace?: (event: ComputerTaskTraceEvent) => void): Promise<ComputerTaskReport> {
     if (!navigator.userAgent.includes("Windows")) throw new Error("Remote Computer Use requires Windows.");
-    return this.runSupervisedReport(goal, true, onProgress, validate);
+    return this.runSupervisedReport(goal, true, onProgress, validate, trace);
   }
 
   private async runSupervised(goal: string, remote = false, onProgress?: (step: number, action: string) => void, validate?: () => Promise<void>): Promise<string> {
@@ -1999,13 +2005,25 @@ export class AssistantController {
     return `${report.status.toUpperCase()}: ${report.summary}${report.evidence ? ` Evidence: ${report.evidence}` : ""}`;
   }
 
-  private async runSupervisedReport(goal: string, remote = false, onProgress?: (step: number, action: string) => void, validate?: () => Promise<void>): Promise<ComputerTaskReport> {
+  private async runSupervisedReport(goal: string, remote = false, onProgress?: (step: number, action: string) => void,
+    validate?: () => Promise<void>, trace?: (event: ComputerTaskTraceEvent) => void): Promise<ComputerTaskReport> {
     if (this.computerTaskActive) throw new Error("Another Computer Use task is already active.");
     this.computerTaskActive = true;
     this.computerStopped = false;
+    const localTraceId = !remote && this.onComputerFlight ? crypto.randomUUID() : null;
+    let lastStage: ComputerTaskTraceEvent["stage"] | null = null;
+    const reportEvent = (event: ComputerTaskTraceEvent) => {
+      lastStage = event.stage;
+      try { trace?.(event); } catch { /* Diagnostics cannot stop a task. */ }
+      if (localTraceId) {
+        try { this.onComputerFlight?.(localTraceId, event); }
+        catch { /* Diagnostics cannot stop a task. */ }
+      }
+    };
+    if (localTraceId) reportEvent({ stage: "started", step: 0 });
     this.dispatch({ type: "computer", running: true, prompt: null });
     try {
-      return await runComputerTaskReport(goal, {
+      const report = await runComputerTaskReport(goal, {
         now: () => Date.now(),
         stopped: () => this.computerStopped,
         capture: async () => {
@@ -2052,7 +2070,13 @@ export class AssistantController {
           return response.text.trim().replace(/^VERIFIED:\s*/i, "");
         },
         onProgress,
+        onTrace: reportEvent,
       }, remote ? REMOTE_COMPUTER_LIMITS : undefined);
+      if (lastStage !== report.status) reportEvent({ stage: report.status, step: report.steps });
+      return report;
+    } catch (error) {
+      if (lastStage !== "failed") reportEvent({ stage: "failed", step: 0, code: "tool" });
+      throw error;
     } finally {
       this.computerConfirm = null;
       this.computerStopped = true;

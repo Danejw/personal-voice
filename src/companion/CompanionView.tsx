@@ -10,6 +10,7 @@ import type { OwnedDevice } from "@/handoffs/handoff";
 import type { CompanionAssistantPhase, CompanionMonitor, DeviceLinkPayload } from "@/device-link/protocol";
 import { assistantPhase, companionGaze, companionMouthVisible, defaultMonitorIndex, selectedCompanionPC, stepCompanionSpring } from "@/companion/companionGeometry";
 import { remoteGoalStillActive } from "@/companion/remoteGoalStatus";
+import { CompanionFlightRecorder } from "@/companion/CompanionFlightRecorder";
 import "./companion.css";
 
 type Pointer = { x: number; y: number };
@@ -27,13 +28,14 @@ function storedMonitor(): number | null {
 }
 
 export function CompanionView({
-  assistant, computerActions, snapshot, micBusy, onStartVoice, onExit, currentDeviceId, devices,
+  assistant, computerActions, snapshot, micBusy, onStartVoice, onExit, currentDeviceId, userId, devices,
 }: {
   assistant: AssistantController;
   computerActions: ComputerActionStore;
   snapshot: AssistantSnapshot;
   micBusy: boolean;
   currentDeviceId: string | null;
+  userId: string | null;
   devices: OwnedDevice[];
   onStartVoice(): void;
   onExit(): void;
@@ -295,6 +297,7 @@ export function CompanionView({
           {linked ? "LAN connected" : pairedWindows.length === 0 ? "Pair a PC in Devices"
             : !targetId ? "Choose a PC" : "Waiting for PC on Wi-Fi"}
         </span>
+        <CompanionFlightRecorder userId={userId} activeTraceId={currentGoal?.requestId ?? null} />
         {pairedWindows.length === 0 && (
           <button type="button" className="companion-pair-button"
             onClick={() => openPairingUI()} aria-label="Pair a Windows computer">
