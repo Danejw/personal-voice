@@ -71,9 +71,9 @@ export class ComputerActionStore {
     if (this.tracedReceiver.has(marker)) return;
     if (this.tracedReceiver.size > 1200) this.tracedReceiver.clear();
     this.tracedReceiver.add(marker);
-    const traceId = (row.action === "computer_goal_status" || row.action === "stop_computer_goal")
-      ? this.remoteGoal?.jobId ?? row.id : row.id;
-    this.trace(traceId, stage, row.action, undefined, code);
+    // Every signed command has its own ID. Its Android and Windows receipts must match.
+    // The ongoing autonomous goal keeps its original start-command ID separately.
+    this.trace(row.id, stage, row.action, undefined, code);
   }
 
   recordLocalComputerTrace(traceId: string, event: ComputerTaskTraceEvent): void {
@@ -166,7 +166,7 @@ export class ComputerActionStore {
         { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
         receipt => {
           requestId = action === "start_computer_goal" ? receipt.requestId : goalId ?? receipt.requestId;
-          const traceId = requestId;
+          const traceId = receipt.requestId;
           if (traceId) {
             if (receipt.stage === "queued") this.trace(traceId, "queued", action);
             if (receipt.stage === "answered") this.trace(traceId, "acknowledged", action);
@@ -365,7 +365,12 @@ export class ComputerActionStore {
             return this.run(action, argument, row.requesterDeviceId, row.id);
           },
         );
-        if (outcome.action === "answered") this.traceReceiverOnce(row, "acknowledged");
+        if (outcome.action === "answered") {
+          if (!["start_computer_goal", "computer_goal_status", "stop_computer_goal"].includes(row.action)) {
+            this.traceReceiverOnce(row, "acted");
+          }
+          this.traceReceiverOnce(row, "acknowledged");
+        }
         if (outcome.action === "denied") this.traceReceiverOnce(row, "blocked", "refused");
         // Start the background task only AFTER the signed start acknowledgment is committed.
         // A timed-out or rejected request must never leave an unauthorized running task.
