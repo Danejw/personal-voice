@@ -290,7 +290,20 @@ export class ComputerActionStore {
         let claimed: "none" | "claimed" | "already";
         try {
           // Fail closed rather than replaying commands after a crash or reconnect.
-          if (await remoteAutoActionApi.wasClaimed(currentId, row.id)) continue;
+          if (await remoteAutoActionApi.wasClaimed(currentId, row.id)) {
+            // An earlier claim may have executed the native action before its signed reply was
+            // lost. Never replay the action, and don't silently time out the requesting phone.
+            await this.api.deny(userId, row.id,
+              "Windows claimed this command but its acknowledgment was lost. The outcome is unknown; check the screen before retrying.");
+            if (row.action === "start_computer_goal" &&
+                this.pendingGoalStart?.requestId === row.id && this.remoteGoal?.status === "starting") {
+              this.pendingGoalStart = null;
+              this.remoteGoal.status = "failed";
+              this.remoteGoal.result = "Task never started because its signed acknowledgment was lost.";
+              this.persistRemoteGoal();
+            }
+            continue;
+          }
           if (!await invoke<boolean>("trusted_desktop_unlocked") &&
             row.action !== "stop_computer_goal" && row.action !== "computer_goal_status") {
             // Do not execute on a locked desktop. Explain why the request is pending.
