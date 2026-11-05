@@ -145,15 +145,6 @@ export function DevicePairingPanel({ deviceId, platform, devices }: { deviceId: 
             </button>
           )}
           <button type="button" className="secondary" disabled={busy}
-                  onClick={() => void run(async () => {
-                    if (!window.confirm("Allow this paired phone to open Notepad or Calculator and use Escape or Tab for up to 14 minutes without approving each action?")) return;
-                    await trustedRemoteApi.start(deviceId, link.peerDeviceId);
-                    setTrustedGrants(await trustedRemoteApi.list(deviceId));
-                  })}>Allow trusted control</button>
-              )}
-            </>
-          )}
-          <button type="button" className="secondary" disabled={busy}
             onClick={() => void run(async () => {
               await devicePairingApi.revoke(deviceId, link.id);
               if (defaultVoiceTarget === link.peerDeviceId) {
