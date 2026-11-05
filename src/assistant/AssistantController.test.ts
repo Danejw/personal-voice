@@ -85,6 +85,25 @@ describe("AssistantController", () => {
     created.end();
   });
 
+  it("uses Windows Computer Use for Android screen supervision requests", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setActions(actions);
+    created.setDeviceContext({ platform: "android", otherDeviceCount: 1 });
+    created.setAutoRun(false);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{
+      id: "screen-1", name: "supervise_screen", args: { goal: "Organize browser tabs." },
+    }] });
+    await settle();
+    expect(actions.computer.remoteAction).toHaveBeenCalledWith(
+      "start_computer_goal", "Organize browser tabs.", null,
+    );
+    expect(created.getSnapshot().pendingAction).toBeNull();
+    created.end();
+  });
+
   it("runs routine signed remote commands without a second phone-side confirmation", async () => {
     const { created } = controller();
     const actions = toolActions();
