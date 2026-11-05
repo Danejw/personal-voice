@@ -166,7 +166,7 @@ export function PairingDialog({ deviceId, platform, devices }: {
                   hour: "numeric", minute: "2-digit",
                 })}</p>
                 {request?.status === "claimed" && (
-                  <p className="pv-pair-hint">This paired phone can control and view your unlocked PC. You can disable this in Windows settings or unpair it.</p>
+                  <p className="pv-pair-hint">Enabling Companion control allows verified paired devices to control and view this unlocked PC. Disable it in Windows settings at any time.</p>
                 )}
                 {request?.status === "claimed" && (
                   <button className="pv-pair-primary" type="button" disabled={busy}
@@ -178,7 +178,7 @@ export function PairingDialog({ deviceId, platform, devices }: {
                       saveRemoteComputerActions(true);
                       saveRemoteReads(true);
                       setNotice("Pairing approved. Companion control enabled.");
-                    })}>Approve & allow control for {peerName}</button>
+                    })}>Approve {peerName} & enable control</button>
                 )}
                 <button className="pv-pair-secondary" type="button" disabled={busy}
                   onClick={() => void run(async () => {
