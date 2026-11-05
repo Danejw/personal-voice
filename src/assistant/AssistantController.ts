@@ -2065,6 +2065,7 @@ export class AssistantController {
           ].join("\n");
           const response = parseInteraction(await this.actions.computer.propose({
             goal: prompt, image: freshImage.jpeg, previousInteractionId: null, functionResult: null,
+            supportsModelFallback: true,
           }));
           if (response.call || !/^VERIFIED:\s+.{12,}/i.test(response.text.trim())) return null;
           return response.text.trim().replace(/^VERIFIED:\s*/i, "");
