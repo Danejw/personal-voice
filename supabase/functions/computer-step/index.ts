@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
     image?: unknown;
     previousInteractionId?: unknown;
     model?: unknown;
+    supportsModelFallback?: unknown;
     functionResult?: { name?: unknown; callId?: unknown; result?: unknown; acknowledgement?: unknown; image?: unknown };
   };
   const goal = typeof fields.goal === "string" ? fields.goal.trim() : "";
@@ -124,7 +125,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ ...body, model: candidate }),
         signal: AbortSignal.timeout(20_000),
       }),
-      selected, !continuation,
+      selected, !continuation && fields.supportsModelFallback === true,
       {
         onRetry: (status, attempt) => console.warn(
           `computer-step: transient provider ${status}; retry ${attempt}/2`,
