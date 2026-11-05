@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   computerUseBody,
+  dragEndpoints,
   isUnsupportedAction,
   planComputerStep,
   planRemoteComputerAction,
+  parseRemotePointer,
   safetyClass,
+  validateComputerCall,
   validateOpenApp,
   validateShortcut,
 } from "@/assistant/computerActions";
@@ -57,6 +60,24 @@ describe("computer action safety", () => {
     });
   });
 
+  it("validates visible pointer actions, bounds and explicit drag confirmation", () => {
+    expect(validateComputerCall({ name: "move", args: { x: 0, y: 999 } }).ok).toBe(true);
+    expect(validateComputerCall({ name: "right_click", args: { x: 500, y: 500 } }).ok).toBe(true);
+    expect(validateComputerCall({ name: "right_click", args: { x: -1, y: 500 } }).ok).toBe(false);
+    expect(validateComputerCall({ name: "drag", args: { x: 100, y: 100, end_x: 900, end_y: 900 } }).ok).toBe(true);
+    expect(validateComputerCall({ name: "drag", args: { x: 100, y: 100, end_x: 1000, end_y: 900 } }).ok).toBe(false);
+    expect(planComputerStep({ name: "drag", args: { x: 100, y: 100, end_x: 900, end_y: 900 } }, 0, started, started, false).action).toBe("confirm");
+    expect(planComputerStep({ name: "right_click", args: { x: 500, y: 500 } }, 0, started, started, true).action).toBe("stop");
+    expect(dragEndpoints([[0, 0], [500, 500], [999, 999]])).toEqual({ x: 0, y: 0, endX: 999, endY: 999 });
+    expect(dragEndpoints([{ x: 20, y: 30 }, { x: 40, y: 50 }])).toEqual({ x: 20, y: 30, endX: 40, endY: 50 });
+    expect(dragEndpoints([[0, 0], [1000, 50]])).toBeNull();
+    expect(validateComputerCall({ name: "drag_and_drop", args: { path: [[0, 0], [999, 999]] } }).ok).toBe(true);
+    expect(validateComputerCall({ name: "drag_and_drop", args: { path: [[0, 0], [-1, 999]] } }).ok).toBe(false);
+    expect(safetyClass("drag_and_drop")).toBe("high");
+    expect(safetyClass("drag")).toBe("high");
+    expect(safetyClass("right_click")).toBe("low");
+  });
+
   it("denies a remote shell, an offline-style opt-out, and a phone", () => {
     expect(planRemoteComputerAction("run_shell", "dir", "windows", true)).toEqual({
       action: "deny",
@@ -72,6 +93,17 @@ describe("computer action safety", () => {
       action: "confirm",
       label: "Open Notepad",
     });
+  });
+
+  it("requires PC confirmation for bounded signed pointer commands", () => {
+    expect(parseRemotePointer("drag_pointer", "0,500,999,501")).toEqual({ kind: "drag", x: 0, y: 500, endX: 999, endY: 501 });
+    expect(parseRemotePointer("click_pointer", "500,500")).toEqual({ kind: "click", x: 500, y: 500 });
+    for (const invalid of ["-1,500", "1000,500", "500, 500", "500,500,500", "01,500", "500;500"]) {
+      expect(planRemoteComputerAction("click_pointer", invalid, "windows", true).action).toBe("deny");
+    }
+    expect(planRemoteComputerAction("drag_pointer", "0,0,999,999", "windows", true)).toMatchObject({ action: "confirm" });
+    expect(planRemoteComputerAction("click_pointer", "500,500", "windows", false).action).toBe("deny");
+    expect(planRemoteComputerAction("click_pointer", "500,500", "android", true).action).toBe("deny");
   });
 
   it("builds a desktop Computer Use request with prompt-injection detection and no shell tool", () => {

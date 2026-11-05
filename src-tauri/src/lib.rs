@@ -116,6 +116,18 @@ pub fn run() {
             #[cfg(windows)]
             commands::pointer_position,
             #[cfg(windows)]
+            commands::companion_pointer_sample,
+            #[cfg(windows)]
+            commands::trusted_desktop_unlocked,
+            #[cfg(windows)]
+            commands::pairing_public_key,
+            #[cfg(windows)]
+            commands::pairing_sign,
+            #[cfg(windows)]
+            commands::device_link_start_relay,
+            #[cfg(windows)]
+            commands::device_link_stop_relay,
+            #[cfg(windows)]
             commands::inspect_pointer_context,
             #[cfg(windows)]
             commands::capture_pointer_snapshot,
@@ -137,6 +149,7 @@ pub fn run() {
             commands::press_allowlisted_shortcut,
             commands::computer_capture,
             commands::computer_click,
+            commands::computer_pointer_action,
             commands::computer_restore,
             commands::set_push_to_talk_shortcut,
             commands::set_hotkeys,

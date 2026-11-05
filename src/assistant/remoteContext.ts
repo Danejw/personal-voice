@@ -46,7 +46,10 @@ export function resolveRemoteDevice(
   let device: RemoteDevice | undefined;
   if (name) {
     const needle = name.toLocaleLowerCase();
-    const matches = others.filter((item) => item.name.toLocaleLowerCase() === needle);
+    // Device IDs are stable. Duplicate friendly names must never choose at random.
+    const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(name);
+    const matches = others.filter((item) => byId
+      ? item.id.toLocaleLowerCase() === needle : item.name.toLocaleLowerCase() === needle);
     if (matches.length === 0) return { ok: false, message: `No other device is named ${name}.` };
     if (matches.length > 1) return { ok: false, message: `More than one device is named ${name}.` };
     device = matches[0];
