@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { loadRemoteVoiceDefault, saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
-import { PAIRING_FINISHED_EVENT, openPairingUI } from "@/devices/pairingFlow";
+import { PAIRING_FINISHED_EVENT, pairingAction } from "@/devices/pairingFlow";
 import { devicePairingApi, type PairLink } from "@/services/devicePairingService";
 import { verifiedPairLinks } from "@/services/verifiedPairLinks";
 import type { OwnedDevice } from "@/handoffs/handoff";
@@ -23,7 +23,10 @@ export function DevicePairingPanel({ deviceId, platform, devices }: {
     const load = async () => {
       try {
         const found = await verifiedPairLinks(deviceId);
-        if (active) setLinks(found);
+        if (active) {
+          setLinks(found);
+          setDefaultVoiceTarget(loadRemoteVoiceDefault(deviceId));
+        }
       } catch { if (active) setNotice("Pairing unavailable."); }
     };
     void load();
@@ -50,7 +53,10 @@ export function DevicePairingPanel({ deviceId, platform, devices }: {
   return (
     <div className="stack">
       <button type="button" className="secondary"
-        onClick={() => openPairingUI()}>Pair device</button>
+        onClick={() => void pairingAction(deviceId, platform,
+          platform === "windows" ? "show_code" : "open").catch(error => {
+          setNotice(error instanceof Error ? error.message : "Pairing unavailable.");
+        })}>Pair device</button>
       {links.map(link => (
         <div className="item-row" key={link.id}>
           <strong>{devices.find(d => d.id === link.peerDeviceId)?.name ?? "Other device"}
