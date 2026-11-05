@@ -57,8 +57,8 @@ import { playbookToolText } from "@/assistant/harness/playbooks";
 import { interpretToolResult, ToolFailureHistory, type ToolResultAssessment } from "@/assistant/harness/toolResults";
 import { ToolTraceRecorder, type ToolEvalTrace, type TraceMetadata } from "@/assistant/harness/evals/traceRecorder";
 import { assembleTaskGuidance, deviceToolGuidance, UNKNOWN_DEVICE_CONTEXT, type AssistantDeviceContext } from "@/assistant/harness/contextAssembler";
-import type { ComputerCall, RemoteComputerAction } from "@/assistant/computerActions";
-import { REMOTE_COMPUTER_LIMITS, runComputerTask, type ComputerImage } from "@/assistant/computerTask";
+import { parseInteraction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
+import { REMOTE_COMPUTER_LIMITS, runComputerTaskReport, type ComputerImage, type ComputerTaskReport } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
 import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import {
@@ -79,7 +79,6 @@ export interface AssistantSessionHandle {
   sendVideo(jpegBase64: string): void;
   sendToolResponse(message: unknown): void;
   sendAudio(pcm: ArrayBuffer): void;
-  endAudioStream(): void;
   close(): void;
 }
 
@@ -166,11 +165,6 @@ export class AssistantController {
   private capture?: AudioCapture;
   private pendingAudio: ArrayBuffer[] = [];
   private streaming = false;
-  /** Companion only: gate microphone frames while the character is not held. */
-  private companionHoldMode = false;
-  private companionPressed = false;
-  private companionPendingEnd = false;
-  private companionHasAudio = false;
   private generation = 0;
   private connection = 0;
   private resumeHandle: string | null = null;
@@ -423,39 +417,6 @@ export class AssistantController {
   subscribe(listener: (snapshot: AssistantSnapshot) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
-  }
-
-  /** The character, unlike the normal Assistant UI, uses press-to-speak. */
-  setCompanionHoldMode(enabled: boolean): void {
-    if (this.companionHoldMode === enabled) return;
-    this.companionHoldMode = enabled;
-    this.companionPressed = false;
-    this.companionPendingEnd = false;
-    this.companionHasAudio = false;
-    this.pendingAudio = [];
-    // Never leave an open microphone running after exiting Companion.
-    if (!enabled && this.snapshot.status !== "IDLE") this.end();
-  }
-
-  setCompanionPressed(pressed: boolean): void {
-    if (!this.companionHoldMode || this.companionPressed === pressed) return;
-    this.companionPressed = pressed;
-    if (pressed) {
-      this.companionPendingEnd = false;
-      this.companionHasAudio = false;
-      if (this.snapshot.status === "RESPONDING") this.interruptPlayback();
-      return;
-    }
-    if (!this.companionHasAudio) return;
-    if (!this.streaming) {
-      this.companionPendingEnd = true;
-      return;
-    }
-    try {
-      this.session?.endAudioStream();
-    } catch {
-      this.failActive("Couldn't finish voice input.");
-    }
   }
 
   /** Opens one Live session and starts the microphone. Ignored while one is already running. */
@@ -1162,10 +1123,8 @@ export class AssistantController {
 
   private onMic(generation: number, chunk: ArrayBuffer) {
     if (generation !== this.generation || chunk.byteLength === 0) return;
-    if (this.companionHoldMode && !this.companionPressed) return;
     this.syncEcho(Date.now());
     if (!shouldForwardMicrophone(this.echo, Date.now())) return;
-    if (this.companionHoldMode) this.companionHasAudio = true;
     if (!this.streaming) {
       this.pendingAudio.push(chunk);
       return;
@@ -1190,19 +1149,11 @@ export class AssistantController {
     this.pendingAudio = [];
     this.streaming = true;
     for (const chunk of queued) this.forward(chunk);
-    if (this.companionHoldMode && this.companionPendingEnd) {
-      this.companionPendingEnd = false;
-      try { this.session?.endAudioStream(); }
-      catch { this.failActive("Couldn't finish voice input."); }
-    }
   }
 
   private stopCapture() {
     this.streaming = false;
     this.pendingAudio = [];
-    this.companionPressed = false;
-    this.companionPendingEnd = false;
-    this.companionHasAudio = false;
     const capture = this.capture;
     this.capture = undefined;
     if (capture) void capture.stop(false).catch(() => undefined);
@@ -1989,18 +1940,23 @@ export class AssistantController {
   }
 
   /** The existing Windows Computer Use executor, available to a paired phone after a single PC approval. */
-  runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => void, validate: () => Promise<void>): Promise<string> {
+  runRemoteComputerGoal(goal: string, onProgress: (step: number, action: string) => void, validate: () => Promise<void>): Promise<ComputerTaskReport> {
     if (!navigator.userAgent.includes("Windows")) throw new Error("Remote Computer Use requires Windows.");
-    return this.runSupervised(goal, true, onProgress, validate);
+    return this.runSupervisedReport(goal, true, onProgress, validate);
   }
 
   private async runSupervised(goal: string, remote = false, onProgress?: (step: number, action: string) => void, validate?: () => Promise<void>): Promise<string> {
+    const report = await this.runSupervisedReport(goal, remote, onProgress, validate);
+    return `${report.status.toUpperCase()}: ${report.summary}${report.evidence ? ` Evidence: ${report.evidence}` : ""}`;
+  }
+
+  private async runSupervisedReport(goal: string, remote = false, onProgress?: (step: number, action: string) => void, validate?: () => Promise<void>): Promise<ComputerTaskReport> {
     if (this.computerTaskActive) throw new Error("Another Computer Use task is already active.");
     this.computerTaskActive = true;
     this.computerStopped = false;
     this.dispatch({ type: "computer", running: true, prompt: null });
     try {
-      return await runComputerTask(goal, {
+      return await runComputerTaskReport(goal, {
         now: () => Date.now(),
         stopped: () => this.computerStopped,
         capture: async () => {
@@ -2029,6 +1985,23 @@ export class AssistantController {
           }
         },
         confirm: (explanation) => this.confirmComputerStep(explanation, remote),
+        verify: async (objective, freshImage, candidate) => {
+          // New independent model interaction with a fresh screenshot, not the click receipt.
+          // A hidden/background side effect cannot be asserted from a visible screenshot.
+          if (validate) await validate();
+          const prompt = [
+            "Verify the RESULT using only this final screenshot. Do not act or call tools.",
+            `Task: ${objective.slice(0, 130)}`,
+            `Agent claim: ${candidate.slice(0, 70)}`,
+            "Only if every requested result is visibly demonstrated, reply VERIFIED: with concrete visual evidence.",
+            "Otherwise reply NOT_VERIFIED: and explain what remains unknown.",
+          ].join("\n");
+          const response = parseInteraction(await this.actions.computer.propose({
+            goal: prompt, image: freshImage.jpeg, previousInteractionId: null, functionResult: null,
+          }));
+          if (response.call || !/^VERIFIED:\s+.{12,}/i.test(response.text.trim())) return null;
+          return response.text.trim().replace(/^VERIFIED:\s*/i, "");
+        },
         onProgress,
       }, remote ? REMOTE_COMPUTER_LIMITS : undefined);
     } finally {
