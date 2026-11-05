@@ -5,7 +5,7 @@ export const DEVICE_LINK_MAX_CLOCK_SKEW_MS = 30_000;
 export const DEVICE_LINK_EPHEMERAL_TTL_MS = 2_000;
 export const DEVICE_LINK_RELIABLE_TTL_MS = 30_000;
 
-export type DeviceLinkMessageType = "presence" | "cursor" | "wake" | "ack" | "companion" | "layout" | "assistant-state";
+export type DeviceLinkMessageType = "presence" | "cursor" | "wake" | "ack" | "companion" | "layout" | "assistant-state" | "assistant-level";
 export type DeviceLinkPath = "local" | "remote";
 export type DeviceLinkState = "offline" | "connecting" | "local" | "remote" | "reconnecting";
 
@@ -22,6 +22,7 @@ export type DeviceLinkPayload =
   | { type: "companion"; action: "start" | "stop" }
   | { type: "layout"; monitors: CompanionMonitor[] }
   | { type: "assistant-state"; phase: CompanionAssistantPhase }
+  | { type: "assistant-level"; level: number }
   | { type: "presence"; state: "ready" | "away" }
   | { type: "cursor"; x: number; y: number }
   | { type: "wake"; family: "remote-dictation" | "computer-action" | "remote-read"; requestId: string }
@@ -47,7 +48,7 @@ const finite = (v: unknown): v is number => typeof v === "number" && Number.isFi
 export function isEphemeral(payload: DeviceLinkPayload): boolean {
   return payload.type === "cursor" || payload.type === "presence"
     || payload.type === "companion" || payload.type === "layout"
-    || payload.type === "assistant-state";
+    || payload.type === "assistant-state" || payload.type === "assistant-level";
 }
 export function makeEnvelope(
   sender: string, target: string, payload: DeviceLinkPayload,
@@ -88,6 +89,10 @@ export function parseDeviceLinkEnvelope(value: unknown, now = Date.now()): Devic
   } else if (payload.type === "assistant-state") {
     if (!keys(payload, ["type","phase"])
       || !["idle","listening","thinking","speaking"].includes(String(payload.phase))
+      || lifetime > DEVICE_LINK_EPHEMERAL_TTL_MS) return null;
+  } else if (payload.type === "assistant-level") {
+    if (!keys(payload, ["type","level"]) || !finite(payload.level)
+      || payload.level < 0 || payload.level > 1
       || lifetime > DEVICE_LINK_EPHEMERAL_TTL_MS) return null;
   } else if (payload.type === "layout") {
     if (!keys(payload, ["type","monitors"]) || !Array.isArray(payload.monitors)
