@@ -18,6 +18,7 @@ create table public.computer_jobs (
   worker_token uuid,
   lease_until timestamptz,
   heartbeat_at timestamptz,
+  stop_requested_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -66,7 +67,8 @@ begin
         and l.left_device_id=least(p_pc_id,job.requester_device_id)
         and l.right_device_id=greatest(p_pc_id,job.requester_device_id)) into paired;
     if job.status='running' and job.steps=0 and job.phase='observing'
-       and p_args->>'canResume'='true' and paired then
+       and p_args->>'canResume'='true' and paired
+       and job.stop_requested_at is null then
       update public.computer_jobs
         set worker_token=pg_catalog.gen_random_uuid(), lease_until=now()+interval '90 seconds',
             heartbeat_at=now(), updated_at=now()
@@ -74,9 +76,12 @@ begin
       return pg_catalog.jsonb_build_object('resumed',true,'job',to_jsonb(job));
     end if;
     update public.computer_jobs set
-      status=case when job.phase='applying' then 'needs_review' else 'interrupted' end,
+      status=case when job.stop_requested_at is not null then 'stopped'
+        when job.phase='applying' then 'needs_review' else 'interrupted' end,
       phase='done', worker_token=null, lease_until=null, updated_at=now(),
-      result=case when job.phase='applying' then
+      result=case when job.stop_requested_at is not null then
+        'The task was stopped before Windows restarted. No actions were replayed.'
+        when job.phase='applying' then
         'Windows restarted during an action. Its outcome is unknown. Inspect the desktop before resuming.'
         when job.status='pending_ack' then
         'Windows restarted before acknowledging the goal. No desktop actions were started.'
@@ -144,6 +149,11 @@ begin
   if job.status<>'running' or job.worker_token is distinct from token
       or job.lease_until <= now() then
     raise exception 'Worker lease revoked or expired' using errcode='42501';
+  end if;
+  if event_name='request_stop' then
+    update public.computer_jobs set stop_requested_at=coalesce(stop_requested_at,now()),
+      updated_at=now() where id=job_id returning * into job;
+    return to_jsonb(job);
   end if;
   if event_name='heartbeat' then
     update public.computer_jobs set heartbeat_at=now(),
