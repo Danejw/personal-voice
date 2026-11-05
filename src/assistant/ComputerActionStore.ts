@@ -445,6 +445,8 @@ export class ComputerActionStore {
    */
   private async reconcileDurableJob(userId: string): Promise<void> {
     if (this.reconciledFor === userId || !this.remoteGoalRunner) return;
+    if (this.remoteGoal?.status === "starting" || this.remoteGoal?.status === "running" ||
+        this.remoteGoal?.status === "stopping") { this.reconciledFor = userId; return; }
     const pcId = this.getDeviceId(userId);
     const unlocked = await invoke<boolean>("trusted_desktop_unlocked").catch(() => false);
     const recovery = await computerJobsApi.reconcile(pcId, unlocked && loadRemoteComputerActions());
@@ -458,7 +460,10 @@ export class ComputerActionStore {
       steps: job.steps, lastAction: job.last_action, result: job.result, evidence: job.evidence,
     };
     this.persistRemoteGoal();
-    if (recovery.resumed) this.startRemoteWorker(job, userId);
+    if (recovery.resumed && unlocked && loadRemoteComputerActions() &&
+        job.status === "running" && job.phase === "observing" && job.steps === 0) {
+      this.startRemoteWorker(job, userId);
+    }
   }
 
   private async launchRemoteGoal(requestId: string): Promise<void> {
@@ -531,11 +536,12 @@ export class ComputerActionStore {
     // Keep the server lease fresh during a slow model request; a lost lease
     // stops the worker before the next desktop side effect.
     if (this.workerHeartbeat) clearInterval(this.workerHeartbeat);
-    this.workerHeartbeat = setInterval(() => {
+    const heartbeat = setInterval(() => {
       void computerJobsApi.heartbeat(pcId, requestId, token).catch(() => {
         if (this.remoteGoal === state) this.remoteGoalStop?.();
       });
     }, 20_000);
+    this.workerHeartbeat = heartbeat;
     void runner(
       job.goal,
       async (step, action) => checkpoint({
@@ -580,8 +586,8 @@ export class ComputerActionStore {
       }
       this.persistRemoteGoal();
     }).finally(() => {
-      if (this.workerHeartbeat) clearInterval(this.workerHeartbeat);
-      this.workerHeartbeat = null;
+      clearInterval(heartbeat);
+      if (this.workerHeartbeat === heartbeat) this.workerHeartbeat = null;
     });
   }
 
