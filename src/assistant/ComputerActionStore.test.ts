@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ComputerActionStore } from "@/assistant/ComputerActionStore";
 import type { ComputerActionRow } from "@/assistant/computerRemote";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
+import type { RemoteDevice } from "@/assistant/remoteContext";
 import { recordComputerEvent } from "@/services/computerFlightRecorder";
 
 vi.mock("@/services/computerFlightRecorder", () => ({
@@ -170,7 +171,7 @@ describe("Windows signed remote action receiver", () => {
       { id: "pc", name: "Desk PC", platform: "windows", lastSeen: new Date().toISOString() },
     ];
     const store = new ComputerActionStore(
-      api, async () => devices as Parameters<ConstructorParameters<typeof ComputerActionStore>[1]>[0][],
+      api, async () => devices as RemoteDevice[],
       () => "phone", { platform: "android" } as PlatformAdapter,
     );
     store.userId = "account";
