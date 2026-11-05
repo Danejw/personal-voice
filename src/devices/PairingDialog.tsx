@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { PairingQrCode } from "@/devices/PairingQrCode";
-import { PAIRING_FINISHED_EVENT, PAIRING_UI_EVENT, openPairingUI, pairingAction,
+import { PAIRING_FINISHED_EVENT, PAIRING_UI_EVENT, pairingAction,
   type PairingViewRequest } from "@/devices/pairingFlow";
 import { devicePairingApi, type PairCode, type PairInvite } from "@/services/devicePairingService";
 import { verifyPairApproval, verifiedPairLinks } from "@/services/verifiedPairLinks";
