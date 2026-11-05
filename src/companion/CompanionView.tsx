@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AssistantController } from "@/assistant/AssistantController";
 import type { AssistantSnapshot } from "@/assistant/state";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
@@ -38,6 +38,9 @@ export function CompanionView({
   const [cursor, setCursor] = useState<Pointer | null>(null);
   const [monitors, setMonitors] = useState<CompanionMonitor[]>([]);
   const [remotePhase, setRemotePhase] = useState<CompanionAssistantPhase>("idle");
+  const remoteSpeech = useRef({ level: 0, at: 0 });
+  const [mouth, setMouth] = useState(0);
+  const [wander, setWander] = useState<Pointer>({ x: 0, y: 0 });
   const [sourceDeviceId, setSourceDeviceId] = useState<string | null>(null);
   const [savedIndex, setSavedIndex] = useState<number | null>(storedMonitor);
   const [preferredPC, setPreferredPC] = useState<string | null>(
@@ -62,6 +65,7 @@ export function CompanionView({
       if (payload.type === "layout") setMonitors(payload.monitors);
       if (payload.type === "cursor") setCursor({ x: payload.x, y: payload.y });
       if (payload.type === "assistant-state") setRemotePhase(payload.phase);
+      if (payload.type === "assistant-level") remoteSpeech.current = { level: payload.level, at: Date.now() };
     });
     const sync = () => deviceLinkManager.setCompanionOpen(document.visibilityState === "visible", targetId);
     sync();
@@ -85,6 +89,7 @@ export function CompanionView({
     setMonitors([]);
     setSourceDeviceId(null);
     setRemotePhase("idle");
+    remoteSpeech.current = { level: 0, at: 0 };
   }, [targetId]);
   useEffect(() => {
     if (targetId && !transport.localPeers.includes(targetId)) {
@@ -92,6 +97,7 @@ export function CompanionView({
       setMonitors([]);
       setSourceDeviceId(null);
       setRemotePhase("idle");
+      remoteSpeech.current = { level: 0, at: 0 };
     }
   }, [targetId, transport.localPeers]);
 
@@ -99,7 +105,35 @@ export function CompanionView({
   const locallyActive = snapshot.status !== "IDLE" && snapshot.status !== "ERROR";
   const linked = !!targetId && sourceDeviceId === targetId && transport.localPeers.includes(targetId);
   const phase = locallyActive ? localPhase : linked ? remotePhase : "idle";
-  const vector = linked ? gaze : { x: 0, y: 0 };
+  const vector = linked ? gaze : wander;
+  useEffect(() => {
+    // Sample the audio envelope without rerendering the rest of the Companion on
+    // every PCM chunk. Never lip-sync to text timing or use microphone input.
+    const timer = window.setInterval(() => {
+      const audible = phase === "speaking"
+        ? locallyActive ? assistant.speechLevel()
+          : linked && Date.now() - remoteSpeech.current.at < 350 ? remoteSpeech.current.level : 0
+        : 0;
+      setMouth(previous => {
+        const next = previous * 0.35 + Math.min(1, Math.max(0, audible)) * 0.65;
+        return next < 0.015 ? 0 : next;
+      });
+    }, 45);
+    return () => window.clearInterval(timer);
+  }, [assistant, phase, locallyActive, linked]);
+
+  useEffect(() => {
+    if (linked) {
+      setWander({ x: 0, y: 0 });
+      return;
+    }
+    // Small, infrequent glances when no live PC cursor is available.
+    const timer = window.setInterval(() => {
+      setWander({ x: (Math.random() - 0.5) * 0.65, y: (Math.random() - 0.5) * 0.28 });
+    }, 2600);
+    return () => window.clearInterval(timer);
+  }, [linked]);
+
   const active = snapshot.status === "READY" || snapshot.status === "RESPONDING" ||
     snapshot.status === "CONNECTING";
 
@@ -147,8 +181,20 @@ export function CompanionView({
               <circle cx="240" cy="110" r="5" fill="#f0fff9" opacity=".85" />
             </g>
           </g>
-          <path className="companion-mouth" d="M164 214 Q180 229 196 214" fill="none"
-            stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          <g className="companion-mouth-group" aria-hidden="true">
+            <path className="companion-smile" d="M163 213 Q180 227 197 213" fill="none"
+              stroke="currentColor" strokeWidth="3.2" strokeLinecap="round"
+              opacity={Math.max(0, 1 - mouth * 6)} />
+            <ellipse className="companion-mouth-open" cx="180" cy={213 + mouth * 3}
+              rx={14 + mouth * 12} ry={3 + mouth * 18}
+              opacity={Math.min(1, mouth * 6)} />
+            <ellipse className="companion-tongue" cx="180" cy={215 + mouth * 10}
+              rx={8 + mouth * 5} ry={2 + mouth * 4}
+              opacity={Math.max(0, Math.min(1, (mouth - 0.28) * 3))} />
+            <path className="companion-upper-lip" d="M161 207 Q180 199 199 207"
+              fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+              opacity={Math.min(1, mouth * 4)} />
+          </g>
         </svg>
         <p className="companion-phase" role="status">{PHASE_LABEL[phase]}</p>
       </div>
