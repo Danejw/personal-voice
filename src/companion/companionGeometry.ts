@@ -68,3 +68,24 @@ export function assistantPhase(snapshot: AssistantSnapshot): CompanionAssistantP
   if (snapshot.status === "READY") return "listening";
   return "idle";
 }
+
+
+/** A frame-rate-independent damped spring for the Companion's small SVG motions.
+ * Integration is bounded after background tab suspension to avoid a violent catch-up frame.
+ */
+export interface CompanionSpring { value: number; velocity: number; }
+
+export function stepCompanionSpring(
+  current: CompanionSpring, target: number, deltaSeconds: number,
+  stiffness: number, damping: number,
+): CompanionSpring {
+  const dt = Number.isFinite(deltaSeconds) ? Math.max(0, Math.min(deltaSeconds, 0.04)) : 0;
+  const velocity = current.velocity
+    + ((target - current.value) * stiffness - current.velocity * damping) * dt;
+  return { value: current.value + velocity * dt, velocity };
+}
+
+/** Only present the single mouth during an active voice exchange. */
+export function companionMouthVisible(phase: CompanionAssistantPhase): boolean {
+  return phase === "listening" || phase === "speaking";
+}
