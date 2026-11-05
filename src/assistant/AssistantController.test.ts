@@ -17,6 +17,7 @@ class FakeSession implements AssistantSessionHandle {
   toolGuidances: Array<string | null> = [];
   histories: Array<Array<{ role: string; text: string }>> = [];
   audio: ArrayBuffer[] = [];
+  audioEnds = 0;
   closed = false;
 
   constructor(private onEvent: (event: AssistantEvent) => void) {
@@ -41,6 +42,7 @@ class FakeSession implements AssistantSessionHandle {
   responses: unknown[] = [];
   sendToolResponse(message: unknown) { this.responses.push(message); }
   sendAudio(pcm: ArrayBuffer) { this.audio.push(pcm); }
+  endAudioStream() { this.audioEnds += 1; }
   close() { this.closed = true; }
   emit(event: AssistantEvent) { this.onEvent(event); }
 }
@@ -601,6 +603,42 @@ describe("AssistantController", () => {
     expect(session.audio).toHaveLength(2);
     expect(lease.heldBy()).toBeNull();
     expect(playback.cleared).toBeGreaterThan(0);
+  });
+
+  it("only forwards Companion audio during a press and flushes each release", () => {
+    const mics: FakeMic[] = [];
+    const created = new AssistantController(
+      (onEvent) => new FakeSession(onEvent),
+      new FakePlayback(),
+      () => "id",
+      () => { const mic = new FakeMic(); mics.push(mic); return mic; },
+      new MicrophoneLease(),
+    );
+    created.setCompanionHoldMode(true);
+    created.start();
+    const mic = mics[0] as FakeMic;
+    const session = FakeSession.opened[0] as FakeSession;
+    const first = Uint8Array.of(1, 2).buffer;
+    const second = Uint8Array.of(3, 4).buffer;
+    mic.push(first);
+    expect(session.audio).toHaveLength(0);
+    created.setCompanionPressed(true);
+    mic.push(first);
+    expect(session.audio).toEqual([first]);
+    created.setCompanionPressed(false);
+    expect(session.audioEnds).toBe(1);
+    mic.push(second);
+    expect(session.audio).toHaveLength(1);
+    created.setCompanionPressed(true);
+    mic.push(second);
+    created.setCompanionPressed(false);
+    expect(session.audio).toEqual([first, second]);
+    expect(session.audioEnds).toBe(2);
+    created.setCompanionPressed(false);
+    expect(session.audioEnds).toBe(2);
+    created.setCompanionHoldMode(false);
+    expect(session.closed).toBe(true);
+    expect(mic.stopped).toBe(true);
   });
 
   it("does not open the microphone while dictation holds it", () => {
