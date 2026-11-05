@@ -237,7 +237,7 @@ export function CompanionView({
         )}
       </header>
       <div className="companion-stage">
-<svg className="companion-face" viewBox="0 0 360 340" role="img"
+        <svg className="companion-face" viewBox="0 0 360 340" role="img"
           aria-label={`Companion is ${PHASE_LABEL[expressivePhase].toLowerCase()}`}>
           <defs>
             <radialGradient id="companion-iris">
