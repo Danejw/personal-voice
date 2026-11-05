@@ -20,6 +20,13 @@ export interface ComputerTaskReport {
   evidence: string | null;
 }
 
+export interface ComputerTaskTraceEvent {
+  stage: "screen" | "model" | "acted" | "verified" | "unverified" | "blocked" | "failed";
+  step: number;
+  action?: string;
+  code?: "capture" | "model" | "tool" | "verification";
+}
+
 export interface ComputerTaskHost {
   now(): number;
   stopped(): boolean;
@@ -28,6 +35,8 @@ export interface ComputerTaskHost {
   execute(call: ComputerCall, image: ComputerImage): Promise<string>;
   confirm(explanation: string): Promise<boolean>;
   onProgress?(step: number, action: string): void;
+  /** Diagnostic metadata only, never screenshots, prompts, coordinates, or tool arguments. */
+  onTrace?(event: ComputerTaskTraceEvent): void;
   /** A fresh post-action screenshot is inspected independently of the action receipt. */
   verify?(goal: string, image: ComputerImage, modelSummary: string): Promise<string | null>;
 }
@@ -67,39 +76,65 @@ export async function runComputerTaskReport(
     if (host.now() - startedAt >= limits.maxDurationMs) {
       return report("blocked", executed, `Time limit reached after ${executed} actions. The goal was not verified.`);
     }
-    const image = await host.capture();
+    let image: ComputerImage;
+    try { image = await host.capture(); }
+    catch (error) {
+      host.onTrace?.({ stage: "failed", step: executed, code: "capture" });
+      throw error;
+    }
+    host.onTrace?.({ stage: "screen", step: executed });
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
-    const interaction = parseInteraction(await host.propose({
-      goal,
-      image: previousId ? null : image.jpeg,
-      previousInteractionId: previousId,
-      functionResult: result
-        ? { name: result.name, callId: result.callId, result: result.result, acknowledgement: result.acknowledgement, image: image.jpeg }
-        : null,
-    }));
+    let interaction;
+    try {
+      interaction = parseInteraction(await host.propose({
+        goal,
+        image: previousId ? null : image.jpeg,
+        previousInteractionId: previousId,
+        functionResult: result
+          ? { name: result.name, callId: result.callId, result: result.result, acknowledgement: result.acknowledgement, image: image.jpeg }
+          : null,
+      }));
+    } catch (error) {
+      host.onTrace?.({ stage: "failed", step: executed, code: "model" });
+      throw error;
+    }
+    host.onTrace?.({ stage: "model", step: executed, action: interaction.call?.name });
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     if (!interaction.call) {
       const said = interaction.text.trim();
-      if (!said) return report("unverified", executed, "Computer Use ended without an action or completion evidence.");
-      if (!host.verify) return report("unverified", executed, `Model reported: ${said}`);
+      if (!said) {
+        host.onTrace?.({ stage: "unverified", step: executed, code: "verification" });
+        return report("unverified", executed, "Computer Use ended without an action or completion evidence.");
+      }
+      if (!host.verify) {
+        host.onTrace?.({ stage: "unverified", step: executed, code: "verification" });
+        return report("unverified", executed, `Model reported: ${said}`);
+      }
       try {
         const fresh = await host.capture();
         if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
         const evidence = await host.verify(goal, fresh, said);
         if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
         if (evidence && evidence.trim().length >= 12) {
+          host.onTrace?.({ stage: "verified", step: executed });
           return report("verified", executed, said, evidence.trim().slice(0, 500));
         }
+        host.onTrace?.({ stage: "unverified", step: executed, code: "verification" });
         return report("unverified", executed, `Model reported: ${said}. Fresh-screen verification did not confirm the goal.`);
       } catch {
+        host.onTrace?.({ stage: "unverified", step: executed, code: "verification" });
         return report("unverified", executed, `Model reported: ${said}. Final screen verification was unavailable.`);
       }
     }
     if (!interaction.id || !interaction.callId) {
+      host.onTrace?.({ stage: "blocked", step: executed, code: "model" });
       return report("blocked", executed, "Computer Use returned an action without its interaction or call ID. No action was executed.");
     }
     const decision = planComputerStep(interaction.call, step, startedAt, host.now(), host.stopped(), limits);
-    if (decision.action === "stop") return report("blocked", executed, decision.message);
+    if (decision.action === "stop") {
+      host.onTrace?.({ stage: "blocked", step: executed, code: "tool" });
+      return report("blocked", executed, decision.message);
+    }
     let acknowledgement = false;
     if (decision.action === "confirm") {
       const allowed = await host.confirm(decision.explanation);
@@ -108,13 +143,20 @@ export async function runComputerTaskReport(
       }
       acknowledgement = true;
     }
-    const outcome = await host.execute(decision.call, image);
+    let outcome: string;
+    try { outcome = await host.execute(decision.call, image); }
+    catch (error) {
+      host.onTrace?.({ stage: "failed", step: executed, action: decision.call.name, code: "tool" });
+      throw error;
+    }
     executed += 1;
+    host.onTrace?.({ stage: "acted", step: executed, action: decision.call.name });
     host.onProgress?.(executed, decision.call.name);
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     previousId = interaction.id;
     result = { name: decision.call.name, callId: interaction.callId, result: outcome, acknowledgement, imageBase64: null };
   }
+  host.onTrace?.({ stage: "blocked", step: executed });
   return report("blocked", executed, `Step limit reached after ${executed} actions. The goal was not verified.`);
 }
 
