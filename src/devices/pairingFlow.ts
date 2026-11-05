@@ -29,8 +29,9 @@ export async function pairingAction(
   if (!deviceId || (platform !== "windows" && platform !== "android"))
     throw new Error("Sign in and register this device before pairing.");
   if (action === "open") {
+    if (platform === "windows") return pairingAction(deviceId, platform, "show_code");
     openPairingUI();
-    return "Pairing window opened on this device. Choose Scan QR or enter a code on Android, or show a QR invitation on Windows.";
+    return "Pairing window opened on Android. Scan the computer's QR code or enter its eight-digit code.";
   }
   if (action === "status") {
     const links = await verifiedPairLinks(deviceId);
