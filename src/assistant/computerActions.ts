@@ -294,20 +294,23 @@ export function computerUseBody(
 export interface ParsedInteraction {
   id: string | null;
   call: ComputerCall | null;
+  /** Required by Gemini Interactions function_result call_id. */
+  callId: string | null;
   text: string;
 }
 
 /** Reads the first function call. Extra calls are ignored so one step is one action. */
 export function parseInteraction(body: unknown): ParsedInteraction {
-  if (typeof body !== "object" || body === null) return { id: null, call: null, text: "" };
+  if (typeof body !== "object" || body === null) return { id: null, call: null, callId: null, text: "" };
   const record = body as { id?: unknown; steps?: unknown; text?: unknown };
   const id = typeof record.id === "string" ? record.id : null;
   let text = typeof record.text === "string" ? record.text : "";
-  if (!Array.isArray(record.steps)) return { id, call: null, text };
+  if (!Array.isArray(record.steps)) return { id, call: null, callId: null, text };
   let call: ComputerCall | null = null;
+  let callId: string | null = null;
   for (const step of record.steps) {
     if (typeof step !== "object" || step === null) continue;
-    const row = step as { type?: unknown; name?: unknown; arguments?: unknown; args?: unknown; content?: unknown };
+    const row = step as { type?: unknown; name?: unknown; id?: unknown; call_id?: unknown; arguments?: unknown; args?: unknown; content?: unknown };
     if (!text && row.type === "model_output" && Array.isArray(row.content)) {
       text = row.content
         .map((block) => (typeof block === "object" && block && "text" in block && typeof block.text === "string" ? block.text : ""))
@@ -318,8 +321,10 @@ export function parseInteraction(body: unknown): ParsedInteraction {
     const args = row.arguments ?? row.args;
     if (typeof args !== "object" || args === null || Array.isArray(args)) continue;
     call = { name: row.name, args: args as Record<string, unknown> };
+    callId = typeof row.id === "string" && row.id ? row.id
+      : typeof row.call_id === "string" && row.call_id ? row.call_id : null;
   }
-  return { id, call, text };
+  return { id, call, callId, text };
 }
 
 /** Maps a Computer Use key step onto the local allowlist. Null means it must not be sent. */
