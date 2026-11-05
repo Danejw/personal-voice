@@ -82,6 +82,11 @@ export function assistantAudioChunk(base64: string) {
   };
 }
 
+/** End one push-to-talk microphone burst while preserving the Live session. */
+export function assistantAudioStreamEnd() {
+  return { realtimeInput: { audioStreamEnd: true } };
+}
+
 /** One finished user turn. Selection, notes, and personal context stay separate from the instruction. */
 export function assistantUserTurn(
   text: string,
