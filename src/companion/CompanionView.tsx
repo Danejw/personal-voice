@@ -378,7 +378,7 @@ export function CompanionView({
         <p className="companion-phase" role="status">{PHASE_LABEL[expressivePhase]}</p>
         {currentGoal && (
           <div className="companion-goal" role="status" aria-live="polite">
-            <p>{currentGoal.phase === "accepted" ? "Computer task accepted" : "Computer task update"}</p>
+            <p>{currentGoal.phase === "queued" ? "Contacting Windows" : currentGoal.phase === "accepted" ? "Computer task accepted" : currentGoal.phase === "connection-error" ? "Computer connection issue" : "Computer task update"}</p>
             <p>{currentGoal.message.slice(0, 250)}</p>
             {goalError && <p>{goalError}</p>}
             <div className="companion-goal-actions">

@@ -30,7 +30,8 @@ export interface RemoteGoalState {
 
 export interface RemoteGoalNotice {
   targetDeviceId: string;
-  phase: "accepted" | "reported";
+  phase: "queued" | "accepted" | "reported" | "connection-error";
+  requestId: string | null;
   message: string;
   receivedAt: number;
 }
@@ -38,6 +39,7 @@ export interface RemoteGoalNotice {
 export interface ComputerActionSnapshot {
   approval: ComputerApproval | null;
   remoteGoal: RemoteGoalNotice | null;
+  receiverError: string | null;
 }
 
 /**
@@ -45,7 +47,7 @@ export interface ComputerActionSnapshot {
  * Shell is not a method on this store.
  */
 export class ComputerActionStore {
-  private snapshot: ComputerActionSnapshot = { approval: null, remoteGoal: null };
+  private snapshot: ComputerActionSnapshot = { approval: null, remoteGoal: null, receiverError: null };
   private listeners = new Set<() => void>();
   private approvedId: string | null = null;
   private polling = false;
@@ -101,6 +103,16 @@ export class ComputerActionStore {
 
   getSnapshot = (): ComputerActionSnapshot => this.snapshot;
 
+  /** The receiver remains fail-closed; expose failures instead of silently losing them. */
+  reportPollFailure(reason: unknown): void {
+    const message = reason === null ? null
+      : reason instanceof Error ? reason.message.slice(0, 240)
+        : "Remote command delivery is unavailable.";
+    if (this.snapshot.receiverError === message) return;
+    this.snapshot = { ...this.snapshot, receiverError: message };
+    for (const listener of this.listeners) listener();
+  }
+
   openApp(id: string): Promise<string> {
     return this.platform.openAllowlistedApp(id);
   }
@@ -115,27 +127,54 @@ export class ComputerActionStore {
     const devices = await this.listDevices(userId);
     const currentId = this.getDeviceId(userId);
     const target = await resolvePairedVoiceTarget(devices, currentId, deviceName);
-    const result = await askComputerAction(
-      this.api,
-      userId,
-      this.getDeviceId(userId),
-      devices,
-      target.id,
-      action,
-      argument,
-      { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
-    );
-    if (action === "start_computer_goal" || action === "computer_goal_status" || action === "stop_computer_goal") {
-      this.snapshot = {
-        ...this.snapshot,
-        remoteGoal: {
-          targetDeviceId: target.id, phase: action === "start_computer_goal" ? "accepted" : "reported",
-          message: result.slice(0, 1500), receivedAt: Date.now(),
+    const isGoalCommand = action === "start_computer_goal"
+      || action === "computer_goal_status" || action === "stop_computer_goal";
+    let requestId: string | null = null;
+    try {
+      const result = await askComputerAction(
+        this.api, userId, currentId, devices, target.id, action, argument,
+        { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
+        receipt => {
+          requestId = receipt.requestId;
+          if (action !== "start_computer_goal" || receipt.stage !== "queued") return;
+          this.snapshot = {
+            ...this.snapshot,
+            remoteGoal: {
+              targetDeviceId: target.id, phase: "queued", requestId,
+              message: "Waiting for Windows to acknowledge the task.",
+              receivedAt: Date.now(),
+            },
+          };
+          for (const listener of this.listeners) listener();
         },
-      };
-      for (const listener of this.listeners) listener();
+      );
+      if (isGoalCommand) {
+        this.snapshot = {
+          ...this.snapshot,
+          remoteGoal: {
+            targetDeviceId: target.id, phase: action === "start_computer_goal" ? "accepted" : "reported",
+            message: result.slice(0, 1500), requestId, receivedAt: Date.now(),
+          },
+        };
+        for (const listener of this.listeners) listener();
+      }
+      return result;
+    } catch (error) {
+      // A timeout is an unknown outcome, not proof that Windows never executed the task.
+      if (isGoalCommand) {
+        const message = error instanceof Error ? error.message : "Command response unavailable.";
+        this.snapshot = {
+          ...this.snapshot,
+          remoteGoal: {
+            targetDeviceId: target.id, phase: "connection-error",
+            message: `Command response unavailable: ${message} Check status before trying again.`.slice(0, 1500),
+            requestId, receivedAt: Date.now(),
+          },
+        };
+        for (const listener of this.listeners) listener();
+      }
+      throw error;
     }
-    return result;
   }
 
   async capture(): Promise<ComputerImage> {
@@ -208,6 +247,7 @@ export class ComputerActionStore {
     if (this.polling) return;
     this.polling = true;
     try {
+      let pollIssue: string | null = null;
       const currentId = this.getDeviceId(userId);
       try { await this.api.touch(currentId); } catch { /* presence is best-effort */ }
       const pending = await this.api.listPending(userId, currentId);
@@ -236,13 +276,18 @@ export class ComputerActionStore {
           if (await remoteAutoActionApi.wasClaimed(currentId, row.id)) continue;
           if (!await invoke<boolean>("trusted_desktop_unlocked") &&
             row.action !== "stop_computer_goal" && row.action !== "computer_goal_status") {
-            // No approval on a locked desktop, and no pending auto-execution.
+            // Do not execute on a locked desktop. Explain why the request is pending.
+            pollIssue = "Windows is locked. Unlock it to run remote computer actions.";
             continue;
           }
           claimed = await remoteAutoActionApi.claim(currentId, row.id);
-        } catch {
-          // Missing backend means no unattended execution, never silent fallback.
+        } catch (error) {
+          // Never bypass a failed claim. Expose the failure for diagnosis and retry on the next poll.
+          pollIssue = error instanceof Error ? `Command authorization: ${error.message}` : "Command authorization unavailable.";
           continue;
+        }
+        if (claimed === "none") {
+          pollIssue = "Windows could not claim the remote command.";
         }
         if (claimed !== "claimed") continue;
         const outcome = await fulfillComputerAction(
@@ -269,6 +314,7 @@ export class ComputerActionStore {
       }
       this.approvedId = null;
       this.setApproval(null);
+      this.reportPollFailure(pollIssue);
     } finally {
       this.polling = false;
     }

@@ -27,6 +27,30 @@ function request(id: string, action: string, argument: string): ComputerActionRo
 }
 
 describe("Windows signed remote action receiver", () => {
+  it("shows receiver failures and clears them after a successful poll", async () => {
+    let unavailable = true;
+    const store = new ComputerActionStore({
+      touch: async () => undefined,
+      create: async () => "",
+      get: async () => null,
+      listPending: async () => {
+        if (unavailable) throw new Error("Database connection unavailable.");
+        return [];
+      },
+      answer: async () => undefined,
+      deny: async () => undefined,
+      remove: async () => undefined,
+    }, async () => [], () => "pc", { platform: "windows" } as PlatformAdapter);
+    store.userId = "account";
+    await expect(store.poll("account")).rejects.toThrow("Database connection unavailable.");
+    store.reportPollFailure(new Error("Database connection unavailable."));
+    expect(store.getSnapshot().receiverError).toBe("Database connection unavailable.");
+    unavailable = false;
+    await store.poll("account");
+    expect(store.getSnapshot().receiverError).toBeNull();
+  });
+
+
   it("runs mouse input and launches Chrome without a second desktop approval", async () => {
     const events: string[] = [];
     const rows = [request("pointer", "click_pointer", "500,500"),

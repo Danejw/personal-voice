@@ -58,6 +58,63 @@ const devices: RemoteDevice[] = [
 ];
 
 describe("remote computer actions", () => {
+  it("retries transient receipt reads without submitting the command twice", async () => {
+    const api = memoryApi();
+    const originalGet = api.get;
+    let readCount = 0;
+    let time = Date.parse("2026-09-28T12:00:10.000Z");
+    const receipts: string[] = [];
+    api.get = async (userId, id) => {
+      if (++readCount === 1) throw new TypeError("Failed to fetch");
+      return originalGet(userId, id);
+    };
+    const clock = {
+      now: () => time,
+      sleep: async () => {
+        time += 2_000;
+        if (api.rows[0]) {
+          api.rows[0].status = "answered";
+          api.rows[0].result = "Opened Notepad.";
+        }
+      },
+    };
+    await expect(askComputerAction(api, "user-1", "phone", devices,
+      "Desk PC", "open_app", "notepad", clock,
+      receipt => receipts.push(receipt.stage))).resolves.toBe("Opened Notepad.");
+    expect(readCount).toBe(2);
+    expect(receipts).toEqual(["queued", "answered"]);
+    expect(api.rows).toHaveLength(0);
+  });
+
+  it("preserves a signed result when receipt-row cleanup fails", async () => {
+    const api = memoryApi();
+    const read = api.get;
+    api.get = async (userId, id) => {
+      const row = await read(userId, id);
+      return row ? { ...row, status: "answered", result: "Opened Notepad." } : null;
+    };
+    api.remove = async () => { throw new Error("cleanup unavailable"); };
+    const clock = { now: () => Date.parse("2026-09-28T12:00:10.000Z"), sleep: async () => undefined };
+    await expect(askComputerAction(api, "user-1", "phone", devices,
+      "Desk PC", "open_app", "notepad", clock)).resolves.toBe("Opened Notepad.");
+  });
+
+  it("times out one request without retrying the command itself", async () => {
+    const api = memoryApi();
+    let sends = 0;
+    const create = api.create;
+    api.create = async (...args) => { sends += 1; return create(...args); };
+    let time = Date.parse("2026-09-28T12:00:10.000Z");
+    const receipts: string[] = [];
+    const clock = { now: () => time, sleep: async (ms: number) => { time += ms; } };
+    await expect(askComputerAction(api, "user-1", "phone", devices,
+      "Desk PC", "open_app", "notepad", clock,
+      receipt => receipts.push(receipt.stage))).rejects.toThrow(/outcome is unknown/);
+    expect(sends).toBe(1);
+    expect(receipts).toEqual(["queued", "timed_out"]);
+  });
+
+
   it("does not insert a row for an offline device", async () => {
     const api = memoryApi();
     const clock = { now: () => Date.parse("2026-09-28T12:02:00.000Z"), sleep: async () => {} };
