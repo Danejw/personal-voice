@@ -1533,6 +1533,7 @@ export class AssistantController {
     // Paired remote command authorization is enforced by the receiving Windows PC.
     // Do not gate each mobile remote command behind a second Assistant UI confirmation.
     if (decision.name === "remote_action") return true;
+    if (decision.name === "supervise_screen" && this.deviceContext.platform === "android") return true;
     // Saving any note attachment always requires explicit consent.
     if (decision.name === "attach_file_to_note" ||
         decision.title === "Save note with attachment" ||
@@ -2118,7 +2119,11 @@ export class AssistantController {
         return this.actions.computer.remoteAction(pending.remote.action, pending.text, pending.remote.device);
       }
       case "supervise_screen":
-        return this.runSupervised(pending.text);
+        // A local screen supervisor on Android would control the phone, not the PC.
+        // Delegate the complete goal to the exact paired Windows target instead.
+        return this.deviceContext.platform === "android"
+          ? this.actions.computer.remoteAction("start_computer_goal", pending.text, null)
+          : this.runSupervised(pending.text);
       case "remember_memory":
         if (!pending.memory || pending.memory.action !== "remember") throw new Error("That memory is not available.");
         return this.actions.rememberMemory(pending.memory);
