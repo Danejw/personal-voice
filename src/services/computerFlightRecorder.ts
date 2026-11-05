@@ -23,7 +23,7 @@ export type FlightInput = {
 };
 
 const PREFIX = "personal-voice.flight.v1.";
-const MAX_PENDING = 300;
+const MAX_PENDING = 1200;
 const SAFE_ACTIONS = new Set([
   "click", "double_click", "move", "right_click", "drag", "drag_and_drop",
   "scroll", "type", "wait", "press_key", "hotkey", "take_screenshot",
@@ -132,6 +132,26 @@ export async function readComputerTimeline(userId: string, limit = 160): Promise
   return {
     events: [...merged.values()].sort((a, b) =>
       (b.occurred_at ?? "").localeCompare(a.occurred_at ?? "") || b.id.localeCompare(a.id)).slice(0, limit),
+    synced: true,
+  };
+}
+
+/** Full history for one task. A 240-step run can emit over 720 events. */
+export async function readComputerTrace(userId: string, traceId: string): Promise<FlightTimelineResult> {
+  await flushComputerEvents(userId).catch(() => undefined);
+  const local = readPending(userId).filter(item => item.trace_id === traceId) as FlightEvent[];
+  const client = getSupabase();
+  if (!client) return { events: local, synced: false };
+  const { data, error } = await client.from("computer_task_events")
+    .select("id,user_id,trace_id,device_id,actor,stage,action_kind,step,failure_code,occurred_at,recorded_at")
+    .eq("user_id", userId).eq("trace_id", traceId)
+    .order("occurred_at", { ascending: true }).limit(1000);
+  if (error) return { events: local, synced: false };
+  const merged = new Map<string, FlightEvent>();
+  for (const item of [...(data ?? []), ...local]) merged.set(item.id, item);
+  return {
+    events: [...merged.values()].sort((a, b) =>
+      a.occurred_at.localeCompare(b.occurred_at) || a.id.localeCompare(b.id)),
     synced: true,
   };
 }
