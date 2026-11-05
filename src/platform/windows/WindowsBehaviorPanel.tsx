@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Toggle } from "@/components/Toggle";
+import { PAIRING_FINISHED_EVENT } from "@/devices/pairingFlow";
 import type { WindowsPlatformAdapter } from "@/platform/windows/WindowsPlatformAdapter";
 import {
   loadRemoteComputerActions,
@@ -31,9 +32,14 @@ export function WindowsBehaviorPanel({
   }, [platform]);
 
   useEffect(() => {
-    setRemoteReads(loadRemoteReads());
-    setRemoteComputerActions(loadRemoteComputerActions());
-    setRemoteDictation(loadRemoteDictation());
+    const refresh = () => {
+      setRemoteReads(loadRemoteReads());
+      setRemoteComputerActions(loadRemoteComputerActions());
+      setRemoteDictation(loadRemoteDictation());
+    };
+    refresh();
+    window.addEventListener(PAIRING_FINISHED_EVENT, refresh);
+    return () => window.removeEventListener(PAIRING_FINISHED_EVENT, refresh);
   }, [settingsReady]);
 
   function onLaunchAtLogin(enabled: boolean) {
@@ -54,7 +60,7 @@ export function WindowsBehaviorPanel({
       />
       <Toggle
         label="Allow remote reads"
-        title="Other devices on this account can ask what window is open. A screenshot still needs Allow once. Nothing is clicked or typed."
+        title="Paired devices can inspect the PC. When remote actions are also enabled, screenshot requests run without repeated approval on an unlocked Windows desktop."
         checked={remoteReads}
         onChange={(enabled) => {
           saveRemoteReads(enabled);
