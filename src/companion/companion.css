@@ -63,7 +63,7 @@
   display: block;
   width: min(94vw, 460px);
   height: auto;
-  max-height: min(46vh, 380px);
+  max-height: min(51vh, 430px);
   overflow: visible;
   color: var(--companion-accent);
   filter: drop-shadow(0 18px 32px #00000025);
@@ -78,9 +78,39 @@
 .companion-view.is-listening .companion-eye { --eye-open: .95; }
 .companion-view.is-thinking .companion-eye { --eye-open: .76; }
 .companion-view.is-speaking .companion-eye { --eye-open: .91; }
-.companion-mouth-open { fill: #10251f; stroke: #7bdfba; stroke-width: 2; }
-.companion-tongue { fill: #e89eac; }
-.companion-mouth-group { filter: drop-shadow(0 2px 2px #071d1720); }
+/* One unified character rig; inertia is driven by the same spring as the gaze. */
+.companion-character { will-change: transform; }
+.companion-hair {
+  fill: none;
+  stroke: #15e9c6;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 2px 4px #04cba51f);
+  will-change: transform;
+}
+.companion-nose { fill: #25dfc5; }
+.companion-mouth-group {
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 2px #071d1720);
+}
+.companion-mouth-group.is-visible { opacity: 1; }
+.companion-mouth {
+  fill: #10251f;
+  stroke: #7bdfba;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.companion-tie {
+  filter: drop-shadow(0 6px 8px #00000025);
+  will-change: transform;
+}
+.companion-tie-knot { fill: #92ffe3; }
+.companion-tie-body { fill: #15dfbf; }
+.companion-tie-shine { stroke: #b4ffe9; opacity: .64; }
 @keyframes companion-blink {
   0%, 7%, 10%, 44%, 49%, 84%, 90%, 100% { transform: scaleY(var(--eye-open)); }
   8.5%, 46.5%, 87% { transform: scaleY(.07); }
