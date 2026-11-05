@@ -4,7 +4,7 @@
  */
 export type JournalGoalStatus =
   | "starting" | "running" | "stopping" | "stopped"
-  | "completed" | "failed" | "interrupted" | "needs_review";
+  | "completed" | "failed" | "interrupted" | "needs_review" | "blocked";
 
 export interface JournalGoal {
   jobId: string;
@@ -44,7 +44,7 @@ export function restoreRemoteGoal(
     if (!value || typeof value !== "object") return null;
     const v = value as Record<string, unknown>;
     if (typeof v.jobId !== "string" || !v.jobId || typeof v.requesterDeviceId !== "string"
-      || typeof v.status !== "string" || !["starting", "running", "stopping", "stopped", "completed", "failed", "interrupted", "needs_review"].includes(v.status)
+      || typeof v.status !== "string" || !["starting", "running", "stopping", "stopped", "completed", "failed", "interrupted", "needs_review", "blocked"].includes(v.status)
       || typeof v.steps !== "number" || !Number.isSafeInteger(v.steps) || v.steps < 0
       || typeof v.lastAction !== "string" || typeof v.result !== "string"
       || typeof v.updatedAt !== "number") return null;
