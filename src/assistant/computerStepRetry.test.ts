@@ -7,7 +7,7 @@ describe("Computer Use model recovery", () => {
       .mockResolvedValueOnce(new Response(null, { status: 503 }))
       .mockResolvedValueOnce(new Response(null, { status: 503 }))
       .mockResolvedValueOnce(new Response("ok", { status: 200 }));
-    const sleep = vi.fn(async (_ms: number) => undefined);
+    const sleep = vi.fn(async (ms: number) => { expect(ms).toBeGreaterThan(0); });
     const retried: Array<number | "network"> = [];
     const result = await retryTransientModelRequest(send, {
       sleep,
