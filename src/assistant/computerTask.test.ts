@@ -68,7 +68,7 @@ describe("computer task loop", () => {
         count += 1;
         return { id: `step-${count}`, steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 50, y: 50 } }] };
       },
-      onProgress: step => progress.push(step),
+      onProgress: step => { progress.push(step); },
     });
     await expect(runComputerTask("Work through the visible UI.", task,
       { maxSteps: 12, maxDurationMs: REMOTE_COMPUTER_LIMITS.maxDurationMs })).resolves.toContain("Step limit reached after 12 actions");
