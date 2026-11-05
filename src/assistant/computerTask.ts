@@ -21,7 +21,7 @@ export interface ComputerTaskReport {
 }
 
 export interface ComputerTaskTraceEvent {
-  stage: "screen" | "model" | "acted" | "verified" | "unverified" | "blocked" | "failed";
+  stage: "started" | "screen" | "model" | "acted" | "verified" | "unverified" | "stopped" | "blocked" | "failed";
   step: number;
   action?: string;
   code?: "capture" | "model" | "tool" | "verification";
