@@ -128,6 +128,14 @@ describe("computer action safety", () => {
     expect(isTrustedRemoteAction("start_computer_goal", "Organize notes")).toBe(false);
   });
 
+  it("validates scroll directions and bounded finite waits before execution", () => {
+    expect(validateComputerCall({ name: "scroll", args: { x: 400, y: 600, direction: "down" } })).toEqual({ ok: true });
+    expect(validateComputerCall({ name: "scroll", args: { x: 400, y: 600, direction: "diagonal" } }).ok).toBe(false);
+    expect(validateComputerCall({ name: "wait", args: { seconds: 2 } })).toEqual({ ok: true });
+    expect(validateComputerCall({ name: "wait", args: { seconds: Number.NaN } }).ok).toBe(false);
+    expect(validateComputerCall({ name: "wait", args: { seconds: Number.POSITIVE_INFINITY } }).ok).toBe(false);
+  });
+
   it("supports a bounded longer goal without weakening blocked-action decisions", () => {
     const limits = { maxSteps: 240, maxDurationMs: 30 * 60_000 };
     expect(planComputerStep({ name: "click", args: { x: 10, y: 20 } }, 100, started, started + 60_000, false, limits).action).toBe("execute");
