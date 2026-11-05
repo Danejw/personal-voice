@@ -3,6 +3,7 @@
 // Docs checked 2026-09-28: https://ai.google.dev/gemini-api/docs/computer-use
 // Model gemini-3.8-flash, Interactions API, desktop environment, prompt-injection detection on.
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@6.2.12";
+import { retryTransientModelRequest } from "./retry.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const jwks = createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`));
@@ -105,12 +106,20 @@ Deno.serve(async (req) => {
 
   let response: Response;
   try {
-    response = await fetch(INTERACTIONS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(20_000),
-    });
+    const payload = JSON.stringify(body);
+    response = await retryTransientModelRequest(
+      () => fetch(INTERACTIONS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: payload,
+        signal: AbortSignal.timeout(20_000),
+      }),
+      {
+        onRetry: (status, attempt) => console.warn(
+          `computer-step: transient provider ${status}; retry ${attempt}/2`,
+        ),
+      },
+    );
   } catch {
     console.error("computer-step: request did not complete");
     return reply(502, { error: "Could not reach Computer Use." });
