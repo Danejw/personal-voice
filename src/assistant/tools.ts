@@ -405,7 +405,7 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "remote_action",
-      description: "Control a paired Windows PC. For a multi-step goal use start_computer_goal with the complete goal as argument: the PC approves once, then its existing Computer Use agent works through screenshots and actions automatically. Use computer_goal_status or stop_computer_goal with argument current to check or stop that session without PC approval. Single mouse, app and text actions still need PC approval. Select an exact paired PC or the saved default. No shell, destructive tasks or unapproved unattended access.",
+      description: "Control a paired Windows PC. For a multi-step goal use start_computer_goal with the complete goal as argument: the Windows PC runs its existing Computer Use agent with screenshots and actions automatically when Allow remote actions is enabled. Use computer_goal_status or stop_computer_goal with argument current to check or stop that session without PC approval. Single mouse, app and text actions run without repeated PC approval when that switch is enabled. Select an exact paired PC or the saved default. Only explicitly paired devices can control an unlocked PC; shell and unsupported destructive commands remain blocked.",
       parameters: {
         type: "object",
         properties: {
