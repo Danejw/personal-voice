@@ -8,7 +8,7 @@ const cors = {
   "Content-Type": "application/json",
 };
 type JsonRecord = Record<string, unknown>;
-const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke", "signal", "trusted_start", "trusted_stop", "trusted_list", "trusted_claim", "trusted_validate", "trusted_seen"]);
+const operations = new Set(["register", "invite", "claim", "read", "approve", "cancel", "list", "revoke", "signal", "trusted_start", "trusted_stop", "trusted_list", "trusted_claim", "trusted_validate", "trusted_seen", "auto_claim", "auto_validate", "auto_seen"]);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const proofPattern = /^[A-Za-z0-9_-]{86}$/;
 const keyPart = /^[A-Za-z0-9_-]{43}$/;
@@ -173,6 +173,18 @@ Deno.serve(async (request: Request) => {
       p_request: requestId, p_family: family,
     });
     if (result.data !== true) return reply(403, { error: "not_paired" });
+  } else if (op === "auto_claim" || op === "auto_validate" || op === "auto_seen") {
+    // Only a signed, registered native Windows identity can claim a paired request.
+    // The RPC atomically verifies the exact request, pairing and allowed command.
+    if (device.platform !== "windows") return reply(403, { error: "windows_only" });
+    const requestId = uuidArg(args.requestId);
+    if (!requestId || Object.keys(args).sort().join() !== "requestId") {
+      return reply(400, { error: "bad_request" });
+    }
+    result = await admin.rpc(op === "auto_claim" ? "remote_auto_claim"
+      : op === "auto_validate" ? "remote_auto_validate" : "remote_auto_seen", {
+      p_user_id: userId, p_pc_id: deviceId, p_request_id: requestId,
+    });
   } else if (op.startsWith("trusted_")) {
     // All trust operations require proof of the PC's native private key.
     // A phone JWT cannot authorize itself as a trusted source.
