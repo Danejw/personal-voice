@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantSession } from "@/assistant/AssistantSession";
 import type { AssistantEvent } from "@/assistant/events";
-import { assistantAudioChunk, assistantSetupMessage, assistantUserTurn } from "@/assistant/protocol";
+import { assistantAudioChunk, assistantAudioStreamEnd, assistantSetupMessage, assistantUserTurn } from "@/assistant/protocol";
 import { CredentialError } from "@/voice/provider/gemini/GeminiTokenSource";
 
 class FakeSocket {
@@ -68,6 +68,16 @@ describe("AssistantSession", () => {
       assistantAudioChunk(btoa(String.fromCharCode(5, 6))),
     ]);
     expect(socket.sent[1]).toMatchObject({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000" } } });
+  });
+
+  it("flushes microphone bursts on release without closing the Gemini session", async () => {
+    const { session, socket } = await readySession();
+    session.sendAudio(Uint8Array.of(1, 2).buffer);
+    session.endAudioStream();
+    session.sendAudio(Uint8Array.of(3, 4).buffer);
+    expect(socket.sent[2]).toEqual(assistantAudioStreamEnd());
+    expect(socket.sent[3]).toEqual(assistantAudioChunk(b64([3, 4])));
+    expect(socket.readyState).toBe(FakeSocket.OPEN);
   });
 
   it("keeps the socket for a second typed turn and reads the spoken transcript", async () => {
