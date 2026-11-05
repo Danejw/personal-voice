@@ -2,7 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import { ComputerActionStore } from "@/assistant/ComputerActionStore";
 import type { ComputerActionRow } from "@/assistant/computerRemote";
 import type { PlatformAdapter } from "@/platform/PlatformAdapter";
+import type { RemoteDevice } from "@/assistant/remoteContext";
+import { recordComputerEvent } from "@/services/computerFlightRecorder";
 
+vi.mock("@/services/computerFlightRecorder", () => ({
+  recordComputerEvent: vi.fn(),
+  flightFailureCode: () => "unknown",
+}));
+vi.mock("@/assistant/remoteVoiceTarget", () => ({
+  resolvePairedVoiceTarget: async () => ({ id: "11111111-1111-4111-8111-111111111111", name: "Desk PC", platform: "windows" }),
+}));
 vi.mock("@/settings/deviceSettings", () => ({
   loadRemoteComputerActions: () => true,
 }));
@@ -81,6 +90,12 @@ describe("Windows signed remote action receiver", () => {
     expect(events).toEqual(["click", "chrome.exe"]);
     expect(rows.map(r => r.status)).toEqual(["answered", "answered"]);
     expect(store.getSnapshot().approval).toBeNull();
+    expect(recordComputerEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actor: "windows", traceId: "pointer", action: "click_pointer", stage: "acted",
+    }));
+    expect(recordComputerEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actor: "windows", traceId: "chrome", action: "open_app", stage: "acknowledged",
+    }));
   });
 
   it("rejects unsupported remote commands without executing them", async () => {
@@ -135,6 +150,40 @@ describe("Windows signed remote action receiver", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("correlates direct Android requests with Windows command IDs, not a previous goal", async () => {
+    vi.mocked(recordComputerEvent).mockClear();
+    let created = 0;
+    const api = {
+      touch: async () => undefined,
+      create: async () => `remote-${++created}`,
+      get: async (_user: string, id: string) => ({
+        ...request(id, "open_app", "notepad"), status: "answered", result: "Acknowledged.",
+      }),
+      listPending: async () => [],
+      answer: async () => undefined,
+      deny: async () => undefined,
+      remove: async () => undefined,
+    } as unknown as ConstructorParameters<typeof ComputerActionStore>[0];
+    const devices = [
+      { id: "phone", name: "Phone", platform: "android", lastSeen: new Date().toISOString() },
+      { id: "11111111-1111-4111-8111-111111111111", name: "Desk PC", platform: "windows", lastSeen: new Date().toISOString() },
+    ];
+    const store = new ComputerActionStore(
+      api, async () => devices as RemoteDevice[],
+      () => "phone", { platform: "android" } as PlatformAdapter,
+    );
+    store.userId = "account";
+    await store.remoteAction("start_computer_goal", "Open Notepad.", "Desk PC");
+    await store.remoteAction("open_app", "notepad", "Desk PC");
+    expect(store.getSnapshot().remoteGoal?.requestId).toBe("remote-1");
+    expect(recordComputerEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actor: "android", traceId: "remote-2", action: "open_app", stage: "queued",
+    }));
+    expect(recordComputerEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      actor: "android", traceId: "remote-1", action: "open_app",
+    }));
   });
 
 });
