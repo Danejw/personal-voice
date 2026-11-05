@@ -327,9 +327,10 @@ const computerActions = new ComputerActionStore(
 );
 if (platform.platform === "windows") {
   computerActions.setRemoteGoalRunner(
-    (goal, progress, validate) => assistant.runRemoteComputerGoal(goal, progress, validate),
+    (goal, progress, validate, trace) => assistant.runRemoteComputerGoal(goal, progress, validate, trace),
     () => assistant.stopComputer(),
   );
+  assistant.setComputerFlightRecorder((traceId, event) => computerActions.recordLocalComputerTrace(traceId, event));
 }
 const remoteDictation = new RemoteDictationStore(
   remoteDictationApi,
