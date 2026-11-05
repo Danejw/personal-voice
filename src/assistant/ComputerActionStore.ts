@@ -71,9 +71,11 @@ export class ComputerActionStore {
     if (this.tracedReceiver.has(marker)) return;
     if (this.tracedReceiver.size > 1200) this.tracedReceiver.clear();
     this.tracedReceiver.add(marker);
-    // Every signed command has its own ID. Its Android and Windows receipts must match.
-    // The ongoing autonomous goal keeps its original start-command ID separately.
-    this.trace(row.id, stage, row.action, undefined, code);
+    // Status/stop observations belong to their autonomous goal.
+    // Direct commands use their own signed request ID on both devices.
+    const traceId = row.action === "computer_goal_status" || row.action === "stop_computer_goal"
+      ? this.remoteGoal?.jobId ?? row.id : row.id;
+    this.trace(traceId, stage, row.action, undefined, code);
   }
 
   recordLocalComputerTrace(traceId: string, event: ComputerTaskTraceEvent): void {
@@ -166,7 +168,8 @@ export class ComputerActionStore {
         { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
         receipt => {
           requestId = action === "start_computer_goal" ? receipt.requestId : goalId ?? receipt.requestId;
-          const traceId = receipt.requestId;
+          const traceId = action === "computer_goal_status" || action === "stop_computer_goal"
+            ? goalId ?? receipt.requestId : receipt.requestId;
           if (traceId) {
             if (receipt.stage === "queued") this.trace(traceId, "queued", action);
             if (receipt.stage === "answered") this.trace(traceId, "acknowledged", action);
