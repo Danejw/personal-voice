@@ -79,6 +79,20 @@ export function interpretToolResult(
       next_step: recovery(kind, count),
     };
   }
+  if (name === "remote_computer_goal") {
+    const completed = /Computer Use completed;/.test(message);
+    const unverified = /Computer Use (?:needs_review|blocked|failed|stopped);/.test(message);
+    return {
+      status: completed ? "observed" : "incomplete",
+      evidence: completed ? "read_result" : "action_acknowledged",
+      goal_verified: null, failure_kind: null, failure_streak: 0,
+      verification_hint: "Ask for computer_goal_status and inspect the receiver's evidence, not the goal-start receipt.",
+      next_step: completed
+        ? "The PC reported model-verified visual evidence. Describe only the evidence, not invisible effects."
+        : unverified ? "The PC did not verify completion. Report the state and blocker without claiming success."
+        : "The PC only accepted or is running the goal. Do not say it is done; check status later.",
+    };
+  }
   if (name === "get_tool_playbook") {
     return { status: "reference", evidence: "reference_only", goal_verified: null, failure_kind: null,
       failure_streak: 0, verification_hint, next_step: "Use only relevant steps. Retrieving guidance did not perform the user's task." };
