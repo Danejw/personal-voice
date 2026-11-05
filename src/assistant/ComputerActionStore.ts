@@ -28,6 +28,7 @@ export interface RemoteGoalState {
   lastAction: string;
   result: string;
   evidence: string | null;
+  stopRequested?: boolean;
 }
 
 export interface RemoteGoalNotice {
@@ -92,6 +93,7 @@ export class ComputerActionStore {
   ) => Promise<ComputerTaskReport>) | null = null;
   private reconciledFor: string | null = null;
   private workerHeartbeat: ReturnType<typeof setInterval> | null = null;
+  private activeWorkerToken: string | null = null;
   private remoteGoalStop: (() => void) | null = null;
 
   private persistRemoteGoal(): void {
@@ -101,6 +103,7 @@ export class ComputerActionStore {
         jobId: this.remoteGoal.jobId, requesterDeviceId: this.remoteGoal.requesterDeviceId,
         status: this.remoteGoal.status, steps: this.remoteGoal.steps,
         lastAction: this.remoteGoal.lastAction, result: this.remoteGoal.result,
+        stopRequested: this.remoteGoal.stopRequested === true,
         updatedAt: Date.now(),
       });
     } catch { /* Storage unavailable: execution is in-memory only. */ }
@@ -120,9 +123,10 @@ export class ComputerActionStore {
     this.remoteGoalStop = stop;
   }
 
-  stopRemoteGoal(): void {
+  stopRemoteGoal(persistStop = true): void {
     if (this.remoteGoal?.status === "starting") {
       this.remoteGoal.status = "stopped";
+      this.remoteGoal.stopRequested = true;
       this.pendingGoalStart = null;
       const owner = this.userId;
       if (owner && this.platform.platform === "windows") {
@@ -132,6 +136,13 @@ export class ComputerActionStore {
       this.persistRemoteGoal();
     } else if (this.remoteGoal?.status === "running") {
       this.remoteGoal.status = "stopping";
+      this.remoteGoal.stopRequested = true;
+      const owner = this.userId;
+      const token = this.activeWorkerToken;
+      if (persistStop && owner && token && this.platform.platform === "windows") {
+        void computerJobsApi.requestStop(this.getDeviceId(owner), this.remoteGoal.jobId, token)
+          .catch(() => undefined); // Local journal also retains stop intent across a restart.
+      }
       this.remoteGoalStop?.();
       this.persistRemoteGoal();
     }
@@ -313,6 +324,7 @@ export class ComputerActionStore {
     this.reconciledFor = null;
     if (this.workerHeartbeat) clearInterval(this.workerHeartbeat);
     this.workerHeartbeat = null;
+    this.activeWorkerToken = null;
     if (userId && this.platform.platform === "windows") {
       try {
         const saved = restoreRemoteGoal(localStorage, userId, this.getDeviceId(userId));
@@ -449,7 +461,8 @@ export class ComputerActionStore {
         this.remoteGoal?.status === "stopping") { this.reconciledFor = userId; return; }
     const pcId = this.getDeviceId(userId);
     const unlocked = await invoke<boolean>("trusted_desktop_unlocked").catch(() => false);
-    const recovery = await computerJobsApi.reconcile(pcId, unlocked && loadRemoteComputerActions());
+    const recovery = await computerJobsApi.reconcile(pcId,
+      unlocked && loadRemoteComputerActions() && this.remoteGoal?.stopRequested !== true);
     if (this.userId !== userId) return;
     this.reconciledFor = userId;
     if (!recovery) return;
@@ -458,9 +471,11 @@ export class ComputerActionStore {
       jobId: job.id, requesterDeviceId: job.requester_device_id,
       status: job.status === "running" ? "running" : job.status === "pending_ack" ? "interrupted" : job.status,
       steps: job.steps, lastAction: job.last_action, result: job.result, evidence: job.evidence,
+      stopRequested: !!job.stop_requested_at,
     };
     this.persistRemoteGoal();
     if (recovery.resumed && unlocked && loadRemoteComputerActions() &&
+        this.remoteGoal?.stopRequested !== true && job.stop_requested_at === null &&
         job.status === "running" && job.phase === "observing" && job.steps === 0) {
       this.startRemoteWorker(job, userId);
     }
@@ -508,8 +523,10 @@ export class ComputerActionStore {
       jobId: job.id, requesterDeviceId: job.requester_device_id,
       status: "running", steps: job.steps,
       lastAction: job.last_action, result: job.result, evidence: job.evidence,
+      stopRequested: !!job.stop_requested_at,
     };
     this.remoteGoal = state;
+    this.activeWorkerToken = token;
     this.persistRemoteGoal();
     this.trace(requestId, "started", "start_computer_goal", job.steps);
     let phase: ComputerJobPhase = "observing";
@@ -517,7 +534,11 @@ export class ComputerActionStore {
       if (this.userId !== ownerId || this.remoteGoal !== state) {
         throw new Error("Computer Use authorization changed.");
       }
-      await computerJobsApi.checkpoint(pcId, requestId, token, point);
+      const saved = await computerJobsApi.checkpoint(pcId, requestId, token, point);
+      if (saved.stop_requested_at && point.status === "running" && point.phase === "applying") {
+        this.remoteGoalStop?.();
+        throw new Error("Computer Use was stopped before the next action.");
+      }
       phase = point.phase;
       state.steps = point.steps;
       state.lastAction = point.lastAction;
@@ -531,15 +552,22 @@ export class ComputerActionStore {
         throw new Error("Computer Use stopped: PC locked, signed out, or remote actions disabled.");
       }
       await pairedPublicKey(pcId, job.requester_device_id);
-      await computerJobsApi.heartbeat(pcId, requestId, token);
+      const lease = await computerJobsApi.heartbeat(pcId, requestId, token);
+      if (lease.stop_requested_at) {
+        this.remoteGoalStop?.();
+        throw new Error("Computer Use was stopped.");
+      }
     };
     // Keep the server lease fresh during a slow model request; a lost lease
     // stops the worker before the next desktop side effect.
     if (this.workerHeartbeat) clearInterval(this.workerHeartbeat);
     const heartbeat = setInterval(() => {
-      void computerJobsApi.heartbeat(pcId, requestId, token).catch(() => {
-        if (this.remoteGoal === state) this.remoteGoalStop?.();
-      });
+      void computerJobsApi.heartbeat(pcId, requestId, token)
+        .then(latest => {
+          if (latest.stop_requested_at && this.remoteGoal === state) this.remoteGoalStop?.();
+        }).catch(() => {
+          if (this.remoteGoal === state) this.remoteGoalStop?.();
+        });
     }, 20_000);
     this.workerHeartbeat = heartbeat;
     void runner(
@@ -588,6 +616,7 @@ export class ComputerActionStore {
     }).finally(() => {
       clearInterval(heartbeat);
       if (this.workerHeartbeat === heartbeat) this.workerHeartbeat = null;
+      if (this.activeWorkerToken === token) this.activeWorkerToken = null;
     });
   }
 
@@ -600,7 +629,15 @@ export class ComputerActionStore {
       if (job.requester_device_id !== requesterDeviceId) {
         throw new Error("This session belongs to a different paired device.");
       }
-      if (action === "stop_computer_goal" && this.remoteGoal?.jobId === job.id) this.stopRemoteGoal();
+      if (action === "stop_computer_goal" && this.remoteGoal?.jobId === job.id) {
+        if (this.remoteGoal.status === "running" && this.activeWorkerToken) {
+          // A signed stop receipt cannot claim success until the stop intent is durable.
+          await computerJobsApi.requestStop(this.getDeviceId(owner), job.id, this.activeWorkerToken);
+        } else if (this.remoteGoal.status === "starting") {
+          await computerJobsApi.cancelPending(this.getDeviceId(owner), job.id);
+        }
+        this.stopRemoteGoal(false);
+      }
       return `Computer Use job ${job.id}: ${this.remoteGoal?.jobId === job.id && this.remoteGoal.status === "stopping" ? "stopping" : job.status}; ${job.steps} steps; ${job.last_action || "no actions yet"}; ${job.result}${job.evidence ? `; Verified visual evidence: ${job.evidence}` : "; No verified completion evidence"}`.slice(0, 1500);
     }
     if (action === "start_computer_goal") {
