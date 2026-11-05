@@ -262,7 +262,7 @@ export function computerUseBody(
   goal: string,
   imageBase64: string | null,
   previousInteractionId: string | null,
-  functionResult: { name: string; result: string; acknowledgement: boolean; imageBase64: string | null } | null,
+  functionResult: { name: string; callId: string; result: string; acknowledgement: boolean; imageBase64: string | null } | null,
 ): Record<string, unknown> {
   const tool = {
     type: "computer_use",
@@ -278,11 +278,13 @@ export function computerUseBody(
       input: [{
         type: "function_result",
         name: functionResult.name,
-        result: [{ type: "text", text: functionResult.result }],
+        call_id: functionResult.callId,
+        result: [
+          { type: "text", text: functionResult.result },
+          ...(functionResult.imageBase64
+            ? [{ type: "image", data: functionResult.imageBase64, mime_type: "image/jpeg" }] : []),
+        ],
         ...(functionResult.acknowledgement ? { safety_acknowledgement: true } : {}),
-        ...(functionResult.imageBase64
-          ? { parts: [{ type: "image", data: functionResult.imageBase64, mime_type: "image/jpeg" }] }
-          : {}),
       }],
     };
   }
