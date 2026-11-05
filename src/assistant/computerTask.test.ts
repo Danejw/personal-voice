@@ -30,7 +30,7 @@ describe("computer task loop", () => {
       propose: async () => {
         calls += 1;
         if (calls === 1) {
-          return { id: "step-1", steps: [{ type: "function_call", name: "click", arguments: { x: 10, y: 20 } }] };
+          return { id: "step-1", steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 10, y: 20 } }] };
         }
         return { id: "step-2", steps: [{ type: "model_output", content: [] }], text: "The button is pressed." };
       },
@@ -43,7 +43,7 @@ describe("computer task loop", () => {
     const task = host({
       propose: async () => ({
         id: "step-1",
-        steps: [{ type: "function_call", name: "type", arguments: { text: "hello", press_enter: true } }],
+        steps: [{ type: "function_call", id: "call-test", name: "type", arguments: { text: "hello", press_enter: true } }],
       }),
       confirm: async () => false,
     });
@@ -54,7 +54,7 @@ describe("computer task loop", () => {
   it("stops immediately when Stop is set", async () => {
     const task = host({
       stopped: () => true,
-      propose: async () => ({ id: "x", steps: [{ type: "function_call", name: "click", arguments: { x: 1, y: 1 } }] }),
+      propose: async () => ({ id: "x", steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 1, y: 1 } }] }),
     });
     await expect(runComputerTask("Keep going.", task)).resolves.toContain("STOPPED: Stopped after 0 actions");
     expect(task.executed).toEqual([]);
@@ -66,7 +66,7 @@ describe("computer task loop", () => {
     const task = host({
       propose: async () => {
         count += 1;
-        return { id: `step-${count}`, steps: [{ type: "function_call", name: "click", arguments: { x: 50, y: 50 } }] };
+        return { id: `step-${count}`, steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 50, y: 50 } }] };
       },
       onProgress: step => progress.push(step),
     });
@@ -83,7 +83,7 @@ describe("computer task loop", () => {
       stopped: () => stopped,
       propose: async () => ({
         id: "step",
-        steps: [{ type: "function_call", name: "click", arguments: { x: 100, y: 100 } }],
+        steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 100, y: 100 } }],
       }),
       execute: async () => { stopped = true; return "Done"; },
     });
@@ -96,12 +96,43 @@ describe("computer task loop", () => {
     const task = host({
       propose: async () => {
         step += 1;
-        return { id: `s-${step}`, steps: [{ type: "function_call", name: "move", arguments: { x: step, y: 1 } }] };
+        return { id: `s-${step}`, steps: [{ type: "function_call", id: "call-test", name: "move", arguments: { x: step, y: 1 } }] };
       },
     });
     await expect(runComputerTask("Move around.", task)).resolves.toContain("Step limit reached after 8 actions");
     expect(task.executed).toHaveLength(8);
   });
+  it("preserves function-call identity and the new screenshot in the continuation", async () => {
+    let continuation: Record<string, unknown> | null = null;
+    let times = 0;
+    const task = host({
+      propose: async (body) => {
+        times += 1;
+        if (times === 1) return { id: "interaction-1", steps: [{
+          type: "function_call", id: "call-abc", name: "click",
+          arguments: { x: 10, y: 12 },
+        }] };
+        continuation = body;
+        return { id: "interaction-2", text: "Clicked.", steps: [] };
+      },
+    });
+    await runComputerTaskReport("Press the button.", task);
+    expect(continuation).toMatchObject({
+      previousInteractionId: "interaction-1",
+      functionResult: { name: "click", callId: "call-abc", image: "img" },
+    });
+  });
+
+  it("does not execute a model action without its call id", async () => {
+    const task = host({ propose: async () => ({ id: "interaction", steps: [{
+      type: "function_call", name: "click", arguments: { x: 10, y: 10 },
+    }] }) });
+    const outcome = await runComputerTaskReport("Click.", task);
+    expect(outcome.status).toBe("blocked");
+    expect(task.executed).toHaveLength(0);
+    expect(outcome.summary).toContain("call ID");
+  });
+
   it("refuses to call an empty model result completed", async () => {
     const task = host({ propose: async () => ({ id: "empty", steps: [] }) });
     const outcome = await runComputerTaskReport("Finish the user's job.", task);
@@ -138,7 +169,7 @@ describe("computer task loop", () => {
     let stop = false;
     const task = host({
       stopped: () => stop,
-      propose: async () => ({ id: "click", steps: [{ type: "function_call", name: "click", arguments: { x: 10, y: 10 } }] }),
+      propose: async () => ({ id: "click", steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 10, y: 10 } }] }),
       execute: async () => { stop = true; return "Clicked"; },
     });
     const outcome = await runComputerTaskReport("Click then stop.", task);
