@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { REMOTE_COMPUTER_LIMITS, runComputerTask, type ComputerTaskHost } from "@/assistant/computerTask";
+import { REMOTE_COMPUTER_LIMITS, runComputerTask, runComputerTaskReport, type ComputerTaskHost } from "@/assistant/computerTask";
 
 function host(partial: Partial<ComputerTaskHost> & Pick<ComputerTaskHost, "propose">): ComputerTaskHost & { executed: string[]; confirmed: string[] } {
   const executed: string[] = [];
@@ -30,12 +30,12 @@ describe("computer task loop", () => {
       propose: async () => {
         calls += 1;
         if (calls === 1) {
-          return { id: "step-1", steps: [{ type: "function_call", name: "click", arguments: { x: 10, y: 20 } }] };
+          return { id: "step-1", steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 10, y: 20 } }] };
         }
         return { id: "step-2", steps: [{ type: "model_output", content: [] }], text: "The button is pressed." };
       },
     });
-    await expect(runComputerTask("Click the harmless button.", task)).resolves.toBe("The button is pressed.");
+    await expect(runComputerTask("Click the harmless button.", task)).resolves.toContain("UNVERIFIED: Model reported: The button is pressed.");
     expect(task.executed).toEqual(["click"]);
   });
 
@@ -43,20 +43,20 @@ describe("computer task loop", () => {
     const task = host({
       propose: async () => ({
         id: "step-1",
-        steps: [{ type: "function_call", name: "type", arguments: { text: "hello", press_enter: true } }],
+        steps: [{ type: "function_call", id: "call-test", name: "type", arguments: { text: "hello", press_enter: true } }],
       }),
       confirm: async () => false,
     });
-    await expect(runComputerTask("Type and submit.", task)).resolves.toBe("Stopped. Nothing further was done.");
+    await expect(runComputerTask("Type and submit.", task)).resolves.toContain("STOPPED: Stopped after 0 actions");
     expect(task.executed).toEqual([]);
   });
 
   it("stops immediately when Stop is set", async () => {
     const task = host({
       stopped: () => true,
-      propose: async () => ({ id: "x", steps: [{ type: "function_call", name: "click", arguments: { x: 1, y: 1 } }] }),
+      propose: async () => ({ id: "x", steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 1, y: 1 } }] }),
     });
-    await expect(runComputerTask("Keep going.", task)).resolves.toBe("Stopped. Nothing further was done.");
+    await expect(runComputerTask("Keep going.", task)).resolves.toContain("STOPPED: Stopped after 0 actions");
     expect(task.executed).toEqual([]);
   });
 
@@ -66,12 +66,12 @@ describe("computer task loop", () => {
     const task = host({
       propose: async () => {
         count += 1;
-        return { id: `step-${count}`, steps: [{ type: "function_call", name: "click", arguments: { x: 50, y: 50 } }] };
+        return { id: `step-${count}`, steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 50, y: 50 } }] };
       },
       onProgress: step => progress.push(step),
     });
     await expect(runComputerTask("Work through the visible UI.", task,
-      { maxSteps: 12, maxDurationMs: REMOTE_COMPUTER_LIMITS.maxDurationMs })).resolves.toContain("12 steps");
+      { maxSteps: 12, maxDurationMs: REMOTE_COMPUTER_LIMITS.maxDurationMs })).resolves.toContain("Step limit reached after 12 actions");
     expect(task.executed).toHaveLength(12);
     expect(task.confirmed).toHaveLength(0);
     expect(progress).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
@@ -83,12 +83,12 @@ describe("computer task loop", () => {
       stopped: () => stopped,
       propose: async () => ({
         id: "step",
-        steps: [{ type: "function_call", name: "click", arguments: { x: 100, y: 100 } }],
+        steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 100, y: 100 } }],
       }),
       execute: async () => { stopped = true; return "Done"; },
     });
     await expect(runComputerTask("Stop on request.", task, REMOTE_COMPUTER_LIMITS))
-      .resolves.toBe("Stopped. Nothing further was done.");
+      .resolves.toContain("STOPPED: Stopped after 1 actions");
   });
 
   it("stops on the step cap without a ninth action", async () => {
@@ -96,10 +96,85 @@ describe("computer task loop", () => {
     const task = host({
       propose: async () => {
         step += 1;
-        return { id: `s-${step}`, steps: [{ type: "function_call", name: "move", arguments: { x: step, y: 1 } }] };
+        return { id: `s-${step}`, steps: [{ type: "function_call", id: "call-test", name: "move", arguments: { x: step, y: 1 } }] };
       },
     });
-    await expect(runComputerTask("Move around.", task)).resolves.toContain("Stopped after 8 steps");
+    await expect(runComputerTask("Move around.", task)).resolves.toContain("Step limit reached after 8 actions");
     expect(task.executed).toHaveLength(8);
   });
+  it("preserves function-call identity and the new screenshot in the continuation", async () => {
+    let continuation: Record<string, unknown> | null = null;
+    let times = 0;
+    const task = host({
+      propose: async (body) => {
+        times += 1;
+        if (times === 1) return { id: "interaction-1", steps: [{
+          type: "function_call", id: "call-abc", name: "click",
+          arguments: { x: 10, y: 12 },
+        }] };
+        continuation = body;
+        return { id: "interaction-2", text: "Clicked.", steps: [] };
+      },
+    });
+    await runComputerTaskReport("Press the button.", task);
+    expect(continuation).toMatchObject({
+      previousInteractionId: "interaction-1",
+      functionResult: { name: "click", callId: "call-abc", image: "img" },
+    });
+  });
+
+  it("does not execute a model action without its call id", async () => {
+    const task = host({ propose: async () => ({ id: "interaction", steps: [{
+      type: "function_call", name: "click", arguments: { x: 10, y: 10 },
+    }] }) });
+    const outcome = await runComputerTaskReport("Click.", task);
+    expect(outcome.status).toBe("blocked");
+    expect(task.executed).toHaveLength(0);
+    expect(outcome.summary).toContain("call ID");
+  });
+
+  it("refuses to call an empty model result completed", async () => {
+    const task = host({ propose: async () => ({ id: "empty", steps: [] }) });
+    const outcome = await runComputerTaskReport("Finish the user's job.", task);
+    expect(outcome.status).toBe("unverified");
+    expect(outcome.summary).toContain("without an action");
+    expect(outcome.steps).toBe(0);
+  });
+
+  it("requires fresh visual verification before reporting success", async () => {
+    let frames = 0;
+    const task = host({
+      capture: async () => ({ jpeg: `screen-${++frames}`, width: 100, height: 100 }),
+      propose: async () => ({ id: "done", steps: [], text: "The file was saved." }),
+      verify: async (_goal, image) => image.jpeg === "screen-2"
+        ? "The saved file is visible in the destination folder." : null,
+    });
+    const outcome = await runComputerTaskReport("Save the file.", task);
+    expect(outcome).toMatchObject({ status: "verified", steps: 0 });
+    expect(outcome.evidence).toContain("destination folder");
+    expect(frames).toBe(2);
+  });
+
+  it("keeps a model's completion claim unverified when the fresh screen cannot prove it", async () => {
+    const task = host({
+      propose: async () => ({ id: "done", steps: [], text: "Email delivered." }),
+      verify: async () => null,
+    });
+    const outcome = await runComputerTaskReport("Deliver email.", task);
+    expect(outcome.status).toBe("unverified");
+    expect(outcome.evidence).toBeNull();
+  });
+
+  it("reports actions already performed before stop, never claims nothing happened", async () => {
+    let stop = false;
+    const task = host({
+      stopped: () => stop,
+      propose: async () => ({ id: "click", steps: [{ type: "function_call", id: "call-test", name: "click", arguments: { x: 10, y: 10 } }] }),
+      execute: async () => { stop = true; return "Clicked"; },
+    });
+    const outcome = await runComputerTaskReport("Click then stop.", task);
+    expect(outcome).toMatchObject({ status: "stopped", steps: 1 });
+    expect(outcome.summary).not.toContain("Nothing further was done");
+  });
+
 });
