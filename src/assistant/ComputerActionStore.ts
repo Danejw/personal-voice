@@ -1,4 +1,4 @@
-import { dragEndpoints, executableShortcut, isTrustedRemoteAction, parseRemotePointer, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
+import { dragEndpoints, executableShortcut, parseRemotePointer, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
 import { askComputerAction, fulfillComputerAction, type ComputerActionApi } from "@/assistant/computerRemote";
 import type { ComputerImage } from "@/assistant/computerTask";
 import type { RemoteDevice } from "@/assistant/remoteContext";
@@ -9,7 +9,7 @@ import { pairedPublicKey } from "@/assistant/remoteVoiceProof";
 import { snapshotFromNative } from "@/assistant/snapshot";
 import { encodeSnapshotJpeg } from "@/assistant/snapshotEncode";
 import { proposeComputerStep } from "@/services/computerStep";
-import { trustedRemoteApi } from "@/services/trustedRemoteService";
+import { remoteAutoActionApi } from "@/services/remoteAutoActionService";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface ComputerApproval {
@@ -38,7 +38,6 @@ export class ComputerActionStore {
   private listeners = new Set<() => void>();
   private approvedId: string | null = null;
   private polling = false;
-  private trustedBackendSeen = false;
   private remoteGoal: RemoteGoalState | null = null;
   private pendingGoalStart: { requestId: string; goal: string; requesterDeviceId: string; ownerId: string } | null = null;
   private remoteGoalRunner: ((goal: string, progress: (step: number, action: string) => void, validate: () => Promise<void>) => Promise<string>) | null = null;
@@ -170,59 +169,44 @@ export class ComputerActionStore {
         this.remoteGoal = null;
       }
       const remoteEnabled = loadRemoteComputerActions();
-      // Backend missing, no trusted grant, account signed out, or Android:
-      // fail closed to ordinary per-action Windows confirmation.
-      let grants: Awaited<ReturnType<typeof trustedRemoteApi.list>> = [];
-      let trustedBackendAvailable = false;
-      if (remoteEnabled && this.platform.platform === "windows" && this.userId === userId && pending.length) {
-        try {
-          grants = await trustedRemoteApi.list(currentId);
-          trustedBackendAvailable = true;
-          this.trustedBackendSeen = true;
-        } catch { /* Older backends support ordinary per-action approval only. */ }
-      }
-      let waiting: ComputerApproval | null = null;
       for (const row of pending) {
-        // Once trusted control has been available in this app process, an
-        // unavailable backend must not turn stale claimed actions into new
-        // manual approvals.
-        if (this.trustedBackendSeen && !trustedBackendAvailable) continue;
-        if (trustedBackendAvailable) {
-          try {
-            if (await trustedRemoteApi.wasClaimed(currentId, row.id)) continue;
-          } catch {
-            // Don't execute or approve if the duplicate-prevention check
-            // cannot be completed. Retry the safe read on the next poll.
+        // A signed v2 request is already verified by listPending. The service
+        // additionally authenticates this Windows PC's native pairing identity
+        // and atomically claims the exact request before any native action.
+        if (this.userId !== userId || this.platform.platform !== "windows" || !remoteEnabled) {
+          const denied = await fulfillComputerAction(
+            this.api, row, this.platform.platform, remoteEnabled, null,
+            async () => { throw new Error("Remote control is not enabled on this Windows PC."); },
+          );
+          if (denied.action === "waiting") continue;
+          continue;
+        }
+        let claimed: "none" | "claimed" | "already";
+        try {
+          // Fail closed rather than replaying commands after a crash or reconnect.
+          if (await remoteAutoActionApi.wasClaimed(currentId, row.id)) continue;
+          if (!await invoke<boolean>("trusted_desktop_unlocked") &&
+            row.action !== "stop_computer_goal" && row.action !== "computer_goal_status") {
+            // No approval on a locked desktop, and no pending auto-execution.
             continue;
           }
+          claimed = await remoteAutoActionApi.claim(currentId, row.id);
+        } catch {
+          // Missing backend means no unattended execution, never silent fallback.
+          continue;
         }
-        const eligible = this.approvedId !== row.id &&
-          this.userId === userId && this.platform.platform === "windows" && remoteEnabled &&
-          isTrustedRemoteAction(row.action, row.argument) &&
-          grants.some(grant => grant.phone_device_id === row.requesterDeviceId &&
-            !grant.stopped_at && Date.parse(grant.expires_at) > Date.now());
-        const sessionControl = row.action === "computer_goal_status" || row.action === "stop_computer_goal";
+        if (claimed !== "claimed") continue;
         const outcome = await fulfillComputerAction(
-          this.api, row, this.platform.platform, remoteEnabled,
-          sessionControl && this.userId === userId ? row.id : this.approvedId,
-          async (action, argument, trusted) => {
-            if (trusted) {
-              // Fresh remote grant, pairing, request and native lock checks
-              // immediately before the OS operation. No caches are authoritative.
-              if (this.userId !== userId ||
-                  !await trustedRemoteApi.validate(currentId, row.id) ||
-                  !await invoke<boolean>("trusted_desktop_unlocked")) {
-                throw new Error("Trusted control was stopped, expired, or the PC is locked.");
-              }
+          this.api, row, this.platform.platform, remoteEnabled, row.id,
+          async (action, argument) => {
+            if (this.userId !== userId || !loadRemoteComputerActions() ||
+                !await remoteAutoActionApi.validate(currentId, row.id) ||
+                (action !== "computer_goal_status" && action !== "stop_computer_goal" &&
+                  !await invoke<boolean>("trusted_desktop_unlocked"))) {
+              throw new Error("Automatic remote control disabled, locked or pairing revoked.");
             }
             return this.run(action, argument, row.requesterDeviceId, row.id);
           },
-          eligible ? {
-            claim: async () => {
-              if (!await invoke<boolean>("trusted_desktop_unlocked")) return "none";
-              return trustedRemoteApi.claim(currentId, row.id);
-            },
-          } : null,
         );
         // Start the background task only AFTER the signed start acknowledgment is committed.
         // A timed-out or rejected request must never leave an unauthorized running task.
@@ -233,12 +217,9 @@ export class ComputerActionStore {
           this.pendingGoalStart = null;
           if (this.remoteGoal?.status === "starting") this.remoteGoal = null;
         }
-        if (outcome.action === "waiting" && outcome.label && !waiting) {
-          waiting = { id: row.id, label: outcome.label };
-        }
       }
-      if (this.approvedId && !pending.some(row => row.id === this.approvedId)) this.approvedId = null;
-      this.setApproval(waiting);
+      this.approvedId = null;
+      this.setApproval(null);
     } finally {
       this.polling = false;
     }
