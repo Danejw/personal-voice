@@ -76,6 +76,14 @@ describe("computer action safety", () => {
     expect(validateComputerCall({ name: "drag_and_drop", args: { path: [[0, 0], [-1, 999]] } }).ok).toBe(false);
     expect(safetyClass("drag_and_drop")).toBe("high");
     expect(safetyClass("drag")).toBe("high");
+    expect(planComputerStep({ name: "drag", args: { x: 100, y: 100, end_x: 900, end_y: 900 } },
+      0, started, started, false, { maxSteps: 240, maxDurationMs: 1800000, allowRoutineDrag: true }).action)
+      .toBe("execute");
+    expect(planComputerStep({ name: "drag", args: { x: 100, y: 100, end_x: 900, end_y: 900,
+      safety_decision: "require_confirmation" } },
+      0, started, started, false, { maxSteps: 240, maxDurationMs: 1800000, allowRoutineDrag: true }).action)
+      .toBe("confirm");
+
     expect(safetyClass("right_click")).toBe("low");
   });
 
