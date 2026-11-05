@@ -310,6 +310,11 @@ export class AssistantController {
   }
 
   /** Auto runs confirming actions. Review waits for Confirm or Cancel. */
+  /** 0–1 playback energy for the character, never raw audio or transcript data. */
+  speechLevel(): number {
+    return this.playback.speechLevel?.() ?? 0;
+  }
+
   setAutoRun(enabled: boolean): void {
     this.autoRun = enabled;
   }
