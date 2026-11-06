@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { computerJobsApi } from "@/services/computerJobsService";
 import { pairServerAction } from "@/services/devicePairingService";
 import { getSupabase } from "@/services/supabase";
@@ -65,6 +66,29 @@ describe("durable signed Computer Use jobs", () => {
     });
     vi.mocked(pairServerAction).mockResolvedValueOnce({ resumed: "yes", job });
     await expect(computerJobsApi.reconcile("pc", true)).rejects.toThrow("Invalid recovery decision");
+  });
+
+  it("registers job_control at the signed Edge operation gate, not as a mutation event", () => {
+    // Check the server's outer authorization gate, not just the mocked client RPC.
+    const source = readFileSync("supabase/functions/device-pairing/index.ts", "utf8");
+    const operations = source.match(/const operations = new Set\((\[[^\n]+\])\);/);
+    expect(operations).not.toBeNull();
+    expect(JSON.parse(operations![1]!)).toContain("job_control");
+    expect(source).toContain('} else if (op === "job_control")');
+    expect(source).toContain('admin.rpc("computer_job_control"');
+    const events = source.match(/!\[([^\]]+)\]\.includes\(event\)/);
+    expect(events).not.toBeNull();
+    expect(JSON.parse(`[${events![1]}]`)).not.toContain("job_control");
+  });
+
+  it("routes each control command through the native signed Windows identity", async () => {
+    vi.mocked(pairServerAction).mockResolvedValue({ ...job, control_state: "paused", instruction_revision: 1 });
+    const result = await computerJobsApi.control("pc", "control-request-id");
+    expect(result.control_state).toBe("paused");
+    expect(pairServerAction).toHaveBeenCalledWith("pc", "job_control", {
+      requestId: "control-request-id",
+    });
+    expect(getSupabase).not.toHaveBeenCalled();
   });
 
   it("sends a signed stop intent so a restart cannot resume the task", async () => {

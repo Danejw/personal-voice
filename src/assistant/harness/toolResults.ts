@@ -82,6 +82,7 @@ export function interpretToolResult(
   if (name === "remote_computer_goal") {
     const completed = /Computer Use completed;/.test(message);
     const unverified = /Computer Use (?:needs_review|blocked|failed|stopped);/.test(message);
+    const paused = /Computer Use job .*: paused;/.test(message);
     return {
       status: completed ? "observed" : "incomplete",
       evidence: completed ? "read_result" : "action_acknowledged",
@@ -89,6 +90,7 @@ export function interpretToolResult(
       verification_hint: "Ask for computer_goal_status and inspect the receiver's evidence, not the goal-start receipt.",
       next_step: completed
         ? "The PC reported model-verified visual evidence. Describe only the evidence, not invisible effects."
+        : paused ? "The Windows task is paused. Resume it or provide a revised goal."
         : unverified ? "The PC did not verify completion. Report the state and blocker without claiming success."
         : "The PC only accepted or is running the goal. Do not say it is done; check status later.",
     };

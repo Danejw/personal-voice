@@ -47,6 +47,8 @@ export interface ComputerTaskHost {
   /** Save the completed-action checkpoint before proceeding to another step. */
   onProgress?(step: number, action: string): Promise<void> | void;
   onBeforeVerify?(step: number): Promise<void> | void;
+  /** Read current goal at each safe boundary. A paused job waits here. */
+  instructions?(): Promise<string>;
   /** Diagnostic metadata only, never screenshots, prompts, coordinates, or tool arguments. */
   onTrace?(event: ComputerTaskTraceEvent): void;
   /** A fresh post-action screenshot is inspected independently of the action receipt. */
@@ -84,11 +86,22 @@ export async function runComputerTaskReport(
   let selectedModel: string | undefined;
   let result: { name: string; callId: string; result: string; acknowledgement: boolean; imageBase64: string | null } | null = null;
   let executed = 0;
+  const syncInstructions = async (): Promise<boolean> => {
+    const next = await host.instructions?.();
+    if (!next || next === goal) return false;
+    goal = next;
+    previousId = null;
+    result = null;
+    selectedModel = undefined;
+    return true;
+  };
   for (let step = 0; step < limits.maxSteps; step += 1) {
     if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
     if (host.now() - startedAt >= limits.maxDurationMs) {
       return report("blocked", executed, `Time limit reached after ${executed} actions. The goal was not verified.`);
     }
+    await syncInstructions();
+    if (host.stopped()) return report("stopped", executed, "Computer Use stopped before the next action.");
     let image: ComputerImage;
     try { image = await host.capture(); }
     catch (error) {
@@ -134,10 +147,12 @@ export async function runComputerTaskReport(
         return report("unverified", executed, `Model reported: ${said}`);
       }
       try {
+        if (await syncInstructions()) continue;
         await host.onBeforeVerify?.(executed);
         const fresh = await host.capture();
         if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
         const evidence = await host.verify(goal, fresh, said);
+        if (await syncInstructions()) continue;
         if (host.stopped()) return report("stopped", executed, `Stopped after ${executed} actions. The goal was not verified.`);
         if (evidence && evidence.trim().length >= 12) {
           host.onTrace?.({ stage: "verified", step: executed });
@@ -167,6 +182,8 @@ export async function runComputerTaskReport(
       }
       acknowledgement = true;
     }
+    // A phone redirect or pause after model reasoning invalidates the stale proposal.
+    if (await syncInstructions()) continue;
     let outcome: string;
     try {
       await host.onBeforeAction?.(executed, decision.call.name);

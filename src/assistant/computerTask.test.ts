@@ -297,4 +297,48 @@ describe("computer task loop", () => {
     expect(phases).toEqual(["capture", "verifying", "capture"]);
   });
 
+  it("discards a stale Gemini click when Android redirects the goal mid-reasoning", async () => {
+    let activeGoal = "Open Notepad.";
+    const proposals: Array<Record<string, unknown>> = [];
+    const checks: string[] = [];
+    const task = host({
+      instructions: async () => activeGoal,
+      propose: async body => {
+        proposals.push(body);
+        if (proposals.length === 1) {
+          activeGoal = "Open Calculator.";
+          return { id: "original", steps: [{
+            type: "function_call", id: "old-click", name: "click", arguments: { x: 50, y: 80 },
+          }] };
+        }
+        return { id: "new", steps: [], text: "Calculator is open." };
+      },
+      verify: async goal => { checks.push(goal); return "Calculator is visibly open on screen."; },
+    });
+    const report = await runComputerTaskReport("Open Notepad.", task);
+    expect(task.executed).toEqual([]);
+    expect(proposals).toHaveLength(2);
+    expect(proposals[1]).toMatchObject({
+      goal: "Open Calculator.", previousInteractionId: null, functionResult: null,
+    });
+    expect(checks).toEqual(["Open Calculator."]);
+    expect(report.status).toBe("verified");
+  });
+
+  it("does not request a model action until the paused worker resumes", async () => {
+    let resume: (() => void) | undefined;
+    const gate = new Promise<void>(resolve => { resume = resolve; });
+    let proposed = false;
+    const task = host({
+      instructions: async () => { await gate; return "Open Notepad."; },
+      propose: async () => { proposed = true; return { id: "done", text: "No action.", steps: [] }; },
+    });
+    const running = runComputerTaskReport("Open Notepad.", task);
+    await Promise.resolve();
+    expect(proposed).toBe(false);
+    resume?.();
+    await running;
+    expect(proposed).toBe(true);
+  });
+
 });

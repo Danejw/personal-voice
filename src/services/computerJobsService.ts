@@ -33,6 +33,10 @@ async function mutate(pcDeviceId: string, args: Record<string, unknown>): Promis
   return jobRow(await pairServerAction<unknown>(pcDeviceId, "job_mutate", args));
 }
 
+async function jobRowPromise(pcDeviceId: string, requestId: string): Promise<ComputerJob> {
+  return jobRow(await pairServerAction<unknown>(pcDeviceId, "job_control", { requestId }));
+}
+
 export const computerJobsApi = {
   /** Called before acknowledging the signed start request. The database copies the verified goal. */
   create(pcDeviceId: string, requestId: string): Promise<ComputerJob> {
@@ -54,6 +58,10 @@ export const computerJobsApi = {
   },
   requestStop(pcDeviceId: string, requestId: string, token: string): Promise<ComputerJob> {
     return mutate(pcDeviceId, { event: "request_stop", requestId, token });
+  },
+  /** The signed Windows receiver alone applies the phone's one-use control command. */
+  control(pcDeviceId: string, requestId: string): Promise<ComputerJob> {
+    return jobRowPromise(pcDeviceId, requestId);
   },
   heartbeat(pcDeviceId: string, requestId: string, token: string): Promise<ComputerJob> {
     return mutate(pcDeviceId, { event: "heartbeat", requestId, token });

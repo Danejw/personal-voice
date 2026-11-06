@@ -45,6 +45,8 @@ export function CompanionView({
   const [remoteGoal, setRemoteGoal] = useState(() => computerActions.getSnapshot().remoteGoal);
   const [persistedJob, setPersistedJob] = useState<ComputerJob | null>(null);
   const [goalError, setGoalError] = useState<string | null>(null);
+  const [redirectText, setRedirectText] = useState("");
+  const [editingGoal, setEditingGoal] = useState(false);
   const goalRequestPending = useRef(false);
   const [cursor, setCursor] = useState<Pointer | null>(null);
   const [monitors, setMonitors] = useState<CompanionMonitor[]>([]);
@@ -72,12 +74,18 @@ export function CompanionView({
   const goalIsActive = persistedJob && persistedJob.target_device_id === targetId
     ? ["pending_ack", "running"].includes(persistedJob.status)
     : !!currentGoal && remoteGoalStillActive(currentGoal.message);
-  const refreshGoal = async (action: "computer_goal_status" | "stop_computer_goal") => {
+  const refreshGoal = async (action: "computer_goal_status" | "stop_computer_goal" |
+    "pause_computer_goal" | "resume_computer_goal" | "redirect_computer_goal") => {
     const target = pairedWindows.find(d => d.id === targetId);
     if (!target || goalRequestPending.current) return;
     goalRequestPending.current = true;
     try {
-      await computerActions.remoteAction(action, "current", target.name);
+      const argument = action === "redirect_computer_goal" ? redirectText.trim() : "current";
+      if (action === "redirect_computer_goal" && (argument.length < 3 || argument.length > 1000)) {
+        throw new Error("Enter a new goal between 3 and 1000 characters.");
+      }
+      await computerActions.remoteAction(action, argument, target.name);
+      if (action === "redirect_computer_goal") { setRedirectText(""); setEditingGoal(false); }
       if (userId && targetId) setPersistedJob(await computerJobsApi.latest(userId, targetId));
       setGoalError(null);
     } catch (error) {
@@ -407,8 +415,21 @@ export function CompanionView({
             {goalError && <p>{goalError}</p>}
             <div className="companion-goal-actions">
               <button type="button" onClick={() => { void refreshGoal("computer_goal_status"); }}>Update</button>
+              {goalIsActive && persistedJob?.control_state === "active" &&
+                <button type="button" onClick={() => { void refreshGoal("pause_computer_goal"); }}>Pause</button>}
+              {goalIsActive && persistedJob?.control_state === "paused" &&
+                <button type="button" onClick={() => { void refreshGoal("resume_computer_goal"); }}>Resume</button>}
+              {goalIsActive && persistedJob?.control_state === "paused" &&
+                <button type="button" onClick={() => setEditingGoal(value => !value)}>Redirect</button>}
               {goalIsActive && <button type="button" onClick={() => { void refreshGoal("stop_computer_goal"); }}>Stop</button>}
             </div>
+            {editingGoal && persistedJob?.control_state === "paused" &&
+              <form onSubmit={event => { event.preventDefault(); void refreshGoal("redirect_computer_goal"); }}>
+                <input aria-label="Revised computer goal" value={redirectText} maxLength={1000}
+                  onChange={event => setRedirectText(event.target.value)}
+                  placeholder="What should the computer do instead?" />
+                <button type="submit">Apply</button>
+              </form>}
           </div>
         )}
       </div>

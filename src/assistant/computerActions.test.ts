@@ -120,6 +120,11 @@ describe("computer action safety", () => {
     expect(planRemoteComputerAction("start_computer_goal", "Organize the open windows.", "windows", true))
       .toMatchObject({ action: "confirm", label: expect.stringContaining("Computer Use") });
     expect(planRemoteComputerAction("computer_goal_status", "current", "windows", true).action).toBe("confirm");
+    expect(planRemoteComputerAction("pause_computer_goal", "current", "windows", true).action).toBe("confirm");
+    expect(planRemoteComputerAction("resume_computer_goal", "current", "windows", true).action).toBe("confirm");
+    expect(planRemoteComputerAction("redirect_computer_goal", "Open Calculator.", "windows", true).action).toBe("confirm");
+    expect(planRemoteComputerAction("pause_computer_goal", "not-current", "windows", true).action).toBe("deny");
+    expect(planRemoteComputerAction("redirect_computer_goal", " ", "windows", true).action).toBe("deny");
     expect(planRemoteComputerAction("stop_computer_goal", "current", "windows", true).action).toBe("confirm");
     expect(planRemoteComputerAction("computer_goal_status", "any", "windows", true).action).toBe("deny");
     expect(planRemoteComputerAction("start_computer_goal", "a".repeat(1001), "windows", true).action).toBe("deny");
