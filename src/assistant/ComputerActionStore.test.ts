@@ -8,7 +8,7 @@ import { computerJobsApi, type ComputerJob } from "@/services/computerJobsServic
 
 vi.mock("@/services/computerJobsService", () => ({
   computerJobsApi: {
-    create: vi.fn(), activate: vi.fn(), cancelPending: vi.fn(),
+    create: vi.fn(), activate: vi.fn(), cancelPending: vi.fn(), control: vi.fn(),
     checkpoint: vi.fn(), heartbeat: vi.fn(), reconcile: vi.fn(), latest: vi.fn(),
   },
 }));
@@ -288,6 +288,25 @@ describe("Windows signed remote action receiver", () => {
       expect.any(Function), expect.any(Function), expect.any(Function),
       expect.any(Function), expect.any(Function),
     );
+  });
+
+  it("accepts a claimed pause command through signed Windows control only", async () => {
+    const row = request("pause-req", "pause_computer_goal", "current");
+    vi.mocked(computerJobsApi.control).mockResolvedValue({
+      ...durable(), control_state: "paused", instruction_revision: 1,
+    });
+    const api = {
+      touch: async () => undefined,
+      listPending: async () => row.status === "pending" ? [row] : [],
+      answer: async () => { row.status = "answered"; },
+      deny: async () => { throw new Error("Unexpected denial."); },
+    } as unknown as ConstructorParameters<typeof ComputerActionStore>[0];
+    const store = new ComputerActionStore(api, async () => [], () => "pc",
+      { platform: "windows" } as PlatformAdapter);
+    store.userId = "account";
+    await store.poll("account");
+    expect(computerJobsApi.control).toHaveBeenCalledWith("pc", "pause-req");
+    expect(row.status).toBe("answered");
   });
 
 });

@@ -67,6 +67,16 @@ describe("durable signed Computer Use jobs", () => {
     await expect(computerJobsApi.reconcile("pc", true)).rejects.toThrow("Invalid recovery decision");
   });
 
+  it("routes each control command through the native signed Windows identity", async () => {
+    vi.mocked(pairServerAction).mockResolvedValue({ ...job, control_state: "paused", instruction_revision: 1 });
+    const result = await computerJobsApi.control("pc", "control-request-id");
+    expect(result.control_state).toBe("paused");
+    expect(pairServerAction).toHaveBeenCalledWith("pc", "job_control", {
+      requestId: "control-request-id",
+    });
+    expect(getSupabase).not.toHaveBeenCalled();
+  });
+
   it("sends a signed stop intent so a restart cannot resume the task", async () => {
     vi.mocked(pairServerAction).mockResolvedValue(job);
     await computerJobsApi.requestStop("pc", "job-1", "lease-1");

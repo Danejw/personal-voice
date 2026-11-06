@@ -107,6 +107,17 @@ describe("assistant tool schema", () => {
       .toMatchObject({ kind: "remoteComputerGoal", action: "status", goal: "current" });
     expect(decideToolCall({ id: "bad", name: "remote_computer_goal",
       args: { action: "start", goal: "" } }, plan).kind).toBe("reject");
+    expect(decideToolCall({ id: "pause", name: "remote_computer_goal",
+      args: { action: "pause" } }, plan)).toMatchObject({ kind: "remoteComputerGoal", action: "pause", goal: "current" });
+    expect(decideToolCall({ id: "resume", name: "remote_computer_goal",
+      args: { action: "resume" } }, plan)).toMatchObject({ kind: "remoteComputerGoal", action: "resume", goal: "current" });
+    expect(decideToolCall({ id: "redirect", name: "remote_computer_goal",
+      args: { action: "redirect", goal: "Open Calculator." } }, plan))
+      .toMatchObject({ kind: "remoteComputerGoal", action: "redirect", goal: "Open Calculator." });
+    expect(decideToolCall({ id: "bad-redirect", name: "remote_computer_goal",
+      args: { action: "redirect", goal: "" } }, plan).kind).toBe("reject");
+    expect(decideToolCall({ id: "bad-pause", name: "remote_computer_goal",
+      args: { action: "pause", goal: "Open Calculator." } }, plan).kind).toBe("reject");
   });
 
   it("validates note image source and keeps old text-only calls compatible", () => {
