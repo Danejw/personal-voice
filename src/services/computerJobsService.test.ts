@@ -71,12 +71,12 @@ describe("durable signed Computer Use jobs", () => {
   it("registers job_control at the signed Edge operation gate, not as a mutation event", () => {
     // Check the server's outer authorization gate, not just the mocked client RPC.
     const source = readFileSync("supabase/functions/device-pairing/index.ts", "utf8");
-    const operations = source.match(/const operations = new Set\\((\\[[^\\n]+\\])\\);/);
+    const operations = source.match(/const operations = new Set\((\[[^\n]+\])\);/);
     expect(operations).not.toBeNull();
     expect(JSON.parse(operations![1]!)).toContain("job_control");
     expect(source).toContain('} else if (op === "job_control")');
     expect(source).toContain('admin.rpc("computer_job_control"');
-    const events = source.match(/!\\[([^\\]]+)\\]\\.includes\\(event\\)/);
+    const events = source.match(/!\[([^\]]+)\]\.includes\(event\)/);
     expect(events).not.toBeNull();
     expect(JSON.parse(`[${events![1]}]`)).not.toContain("job_control");
   });
