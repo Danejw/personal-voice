@@ -287,7 +287,7 @@ describe("Windows signed remote action receiver", () => {
     expect(runner).toHaveBeenCalledWith(
       "Open Notepad and type Hello World.",
       expect.any(Function), expect.any(Function), expect.any(Function),
-      expect.any(Function), expect.any(Function),
+      expect.any(Function), expect.any(Function), expect.any(Function),
     );
   });
 
