@@ -196,7 +196,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
               <button type="button" className="secondary" onClick={() => clearPosition(target.id)}>Unplace</button>
             )}
             {target.pairedDeviceId && (
-              <button type="button" onClick={() => onControlPc(target.pairedDeviceId!)}>Open Companion</button>
+              <button type="button" onClick={() => { if (target.pairedDeviceId) onControlPc(target.pairedDeviceId); }}>Open Companion</button>
             )}
           </div>
           {!target.pairedDeviceId && (
