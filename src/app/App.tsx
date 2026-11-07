@@ -38,6 +38,7 @@ import type { SelectOption } from "@/components/SelectField";
 import { Toggle } from "@/components/Toggle";
 import { Tooltip } from "@/components/Tooltip";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
+import { saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import { CompanionView } from "@/companion/CompanionView";
 import { assistantPhase } from "@/companion/companionGeometry";
 import { DevicesPanel } from "@/devices/DevicesPanel";
@@ -1542,6 +1543,11 @@ export default function App() {
               store={devices}
               snapshot={deviceSnapshot}
               onChanged={() => { void handoffs.reload(); }}
+              onControlPc={(id) => {
+                if (!deviceSnapshot.currentDeviceId) return;
+                saveRemoteVoiceDefault(deviceSnapshot.currentDeviceId, id);
+                selectSection("companion");
+              }}
             />
           </section>
           <DeviceControls

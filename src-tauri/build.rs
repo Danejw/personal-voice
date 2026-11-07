@@ -37,6 +37,8 @@ fn main() {
                     "scan_pairing_qr",
                     "pairing_public_key",
                     "pairing_sign",
+                    "scan_nearby_devices",
+                    "request_nearby_bluetooth",
                     "device_link_discover",
                     "device_link_connect",
                     "device_link_send",

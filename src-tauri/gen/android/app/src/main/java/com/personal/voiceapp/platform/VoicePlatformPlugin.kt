@@ -280,6 +280,48 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     invoke.resolve(JSObject())
   }
 
+  /** On-demand discovery only. Never establishes control or infers physical location. */
+  @Command
+  fun scanNearbyDevices(invoke: Invoke) {
+    if (!localNetworkAllowed()) {
+      invoke.reject("Allow local network access, then scan again.")
+      return
+    }
+    Thread {
+      try {
+        val scan = NearbyDeviceDiscovery.scan(activity.applicationContext)
+        val devices = JSONArray()
+        for (device in scan.devices) {
+          devices.put(JSONObject()
+            .put("id", device.id).put("name", device.name)
+            .put("kind", device.kind).put("source", device.source)
+            .put("detail", device.detail))
+        }
+        invoke.resolve(JSObject().put("devices", devices)
+          .put("bluetoothPermissionRequired", scan.bluetoothPermissionRequired))
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Could not scan nearby devices.")
+      }
+    }.start()
+  }
+
+  @Command
+  fun requestNearbyBluetooth(invoke: Invoke) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+      invoke.reject("Bluetooth discovery requires Android 12 or newer.")
+      return
+    }
+    if (ContextCompat.checkSelfPermission(activity, Manifest.permission.BLUETOOTH_SCAN) ==
+      PackageManager.PERMISSION_GRANTED) {
+      invoke.resolve(JSObject())
+      return
+    }
+    main.post {
+      activity.requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_SCAN), 54018)
+      invoke.resolve(JSObject())
+    }
+  }
+
   /** Android Keystore operations run on a background worker; private keys never reach the WebView. */
   @Command
   fun pairingPublicKey(invoke: Invoke) {

@@ -52,6 +52,8 @@ android {
     }
     buildTypes {
         getByName("debug") {
+            // PR preview installs beside the release app without replacing its signing identity or data.
+            applicationIdSuffix = ".preview"
             manifestPlaceholders["usesCleartextTraffic"] = "true"
             isDebuggable = true
             isJniDebuggable = true
