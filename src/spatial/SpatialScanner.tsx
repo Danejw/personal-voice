@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
-import { discoverAndroidLanPeers } from "@/device-link/androidLan";
+import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import {
   clampPosition, mergePersonalVoicePeers, parseNearbyScan, readPositions,
@@ -23,7 +23,7 @@ const emptyScan: NearbyScan = { devices: [], bluetoothPermissionRequired: false 
 
 export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props) {
   const [scan, setScan] = useState<NearbyScan>(emptyScan);
-  const [peers, setPeers] = useState<string[]>([]);
+  const [peers, setPeers] = useState<string[]>(() => deviceLinkManager.getSnapshot().localPeers);
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,11 +38,15 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     try { setPositions(readPositions(localStorage.getItem(placementKey(currentDeviceId)))); }
     catch { setPositions({}); }
     setScan(emptyScan);
-    setPeers([]);
+    setPeers(deviceLinkManager.getSnapshot().localPeers);
     setSelected(null);
     setPlacing(null);
     setScanned(false);
   }, [currentDeviceId]);
+
+  useEffect(() => deviceLinkManager.subscribe(() => {
+    setPeers(deviceLinkManager.getSnapshot().localPeers);
+  }), []);
 
   const nearby = useMemo(
     () => mergePersonalVoicePeers(scan.devices, peers, devices, currentDeviceId),
@@ -57,19 +61,9 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     setScanning(true);
     setError(null);
     try {
-      const [network, linked] = await Promise.allSettled([
-        callPlugin<unknown>("scan_nearby_devices"),
-        discoverAndroidLanPeers(),
-      ]);
-      if (network.status === "rejected" && linked.status === "rejected") {
-        throw network.reason;
-      }
-      if (network.status === "fulfilled") setScan(parseNearbyScan(network.value));
-      else {
-        setScan(emptyScan);
-        setError(network.reason instanceof Error ? network.reason.message : "Media discovery unavailable.");
-      }
-      setPeers(linked.status === "fulfilled" ? linked.value.map(peer => peer.deviceId) : []);
+      const network = await callPlugin<unknown>("scan_nearby_devices");
+      setScan(parseNearbyScan(network));
+      setPeers(deviceLinkManager.getSnapshot().localPeers);
       setScanned(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Nearby scan failed.");
