@@ -136,6 +136,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
           <span className="spatial-self" aria-hidden="true"><span>●</span>You</span>
           {placed.map(device => {
             const point = positions[device.id];
+            if (!point) return null;
             return (
               <button
                 type="button"
@@ -175,7 +176,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
       {scanned && nearby.length === 0 && !error && (
         <p className="spatial-empty">No supported devices found. Connect to the same Wi-Fi and try again.</p>
       )}
-      {!scanned && <p className="spatial-empty">Scan to discover nearby devices, then place them on the map.</p>}
+      {!scanned && nearby.length === 0 && <p className="spatial-empty">Scan to discover nearby devices, then place them on the map.</p>}
       {target && (
         <div className="spatial-details">
           <div className="spatial-details-main">
