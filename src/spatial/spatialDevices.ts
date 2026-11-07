@@ -54,7 +54,7 @@ export function mergePersonalVoicePeers(
   found: NearbyDevice[], peers: readonly string[], devices: readonly OwnedDevice[],
   currentDeviceId: string,
 ): NearbyDevice[] {
-  const merged = new Map(found.map(device => [device.id, device]));
+  const merged = new Map<string, NearbyDevice>(found.map(device => [device.id, device] as const));
   for (const id of peers) {
     if (id === currentDeviceId) continue;
     const device = devices.find(item => item.id === id && item.platform === "windows");
