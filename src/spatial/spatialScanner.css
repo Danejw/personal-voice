@@ -10,7 +10,7 @@
 }
 .spatial-rings { position: absolute; inset: 0; pointer-events: none; }
 .spatial-rings i { position: absolute; left: 50%; top: 56%;
-  border: 1px solid rgba(136, 216, 193, 0.13); border-radius: 50%;
+  background: rgba(136, 216, 193, 0.035); border-radius: 50%;
   transform: translate(-50%, -50%) rotateX(55deg);
 }
 .spatial-rings i:nth-child(1) { width: 40%; height: 46%; }
