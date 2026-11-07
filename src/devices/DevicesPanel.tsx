@@ -6,11 +6,13 @@ import type { DeviceSnapshot, DeviceStatus, DeviceStore } from "@/devices/Device
 import type { OwnedDevice } from "@/handoffs/handoff";
 import { MAX_DEVICE_NAME } from "@/services/deviceService";
 import { DevicePairingPanel } from "@/devices/DevicePairingPanel";
+import { SpatialScanner } from "@/spatial/SpatialScanner";
 
 interface DevicesPanelProps {
   store: DeviceStore;
   snapshot: DeviceSnapshot;
   onChanged(): void;
+  onControlPc(id: string): void;
 }
 
 function statusLabel(status: DeviceStatus): string {
@@ -99,7 +101,7 @@ function DeviceRow({ device, current, connected, busy, onRename, onRemove }: Dev
 }
 
 /** Friendly names for owned installs. Removing a row never deletes notes or handoffs. */
-export function DevicesPanel({ store, snapshot, onChanged }: DevicesPanelProps) {
+export function DevicesPanel({ store, snapshot, onChanged, onControlPc }: DevicesPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const confirm = useConfirmAction();
@@ -138,6 +140,11 @@ export function DevicesPanel({ store, snapshot, onChanged }: DevicesPanelProps) 
         </div>
       </div>
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
+      {connected && snapshot.currentDeviceId &&
+        snapshot.devices.find(device => device.id === snapshot.currentDeviceId)?.platform === "android" && (
+        <SpatialScanner currentDeviceId={snapshot.currentDeviceId}
+          devices={snapshot.devices} onControlPc={onControlPc} />
+      )}
       {connected && snapshot.currentDeviceId && (
         <DevicePairingPanel
           key={snapshot.currentDeviceId}
