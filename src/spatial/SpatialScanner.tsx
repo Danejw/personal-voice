@@ -5,10 +5,11 @@ import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { consolidateNearbyDevices } from "@/spatial/deviceCapabilities";
 import { DeviceActions } from "@/spatial/DeviceActions";
+import { nearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
 import { deviceSubtitle, listDevices, type DeviceView } from "@/spatial/deviceExplorer";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import {
-  clampPosition, mergePersonalVoicePeers, parseNearbyScan, readPositions, nearbyGroup,
+  clampPosition, mergePersonalVoicePeers, readPositions, nearbyGroup,
   type NearbyDevice, type NearbyScan, type SpatialPositions,
 } from "@/spatial/spatialDevices";
 import "./spatialScanner.css";
@@ -131,7 +132,8 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     setSelected(null);
     setPlacing(null);
     try {
-      const result = parseNearbyScan(await callPlugin<unknown>("scan_nearby_devices"));
+      const result = await nearbyCapabilityService.scan(devices, currentDeviceId,
+        deviceLinkManager.getSnapshot().localPeers);
       setScan(result);
       setScanGeneration(previous => previous + 1);
       setPeers(deviceLinkManager.getSnapshot().localPeers);
