@@ -81,10 +81,27 @@ describe("AssistantController", () => {
     ] });
     await settle();
     expect(used.listNearbyDevices).toHaveBeenCalledTimes(1);
+    expect(used.listNearbyDevices).toHaveBeenCalledWith("");
     expect(used.controlNearbyDevice).not.toHaveBeenCalled();
     expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
       id: "scan", response: { result: expect.stringContaining("fresh_android_local_scan") },
     }] } });
+    created.end();
+  });
+
+  it("passes the requested device name to a targeted read-only scan", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setDeviceContext({ platform: "android", otherDeviceCount: 0 });
+    created.setActions(used);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [
+      { id: "find-lg", name: "list_nearby_devices", args: { query: "LG" } },
+    ] });
+    await settle();
+    expect(used.listNearbyDevices).toHaveBeenCalledWith("LG");
+    expect(used.controlNearbyDevice).not.toHaveBeenCalled();
     created.end();
   });
 
