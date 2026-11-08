@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - package.json
+      - .github/workflows/release.yml
 
 permissions:
   contents: write
@@ -37,7 +38,10 @@ jobs:
             exit 1
           }
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "::notice::Release tag $tag already exists; no new tag created"
+            # Reuse the immutable existing tag when repairing release workflow
+            # packaging; never force-push or create an alternate release tag.
+            echo "::notice::Existing tag $tag; dispatching repaired release workflow"
+            gh workflow run release.yml --ref main -f "tag=$tag"
             exit 0
           fi
           git config user.name "github-actions[bot]"
