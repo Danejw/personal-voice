@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SelectField } from "@/components/SelectField";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 
 export interface AudioOutput {
@@ -61,14 +62,18 @@ export function AssistantAudioOutputSettings() {
         <h4>Speech output</h4>
         <button type="button" className="secondary" onClick={() => void refresh()} disabled={busy}>Refresh</button>
       </div>
-      <label htmlFor="assistant-audio-output">Assistant speaker</label>
-      <select id="assistant-audio-output" value={selected} disabled={busy || outputs.length === 0}
-        onChange={e => void choose(e.target.value)}>
-        {(outputs.length ? outputs : [{ id: "system", name: "System default", type: "", selected: true }])
-          .map(output => <option key={output.id} value={output.id}>
-            {output.name}{output.id === "system" ? "" : " · " + output.type}
-          </option>)}
-      </select>
+      <SelectField
+        label="Assistant speaker"
+        layout="stack"
+        value={selected}
+        disabled={busy || outputs.length === 0}
+        onChange={id => void choose(id)}
+        options={(outputs.length ? outputs : [{ id: "system", name: "System default", type: "", selected: true }])
+          .map(output => ({
+            value: output.id,
+            label: output.name + (output.id === "system" ? "" : " · " + output.type),
+          }))}
+      />
       <p className="note-meta">Only connected Android audio outputs appear here, not merely paired Bluetooth devices. Bluetooth media speakers use non-duplex speech: the microphone pauses during replies.</p>
       {message && <p role="status">{message}</p>}
       {error && <p className="error" role="alert">{error}</p>}
