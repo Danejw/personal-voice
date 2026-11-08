@@ -1,6 +1,6 @@
 [package]
 name = "personal-voice-app"
-version = "0.3.40"
+version = "0.3.41"
 description = "Personal cross-platform voice utility"
 edition = "2021"
 
