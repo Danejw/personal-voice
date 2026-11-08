@@ -1183,6 +1183,33 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
+  /** Start an opt-in, browser-compatible local MJPEG screen share for a compatible TV. */
+  @Command
+  fun startScreenShare(invoke: Invoke) {
+    if (!localNetworkAllowed()) {
+      invoke.reject("Allow local network access before starting a screen share.")
+      return
+    }
+    main.post {
+      ScreenSharing.start(activity) { url, error ->
+        if (url == null) invoke.reject(error ?: "Screen share failed.")
+        else invoke.resolve(JSObject().put("url", url).put("active", true))
+      }
+    }
+  }
+
+  @Command
+  fun screenShareStatus(invoke: Invoke) {
+    val url = ScreenSharing.currentUrl()
+    invoke.resolve(JSObject().put("active", url != null).put("url", url))
+  }
+
+  @Command
+  fun stopScreenShare(invoke: Invoke) {
+    ScreenSharing.stop(activity.applicationContext)
+    invoke.resolve(JSObject().put("active", false))
+  }
+
   /** One MediaProjection frame. Accessibility is not used. */
   @Command
   fun captureSnapshot(invoke: Invoke) {
