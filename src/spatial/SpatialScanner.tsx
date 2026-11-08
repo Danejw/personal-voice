@@ -9,7 +9,7 @@ import { nearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
 import { deviceSubtitle, deviceReadiness, listDevices, type DeviceView } from "@/spatial/deviceExplorer";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import {
-  clampPosition, mergePersonalVoicePeers, readPositions, nearbyGroup,
+  clampPosition, mergePersonalVoicePeers, observedThisScan, readPositions, nearbyGroup,
   type NearbyDevice, type NearbyScan, type SpatialPositions,
 } from "@/spatial/spatialDevices";
 import "./spatialScanner.css";
@@ -82,6 +82,8 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   );
   const networkCount = nearby.filter(item => nearbyGroup(item.source) === "network").length;
   const bluetoothCount = nearby.length - networkCount;
+  const liveCount = nearby.filter(observedThisScan).length;
+  const savedCount = nearby.length - liveCount;
   const selectedDevice = nearby.find(item => item.id === selected) ?? null;
   const selectedDeviceId = selectedDevice?.id;
   const group = nearby.filter(item => view === "all" || nearbyGroup(item.source) === view);
@@ -228,7 +230,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   async function quickAction(device: NearbyDevice, action: import("@/spatial/deviceActionRegistry").NearbyAction) {
     if (quickPending) return;
     setQuickPending(device.id);
-    setQuickFeedback(null);
+    setQuickFeedback(action === "pair" ? "Approve Personal Voice on your TV if prompted." : null);
     try {
       const response = await nearbyCapabilityService.act(device.id, action);
       setQuickFeedback(device.name + ": " + response);
@@ -249,7 +251,8 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
       <div className="spatial-head">
         <div>
           <h2>Nearby devices</h2>
-          <p>{scanned ? nearby.length + " discovered" : "Wi-Fi and Bluetooth"}</p>
+          <p>{scanned ? liveCount + " observed" +
+            (savedCount ? " · " + savedCount + " saved pairings" : "") : "Wi-Fi and Bluetooth"}</p>
         </div>
         <button type="button" onClick={() => void discover()} disabled={scanning}>
           {scanning ? "Scanning…" : scanned ? "Rescan" : "Scan"}
