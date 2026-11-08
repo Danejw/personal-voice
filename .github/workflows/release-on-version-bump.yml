@@ -38,6 +38,12 @@ jobs:
             exit 1
           }
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            # Do not rebuild an already published release if the previous attempt
+            # succeeded while this recovery change was under review.
+            if gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx false; then
+              echo "::notice::Release $tag is already published"
+              exit 0
+            fi
             # Reuse the immutable existing tag when repairing release workflow
             # packaging; never force-push or create an alternate release tag.
             echo "::notice::Existing tag $tag; dispatching repaired release workflow"
