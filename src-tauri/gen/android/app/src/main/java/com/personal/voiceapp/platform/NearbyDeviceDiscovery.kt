@@ -163,6 +163,7 @@ internal object NearbyDeviceDiscovery {
     val targets = listOf(
       "urn:schemas-upnp-org:device:MediaRenderer:1",
       "urn:dial-multiscreen-org:service:dial:1",
+      "urn:lge-com:service:webos-second-screen:1",
     )
     try {
       DatagramSocket().use { socket ->
