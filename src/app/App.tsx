@@ -24,6 +24,7 @@ import { personalContextBody, profileFacts } from "@/assistant/personalContext";
 import { AssistantSession } from "@/assistant/AssistantSession";
 import { PcmPlayback } from "@/assistant/PcmPlayback";
 import { AndroidAssistantPlayback } from "@/platform/android/AndroidAssistantPlayback";
+import { AssistantAudioOutputSettings } from "@/platform/android/AssistantAudioOutputSettings";
 import { useAssistant } from "@/assistant/useAssistant";
 import { useAssistantLibrary } from "@/assistant/useAssistantLibrary";
 import { AppNav, sectionMeta, useMobileNav, type AppSection } from "@/app/AppNav";
@@ -1448,6 +1449,7 @@ export default function App() {
                     <h4>Assistant settings</h4>
                     <p>Control how your Assistant learns, searches saved content and uses context across devices.</p>
                   </div>
+                  {platform.platform === "android" && <AssistantAudioOutputSettings />}
                   <MemoryPanel
                     store={assistantMemory}
                     snapshot={assistantMemorySnapshot}
