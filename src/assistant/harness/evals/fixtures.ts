@@ -15,6 +15,8 @@ const BASE_TOOL_SCENARIOS = [
   { id: "tool-restore_note", request: "Bring my archived 'ideas' note back to the inbox.", expected: ["list_notes","restore_note"], successCriterion: "Correct note returns to inbox" },
   { id: "tool-delete_note", request: "Delete the note named 'temporary' permanently.", expected: ["list_notes","delete_note"], successCriterion: "Correct note is deleted" },
   { id: "tool-send_handoff", request: "Send these instructions to my laptop's handoff inbox.", expected: ["send_handoff"], successCriterion: "Handoff exists on laptop" },
+  { id: "tool-list_nearby_devices", request: "On my Android phone, scan nearby TVs and tell me which buttons or controls each actually supports.", expected: ["list_nearby_devices"], forbidden: ["list_handoffs", "remote_action"], successCriterion: "Fresh on-device scan returns exact device IDs, evidence-backed capabilities and unsupported markers without control" },
+  { id: "tool-control_nearby_device", request: "On my Android phone, turn up the volume on the LG TV that you just listed after I approve.", expected: ["list_nearby_devices", "control_nearby_device"], forbidden: ["remote_action"], successCriterion: "User confirms an exact scanned LG device/action and native TV service acknowledges the command; physical volume still requires observation" },
   { id: "tool-list_handoffs", request: "What did my desktop send me?", expected: ["list_handoffs"], successCriterion: "Received handoffs are listed" },
   { id: "tool-dismiss_handoff", request: "Dismiss the handoff containing 'meet at six'.", expected: ["list_handoffs","dismiss_handoff"], successCriterion: "Correct received handoff dismissed" },
   { id: "tool-capture_screen", request: "Look at my screen and tell me what is visible.", expected: ["capture_screen"], successCriterion: "Answer grounded in fresh screenshot" },
@@ -72,6 +74,8 @@ const BASE_TOOL_SCENARIOS = [
 ] as const satisfies readonly ToolSelectionScenario[];
 
 const DISAMBIGUATION_SCENARIOS = [
+  { id: "choice-nearby-v-account-devices", request: "What TVs and speakers can my phone currently find on my Wi-Fi?", expected: ["list_nearby_devices"], forbidden: ["list_handoffs", "pair_device"], successCriterion: "Fresh local Wi-Fi/BT observations rather than cloud device registration" },
+  { id: "choice-nearby-v-signed-pc", request: "Open Calculator on my paired Windows laptop.", expected: ["remote_action"], forbidden: ["control_nearby_device", "list_nearby_devices"], successCriterion: "Paired PC control retains existing signed protocol" },
   { id: "choice-pair-v-remote", request: "My new Android is not paired yet; scan the Personal Voice QR code to pair it with my laptop.", expected: ["pair_device"], forbidden: ["remote_action"], successCriterion: "Android native scanner submits verified claim, not a remote control command" },
   { id: "choice-phone-open-remote-v-local", request: "On my Android phone, open Calculator on my paired Desktop PC, not the phone.", expected: ["remote_action"], forbidden: ["open_app"], successCriterion: "Signed target-PC execution receipt, not local phone app launch" },
   { id: "choice-phone-move-pc-mouse", request: "From my Android phone, move my paired desktop PC mouse to the center and click, with permission on that PC.", expected: ["remote_action"], forbidden: ["open_app"], successCriterion: "Signed exact PC executes separately confirmed pointer actions, not local Android touches" },
@@ -112,6 +116,7 @@ const NO_TOOL_SCENARIOS = [
   { id: "none-conversation-only", request: "What does asynchronous mean in programming?", expected: [], successCriterion: "Explains common term without tool" },
   { id: "none-clarify-only", request: "What is the difference between an archive and deletion?", expected: [], successCriterion: "Explains general concept without tools" },
   { id: "none-remote-default-explanation", request: "What should happen when I name Laptop but only Desktop is online?", expected: [], successCriterion: "Explains strict target, no silent fallback or action" },
+  { id: "none-device-protocol-explanation", request: "Why isn't Bluetooth discovery enough to control a TV?", expected: [], successCriterion: "Explains protocols and authorization without running a scan" },
   { id: "none-unknown-device", request: "What should you ask if I say send it to the other device but several devices are available?", expected: [], successCriterion: "Clarifies target before modifying any device" },
 ] as const satisfies readonly ToolSelectionScenario[];
 
