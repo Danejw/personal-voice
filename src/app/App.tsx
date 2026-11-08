@@ -45,6 +45,7 @@ import { saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import { CompanionView } from "@/companion/CompanionView";
 import { assistantPhase } from "@/companion/companionGeometry";
 import { DevicesPanel } from "@/devices/DevicesPanel";
+import { ScreenSharingPanel } from "@/spatial/ScreenSharingPanel";
 import { PairingDialog } from "@/devices/PairingDialog";
 import { pairingAction } from "@/devices/pairingFlow";
 import { DeviceStore } from "@/devices/DeviceStore";
@@ -1618,6 +1619,7 @@ export default function App() {
                 <MicrophonePanel />
               </section>
             )}
+            {platform.platform === "android" && <ScreenSharingPanel />}
             <DeviceControls
               key={auth.userId ?? "signed-out"}
               platform={platform}
