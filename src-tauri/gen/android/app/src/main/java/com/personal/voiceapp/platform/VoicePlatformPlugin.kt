@@ -117,6 +117,11 @@ class AssistantPlaybackArgs {
 }
 
 @InvokeArg
+class AssistantOutputArgs {
+  var id: String = "system"
+}
+
+@InvokeArg
 class CameraArgs {
   /** `default`, `front`, or `back`. */
   var facing: String = "default"
@@ -192,6 +197,7 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private var capture: NativeMicCapture? = null
   private var captureId = 0
   private var audioSession: AssistantAudioSession? = null
+  private val assistantOutputs by lazy { AssistantAudioOutputs(activity.applicationContext) }
   private var playbackTrack: AssistantPcmTrack? = null
   private var cameraSession: AndroidCameraSession? = null
   private var pendingCamera: (() -> Unit)? = null
@@ -963,7 +969,11 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     )
     capture = next
     try {
-      val status = session().start(purpose)
+      if (purpose == CapturePurpose.ASSISTANT &&
+        assistantOutputs.requiresMediaPlayback() && !assistantOutputs.selectedAvailable()) {
+        throw IllegalStateException("Selected Bluetooth speaker is disconnected. Choose a connected output.")
+      }
+      val status = session().start(purpose, assistantOutputs.requiresMediaPlayback())
       captureId = id
       invoke.resolve(
         JSObject()
@@ -1001,10 +1011,44 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     invoke.resolve()
   }
 
+  /** Enumerate actual AudioManager output sinks, not devices merely paired in settings. */
+  @Command
+  fun listAssistantAudioOutputs(invoke: Invoke) {
+    val available = JSONArray()
+    for (item in assistantOutputs.list()) {
+      available.put(JSONObject().put("id", item.id).put("name", item.name)
+        .put("type", item.type).put("selected", item.selected))
+    }
+    invoke.resolve(JSObject().put("outputs", available))
+  }
+
+  @Command
+  fun selectAssistantAudioOutput(invoke: Invoke) {
+    val requested = try { invoke.parseArgs(AssistantOutputArgs::class.java).id }
+      catch (_: Exception) { invoke.reject("Choose an audio output."); return }
+    try {
+      assistantOutputs.choose(requested)
+      // Reopening the media track clears queued speech, but never pretends it is echo cancelled.
+      val status = audioSession?.takeIf { it.isRunning() }?.switchToMediaOutput()
+      val message = if (status?.nativePlayback == false) {
+        "Native media routing unavailable. Android will use system playback."
+      } else if (status != null && requested == "system") {
+        "System media output selected. Restart Assistant to restore echo-cancelled call audio."
+      } else if (status != null) {
+        "Assistant output switched. Microphone pauses while speaker replies play."
+      } else {
+        "Assistant output selected for the next conversation."
+      }
+      invoke.resolve(JSObject().put("message", message))
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Couldn't select audio output.")
+    }
+  }
+
   private fun session(): AssistantAudioSession {
     audioSession?.let { return it }
     val effects = AndroidCaptureEffects()
-    val track = AssistantPcmTrack(::emitPlayback)
+    val track = AssistantPcmTrack(::emitPlayback) { assistantOutputs.selectedDevice() }
     val route = AndroidCommunicationRoute(activity) { main.post { audioSession?.reselectRoute() } }
     effects.onEchoDisabled = { main.post { audioSession?.noteRouteLost() } }
     route.onFocusLost = { main.post { audioSession?.noteRouteLost() } }
