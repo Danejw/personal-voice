@@ -177,3 +177,15 @@
   .spatial-inventory-tools { gap: 6px; }
   .spatial-tabs button { padding: 10px 4px; }
 }
+
+.spatial-capability-summary {
+  display: grid; gap: 8px; padding: 11px 12px;
+  border-radius: 12px; background: #1b3337;
+}
+.spatial-capability-summary > strong { color: #dceee8; font-size: 13px; font-weight: 650; }
+.spatial-capability-summary > span { color: #abc1c2; font-size: 12px; line-height: 1.45; }
+.spatial-feature-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.spatial-feature-chips > span {
+  padding: 6px 9px; border-radius: 8px; background: #25554b;
+  color: #b7edde; font-size: 11px; font-weight: 600;
+}
