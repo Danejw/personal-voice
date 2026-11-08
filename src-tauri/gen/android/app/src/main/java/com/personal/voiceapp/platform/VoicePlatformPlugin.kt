@@ -373,6 +373,17 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     }.start()
   }
 
+  /** Hand off to the official Roku mobile app. Never sends third-party ECP commands. */
+  @Command
+  fun openNearbyRokuApp(invoke: Invoke) {
+    if (!localNetworkAllowed()) { invoke.reject("Local network access is required."); return }
+    val ip = try { invoke.parseArgs(NearbyIpArgs::class.java).ipAddress }
+      catch (_: Exception) { invoke.reject("Invalid Roku target."); return }
+    try {
+      open(invoke, LocalDeviceCapabilities.openRokuApp(activity.applicationContext, ip))
+    } catch (e: Exception) { invoke.reject(e.message ?: "Could not open the Roku companion app.") }
+  }
+
   /** An HTTP browser hand-off is not admin authentication or arbitrary JavaScript navigation. */
   @Command
   fun openNearbyWeb(invoke: Invoke) {
