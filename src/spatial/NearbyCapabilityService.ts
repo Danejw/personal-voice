@@ -10,6 +10,7 @@ import { nearbyGroup, observedThisScan } from "@/spatial/spatialDevices";
 
 const SCAN_TTL_MS = 180_000;
 const INSPECT_LIMIT = 9;
+const TARGETED_INSPECT_LIMIT = 28;
 const REPORT_LIMIT = 28;
 
 /**
@@ -90,8 +91,15 @@ export class NearbyCapabilityService {
     // rather than losing it behind the first 28 entries of a full inventory.
     const search = query.trim().slice(0, 80);
     const scan = await this.scan(owned, currentDeviceId, peers);
-    const candidates = listDevices(this.devices, "all", search, false).items;
-    const withIp = candidates.filter(device => device.ipAddress).slice(0, INSPECT_LIMIT);
+    const all = listDevices(this.devices, "all", "", false).items;
+    const directlyNamed = search ? listDevices(this.devices, "all", search, false).items : all;
+    const directIds = new Set(directlyNamed.map(device => device.id));
+    // An unnamed LAN host can identify itself as the requested LG or Samsung
+    // only after native protocol inspection. Inspect bounded unknown hosts too.
+    const inspectionOrder = search
+      ? [...directlyNamed, ...all.filter(device => !directIds.has(device.id))] : all;
+    const withIp = inspectionOrder.filter(device => device.ipAddress)
+      .slice(0, search ? TARGETED_INSPECT_LIMIT : INSPECT_LIMIT);
     // Inspect small concurrent batches; do not flood TVs or delay a Live turn for 30+ radios.
     for (let offset = 0; offset < withIp.length; offset += 3) {
       await Promise.all(withIp.slice(offset, offset + 3).map(async device => {
@@ -99,6 +107,14 @@ export class NearbyCapabilityService {
         catch { /* Mark inspection failure explicitly in the returned inventory. */ }
       }));
     }
+    const term = search.toLocaleLowerCase();
+    const candidates = !search ? all : all.filter(device => {
+      if (directIds.has(device.id)) return true;
+      const identity = device.ipAddress ? this.identities.get(device.ipAddress) : null;
+      return identity != null &&
+        [identity.name, identity.manufacturer, identity.model]
+          .some(value => value.toLocaleLowerCase().includes(term));
+    });
     const items = candidates.slice(0, REPORT_LIMIT).map(device => {
       const identity = device.ipAddress ? this.identities.get(device.ipAddress) ?? null : null;
       const actions = availableNearbyActions(device, identity);
