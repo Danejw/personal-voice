@@ -50,6 +50,23 @@ export class NearbyCapabilityService {
     return result;
   }
 
+  /** Build the approval card from the actual current scan, not an untrusted model label. */
+  async preview(id: string, action: NearbyAction): Promise<string> {
+    if (!this.fresh()) throw new Error("Discovery expired. Scan nearby devices again.");
+    const device = this.devices.find(item => item.id === id);
+    if (!device) throw new Error("The device was not returned by the most recent scan.");
+    const identity = device.ipAddress ? await this.inspect(device.ipAddress) : null;
+    const capability = availableNearbyActions(device, identity).find(item => item.action === action);
+    if (!capability) throw new Error("This device does not verify that action.");
+    const label = (identity?.name && !identity.name.startsWith("Device ")
+      ? identity.name : device.name).slice(0, 72);
+    const target = device.ipAddress ? " (" + device.ipAddress + ")" : "";
+    const approval = capability.authorization === "tv-approval"
+      ? " TV approval or pairing is also required." : "";
+    return action.replace(/_/g, " ") + " on " + label + target +
+      " using " + capability.protocol + "." + approval;
+  }
+
   /** Requires exact ID from latest inventory, not a name or invented device address. */
   async act(id: string, action: NearbyAction): Promise<string> {
     if (!this.fresh()) throw new Error("Discovery expired. Scan nearby devices again.");
