@@ -471,6 +471,11 @@ assistant.setActions({
       snapshot.devices, snapshot.currentDeviceId, deviceLinkManager.getSnapshot().localPeers,
     );
   },
+  previewNearbyDeviceAction: async (deviceId, action) => {
+    if (platform.platform !== "android") throw new Error("Local device control is Android-only.");
+    if (!NEARBY_ACTIONS.includes(action as NearbyAction)) throw new Error("Unsupported nearby action.");
+    return nearbyCapabilityService.preview(deviceId, action as NearbyAction);
+  },
   controlNearbyDevice: async (deviceId, action) => {
     if (platform.platform !== "android") throw new Error("Local device control is Android-only.");
     if (!NEARBY_ACTIONS.includes(action as NearbyAction)) {
