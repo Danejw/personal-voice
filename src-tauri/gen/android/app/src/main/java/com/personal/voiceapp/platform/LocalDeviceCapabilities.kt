@@ -14,6 +14,8 @@ import java.net.InetSocketAddress
 import java.net.URI
 import java.net.Socket
 import java.security.MessageDigest
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -38,6 +40,37 @@ internal object LocalDeviceCapabilities {
   private val known = java.util.concurrent.ConcurrentHashMap<String, Record>()
   private const val TTL = 180_000L
   private const val MAX_REPLY = 80_000
+
+  /** TCP connect alone does not establish that a host serves a working web protocol. */
+  internal fun verifiedWebPort(ports: Set<Int>, responds: (Int) -> Boolean): Int? =
+    listOf(443, 80, 8080).firstOrNull { it in ports && responds(it) }
+
+  private fun respondsAsWeb(ip: String, port: Int): Boolean {
+    if (!privateIp(ip) || port !in listOf(443, 80, 8080)) return false
+    return try {
+      val socket: Socket = if (port == 443) SSLSocketFactory.getDefault().createSocket() else Socket()
+      socket.use {
+        it.connect(InetSocketAddress(ip, port), 1100)
+        it.soTimeout = 1300
+        // The default TLS trust manager rejects invalid/expired certificates.
+        // Never bypass certificate checks merely to make a web button appear.
+        if (it is SSLSocket) it.startHandshake()
+        val request = "HEAD / HTTP/1.1\r\nHost: " + ip + "\r\nConnection: close\r\n\r\n"
+        it.getOutputStream().write(request.toByteArray(Charsets.US_ASCII))
+        it.getOutputStream().flush()
+        val prefix = ByteArray(5)
+        var received = 0
+        while (received < prefix.size) {
+          val count = it.getInputStream().read(prefix, received, prefix.size - received)
+          if (count <= 0) return false
+          received += count
+        }
+        String(prefix, Charsets.US_ASCII) == "HTTP/"
+      }
+    } catch (_: Exception) {
+      false
+    }
+  }
 
   fun privateIp(ip: String): Boolean {
     val octets = ip.split('.').mapNotNull { it.toIntOrNull()?.takeIf { number -> number in 0..255 } }
@@ -169,8 +202,9 @@ internal object LocalDeviceCapabilities {
       name = "LG webOS TV"
     }
 
-    // A port response is evidence of a reachable website, not proof of an admin interface.
-    val webPort = listOf(443, 80, 8080).firstOrNull { it in record.ports }
+    // A bare TCP listener can be a broken TLS endpoint, not a usable web page.
+    // Prefer verified HTTPS; fall back to an actual HTTP response if TLS fails.
+    val webPort = verifiedWebPort(record.ports) { respondsAsWeb(ip, it) }
     val fingerprint = if (manufacturer.contains("samsung", ignoreCase = true))
       SamsungTvRemote.fingerprint(ip) else null
     val lgFingerprint = when {
