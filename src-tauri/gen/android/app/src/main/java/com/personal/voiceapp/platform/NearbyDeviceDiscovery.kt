@@ -33,6 +33,12 @@ internal object NearbyDeviceDiscovery {
     "_airplay._tcp." to "display",
     "_raop._tcp." to "speaker",
     "_spotify-connect._tcp." to "speaker",
+    "_workstation._tcp." to "computer",
+    "_smb._tcp." to "computer",
+    "_ssh._tcp." to "server",
+    "_ipp._tcp." to "printer",
+    "_printer._tcp." to "printer",
+    "_http._tcp." to "unknown",
   )
 
   private fun identifier(source: String, key: String): String {
