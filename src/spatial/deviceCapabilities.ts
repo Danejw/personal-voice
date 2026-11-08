@@ -1,7 +1,7 @@
 import type { NearbyDevice } from "@/spatial/spatialDevices";
 import { isBluetoothSource } from "@/spatial/spatialDevices";
 
-export type Capability = "open_web" | "volume" | "playback" | "samsung_remote";
+export type Capability = "open_web" | "volume" | "playback" | "samsung_remote" | "lg_remote";
 
 export interface DeviceIdentity {
   ipAddress: string;
@@ -11,9 +11,11 @@ export interface DeviceIdentity {
   features: Capability[];
   samsungFingerprint?: string;
   samsungPaired: boolean;
+  lgFingerprint?: string;
+  lgPaired: boolean;
 }
 
-const supported = new Set<Capability>(["open_web", "volume", "playback", "samsung_remote"]);
+const supported = new Set<Capability>(["open_web", "volume", "playback", "samsung_remote", "lg_remote"]);
 const privateIp = (ip: string): boolean => {
   const a = ip.split(".").map(Number);
   return a.length === 4 && a.every(n => Number.isInteger(n) && n >= 0 && n <= 255) &&
@@ -30,6 +32,8 @@ export function parseDeviceIdentity(value: unknown, expectedIp: string): DeviceI
   if (raw.ipAddress !== expectedIp || typeof raw.name !== "string" ||
     typeof raw.manufacturer !== "string" || typeof raw.model !== "string" ||
     !Array.isArray(raw.features)) throw new Error("Device identity did not match the scan.");
+  const lgFingerprint = typeof raw.lgFingerprint === "string" &&
+    /^[a-f0-9]{64}$/.test(raw.lgFingerprint) ? raw.lgFingerprint : undefined;
   const fingerprint = typeof raw.samsungFingerprint === "string" &&
     /^[a-f0-9]{64}$/.test(raw.samsungFingerprint) ? raw.samsungFingerprint : undefined;
   const features = [...new Set(raw.features.filter(
@@ -40,9 +44,12 @@ export function parseDeviceIdentity(value: unknown, expectedIp: string): DeviceI
     name: raw.name.trim().slice(0, 72),
     manufacturer: raw.manufacturer.trim().slice(0, 64),
     model: raw.model.trim().slice(0, 64),
-    features: features.filter(feature => feature !== "samsung_remote" || !!fingerprint),
+    features: features.filter(feature => (feature !== "samsung_remote" || !!fingerprint) &&
+      (feature !== "lg_remote" || !!lgFingerprint)),
     ...(fingerprint ? { samsungFingerprint: fingerprint } : {}),
     samsungPaired: raw.samsungPaired === true && !!fingerprint,
+    ...(lgFingerprint ? { lgFingerprint } : {}),
+    lgPaired: raw.lgPaired === true && !!lgFingerprint,
   };
 }
 

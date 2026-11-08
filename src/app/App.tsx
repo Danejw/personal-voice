@@ -38,6 +38,8 @@ import type { SelectOption } from "@/components/SelectField";
 import { Toggle } from "@/components/Toggle";
 import { Tooltip } from "@/components/Tooltip";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
+import { nearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
+import { NEARBY_ACTIONS, type NearbyAction } from "@/spatial/deviceActionRegistry";
 import { saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import { CompanionView } from "@/companion/CompanionView";
 import { assistantPhase } from "@/companion/companionGeometry";
@@ -460,6 +462,26 @@ assistant.setActions({
   pairDevice: async (action, code) => {
     const current = devices.getSnapshot().currentDeviceId;
     return pairingAction(current, platform.platform, action, code);
+  },
+  listNearbyDevices: async () => {
+    if (platform.platform !== "android") throw new Error("Local network discovery is Android-only.");
+    const snapshot = devices.getSnapshot();
+    if (!snapshot.currentDeviceId) throw new Error("No current Android device is registered.");
+    return nearbyCapabilityService.describe(
+      snapshot.devices, snapshot.currentDeviceId, deviceLinkManager.getSnapshot().localPeers,
+    );
+  },
+  previewNearbyDeviceAction: async (deviceId, action) => {
+    if (platform.platform !== "android") throw new Error("Local device control is Android-only.");
+    if (!NEARBY_ACTIONS.includes(action as NearbyAction)) throw new Error("Unsupported nearby action.");
+    return nearbyCapabilityService.preview(deviceId, action as NearbyAction);
+  },
+  controlNearbyDevice: async (deviceId, action) => {
+    if (platform.platform !== "android") throw new Error("Local device control is Android-only.");
+    if (!NEARBY_ACTIONS.includes(action as NearbyAction)) {
+      throw new Error("Unsupported nearby device action.");
+    }
+    return nearbyCapabilityService.act(deviceId, action as NearbyAction);
   },
   listHandoffs: async () => {
     const snap = handoffs.getSnapshot();

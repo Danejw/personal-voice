@@ -19,7 +19,7 @@ describe("assistant tool intelligence registry", () => {
     expect([...ASSISTANT_TOOL_NAMES].sort()).toEqual([...names].sort());
     for (const [name, item] of Object.entries(ASSISTANT_TOOL_INTELLIGENCE)) {
       expect(name).toMatch(/^[a-z][a-z0-9_]*$/);
-      expect(["all", "windows"]).toContain(item.platform);
+      expect(["all", "windows", "android"]).toContain(item.platform);
       for (const value of [item.when, item.avoid, item.next, item.verify]) {
         expect(value.trim().length).toBeGreaterThan(12);
       }

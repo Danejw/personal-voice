@@ -81,6 +81,11 @@ class NearbySamsungPairArgs {
 }
 
 @InvokeArg
+class NearbyLgPairArgs {
+  lateinit var ipAddress: String
+  lateinit var fingerprint: String
+}
+
 class NearbySamsungKeyArgs {
   lateinit var ipAddress: String
   lateinit var key: String
@@ -358,6 +363,11 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
           result.put("samsungPaired", LocalDeviceCapabilities.samsungPaired(
             activity.applicationContext, ip, identity.samsungFingerprint))
         }
+        if (identity.lgFingerprint != null) {
+          result.put("lgFingerprint", identity.lgFingerprint)
+          result.put("lgPaired", LocalDeviceCapabilities.lgPaired(
+            activity.applicationContext, ip, identity.lgFingerprint))
+        }
         invoke.resolve(result)
       } catch (e: Exception) { invoke.reject(e.message ?: "Could not identify this device.") }
     }.start()
@@ -384,6 +394,45 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(JSObject().put("message",
           LocalDeviceCapabilities.mediaAction(activity.applicationContext, args.ipAddress, args.action)))
       } catch (e: Exception) { invoke.reject(e.message ?: "Media command failed.") }
+    }.start()
+  }
+
+  @Command
+  fun pairLgTv(invoke: Invoke) {
+    if (!localNetworkAllowed()) { invoke.reject("Local network access is required."); return }
+    val args = try { invoke.parseArgs(NearbyLgPairArgs::class.java) }
+      catch (_: Exception) { invoke.reject("Invalid LG TV pairing request."); return }
+    Thread {
+      try {
+        invoke.resolve(JSObject().put("message",
+          LocalDeviceCapabilities.pairLg(activity.applicationContext, args.ipAddress, args.fingerprint)))
+      } catch (e: Exception) { invoke.reject(e.message ?: "LG TV did not approve pairing.") }
+    }.start()
+  }
+
+  @Command
+  fun lgRemoteAction(invoke: Invoke) {
+    if (!localNetworkAllowed()) { invoke.reject("Local network access is required."); return }
+    val args = try { invoke.parseArgs(NearbyMediaArgs::class.java) }
+      catch (_: Exception) { invoke.reject("Invalid LG TV command."); return }
+    Thread {
+      try {
+        invoke.resolve(JSObject().put("message",
+          LocalDeviceCapabilities.lgAction(activity.applicationContext, args.ipAddress, args.action)))
+      } catch (e: Exception) { invoke.reject(e.message ?: "LG TV rejected the command.") }
+    }.start()
+  }
+
+  @Command
+  fun forgetLgTv(invoke: Invoke) {
+    if (!localNetworkAllowed()) { invoke.reject("Local network access is required."); return }
+    val ip = try { invoke.parseArgs(NearbyIpArgs::class.java).ipAddress }
+      catch (_: Exception) { invoke.reject("Invalid LG TV."); return }
+    Thread {
+      try {
+        LocalDeviceCapabilities.forgetLg(activity.applicationContext, ip)
+        invoke.resolve(JSObject())
+      } catch (e: Exception) { invoke.reject(e.message ?: "Could not forget LG TV pairing.") }
     }.start()
   }
 
@@ -424,6 +473,16 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(JSObject())
       } catch (e: Exception) { invoke.reject(e.message ?: "Could not forget TV pairing.") }
     }.start()
+  }
+
+  /** Bluetooth device discovery does not permit arbitrary device control. */
+  @Command
+  fun openNearbyBluetoothSettings(invoke: Invoke) {
+    try {
+      open(invoke, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+    } catch (_: ActivityNotFoundException) {
+      invoke.reject("Bluetooth settings are unavailable on this device.")
+    }
   }
 
   @Command

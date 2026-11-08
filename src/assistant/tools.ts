@@ -11,6 +11,7 @@ import {
 } from "@/assistant/computerActions";
 import { cameraFacingFromArgs, type CameraFacing } from "@/platform/camera";
 import { enrichToolDescription } from "@/assistant/harness/toolIntelligence";
+import { NEARBY_ACTIONS, type NearbyAction } from "@/spatial/deviceActionRegistry";
 import { MAX_SNIPPET_CONTENT_LENGTH, MAX_SNIPPET_TRIGGER_FIELD_LENGTH } from "@/snippets/snippet";
 import { isToolPlaybookId, TOOL_PLAYBOOK_IDS, type ToolPlaybookId } from "@/assistant/harness/playbooks";
 
@@ -93,6 +94,19 @@ export function assistantFunctionDeclarations() {
         },
         required: ["text"],
       },
+    },
+    {
+      name: "list_nearby_devices",
+      description: "Android only. On explicit request, scan nearby Wi-Fi and Bluetooth devices and report their observed identities and verified supported actions. The result includes exact device IDs, protocols and whether TV approval is required. Read-only; does not pair or control a device. Never guess support from a device name or a Bluetooth advertisement.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
+      name: "control_nearby_device",
+      description: "Android only. Perform one explicitly requested local device action, after list_nearby_devices supplies the exact device_id and verified action. Requires Personal Voice confirmation, plus TV authorization if applicable. Use only listed actions; pairing must be approved on the television. Never infer remote control from Bluetooth discovery. A command receipt does not prove visible effect.",
+      parameters: { type: "object", properties: {
+        device_id: { type: "string", description: "Exact local scan ID from list_nearby_devices; not a guessed name or IP." },
+        action: { type: "string", enum: [...NEARBY_ACTIONS] },
+      }, required: ["device_id", "action"] },
     },
     {
       name: "list_handoffs",
@@ -479,6 +493,7 @@ export type ConfirmToolName =
   | "press_shortcut"
   | "supervise_screen"
   | "remote_action"
+  | "control_nearby_device"
   | "remember_memory"
   | "change_memory"
   | "forget_memory";
@@ -514,6 +529,7 @@ export type ToolDecision =
   | { kind: "memorySearch"; id: string; name: "search_memory"; query: string }
   | { kind: "playbook"; id: string; name: "get_tool_playbook"; playbookId: ToolPlaybookId }
   | { kind: "handoffs"; id: string; name: "list_handoffs" }
+  | { kind: "nearbyDevices"; id: string; name: "list_nearby_devices" }
   | { kind: "pairing"; id: string; name: "pair_device"; action: "open" | "show_code" | "scan_qr" | "enter_code" | "status"; code?: string }
   | { kind: "remoteComputerGoal"; id: string; name: "remote_computer_goal"; action: "start" | "status" | "pause" | "resume" | "redirect" | "stop"; goal: string; device: string | null }
   | {
@@ -622,6 +638,24 @@ export function decideToolCall(
       return { kind: "dashboard", id: call.id, name: call.name };
     case "list_notes":
       return { kind: "notes", id: call.id, name: "list_notes", includeArchived: args.include_archived === true || args.includeArchived === true };
+    case "list_nearby_devices":
+      return { kind: "nearbyDevices", id: call.id, name: "list_nearby_devices" };
+    case "control_nearby_device": {
+      const deviceId = args.device_id;
+      const action = args.action;
+      if (typeof deviceId !== "string" || !/^(?:lan|ssdp|mdns|bt|pv)-[a-z0-9-]{6,90}$/.test(deviceId) ||
+        typeof action !== "string" || !NEARBY_ACTIONS.includes(action as NearbyAction)) {
+        return { kind: "reject", id: call.id, name: call.name,
+          message: "Use an exact device ID and supported action returned by list_nearby_devices." };
+      }
+      return {
+        kind: "confirm", id: call.id, name: "control_nearby_device",
+        text: JSON.stringify({ deviceId, action }),
+        title: "Control nearby device",
+        preview: action.replace(/_/g, " ") + " on scanned device " + deviceId,
+        deviceId: null, remote: null, memory: null,
+      };
+    }
     case "list_handoffs":
       return { kind: "handoffs", id: call.id, name: "list_handoffs" };
     case "pair_device": {

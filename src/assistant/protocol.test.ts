@@ -59,6 +59,8 @@ describe("assistant setup and typed turns", () => {
       "restore_note",
       "delete_note",
       "send_handoff",
+      "list_nearby_devices",
+      "control_nearby_device",
       "list_handoffs",
       "dismiss_handoff",
       "capture_screen",

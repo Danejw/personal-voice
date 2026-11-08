@@ -26,10 +26,12 @@ internal object LocalDeviceCapabilities {
   data class Identity(
     val ip: String, val name: String, val manufacturer: String, val model: String,
     val features: List<String>, val webPort: Int?, val samsungFingerprint: String?,
+    val lgFingerprint: String?,
   )
 
   private data class Record(
     val observedAt: Long, val ports: Set<Int>, val descriptions: List<URI>,
+    val lgAnnounced: Boolean = false,
     var identity: Identity? = null, var media: Map<String, Service> = emptyMap(),
   )
   private val known = java.util.concurrent.ConcurrentHashMap<String, Record>()
@@ -56,18 +58,23 @@ internal object LocalDeviceCapabilities {
   /** Called only after an explicit Nearby scan, before its results cross the plugin boundary. */
   @Synchronized fun remember(devices: List<NearbyDeviceDiscovery.Device>) {
     val next = mutableMapOf<String, Pair<MutableSet<Int>, MutableList<URI>>>()
+    val lgResponders = mutableSetOf<String>()
     for (device in devices) {
       val ip = device.ipAddress ?: continue
       if (!privateIp(ip)) continue
       val pair = next.getOrPut(ip) { Pair(mutableSetOf(), mutableListOf()) }
       pair.first.addAll(device.ports)
+      if (device.source == "ssdp" && device.detail == "LG webOS second screen") {
+        lgResponders.add(ip)
+      }
       val safe = safeLocation(device.descriptionUrl, ip)
       if (safe != null && safe !in pair.second) pair.second.add(safe)
     }
     known.clear()
     val now = SystemClock.elapsedRealtime()
     for ((ip, evidence) in next) {
-      known[ip] = Record(now, evidence.first.toSet(), evidence.second.take(4))
+      known[ip] = Record(now, evidence.first.toSet(), evidence.second.take(4),
+        lgAnnounced = ip in lgResponders)
     }
   }
 
@@ -146,21 +153,64 @@ internal object LocalDeviceCapabilities {
       } catch (_: Exception) { /* An open port alone proves nothing about TV identity. */ }
     }
 
+    if (record.lgAnnounced && manufacturer.isBlank()) {
+      manufacturer = "LG"
+      name = "LG webOS TV"
+    }
+
     // A port response is evidence of a reachable website, not proof of an admin interface.
     val webPort = listOf(443, 80, 8080).firstOrNull { it in record.ports }
     val fingerprint = if (manufacturer.contains("samsung", ignoreCase = true))
       SamsungTvRemote.fingerprint(ip) else null
+    val lgFingerprint = when {
+      record.lgAnnounced -> LgWebOsRemote.fingerprint(ip)
+      manufacturer.contains("LG", ignoreCase = true) && 3001 in record.ports ->
+        LgWebOsRemote.fingerprint(ip)
+      3001 in record.ports -> LgWebOsRemote.probeWebOs(ip)
+      else -> null
+    }
+    if (lgFingerprint != null && manufacturer.isBlank()) {
+      manufacturer = "LG"
+      name = "LG webOS TV"
+    }
     val features = buildList {
       if (webPort != null) add("open_web")
       if (media.containsKey("volume")) add("volume")
       if (media.containsKey("playback")) add("playback")
       if (fingerprint != null) add("samsung_remote")
+      if (lgFingerprint != null) add("lg_remote")
     }
-    val identity = Identity(ip, name, manufacturer, model, features, webPort, fingerprint)
+    val identity = Identity(ip, name, manufacturer, model, features, webPort, fingerprint,
+      lgFingerprint)
     record.identity = identity
     record.media = media
     return identity
   }
+
+  fun pairLg(context: Context, ip: String, fingerprint: String): String {
+    val identity = requireSeen(context, ip).identity ?: error("Identify the TV first.")
+    require("lg_remote" in identity.features && identity.lgFingerprint == fingerprint) {
+      "An LG webOS remote was not verified for this device."
+    }
+    return LgWebOsRemote.pair(context, ip, fingerprint)
+  }
+
+  fun lgAction(context: Context, ip: String, action: String): String {
+    val identity = requireSeen(context, ip).identity ?: error("Identify the TV first.")
+    require("lg_remote" in identity.features && LgWebOsRemote.supportedAction(action)) {
+      "LG TV action is not available for this device."
+    }
+    return LgWebOsRemote.action(context, ip, action)
+  }
+
+  fun forgetLg(context: Context, ip: String) {
+    val identity = requireSeen(context, ip).identity ?: error("Identify the TV first.")
+    require("lg_remote" in identity.features) { "LG TV remote is not verified." }
+    LgWebOsRemote.forget(context, ip)
+  }
+
+  fun lgPaired(context: Context, ip: String, fingerprint: String): Boolean =
+    LgWebOsRemote.isPaired(context, ip, fingerprint)
 
   fun pairSamsung(context: Context, ip: String, fingerprint: String): String {
     val identity = requireSeen(context, ip).identity ?: error("Identify the TV first.")

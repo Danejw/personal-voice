@@ -72,3 +72,29 @@ describe("native capability parsing", () => {
     expect(identity.samsungPaired).toBe(false);
   });
 });
+
+describe("LG webOS remote capability", () => {
+  const ip = "192.168.0.45";
+  const base = {
+    ipAddress: ip, name: "LG webOS TV", manufacturer: "LG",
+    model: "OLED65C4AUA", features: ["lg_remote", "factory_reset"],
+    lgFingerprint: "a".repeat(64), lgPaired: true,
+  };
+
+  it("exposes only the verified LG control feature with a valid native certificate", () => {
+    const identity = parseDeviceIdentity(base, ip);
+    expect(identity.features).toEqual(["lg_remote"]);
+    expect(identity.lgFingerprint).toBe("a".repeat(64));
+    expect(identity.lgPaired).toBe(true);
+  });
+
+  it("never accepts an LG remote without a valid fingerprint", () => {
+    const identity = parseDeviceIdentity({ ...base, lgFingerprint: "invalid" }, ip);
+    expect(identity.features).toEqual([]);
+    expect(identity.lgPaired).toBe(false);
+  });
+
+  it("rejects an LG TV identification for a different network host", () => {
+    expect(() => parseDeviceIdentity(base, "192.168.0.9")).toThrow();
+  });
+});

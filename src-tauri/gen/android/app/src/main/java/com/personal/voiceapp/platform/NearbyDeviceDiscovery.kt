@@ -163,6 +163,7 @@ internal object NearbyDeviceDiscovery {
     val targets = listOf(
       "urn:schemas-upnp-org:device:MediaRenderer:1",
       "urn:dial-multiscreen-org:service:dial:1",
+      "urn:lge-com:service:webos-second-screen:1",
     )
     try {
       DatagramSocket().use { socket ->
@@ -191,12 +192,17 @@ internal object NearbyDeviceDiscovery {
             else line.substring(0, index).trim().lowercase() to line.substring(index + 1).trim()
           }.toMap()
           val target = headers["st"]?.lowercase() ?: continue
-          if (!target.contains("mediarenderer") && !target.contains("dial")) continue
+          val lgWebos = target.contains("webos-second-screen")
+          if (!target.contains("mediarenderer") && !target.contains("dial") && !lgWebos) continue
           val usn = headers["usn"]?.take(160) ?: continue
           val server = clean(headers["server"] ?: "", 72)
-          val name = if (server.isNotEmpty()) server else if (target.contains("dial")) "DIAL media device" else "UPnP media renderer"
-          add(found, "ssdp", usn, name, if (target.contains("dial")) "display" else "media",
-            "UPnP / DIAL", ipAddress = packet.address.hostAddress,
+          val name = if (lgWebos) "LG webOS TV"
+            else if (server.isNotEmpty()) server
+            else if (target.contains("dial")) "DIAL media device" else "UPnP media renderer"
+          add(found, "ssdp", usn, name,
+            if (lgWebos || target.contains("dial")) "display" else "media",
+            if (lgWebos) "LG webOS second screen" else "UPnP / DIAL",
+            ipAddress = packet.address.hostAddress,
             descriptionUrl = headers["location"]?.take(400))
         }
       }
