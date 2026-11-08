@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
-import { parseDeviceIdentity, type DeviceIdentity } from "@/spatial/deviceCapabilities";
+import { nearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
+import type { DeviceIdentity } from "@/spatial/deviceCapabilities";
 import type { NearbyDevice } from "@/spatial/spatialDevices";
 import { isBluetoothSource } from "@/spatial/spatialDevices";
 
@@ -37,9 +38,8 @@ export function DeviceActions({ device, onControlPc }: Props) {
     setFailure(null);
     if (!ip) return;
     setInspecting(true);
-    void callPlugin<unknown>("inspect_nearby_device", { ipAddress: ip })
-      .then(value => {
-        const next = parseDeviceIdentity(value, ip);
+    void nearbyCapabilityService.inspect(ip)
+      .then(next => {
         if (!cancelled) setIdentity(next);
       })
       .catch(reason => {
