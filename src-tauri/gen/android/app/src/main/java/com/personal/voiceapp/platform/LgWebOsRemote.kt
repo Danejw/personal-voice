@@ -145,7 +145,7 @@ internal object LgWebOsRemote {
     val pending = java.util.concurrent.ConcurrentHashMap<String, Pending>()
     val registered = CountDownLatch(1)
     val receivedKey = AtomicReference<String?>()
-    val error = AtomicReference("TV did not approve Personal Voice.")
+    val pairFailure = AtomicReference("TV did not approve Personal Voice.")
     val ws = client.newWebSocket(Request.Builder()
       .url("wss://" + ip + ":" + PORT + "/").build(),
       object : WebSocketListener() {
@@ -153,7 +153,7 @@ internal object LgWebOsRemote {
           val request = JSONObject()
             .put("id", "register_1").put("type", "register").put("payload", payload)
           if (!webSocket.send(request.toString())) {
-            error.set("Could not send the TV pairing request.")
+            pairFailure.set("Could not send the TV pairing request.")
             registered.countDown()
           }
         }
@@ -166,13 +166,13 @@ internal object LgWebOsRemote {
                 if (!key.isNullOrBlank() && key.length <= 256) {
                   receivedKey.set(key)
                 } else {
-                  error.set("TV did not return a pairing key.")
+                  pairFailure.set("TV did not return a pairing key.")
                 }
                 registered.countDown()
               }
               "error" -> {
                 if (data.optString("id") == "register_1") {
-                  error.set(data.optString("error", "TV rejected pairing.").take(180))
+                  pairFailure.set(data.optString("error", "TV rejected pairing.").take(180))
                   registered.countDown()
                 } else {
                   pending.remove(data.optString("id"))?.let {
@@ -189,7 +189,7 @@ internal object LgWebOsRemote {
           } catch (_: Exception) { /* Ignore unrelated or malformed TV frames. */ }
         }
         override fun onFailure(webSocket: WebSocket, cause: Throwable, response: Response?) {
-          error.set("TV connection failed: " + (cause.message ?: "remote unavailable"))
+          pairFailure.set("TV connection failed: " + (cause.message ?: "remote unavailable"))
           registered.countDown()
           synchronized(lock) {
             if (sessions[ip]?.socket === webSocket) sessions.remove(ip)
@@ -205,7 +205,7 @@ internal object LgWebOsRemote {
     if (key == null) {
       ws.close(1000, "Pairing ended")
       client.dispatcher.executorService.shutdown()
-      error(error.get())
+      error(pairFailure.get())
     }
     prefs.edit().putString("pin:" + ip, presented).putString("key:" + ip, key).apply()
     synchronized(lock) { sessions[ip] = Session(ws, presented, client, pending) }
