@@ -254,6 +254,8 @@ internal object LocalDeviceCapabilities {
   fun openRokuApp(context: Context, ip: String): Intent {
     val identity = requireSeen(context, ip).identity ?: error("Identify the Roku first.")
     require("roku_companion" in identity.features) { "Roku has not been verified on this network." }
+    val installed = context.packageManager.getLaunchIntentForPackage("com.roku.remote")
+    if (installed != null) return installed.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     return Intent(Intent.ACTION_VIEW,
       Uri.parse("https://play.google.com/store/apps/details?id=com.roku.remote"))
       .addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
