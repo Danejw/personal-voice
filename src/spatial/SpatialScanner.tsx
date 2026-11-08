@@ -268,9 +268,6 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
         ))}
       </div>
 
-      {scanned && (view === "network" || view === "all") && !!scan.networkLabel && (
-        <p className="spatial-network-scope">{scan.networkLabel}</p>
-      )}
       {error && <p className="spatial-error" role="alert">{error}</p>}
       {scan.bluetoothPermissionRequired && (
         <button type="button" className="secondary spatial-bluetooth" onClick={() => void enableBluetooth()}>
@@ -279,13 +276,67 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
       )}
       <div className="spatial-inventory-tools">
         <input type="search" value={query} onChange={event => setQuery(event.target.value)}
-          placeholder="Find device or IP" aria-label="Search nearby devices" />
-        <button type="button" className="secondary" aria-expanded={showMap}
-          onClick={() => { setShowMap(!showMap); setPlacing(null); }}>
-          {showMap ? "Hide map" : "Room map"}
-        </button>
+          placeholder="Search name, IP, service" aria-label="Search nearby devices" />
       </div>
 
+      <div className="spatial-inventory">
+        {visible.map(device => {
+          const identity = device.ipAddress ? identities[device.ipAddress] ?? null : null;
+          const inspecting = !!device.ipAddress && scanned && !identity &&
+            !inspectionFailures[device.ipAddress];
+          const readiness = deviceReadiness(device, identity, inspecting);
+          return (
+            <div className="spatial-device-row" key={device.id}>
+              <button type="button" className="spatial-device"
+                title={deviceSubtitle(device) + " · " + readiness.hint}
+                onClick={() => { setPlacing(null); setSelected(device.id); }}
+                aria-label={"Open controls for " + device.name + ". " + readiness.hint}>
+                <span className="spatial-device-icon" aria-hidden="true">{glyph[device.kind]}</span>
+                <span className="spatial-device-label">
+                  <strong>{device.name}</strong>
+                  <small><span className={"spatial-readiness spatial-readiness-" + readiness.state}>
+                    {readiness.label}</span> · {readiness.hint}</small>
+                </span>
+                {!readiness.quickAction && <span className="spatial-place-label" aria-hidden="true">›</span>}
+              </button>
+              {readiness.quickAction && (
+                <button type="button" className="spatial-quick-action"
+                  disabled={quickPending !== null}
+                  aria-label={readiness.quickLabel + " for " + device.name}
+                  onClick={() => void quickAction(device, readiness.quickAction!)}>
+                  {quickPending === device.id ? "…" : readiness.quickLabel}
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {!showUnnamed && hiddenCount > 0 && (
+          <button type="button" className="spatial-unnamed-toggle" onClick={() => setShowUnnamed(true)}>
+            Show {hiddenCount} unidentified Bluetooth devices
+          </button>
+        )}
+        {showUnnamed && hiddenCount > 0 && (
+          <button type="button" className="spatial-unnamed-toggle" onClick={() => setShowUnnamed(false)}>
+            Hide unidentified devices
+          </button>
+        )}
+        {!query && listed.length > visible.length && (
+          <button type="button" className="spatial-unnamed-toggle"
+            onClick={() => setVisibleLimit(n => n + 12)}>
+            Show {Math.min(12, listed.length - visible.length)} more
+          </button>
+        )}
+      </div>
+      {quickFeedback && <p className="spatial-action-notice" role="status">{quickFeedback}</p>}
+      <details className="spatial-advanced" ref={advancedRef}>
+        <summary>Scan details and room map</summary>
+        {scanned && !!scan.networkLabel && (
+          <p className="spatial-network-scope">{scan.networkLabel}</p>
+        )}
+        <button type="button" className="secondary" aria-expanded={showMap}
+          onClick={() => { setShowMap(!showMap); setPlacing(null); }}>
+          {showMap ? "Hide map" : "Show room map"}
+        </button>
       {showMap && (
         <div className="spatial-scene" ref={mapRef}>
           <div className="spatial-floor" aria-label="Manual device placement map">
@@ -315,31 +366,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
         </div>
       )}
 
-      <div className="spatial-inventory">
-        {listed.map(device => (
-          <button key={device.id} type="button" className="spatial-device"
-            onClick={() => { setPlacing(null); setSelected(device.id); }}
-            aria-label={"View device details for " + device.name}>
-            <span className="spatial-device-icon" aria-hidden="true">{glyph[device.kind]}</span>
-            <span className="spatial-device-label">
-              <strong>{device.name}</strong>
-              <small>{deviceSubtitle(device)}</small>
-            </span>
-            {device.pairedDeviceId && <span className="spatial-device-connected">Ready</span>}
-            <span className="spatial-place-label" aria-hidden="true">›</span>
-          </button>
-        ))}
-        {!showUnnamed && hiddenCount > 0 && (
-          <button type="button" className="spatial-unnamed-toggle" onClick={() => setShowUnnamed(true)}>
-            Show {hiddenCount} unidentified Bluetooth devices
-          </button>
-        )}
-        {showUnnamed && hiddenCount > 0 && (
-          <button type="button" className="spatial-unnamed-toggle" onClick={() => setShowUnnamed(false)}>
-            Hide unidentified devices
-          </button>
-        )}
-      </div>
+      </details>
 
       {matches === 0 && scanned && (
         <p className="spatial-empty">No matching devices. Try another source or search.</p>
