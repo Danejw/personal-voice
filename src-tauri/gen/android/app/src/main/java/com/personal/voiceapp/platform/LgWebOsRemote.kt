@@ -94,6 +94,48 @@ internal object LgWebOsRemote {
     } catch (_: Exception) { null }
   }
 
+  /** A no-permission WebSocket hello proves that an anonymous :3001 host speaks webOS. */
+  fun probeWebOs(ip: String): String? {
+    val pin = fingerprint(ip) ?: return null
+    val verified = trustManager { chain ->
+      val bytes = chain?.firstOrNull()?.encoded ?: throw CertificateException("Missing certificate.")
+      if (sha256(bytes) != pin) throw CertificateException("Device identity changed.")
+    }
+    val client = OkHttpClient.Builder()
+      .sslSocketFactory(tls(verified), verified)
+      .hostnameVerifier { host, _ -> host == ip }
+      .connectTimeout(3, TimeUnit.SECONDS)
+      .readTimeout(0, TimeUnit.MILLISECONDS)
+      .build()
+    val done = CountDownLatch(1)
+    val webos = java.util.concurrent.atomic.AtomicBoolean(false)
+    val ws = client.newWebSocket(Request.Builder()
+      .url("wss://" + ip + ":" + PORT + "/").build(),
+      object : WebSocketListener() {
+        override fun onOpen(webSocket: WebSocket, response: Response) {
+          webSocket.send(JSONObject().put("type", "hello")
+            .put("id", "pv_identify").toString())
+        }
+        override fun onMessage(webSocket: WebSocket, text: String) {
+          try {
+            val reply = JSONObject(text.take(4096))
+            if (reply.optString("type") == "hello" &&
+              reply.optJSONObject("payload") != null) {
+              webos.set(true)
+              done.countDown()
+            }
+          } catch (_: Exception) { }
+        }
+        override fun onFailure(webSocket: WebSocket, cause: Throwable, response: Response?) {
+          done.countDown()
+        }
+      })
+    done.await(3500, TimeUnit.MILLISECONDS)
+    ws.close(1000, "Inspection completed")
+    client.dispatcher.executorService.shutdown()
+    return if (webos.get()) pin else null
+  }
+
   private fun settings(context: Context) =
     context.getSharedPreferences("pv_lg_webos_remote", Context.MODE_PRIVATE)
 
