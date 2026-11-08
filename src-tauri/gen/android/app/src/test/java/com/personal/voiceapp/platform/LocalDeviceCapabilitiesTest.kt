@@ -17,6 +17,20 @@ class LocalDeviceCapabilitiesTest {
     assertFalse(LocalDeviceCapabilities.privateIp("192.168.foo.7"))
   }
 
+  @Test fun webButtonRequiresAnActualProtocolResponse() {
+    val attempted = mutableListOf<Int>()
+    val available = setOf(80, 443, 8080)
+    assertEquals(80, LocalDeviceCapabilities.verifiedWebPort(available) {
+      attempted.add(it)
+      it == 80 // Old printer: TLS listener accepts TCP but cannot finish HTTPS.
+    })
+    assertEquals(listOf(443, 80), attempted)
+
+    assertEquals(443, LocalDeviceCapabilities.verifiedWebPort(available) { true })
+    assertNull(LocalDeviceCapabilities.verifiedWebPort(available) { false })
+    assertNull(LocalDeviceCapabilities.verifiedWebPort(setOf(9100, 631)) { true })
+  }
+
   @Test fun locationMustMatchTheRespondingDeviceIp() {
     val ip = "192.168.0.27"
     val safe = LocalDeviceCapabilities.safeLocation("http://192.168.0.27:9197/description.xml", ip)
