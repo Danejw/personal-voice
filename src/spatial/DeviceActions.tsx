@@ -22,6 +22,7 @@ export function DeviceActions({ device, onControlPc }: Props) {
   const [inspecting, setInspecting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [remoteOpen, setRemoteOpen] = useState(false);
+  const [lgRemoteOpen, setLgRemoteOpen] = useState(false);
   const [inspectAttempt, setInspectAttempt] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export function DeviceActions({ device, onControlPc }: Props) {
     let cancelled = false;
     setIdentity(null);
     setRemoteOpen(false);
+    setLgRemoteOpen(false);
     setNotice(null);
     setFailure(null);
     if (!ip) return;
@@ -91,11 +93,39 @@ export function DeviceActions({ device, onControlPc }: Props) {
     }
   }
 
+  async function connectLg() {
+    if (!ip || !identity?.lgFingerprint) return;
+    setBusy(true);
+    setFailure(null);
+    setNotice("Approve Personal Voice on your LG TV screen.");
+    try {
+      const result = await callPlugin<ActionResult>("pair_lg_tv", {
+        ipAddress: ip, fingerprint: identity.lgFingerprint,
+      });
+      setIdentity(previous => previous ? { ...previous, lgPaired: true } : null);
+      setLgRemoteOpen(true);
+      setNotice(result?.message || "LG TV approved the connection.");
+    } catch (reason) {
+      setFailure(reason instanceof Error ? reason.message : "LG TV pairing failed.");
+      setNotice(null);
+    } finally { setBusy(false); }
+  }
+
+  async function forgetLg() {
+    if (!ip) return;
+    const success = await perform("forget_lg_tv", { ipAddress: ip },
+      "LG TV credentials cleared on this phone.");
+    if (success) {
+      setLgRemoteOpen(false);
+      setIdentity(previous => previous ? { ...previous, lgPaired: false } : null);
+    }
+  }
+
   const has = (feature: string) => identity?.features.some(item => item === feature) === true;
   const bluetooth = isBluetoothSource(device.source);
   const capabilityNames: Record<string, string> = {
     open_web: "Local web page", volume: "UPnP volume", playback: "UPnP playback",
-    samsung_remote: "Samsung TV remote",
+    samsung_remote: "Samsung TV remote", lg_remote: "LG webOS remote",
   };
   return (
     <div className="spatial-capability-panel">
@@ -174,6 +204,40 @@ export function DeviceActions({ device, onControlPc }: Props) {
               </div>
             </div>
           )}
+          {has("lg_remote") && identity.lgFingerprint && (
+            <div className="spatial-control-group">
+              <span>LG webOS TV</span>
+              {!lgRemoteOpen ? (
+                <>
+                  <p className="spatial-capabilities">
+                    Pair over local Wi-Fi. Approve the connection on your TV to enable commands.
+                  </p>
+                  <button type="button" disabled={busy} onClick={() => void connectLg()}>
+                    {identity.lgPaired ? "Connect LG TV" : "Pair LG TV"}
+                  </button>
+                </>
+              ) : (
+                <div className="spatial-lg-actions">
+                  {([
+                    ["Volume −", "volume_down"], ["Volume +", "volume_up"],
+                    ["Get volume", "get_volume"], ["Mute", "mute"],
+                    ["Unmute", "unmute"], ["Play", "play"], ["Pause", "pause"],
+                    ["Show message on TV", "show_message"],
+                  ] as const).map(([label, action]) => (
+                    <button type="button" className="secondary" key={action} disabled={busy}
+                      onClick={() => void perform("lg_remote_action", { ipAddress: ip, action },
+                        "LG TV confirmed " + label + ".")}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {identity.lgPaired && (
+                <button type="button" className="secondary" disabled={busy}
+                  onClick={() => void forgetLg()}>Forget LG TV pairing</button>
+              )}
+            </div>
+          )}
           {has("samsung_remote") && identity.samsungFingerprint && (
             <div className="spatial-control-group">
               <span>Samsung TV remote</span>
@@ -215,9 +279,11 @@ export function DeviceActions({ device, onControlPc }: Props) {
       )}
       {bluetooth && (
         <p className="spatial-capabilities">
-          {device.paired
-            ? "Android recognizes this device. Bluetooth pairing does not grant Personal Voice TV or computer control."
-            : "Android can manage discovery and pairing. Remote control needs a supported device protocol."}
+          {/LG.*webOS/i.test(device.name)
+            ? "LG TV control uses Wi-Fi, not the Bluetooth advertisement. Find your LG webOS TV under Network on the same Wi-Fi, then pair it using the TV prompt."
+            : device.paired
+              ? "Android recognizes this device. Bluetooth pairing does not grant Personal Voice TV or computer control."
+              : "Android can manage discovery and pairing. Remote control needs a supported device protocol."}
         </p>
       )}
       {!ip && !bluetooth && !device.pairedDeviceId && (
