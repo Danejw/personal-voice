@@ -72,7 +72,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - name: Build signed installer
-        run: pnpm tauri build
+        shell: pwsh
+        run: |
+          # Tauri fetches NSIS and its helper DLL from upstream GitHub releases.
+          # Retry transient HTTP 504s without changing the installer or signing key.
+          $PSNativeCommandUseErrorActionPreference = $false
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
+            Write-Host "Windows bundle attempt $attempt/5"
+            pnpm tauri build
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            if ($attempt -eq 5) { exit $LASTEXITCODE }
+            Start-Sleep -Seconds (10 * $attempt)
+          }
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -143,7 +154,26 @@ jobs:
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - name: Build signed APK
-        run: pnpm tauri android build --apk --target aarch64 --target x86_64
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Avoid the Gradle services redirect that has been returning HTTP 504.
+          # The downloads.gradle.org domain is Gradle's official distribution CDN.
+          sed -i 's#services.gradle.org/distributions/#downloads.gradle.org/distributions/#' \
+            src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+          # Retry unavailable upstream Gradle/Kotlin Maven downloads with Gradle's
+          # normal local caches retained between attempts.
+          for attempt in 1 2 3 4 5; do
+            echo "Android signed bundle attempt $attempt/5"
+            if pnpm tauri android build --apk --target aarch64 --target x86_64; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::Signed Android build failed after five attempts"
+              exit 1
+            fi
+            sleep $((10 * attempt))
+          done
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: personal-voice
