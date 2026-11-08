@@ -89,14 +89,15 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     listDevices(nearby, view, query, showUnnamed);
   const placed = group.filter(item => positions[item.id]);
   const visible = query.trim() ? listed : listed.slice(0, visibleLimit);
+  const inspectionTargets = useMemo(() => [...new Set(nearby.filter(device => device.ipAddress &&
+    nearbyGroup(device.source) === "network").map(device => device.ipAddress!))].slice(0, 28), [nearby]);
 
   // Native service verification runs after discovery, bounded to three hosts in
   // parallel. A host or Bluetooth advertisement is never marked ready on name alone.
   useEffect(() => {
     if (!scanned) return;
     let cancelled = false;
-    const targets = [...new Set(nearby.filter(device => device.ipAddress &&
-      nearbyGroup(device.source) === "network").map(device => device.ipAddress!))].slice(0, 28);
+    const targets = inspectionTargets;
     let next = 0;
     const worker = async () => {
       while (!cancelled && next < targets.length) {
@@ -111,7 +112,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     };
     void Promise.all(Array.from({ length: Math.min(3, targets.length) }, worker));
     return () => { cancelled = true; };
-  }, [nearby, scanned, scanGeneration]);
+  }, [inspectionTargets, scanned, scanGeneration]);
 
   useEffect(() => {
     if (!selectedDeviceId) return;
@@ -282,9 +283,11 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
       <div className="spatial-inventory">
         {visible.map(device => {
           const identity = device.ipAddress ? identities[device.ipAddress] ?? null : null;
-          const inspecting = !!device.ipAddress && scanned && !identity &&
-            !inspectionFailures[device.ipAddress];
-          const readiness = deviceReadiness(device, identity, inspecting);
+          const scheduled = !!device.ipAddress && inspectionTargets.includes(device.ipAddress);
+          const inspecting = scheduled && scanned && !identity &&
+            !inspectionFailures[device.ipAddress!];
+          const skipped = !!device.ipAddress && scanned && !scheduled;
+          const readiness = deviceReadiness(device, identity, inspecting, skipped);
           return (
             <div className="spatial-device-row" key={device.id}>
               <button type="button" className="spatial-device"
