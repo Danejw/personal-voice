@@ -758,6 +758,9 @@ export default function App() {
   const [destination, setDestination] = useState<TranscriptDestinationId>(destinations.selected);
   const [dictationTransformId, setDictationTransformId] = useState<string | null>(() => loadTransformProfileId());
   const [section, setSection] = useState<AppSection>("dictation");
+  const [devicesTab, setDevicesTab] = useState<"paired" | "nearby" | "controls">(
+    platform.platform === "android" ? "nearby" : "paired",
+  );
   const [clipboardFocus, setClipboardFocus] = useState(0);
   const insightsSnapshot = useInsights(insightsStore, auth.userId, section === "insights");
   const [assistantInsightsRefreshToken, setAssistantInsightsRefreshToken] = useState(0);
@@ -1554,16 +1557,25 @@ export default function App() {
         </div>
 
         <div className="panel-stack is-scroll" hidden={section !== "devices"}>
-          {platform.platform === "windows" && (
-            <section aria-labelledby="microphone-heading">
-              <h2 id="microphone-heading">Microphone</h2>
-              <MicrophonePanel />
-            </section>
-          )}
-          <section aria-labelledby="devices-heading">
-            <DevicesPanel
-              store={devices}
-              snapshot={deviceSnapshot}
+          <nav className="devices-page-tabs" role="tablist" aria-label="Devices and controls">
+            {([
+              ["paired", "My devices"],
+              ["nearby", "Nearby"],
+              ["controls", "Settings"],
+            ] as const).map(([id, label]) => (
+              <button key={id} type="button" id={"devices-tab-" + id}
+                role="tab" aria-selected={devicesTab === id}
+                aria-controls={"devices-pane-" + id}
+                tabIndex={devicesTab === id ? 0 : -1}
+                onClick={() => setDevicesTab(id)}>
+                {label}
+              </button>
+            ))}
+          </nav>
+          <section id="devices-pane-paired" role="tabpanel" aria-labelledby="devices-tab-paired"
+            hidden={devicesTab !== "paired"}>
+            <DevicesPanel mode="paired"
+              store={devices} snapshot={deviceSnapshot}
               onChanged={() => { void handoffs.reload(); }}
               onControlPc={(id) => {
                 if (!deviceSnapshot.currentDeviceId) return;
@@ -1572,11 +1584,32 @@ export default function App() {
               }}
             />
           </section>
-          <DeviceControls
-            key={auth.userId ?? "signed-out"}
-            platform={platform}
-            settingsReady={settingsDeviceId !== undefined}
-          />
+          <section id="devices-pane-nearby" role="tabpanel" aria-labelledby="devices-tab-nearby"
+            hidden={devicesTab !== "nearby"}>
+            <DevicesPanel mode="nearby"
+              store={devices} snapshot={deviceSnapshot}
+              onChanged={() => { void handoffs.reload(); }}
+              onControlPc={(id) => {
+                if (!deviceSnapshot.currentDeviceId) return;
+                saveRemoteVoiceDefault(deviceSnapshot.currentDeviceId, id);
+                selectSection("companion");
+              }}
+            />
+          </section>
+          <section id="devices-pane-controls" role="tabpanel" aria-labelledby="devices-tab-controls"
+            hidden={devicesTab !== "controls"}>
+            {platform.platform === "windows" && (
+              <section aria-labelledby="microphone-heading">
+                <h2 id="microphone-heading">Microphone</h2>
+                <MicrophonePanel />
+              </section>
+            )}
+            <DeviceControls
+              key={auth.userId ?? "signed-out"}
+              platform={platform}
+              settingsReady={settingsDeviceId !== undefined}
+            />
+          </section>
         </div>
 
         <div className="panel-stack is-scroll" hidden={section !== "settings"}>
