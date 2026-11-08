@@ -1567,6 +1567,18 @@ export default function App() {
                 role="tab" aria-selected={devicesTab === id}
                 aria-controls={"devices-pane-" + id}
                 tabIndex={devicesTab === id ? 0 : -1}
+                onKeyDown={event => {
+                  const order = ["paired", "nearby", "controls"] as const;
+                  const at = order.indexOf(id);
+                  const next = event.key === "ArrowRight" ? (at + 1) % order.length
+                    : event.key === "ArrowLeft" ? (at + order.length - 1) % order.length
+                    : event.key === "Home" ? 0 : event.key === "End" ? order.length - 1 : -1;
+                  if (next < 0) return;
+                  event.preventDefault();
+                  setDevicesTab(order[next]!);
+                  const target = document.getElementById("devices-tab-" + order[next]);
+                  target?.focus();
+                }}
                 onClick={() => setDevicesTab(id)}>
                 {label}
               </button>
