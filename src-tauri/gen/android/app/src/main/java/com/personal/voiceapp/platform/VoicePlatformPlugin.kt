@@ -292,13 +292,19 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
         val scan = NearbyDeviceDiscovery.scan(activity.applicationContext)
         val devices = JSONArray()
         for (device in scan.devices) {
-          devices.put(JSONObject()
+          val item = JSONObject()
             .put("id", device.id).put("name", device.name)
             .put("kind", device.kind).put("source", device.source)
-            .put("detail", device.detail))
+            .put("detail", device.detail)
+            .put("paired", device.paired)
+          if (device.ipAddress != null) item.put("ipAddress", device.ipAddress)
+          if (device.signalDbm != null) item.put("signalDbm", device.signalDbm)
+          devices.put(item)
         }
         invoke.resolve(JSObject().put("devices", devices)
-          .put("bluetoothPermissionRequired", scan.bluetoothPermissionRequired))
+          .put("bluetoothPermissionRequired", scan.bluetoothPermissionRequired)
+          .put("networkLabel", scan.networkLabel)
+          .put("networkLimited", scan.networkLimited))
       } catch (error: Exception) {
         invoke.reject(error.message ?: "Could not scan nearby devices.")
       }
@@ -311,13 +317,14 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       invoke.reject("Bluetooth discovery requires Android 12 or newer.")
       return
     }
-    if (ContextCompat.checkSelfPermission(activity, Manifest.permission.BLUETOOTH_SCAN) ==
-      PackageManager.PERMISSION_GRANTED) {
+    val required = listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+      .filter { ContextCompat.checkSelfPermission(activity, it) != PackageManager.PERMISSION_GRANTED }
+    if (required.isEmpty()) {
       invoke.resolve(JSObject())
       return
     }
     main.post {
-      activity.requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_SCAN), 54018)
+      activity.requestPermissions(required.toTypedArray(), 54018)
       invoke.resolve(JSObject())
     }
   }

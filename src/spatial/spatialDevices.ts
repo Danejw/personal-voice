@@ -1,7 +1,7 @@
 import type { OwnedDevice } from "@/handoffs/handoff";
 
-export type NearbyKind = "computer" | "display" | "speaker" | "media" | "unknown";
-export type NearbySource = "device-link" | "mdns" | "ssdp" | "bluetooth";
+export type NearbyKind = "computer" | "display" | "speaker" | "media" | "phone" | "printer" | "server" | "unknown";
+export type NearbySource = "device-link" | "mdns" | "ssdp" | "lan" | "bluetooth" | "bluetooth-classic" | "bluetooth-paired";
 
 export interface NearbyDevice {
   id: string;
@@ -10,11 +10,16 @@ export interface NearbyDevice {
   source: NearbySource;
   detail: string;
   pairedDeviceId?: string;
+  ipAddress?: string;
+  signalDbm?: number;
+  paired?: boolean;
 }
 
 export interface NearbyScan {
   devices: NearbyDevice[];
   bluetoothPermissionRequired: boolean;
+  networkLabel: string;
+  networkLimited: boolean;
 }
 
 export interface SpatialPosition { x: number; y: number }
@@ -22,8 +27,13 @@ export interface SpatialPosition { x: number; y: number }
 /** Positions are user-marked positions on a sketch, never inferred coordinates or measured distance. */
 export type SpatialPositions = Record<string, SpatialPosition>;
 
-const kinds = new Set<NearbyKind>(["computer", "display", "speaker", "media", "unknown"]);
-const sources = new Set<NearbySource>(["mdns", "ssdp", "bluetooth"]);
+const kinds = new Set<NearbyKind>(["computer", "display", "speaker", "media", "phone", "printer", "server", "unknown"]);
+const sources = new Set<NearbySource>(["mdns", "ssdp", "lan", "bluetooth", "bluetooth-classic", "bluetooth-paired"]);
+const isPrivateIpv4 = (value: string): boolean => {
+  const a = value.split(".").map(Number);
+  return a.length === 4 && a.every(n => Number.isInteger(n) && n >= 0 && n <= 255) &&
+    (a[0] === 10 || (a[0] === 172 && a[1]! >= 16 && a[1]! <= 31) || (a[0] === 192 && a[1] === 168));
+};
 const stableId = /^[a-z0-9-]{6,90}$/;
 
 export function parseNearbyScan(value: unknown): NearbyScan {
@@ -32,7 +42,7 @@ export function parseNearbyScan(value: unknown): NearbyScan {
   if (!Array.isArray(result.devices)) throw new Error("Invalid nearby device scan.");
   const devices: NearbyDevice[] = [];
   const seen = new Set<string>();
-  for (const raw of result.devices.slice(0, 80)) {
+  for (const raw of result.devices.slice(0, 350)) {
     if (!raw || typeof raw !== "object") continue;
     const row = raw as Record<string, unknown>;
     if (typeof row.id !== "string" || !stableId.test(row.id) ||
@@ -41,12 +51,24 @@ export function parseNearbyScan(value: unknown): NearbyScan {
       typeof row.source !== "string" || !sources.has(row.source as NearbySource) ||
       typeof row.detail !== "string" || row.detail.length > 120 || seen.has(row.id)) continue;
     seen.add(row.id);
-    devices.push({
+    const device: NearbyDevice = {
       id: row.id, name: row.name.trim(), kind: row.kind as NearbyKind,
       source: row.source as NearbySource, detail: row.detail.trim(),
-    });
+    };
+    if (typeof row.ipAddress === "string" && isPrivateIpv4(row.ipAddress)) {
+      device.ipAddress = row.ipAddress;
+    }
+    if (typeof row.signalDbm === "number" && Number.isInteger(row.signalDbm) &&
+      row.signalDbm >= -127 && row.signalDbm <= 20) device.signalDbm = row.signalDbm;
+    if (row.paired === true) device.paired = true;
+    devices.push(device);
   }
-  return { devices, bluetoothPermissionRequired: result.bluetoothPermissionRequired === true };
+  return {
+    devices,
+    bluetoothPermissionRequired: result.bluetoothPermissionRequired === true,
+    networkLabel: typeof result.networkLabel === "string" ? result.networkLabel.slice(0, 100) : "",
+    networkLimited: result.networkLimited === true,
+  };
 }
 
 /** Only locally observed Personal Voice peers are called nearby, never all cloud-synced installs. */
@@ -88,4 +110,13 @@ export function readPositions(raw: string | null): SpatialPositions {
   } catch {
     return {};
   }
+}
+
+/** A Bluetooth radio advertisement is not a network host or an authorized control channel. */
+export function isBluetoothSource(source: NearbySource): boolean {
+  return source === "bluetooth" || source === "bluetooth-classic" || source === "bluetooth-paired";
+}
+
+export function nearbyGroup(source: NearbySource): "network" | "bluetooth" {
+  return isBluetoothSource(source) ? "bluetooth" : "network";
 }

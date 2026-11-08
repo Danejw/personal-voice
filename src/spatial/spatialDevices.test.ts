@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import {
-  clampPosition, mergePersonalVoicePeers, parseNearbyScan, readPositions,
+  clampPosition, mergePersonalVoicePeers, parseNearbyScan, readPositions, nearbyGroup,
 } from "@/spatial/spatialDevices";
 
 const pcId = "ec1ab9a2-5341-49e1-a0af-dfdc30b827b8";
@@ -57,5 +57,52 @@ describe("user-placed room sketch", () => {
     expect(readPositions('{"mdns-cafe02":{"x":-4,"y":7}}')).toEqual({
       "mdns-cafe02": { x: 0.08, y: 0.88 },
     });
+  });
+});
+
+describe("expanded device inventory", () => {
+  it("accepts LAN, paired Bluetooth and Classic Bluetooth with bounded native metadata", () => {
+    const scan = parseNearbyScan({
+      networkLabel: "192.168.1.55/24 · 253 addresses checked",
+      networkLimited: true,
+      bluetoothPermissionRequired: false,
+      devices: [
+        { id: "lan-abcdef012345", name: "Device 192.168.1.7", kind: "computer", source: "lan",
+          detail: "TCP 445", ipAddress: "192.168.1.7" },
+        { id: "bt-abcdef012345", name: "Headphones", kind: "speaker", source: "bluetooth-paired",
+          detail: "Paired Bluetooth", signalDbm: -47, paired: true },
+        { id: "bt-abcdef012346", name: "Nearby phone", kind: "phone", source: "bluetooth-classic",
+          detail: "Bluetooth Classic", signalDbm: -70 },
+      ],
+    });
+    expect(scan.devices).toHaveLength(3);
+    expect(scan.devices[0]?.ipAddress).toBe("192.168.1.7");
+    expect(scan.devices[1]?.paired).toBe(true);
+    expect(scan.devices[1]?.signalDbm).toBe(-47);
+    expect(nearbyGroup(scan.devices[0]!.source)).toBe("network");
+    expect(nearbyGroup(scan.devices[1]!.source)).toBe("bluetooth");
+    expect(scan.networkLimited).toBe(true);
+    expect(scan.networkLabel).toContain("253 addresses checked");
+  });
+
+  it("refuses fabricated public IP addresses and out-of-range signal data", () => {
+    const scan = parseNearbyScan({ devices: [
+      { id: "lan-abcdef012345", name: "External", kind: "server", source: "lan",
+        detail: "TCP 443", ipAddress: "8.8.8.8", signalDbm: 999 },
+    ]});
+    expect(scan.devices).toHaveLength(1);
+    expect(scan.devices[0]?.ipAddress).toBeUndefined();
+    expect(scan.devices[0]?.signalDbm).toBeUndefined();
+    expect(scan.networkLabel).toBe("");
+  });
+
+  it("does not grant control to ordinary LAN hosts or Bluetooth pairs", () => {
+    const scan = parseNearbyScan({ devices: [
+      { id: "lan-abcdef012345", name: "LAN PC", kind: "computer", source: "lan",
+        detail: "TCP 3389", ipAddress: "10.0.0.6" },
+      { id: "bt-abcdef012346", name: "TV", kind: "display", source: "bluetooth-paired",
+        detail: "Paired Bluetooth", paired: true },
+    ]});
+    expect(scan.devices.every(device => device.pairedDeviceId === undefined)).toBe(true);
   });
 });
