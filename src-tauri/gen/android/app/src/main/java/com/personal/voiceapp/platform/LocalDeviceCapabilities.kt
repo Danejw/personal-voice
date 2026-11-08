@@ -132,6 +132,20 @@ internal object LocalDeviceCapabilities {
       }
     }
 
+    // A Samsung device-info response can identify a TV even when multicast is blocked.
+    // It is still self-reported network evidence, not authorization to control it.
+    if (8001 in record.ports) {
+      try {
+        val api = JSONObject(http(ip, 8001, "/api/v2/", null).body)
+        val device = api.optJSONObject("device")
+        if (device?.optString("type") == "Samsung SmartTV") {
+          manufacturer = "Samsung"
+          name = device.optString("name", name).take(72)
+          model = device.optString("modelName", model).take(64)
+        }
+      } catch (_: Exception) { /* An open port alone proves nothing about TV identity. */ }
+    }
+
     // A port response is evidence of a reachable website, not proof of an admin interface.
     val webPort = listOf(443, 80, 8080).firstOrNull { it in record.ports }
     val fingerprint = if (manufacturer.contains("samsung", ignoreCase = true))
@@ -269,11 +283,35 @@ internal object LocalDeviceCapabilities {
       require(header.startsWith("HTTP/1.1 200") || header.startsWith("HTTP/1.0 200")) {
         "Device rejected the request (" + header.lineSequence().first().take(55) + ")."
       }
-      require(!header.contains("transfer-encoding: chunked", true)) {
-        "This device uses an unsupported HTTP encoding."
-      }
-      return HttpReply(raw.substring(split + 4))
+      val body = raw.substring(split + 4)
+      return HttpReply(if (header.contains("transfer-encoding: chunked", true))
+        decodeChunked(body) else body)
     }
+  }
+
+  /** Bounded decoder for HTTP/1.1 chunked UPnP device descriptions. */
+  private fun decodeChunked(body: String): String {
+    var cursor = 0
+    val out = StringBuilder()
+    while (cursor < body.length && out.length < MAX_REPLY) {
+      val lineEnd = body.indexOf("\r\n", cursor)
+      require(lineEnd in cursor..(cursor + 32).coerceAtMost(body.length)) {
+        "Invalid HTTP chunk framing."
+      }
+      val size = body.substring(cursor, lineEnd).substringBefore(";").trim()
+        .toIntOrNull(16) ?: error("Invalid HTTP chunk size.")
+      require(size in 0..MAX_REPLY && out.length + size <= MAX_REPLY) {
+        "Oversized HTTP chunk."
+      }
+      if (size == 0) return out.toString()
+      val first = lineEnd + 2
+      require(first + size + 2 <= body.length && body.startsWith("\r\n", first + size)) {
+        "Incomplete HTTP chunk."
+      }
+      out.append(body, first, first + size)
+      cursor = first + size + 2
+    }
+    error("Incomplete HTTP chunked response.")
   }
 
   private fun parseXml(xml: String): org.w3c.dom.Document {
