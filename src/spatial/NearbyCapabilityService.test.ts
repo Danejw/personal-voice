@@ -29,10 +29,12 @@ describe("shared nearby capability inventory", () => {
     const service = new NearbyCapabilityService();
     const result = JSON.parse(await service.describe([], "local-phone", []));
     expect(result.observed).toBe("fresh_android_local_scan");
-    expect(result.devices).toMatchObject([{
+    expect(result.devices[0]).toMatchObject({
       id, identification: "inspected", manufacturer: "Example",
-      actions: [{ name: "open_web", protocol: "web", authorization: "none" }],
-    }]);
+    });
+    expect(result.devices[0].actions[0]).toMatchObject({
+      name: "open_web", protocol: "web", authorization: "none",
+    });
     expect(result.devices[0].actions.map((a: {name:string})=>a.name))
       .toEqual(["open_web", "volume_up", "volume_down", "play", "pause"]);
     expect(mocked).not.toHaveBeenCalledWith("nearby_media_action", expect.anything());
