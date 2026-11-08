@@ -68,6 +68,16 @@
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Explicit per-session MediaProjection consent and a local-only foreground stream. -->
+        <activity
+            android:name=".platform.ScreenShareConsentActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <service
+            android:name=".platform.ScreenShareService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
         <service
             android:name=".platform.VoiceAccessibilityService"
             android:exported="true"
