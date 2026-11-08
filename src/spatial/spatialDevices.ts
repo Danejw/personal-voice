@@ -13,6 +13,8 @@ export interface NearbyDevice {
   ipAddress?: string;
   signalDbm?: number;
   paired?: boolean;
+  /** True only for a service/radio actually observed during this scan; a stored bond is not live evidence. */
+  observedNow?: boolean;
 }
 
 export interface NearbyScan {
@@ -61,6 +63,7 @@ export function parseNearbyScan(value: unknown): NearbyScan {
     if (typeof row.signalDbm === "number" && Number.isInteger(row.signalDbm) &&
       row.signalDbm >= -127 && row.signalDbm <= 20) device.signalDbm = row.signalDbm;
     if (row.paired === true) device.paired = true;
+    if (typeof row.observedNow === "boolean") device.observedNow = row.observedNow;
     devices.push(device);
   }
   return {
@@ -119,4 +122,11 @@ export function isBluetoothSource(source: NearbySource): boolean {
 
 export function nearbyGroup(source: NearbySource): "network" | "bluetooth" {
   return isBluetoothSource(source) ? "bluetooth" : "network";
+}
+
+/** A bonded Android radio can exist in the OS without answering this scan. */
+export function observedThisScan(device: NearbyDevice): boolean {
+  if (device.pairedDeviceId) return true;
+  if (device.observedNow !== undefined) return device.observedNow;
+  return device.source !== "bluetooth-paired";
 }
