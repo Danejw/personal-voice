@@ -89,3 +89,16 @@
   color: #8fa9b2; font-size: 11px; }
 .spatial-details-main > div { min-width: 0; }
 .spatial-details-main p { overflow-wrap: anywhere; }
+
+.spatial-capability-panel { display: grid; gap: 10px; }
+.spatial-capability-panel > button { justify-self: start; }
+.spatial-identity { display: grid; gap: 3px; }
+.spatial-identity strong { font-size: 13px; overflow-wrap: anywhere; }
+.spatial-identity span { font-size: 11px; color: #93abb5; overflow-wrap: anywhere; }
+.spatial-control-group { display: grid; gap: 8px; padding-top: 8px; border-top: 1px solid rgba(158, 200, 198, .12); }
+.spatial-control-group > span { color: #a8c2c8; font-size: 12px; font-weight: 600; }
+.spatial-control-group > button { justify-self: start; }
+.spatial-control-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.spatial-remote-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.spatial-remote-grid button { font-size: 12px; min-width: 0; padding: 9px 5px; }
+.spatial-action-notice { margin: 0; color: #9edec5; font-size: 12px; line-height: 1.4; }

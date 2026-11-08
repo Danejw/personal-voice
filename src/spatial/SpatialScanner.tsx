@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
+import { consolidateNearbyDevices } from "@/spatial/deviceCapabilities";
+import { DeviceActions } from "@/spatial/DeviceActions";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import {
   clampPosition, mergePersonalVoicePeers, parseNearbyScan, readPositions, nearbyGroup,
@@ -31,6 +33,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   const [scanning, setScanning] = useState(false);
   const [view, setView] = useState<DeviceView>("all");
   const [scanned, setScanned] = useState(false);
+  const [scanGeneration, setScanGeneration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -55,7 +58,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   }), []);
 
   const nearby = useMemo(
-    () => mergePersonalVoicePeers(scan.devices, peers, devices, currentDeviceId),
+    () => consolidateNearbyDevices(mergePersonalVoicePeers(scan.devices, peers, devices, currentDeviceId)),
     [scan.devices, peers, devices, currentDeviceId],
   );
   const networkCount = nearby.filter(item => nearbyGroup(item.source) === "network").length;
@@ -77,6 +80,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     try {
       const network = await callPlugin<unknown>("scan_nearby_devices");
       setScan(parseNearbyScan(network));
+      setScanGeneration(previous => previous + 1);
       setPeers(deviceLinkManager.getSnapshot().localPeers);
       setScanned(true);
     } catch (reason) {
@@ -197,10 +201,10 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
           <h3>Not placed</h3>
           {unplaced.map(device => (
             <button key={device.id} type="button" className="spatial-device"
-              onClick={() => { setPlacing(device.id); setSelected(device.id); }}>
+              onClick={() => { setSelected(device.id); setPlacing(null); }}>
               <span className="spatial-device-icon" aria-hidden="true">{glyph[device.kind]}</span>
               <span className="spatial-device-label"><strong>{device.name}</strong><small>{device.ipAddress ? device.ipAddress + " · " : ""}{device.detail || device.source}{device.paired ? " · Paired" : ""}{device.signalDbm !== undefined ? " · " + device.signalDbm + " dBm" : ""}</small></span>
-              <span className="spatial-place-label">Place</span>
+              <span className="spatial-place-label">Details</span>
             </button>
           ))}
         </div>
@@ -226,13 +230,10 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
             {positions[target.id] && (
               <button type="button" className="secondary" onClick={() => clearPosition(target.id)}>Unplace</button>
             )}
-            {target.pairedDeviceId && (
-              <button type="button" onClick={() => { if (target.pairedDeviceId) onControlPc(target.pairedDeviceId); }}>Open Companion</button>
-            )}
+
           </div>
-          {!target.pairedDeviceId && (
-            <p className="spatial-capabilities">Discovered only. Discovery does not grant control. This device requires a supported integration and authorization before actions become available.</p>
-          )}
+          <DeviceActions key={target.id + ":" + scanGeneration}
+            device={target} onControlPc={onControlPc} />
         </div>
       )}
     </section>
