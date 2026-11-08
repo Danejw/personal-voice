@@ -17,7 +17,7 @@ import java.net.InetAddress
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
-/** An on-demand, bounded scan of advertised services. No port scanning, connection or control. */
+/** User-triggered LAN, service and Bluetooth discovery. Does not authorize device control. */
 internal object NearbyDeviceDiscovery {
   data class Device(
     val id: String, val name: String, val kind: String, val source: String, val detail: String,
