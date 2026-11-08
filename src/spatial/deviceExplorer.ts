@@ -55,7 +55,7 @@ export interface DeviceReadiness {
 }
 
 export function deviceReadiness(
-  device: NearbyDevice, identity: DeviceIdentity | null, inspecting: boolean,
+  device: NearbyDevice, identity: DeviceIdentity | null, inspecting: boolean, skipped = false,
 ): DeviceReadiness {
   if (device.pairedDeviceId) return {
     state: "ready", label: "Ready", hint: "Authenticated Personal Voice computer",
@@ -71,6 +71,10 @@ export function deviceReadiness(
     hint: "Service discovered without a usable local IP; rescan on the same Wi-Fi",
   };
   if (inspecting) return { state: "checking", label: "Identifying", hint: "Checking reachable services" };
+  if (skipped && !identity) return {
+    state: "unavailable", label: "Not inspected",
+    hint: "Automatic verification is limited to 28 hosts; open device details to inspect this one",
+  };
   if (!identity) return {
     state: "unavailable", label: "Not verified",
     hint: "Device inspection failed. Retry from the device details",
