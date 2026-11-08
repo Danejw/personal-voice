@@ -19,6 +19,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
@@ -78,7 +79,9 @@ internal object NearbyDeviceDiscovery {
     val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
     val listeners = mutableListOf<NsdManager.DiscoveryListener>()
     // Resolve discovered DNS-SD endpoints without extending the scan indefinitely.
-    val resolvers = Executors.newFixedThreadPool(2)
+    // Legacy Android NSD permits only one outstanding resolve request per manager.
+    val resolvers = Executors.newSingleThreadExecutor()
+    val resolutionStalled = AtomicBoolean(false)
     val queuedResolutions = AtomicInteger(0)
     val seenServices = ConcurrentHashMap.newKeySet<String>()
     for ((type, kind) in serviceTypes) {
@@ -95,6 +98,8 @@ internal object NearbyDeviceDiscovery {
           add(found, "mdns", key, name, kind, type)
           if (!seenServices.add(key) || queuedResolutions.incrementAndGet() > 24) return
           try { resolvers.execute {
+            // A timed-out native resolve may still be active. Do not start another.
+            if (resolutionStalled.get()) return@execute
             val finished = CountDownLatch(1)
             val callback = object : NsdManager.ResolveListener {
               override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) { finished.countDown() }
@@ -114,7 +119,7 @@ internal object NearbyDeviceDiscovery {
             try {
               @Suppress("DEPRECATION")
               nsd.resolveService(service, callback)
-              finished.await(1600, TimeUnit.MILLISECONDS)
+              if (!finished.await(1600, TimeUnit.MILLISECONDS)) resolutionStalled.set(true)
             } catch (_: Exception) { /* Name remains visible without an endpoint. */ }
           } } catch (_: java.util.concurrent.RejectedExecutionException) {
             // Discovery already stopped after its bounded scan window.
