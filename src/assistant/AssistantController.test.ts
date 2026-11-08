@@ -103,6 +103,7 @@ describe("AssistantController", () => {
     await settle();
     expect(used.controlNearbyDevice).not.toHaveBeenCalled();
     expect(created.getSnapshot().pendingAction?.title).toBe("Control nearby device");
+    expect(created.getSnapshot().pendingAction?.preview).toContain("LG TV");
     created.cancelPending();
     await settle();
     expect(used.controlNearbyDevice).not.toHaveBeenCalled();
@@ -1840,6 +1841,7 @@ function toolActions() {
     listHandoffs: vi.fn(async () => "Devices you can send to: Phone.\nNo received handoffs."),
     listNearbyDevices: vi.fn(async () => '{"observed":"fresh_android_local_scan","devices":[]}'),
     controlNearbyDevice: vi.fn(async () => "Device acknowledged volume up; physical state not verified."),
+    previewNearbyDeviceAction: vi.fn(async () => "volume up on LG TV (192.168.0.27) using LG webOS."),
     pairDevice: vi.fn(async () => "Pairing invitation displayed."),
     describeItem: vi.fn((_kind: "note" | "handoff", id: string) => `Preview ${id}`),
     archiveNote: vi.fn(async () => {}),
