@@ -94,13 +94,16 @@ internal object NearbyDeviceDiscovery {
           val key = type + ":" + name.lowercase()
           add(found, "mdns", key, name, kind, type)
           if (!seenServices.add(key) || queuedResolutions.incrementAndGet() > 24) return
-          resolvers.execute {
+          try { resolvers.execute {
             val finished = CountDownLatch(1)
             val callback = object : NsdManager.ResolveListener {
               override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) { finished.countDown() }
               override fun onServiceResolved(info: NsdServiceInfo) {
-                val address = info.host
-                if (address is Inet4Address && address.isSiteLocalAddress && info.port in 1..65535) {
+                // Android 14+ may publish multiple IPv4/IPv6 host addresses.
+                val address = (listOfNotNull(info.host) +
+                  (if (Build.VERSION.SDK_INT >= 34) info.hostAddresses else emptyList()))
+                  .firstOrNull { it is Inet4Address && it.isSiteLocalAddress } as? Inet4Address
+                if (address != null && info.port in 1..65535) {
                   // Resolution gives an endpoint, never control permission.
                   add(found, "mdns", key, name, kind, type + " · TCP " + info.port,
                     ipAddress = address.hostAddress, ports = listOf(info.port))
@@ -113,6 +116,8 @@ internal object NearbyDeviceDiscovery {
               nsd.resolveService(service, callback)
               finished.await(1600, TimeUnit.MILLISECONDS)
             } catch (_: Exception) { /* Name remains visible without an endpoint. */ }
+          } } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Discovery already stopped after its bounded scan window.
           }
         }
       }
