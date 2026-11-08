@@ -1,7 +1,7 @@
 import type { NearbyDevice } from "@/spatial/spatialDevices";
 import { isBluetoothSource } from "@/spatial/spatialDevices";
 
-export type Capability = "open_web" | "volume" | "playback" | "samsung_remote" | "lg_remote";
+export type Capability = "open_web" | "volume" | "playback" | "samsung_remote" | "lg_remote" | "roku_companion";
 
 export interface DeviceIdentity {
   ipAddress: string;
@@ -15,7 +15,7 @@ export interface DeviceIdentity {
   lgPaired: boolean;
 }
 
-const supported = new Set<Capability>(["open_web", "volume", "playback", "samsung_remote", "lg_remote"]);
+const supported = new Set<Capability>(["open_web", "volume", "playback", "samsung_remote", "lg_remote", "roku_companion"]);
 const privateIp = (ip: string): boolean => {
   const a = ip.split(".").map(Number);
   return a.length === 4 && a.every(n => Number.isInteger(n) && n >= 0 && n <= 255) &&
