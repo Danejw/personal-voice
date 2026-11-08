@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { nearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
+import type { NearbyAction } from "@/spatial/deviceActionRegistry";
 import type { DeviceIdentity } from "@/spatial/deviceCapabilities";
 import type { NearbyDevice } from "@/spatial/spatialDevices";
 import { isBluetoothSource } from "@/spatial/spatialDevices";
@@ -17,6 +18,26 @@ const remoteKeys = [
   ["Volume −", "KEY_VOLDOWN"], ["Down", "KEY_DOWN"], ["Volume +", "KEY_VOLUP"],
   ["Mute", "KEY_MUTE"], ["Play", "KEY_PLAY"], ["Pause", "KEY_PAUSE"],
 ] as const;
+
+const samsungKeyAction: Record<string, NearbyAction> = {
+  KEY_HOME: "home", KEY_RETURN: "back", KEY_UP: "up", KEY_DOWN: "down",
+  KEY_LEFT: "left", KEY_RIGHT: "right", KEY_ENTER: "select",
+  KEY_VOLUP: "volume_up", KEY_VOLDOWN: "volume_down", KEY_MUTE: "mute",
+  KEY_PLAY: "play", KEY_PAUSE: "pause",
+};
+
+/** UI and Assistant dispatch the same semantic action, not separate raw protocol controls. */
+function actionFor(command: string, args: Record<string, string>): NearbyAction | null {
+  if (command === "open_nearby_web") return "open_web";
+  if (command === "open_nearby_bluetooth_settings") return "bluetooth_settings";
+  if (command === "samsung_remote_key") return samsungKeyAction[args.key ?? ""] ?? null;
+  if (command === "nearby_media_action" || command === "lg_remote_action") {
+    const action = args.action;
+    if (["volume_up", "volume_down", "get_volume", "mute", "unmute",
+      "play", "pause", "show_message"].includes(action ?? "")) return action as NearbyAction;
+  }
+  return null;
+}
 
 export function DeviceActions({ device, onControlPc }: Props) {
   const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
@@ -54,8 +75,11 @@ export function DeviceActions({ device, onControlPc }: Props) {
     setFailure(null);
     setNotice(null);
     try {
-      const result = await callPlugin<ActionResult>(command, args);
-      setNotice(result?.message || fallback);
+      const action = actionFor(command, args);
+      const message = action
+        ? await nearbyCapabilityService.act(device.id, action)
+        : (await callPlugin<ActionResult>(command, args))?.message;
+      setNotice(message || fallback);
       return true;
     } catch (reason) {
       setFailure(reason instanceof Error ? reason.message : "Device action failed.");
@@ -71,12 +95,10 @@ export function DeviceActions({ device, onControlPc }: Props) {
     setFailure(null);
     setNotice("Confirm the Personal Voice access request on your TV.");
     try {
-      const result = await callPlugin<ActionResult>("pair_samsung_tv", {
-        ipAddress: ip, fingerprint: identity.samsungFingerprint,
-      });
+      const message = await nearbyCapabilityService.act(device.id, "pair");
       setIdentity(previous => previous ? { ...previous, samsungPaired: true } : null);
       setRemoteOpen(true);
-      setNotice(result?.message || "TV approved the connection.");
+      setNotice(message || "TV approved the connection.");
     } catch (reason) {
       setFailure(reason instanceof Error ? reason.message : "TV pairing failed.");
       setNotice(null);
@@ -99,12 +121,10 @@ export function DeviceActions({ device, onControlPc }: Props) {
     setFailure(null);
     setNotice("Approve Personal Voice on your LG TV screen.");
     try {
-      const result = await callPlugin<ActionResult>("pair_lg_tv", {
-        ipAddress: ip, fingerprint: identity.lgFingerprint,
-      });
+      const message = await nearbyCapabilityService.act(device.id, "pair");
       setIdentity(previous => previous ? { ...previous, lgPaired: true } : null);
       setLgRemoteOpen(true);
-      setNotice(result?.message || "LG TV approved the connection.");
+      setNotice(message || "LG TV approved the connection.");
     } catch (reason) {
       setFailure(reason instanceof Error ? reason.message : "LG TV pairing failed.");
       setNotice(null);
