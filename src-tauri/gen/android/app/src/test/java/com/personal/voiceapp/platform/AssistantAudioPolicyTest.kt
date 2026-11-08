@@ -91,6 +91,33 @@ class AssistantAudioSessionTest {
   }
 
   @Test
+  fun mediaOnlyBluetoothSpeakerUsesNativePlaybackWithoutVoiceCallModeOrDuplex() {
+    val harness = Harness()
+    val status = harness.session.start(CapturePurpose.ASSISTANT, mediaPlayback = true)
+    assertFalse(status.fullDuplex)
+    assertTrue(status.nativePlayback)
+    assertFalse(status.noiseSuppression)
+    assertEquals(listOf("open:VOICE_RECOGNITION:headset=false", "start"), harness.capture.calls)
+    assertEquals(0, harness.route.applied)
+    assertEquals(0, harness.effects.attached)
+    assertEquals(1, harness.playback.mediaOpened)
+  }
+
+  @Test
+  fun switchingToMediaOutputClearsCallRouteAndReportsHalfDuplex() {
+    val harness = Harness()
+    harness.session.start(CapturePurpose.ASSISTANT)
+    val observed = mutableListOf<CaptureEchoStatus>()
+    harness.session.onStatusChanged = { observed.add(it) }
+    val status = harness.session.switchToMediaOutput()
+    assertFalse(status.fullDuplex)
+    assertTrue(status.nativePlayback)
+    assertEquals(1, harness.route.restored)
+    assertEquals(1, harness.playback.mediaOpened)
+    assertEquals(1, observed.size)
+  }
+
+  @Test
   fun dictationDoesNotTouchCommunicationRoutingOrEffects() {
     val harness = Harness()
     val status = harness.session.start(CapturePurpose.DICTATION)
@@ -262,10 +289,15 @@ class AssistantAudioSessionTest {
   private class FakePlayback : PlaybackHandle {
     var openResult = true
     var opened = 0
+    var mediaOpened = 0
     var cleared = 0
     var closed = 0
     override fun open(): Boolean {
       opened += 1
+      return openResult
+    }
+    override fun openMedia(): Boolean {
+      mediaOpened += 1
       return openResult
     }
     override fun clear() {
