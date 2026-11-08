@@ -77,3 +77,15 @@
   .spatial-head { align-items: flex-start; }
   .spatial-head p { max-width: 180px; }
 }
+
+.spatial-tabs { display: flex; align-items: center; gap: 4px; background: #14242b; border-radius: 12px; padding: 4px; }
+.spatial-tabs button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 0; border: 0; border-radius: 9px; padding: 10px 6px; color: #a6b9c2;
+  background: transparent; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.spatial-tabs button span { opacity: .7; font-size: 11px; }
+.spatial-tabs button.is-active { background: #265d53; color: #e3fff3; }
+.spatial-tabs button:focus-visible { outline: 2px solid #88d8c1; outline-offset: 2px; }
+.spatial-network-scope { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0 4px;
+  color: #8fa9b2; font-size: 11px; }
+.spatial-details-main > div { min-width: 0; }
+.spatial-details-main p { overflow-wrap: anywhere; }
