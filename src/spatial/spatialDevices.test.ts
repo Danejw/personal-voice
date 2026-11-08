@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import {
-  clampPosition, mergePersonalVoicePeers, parseNearbyScan, readPositions, nearbyGroup,
+  clampPosition, mergePersonalVoicePeers, observedThisScan, parseNearbyScan, readPositions, nearbyGroup,
 } from "@/spatial/spatialDevices";
 
 const pcId = "ec1ab9a2-5341-49e1-a0af-dfdc30b827b8";
@@ -57,6 +57,21 @@ describe("user-placed room sketch", () => {
     expect(readPositions('{"mdns-cafe02":{"x":-4,"y":7}}')).toEqual({
       "mdns-cafe02": { x: 0.08, y: 0.88 },
     });
+  });
+});
+
+describe("observed vs remembered hardware", () => {
+  it("does not treat a stored Android pairing as a live radio observation", () => {
+    const scan = parseNearbyScan({ devices: [
+      { id: "bt-111111aaaaaa", source: "bluetooth-paired", name: "LG webOS TV",
+        kind: "speaker", detail: "Paired Bluetooth", paired: true, observedNow: false },
+      { id: "bt-222222aaaaaa", source: "bluetooth-classic", name: "Headphones",
+        kind: "speaker", detail: "Bluetooth Classic", observedNow: true },
+    ] });
+    expect(observedThisScan(scan.devices[0]!)).toBe(false);
+    expect(observedThisScan(scan.devices[1]!)).toBe(true);
+    expect(scan.devices[0]?.paired).toBe(true);
+    expect(scan.devices[0]?.observedNow).toBe(false);
   });
 });
 

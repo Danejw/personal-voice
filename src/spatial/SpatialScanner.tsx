@@ -9,7 +9,7 @@ import { nearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
 import { deviceSubtitle, deviceReadiness, listDevices, type DeviceView } from "@/spatial/deviceExplorer";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import {
-  clampPosition, mergePersonalVoicePeers, readPositions, nearbyGroup,
+  clampPosition, mergePersonalVoicePeers, observedThisScan, readPositions, nearbyGroup,
   type NearbyDevice, type NearbyScan, type SpatialPositions,
 } from "@/spatial/spatialDevices";
 import "./spatialScanner.css";
@@ -82,6 +82,8 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   );
   const networkCount = nearby.filter(item => nearbyGroup(item.source) === "network").length;
   const bluetoothCount = nearby.length - networkCount;
+  const liveCount = nearby.filter(observedThisScan).length;
+  const savedCount = nearby.length - liveCount;
   const selectedDevice = nearby.find(item => item.id === selected) ?? null;
   const selectedDeviceId = selectedDevice?.id;
   const group = nearby.filter(item => view === "all" || nearbyGroup(item.source) === view);
@@ -228,7 +230,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   async function quickAction(device: NearbyDevice, action: import("@/spatial/deviceActionRegistry").NearbyAction) {
     if (quickPending) return;
     setQuickPending(device.id);
-    setQuickFeedback(null);
+    setQuickFeedback(action === "pair" ? "Approve Personal Voice on your TV if prompted." : null);
     try {
       const response = await nearbyCapabilityService.act(device.id, action);
       setQuickFeedback(device.name + ": " + response);
@@ -249,7 +251,8 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
       <div className="spatial-head">
         <div>
           <h2>Nearby devices</h2>
-          <p>{scanned ? nearby.length + " discovered" : "Wi-Fi and Bluetooth"}</p>
+          <p>{scanned ? liveCount + " observed" +
+            (savedCount ? " · " + savedCount + " saved pairings" : "") : "Wi-Fi and Bluetooth"}</p>
         </div>
         <button type="button" onClick={() => void discover()} disabled={scanning}>
           {scanning ? "Scanning…" : scanned ? "Rescan" : "Scan"}
@@ -288,15 +291,17 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
             !inspectionFailures[device.ipAddress!];
           const skipped = !!device.ipAddress && scanned && !scheduled;
           const readiness = deviceReadiness(device, identity, inspecting, skipped);
+          const displayName = identity?.name && !/^Device \d+\.\d+\.\d+\.\d+$/.test(identity.name)
+            ? identity.name : device.name;
           return (
             <div className="spatial-device-row" key={device.id}>
               <button type="button" className="spatial-device"
                 title={deviceSubtitle(device) + " · " + readiness.hint}
                 onClick={() => { setPlacing(null); setSelected(device.id); }}
-                aria-label={"Open controls for " + device.name + ". " + readiness.hint}>
+                aria-label={"Open controls for " + displayName + ". " + readiness.hint}>
                 <span className="spatial-device-icon" aria-hidden="true">{glyph[device.kind]}</span>
                 <span className="spatial-device-label">
-                  <strong>{device.name}</strong>
+                  <strong>{displayName}</strong>
                   <small><span className={"spatial-readiness spatial-readiness-" + readiness.state}>
                     {readiness.label}</span> · {readiness.hint}</small>
                 </span>
@@ -305,7 +310,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
               {readiness.quickAction && (
                 <button type="button" className="spatial-quick-action"
                   disabled={quickPending !== null}
-                  aria-label={readiness.quickLabel + " for " + device.name}
+                  aria-label={readiness.quickLabel + " for " + displayName}
                   onClick={() => void quickAction(device, readiness.quickAction!)}>
                   {quickPending === device.id ? "…" : readiness.quickLabel}
                 </button>

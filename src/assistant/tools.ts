@@ -97,8 +97,10 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "list_nearby_devices",
-      description: "Android only. On explicit request, scan nearby Wi-Fi and Bluetooth devices and report their observed identities and verified supported actions. The result includes exact device IDs, protocols and whether TV approval is required. Read-only; does not pair or control a device. A resolved mDNS service name or open port is not proof of remote control; never guess support from Bluetooth.",
-      parameters: { type: "object", properties: {} },
+      description: "Android only. On explicit request, scan nearby Wi-Fi and Bluetooth devices. For a named device, supply query to find it beyond the default inventory limit; otherwise omit query. Distinguish live observations from stored Bluetooth pairings and active TV sessions from saved authorization. Return exact IDs and verified actions. Read-only; discovery never grants control.",
+      parameters: { type: "object", properties: {
+        query: { type: "string", description: "Optional device name, brand or IP fragment to search; max 80 characters." },
+      } },
     },
     {
       name: "control_nearby_device",
@@ -529,7 +531,7 @@ export type ToolDecision =
   | { kind: "memorySearch"; id: string; name: "search_memory"; query: string }
   | { kind: "playbook"; id: string; name: "get_tool_playbook"; playbookId: ToolPlaybookId }
   | { kind: "handoffs"; id: string; name: "list_handoffs" }
-  | { kind: "nearbyDevices"; id: string; name: "list_nearby_devices" }
+  | { kind: "nearbyDevices"; id: string; name: "list_nearby_devices"; query: string }
   | { kind: "pairing"; id: string; name: "pair_device"; action: "open" | "show_code" | "scan_qr" | "enter_code" | "status"; code?: string }
   | { kind: "remoteComputerGoal"; id: string; name: "remote_computer_goal"; action: "start" | "status" | "pause" | "resume" | "redirect" | "stop"; goal: string; device: string | null }
   | {
@@ -638,8 +640,14 @@ export function decideToolCall(
       return { kind: "dashboard", id: call.id, name: call.name };
     case "list_notes":
       return { kind: "notes", id: call.id, name: "list_notes", includeArchived: args.include_archived === true || args.includeArchived === true };
-    case "list_nearby_devices":
-      return { kind: "nearbyDevices", id: call.id, name: "list_nearby_devices" };
+    case "list_nearby_devices": {
+      if (args.query !== undefined && (typeof args.query !== "string" || args.query.length > 80)) {
+        return { kind: "reject", id: call.id, name: call.name,
+          message: "Nearby device search must be a name or IP fragment up to 80 characters." };
+      }
+      return { kind: "nearbyDevices", id: call.id, name: "list_nearby_devices",
+        query: typeof args.query === "string" ? args.query.trim() : "" };
+    }
     case "control_nearby_device": {
       const deviceId = args.device_id;
       const action = args.action;

@@ -463,12 +463,12 @@ assistant.setActions({
     const current = devices.getSnapshot().currentDeviceId;
     return pairingAction(current, platform.platform, action, code);
   },
-  listNearbyDevices: async () => {
+  listNearbyDevices: async (query = "") => {
     if (platform.platform !== "android") throw new Error("Local network discovery is Android-only.");
     const snapshot = devices.getSnapshot();
     if (!snapshot.currentDeviceId) throw new Error("No current Android device is registered.");
     return nearbyCapabilityService.describe(
-      snapshot.devices, snapshot.currentDeviceId, deviceLinkManager.getSnapshot().localPeers,
+      snapshot.devices, snapshot.currentDeviceId, deviceLinkManager.getSnapshot().localPeers, query,
     );
   },
   previewNearbyDeviceAction: async (deviceId, action) => {

@@ -65,8 +65,8 @@ export function DeviceActions({ device, onControlPc }: Props) {
       .then(next => {
         if (!cancelled) {
           setIdentity(next);
-          setRemoteOpen(next.samsungPaired);
-          setLgRemoteOpen(next.lgPaired);
+          setRemoteOpen(next.samsungConnected === true);
+          setLgRemoteOpen(next.lgConnected === true);
         }
       })
       .catch(reason => {
@@ -102,8 +102,9 @@ export function DeviceActions({ device, onControlPc }: Props) {
     setNotice("Confirm the Personal Voice access request on your TV.");
     try {
       const message = await nearbyCapabilityService.act(device.id, "pair");
-      setIdentity(previous => previous ? { ...previous, samsungPaired: true } : null);
-      setRemoteOpen(true);
+      const refreshed = await nearbyCapabilityService.inspect(ip);
+      setIdentity(refreshed);
+      setRemoteOpen(refreshed.samsungConnected === true);
       setNotice(message || "TV approved the connection.");
     } catch (reason) {
       setFailure(reason instanceof Error ? reason.message : "TV pairing failed.");
@@ -128,8 +129,9 @@ export function DeviceActions({ device, onControlPc }: Props) {
     setNotice("Approve Personal Voice on your LG TV screen.");
     try {
       const message = await nearbyCapabilityService.act(device.id, "pair");
-      setIdentity(previous => previous ? { ...previous, lgPaired: true } : null);
-      setLgRemoteOpen(true);
+      const refreshed = await nearbyCapabilityService.inspect(ip);
+      setIdentity(refreshed);
+      setLgRemoteOpen(refreshed.lgConnected === true);
       setNotice(message || "LG TV approved the connection.");
     } catch (reason) {
       setFailure(reason instanceof Error ? reason.message : "LG TV pairing failed.");

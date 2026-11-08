@@ -29,6 +29,7 @@ internal object NearbyDeviceDiscovery {
     val id: String, val name: String, val kind: String, val source: String, val detail: String,
     val ipAddress: String? = null, val signalDbm: Int? = null, val paired: Boolean = false,
     val ports: List<Int> = emptyList(), val descriptionUrl: String? = null,
+    val observedNow: Boolean = true,
   )
   data class Scan(
     val devices: List<Device>, val bluetoothPermissionRequired: Boolean,
@@ -62,16 +63,41 @@ internal object NearbyDeviceDiscovery {
     name: String, kind: String, detail: String,
     ipAddress: String? = null, signalDbm: Int? = null, paired: Boolean = false,
     ports: List<Int> = emptyList(), descriptionUrl: String? = null,
+    observedNow: Boolean = true,
   ) {
     val safeName = clean(name, 72)
     if (safeName.isEmpty() || found.size >= 350) return
     // BLE, Classic and paired Bluetooth records share the same hashed hardware identity.
     val id = identifier(if (source.startsWith("bluetooth")) "bt" else source, key)
     val fresh = Device(id, safeName, kind, source, clean(detail, 100), ipAddress, signalDbm,
-      paired, ports, descriptionUrl)
-    found.compute(id) { _, previous ->
-      if (previous?.paired == true && !fresh.paired) previous else fresh
+      paired, ports, descriptionUrl, observedNow)
+    found.compute(id) { _, previous -> mergeObservations(previous, fresh) }
+  }
+
+  /** Keep a resolved mDNS endpoint and a saved Bluetooth identity when observations converge. */
+  internal fun mergeObservations(previous: Device?, fresh: Device): Device {
+    if (previous == null) return fresh
+    if (!fresh.id.startsWith("bt-")) {
+      // mDNS resolution follows the service-name advertisement for the same ID.
+      // Never downgrade a resolved private-IP endpoint back to an unaddressed name.
+      return (if (fresh.ipAddress != null) fresh else previous).copy(
+        observedNow = fresh.observedNow || previous.observedNow,
+        paired = fresh.paired || previous.paired)
     }
+    val live = when {
+      fresh.observedNow && !previous.observedNow -> fresh
+      previous.observedNow && !fresh.observedNow -> previous
+      fresh.signalDbm != null && previous.signalDbm == null -> fresh
+      else -> previous
+    }
+    val other = if (live === fresh) previous else fresh
+    val anonymous = setOf("Bluetooth device", "Bluetooth LE device", "Paired Bluetooth device")
+    val name = if (live.name in anonymous && other.name !in anonymous) other.name else live.name
+    val kind = if (live.kind == "unknown" && other.kind != "unknown") other.kind else live.kind
+    return live.copy(name = name, kind = kind,
+      paired = fresh.paired || previous.paired,
+      observedNow = fresh.observedNow || previous.observedNow,
+      signalDbm = live.signalDbm ?: other.signalDbm)
   }
 
   fun scan(context: Context): Scan {
@@ -186,7 +212,8 @@ internal object NearbyDeviceDiscovery {
     val stopClassic = if (!permissionScan && !permissionConnect) BluetoothClassicDiscovery.start(context) {
       address, name, kind, source, paired, rssi ->
       add(found, source, address, name, kind,
-        if (paired) "Paired Bluetooth" else "Bluetooth Classic", signalDbm = rssi, paired = paired)
+        if (paired) "Paired Bluetooth" else "Bluetooth Classic", signalDbm = rssi, paired = paired,
+        observedNow = source != "bluetooth-paired" || rssi != null)
     } else ({})
     try { Thread.sleep(if (permissionScan || permissionConnect) 8500 else 10500) }
     catch (_: InterruptedException) { Thread.currentThread().interrupt() }

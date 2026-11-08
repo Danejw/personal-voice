@@ -40,6 +40,55 @@ describe("shared nearby capability inventory", () => {
     expect(mocked).not.toHaveBeenCalledWith("nearby_media_action", expect.anything());
   });
 
+  it("searches a named device and distinguishes saved bonds from live observations", async () => {
+    mocked.mockImplementation(async (command: string) => {
+      if (command === "scan_nearby_devices") return { devices: [
+        { id: "bt-abcdef000001", name: "LG webOS TV", kind: "speaker",
+          source: "bluetooth-paired", detail: "Paired Bluetooth", paired: true, observedNow: false },
+        { id: "mdns-abcdef000002", name: "SpotifyConnect", kind: "speaker",
+          source: "mdns", detail: "_spotify-connect._tcp.", observedNow: true },
+        { ...scan.devices[0], observedNow: true },
+      ] };
+      if (command === "inspect_nearby_device") return identity;
+      throw new Error("Unexpected action: " + command);
+    });
+    const service = new NearbyCapabilityService();
+    const found = JSON.parse(await service.describe([], "phone", [], "LG"));
+    expect(found.query).toBe("LG");
+    expect(found.matching_devices).toBe(1);
+    expect(found.live_observed).toBe(2);
+    expect(found.saved_pairings_not_observed).toBe(1);
+    expect(found.devices[0]).toMatchObject({
+      name: "LG webOS TV", presence: "saved_pairing_not_observed", paired_with_android: true,
+    });
+    expect(found.devices[0].actions.map((a: {name: string}) => a.name))
+      .toEqual(["bluetooth_settings"]);
+  });
+
+  it("finds a named TV through bounded inspection even when LAN discovery only supplied its IP", async () => {
+    mocked.mockImplementation(async (command: string) => {
+      if (command === "scan_nearby_devices") return { devices: [
+        { id: "lan-bbbb22222222", name: "Device 192.168.0.45", kind: "unknown",
+          source: "lan", detail: "TCP 3001", ipAddress: "192.168.0.45" },
+      ] };
+      if (command === "inspect_nearby_device") return {
+        ipAddress: "192.168.0.45", name: "LG webOS TV", manufacturer: "LG",
+        model: "OLED C4", features: ["lg_remote"], lgFingerprint: "a".repeat(64),
+        lgPaired: false, lgConnected: false,
+      };
+      throw new Error("No device actions in read-only search");
+    });
+    const report = JSON.parse(await new NearbyCapabilityService().describe([], "phone", [], "LG"));
+    expect(report.matching_devices).toBe(1);
+    expect(report.devices[0]).toMatchObject({
+      id: "lan-bbbb22222222", name: "LG webOS TV", presence: "network_observed",
+      tv_connection: "approval_required",
+    });
+    expect(report.devices[0].actions).toEqual([{
+      name: "pair", protocol: "lg-webos", authorization: "tv-approval",
+    }]);
+  });
+
   it("requires last-scanned IDs and refuses invented IDs or unsupported controls", async () => {
     const service = new NearbyCapabilityService();
     await service.scan([], "phone", []);

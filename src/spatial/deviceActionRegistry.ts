@@ -46,13 +46,16 @@ export function availableNearbyActions(device: NearbyDevice, identity: DeviceIde
   if (verified.has("open_web")) add("open_web", "web", "none");
   if (verified.has("roku_companion")) add("open_roku_app", "roku-companion", "none");
   if (verified.has("lg_remote") && identity.lgFingerprint) {
-    const authorization = identity.lgPaired ? "paired-tv" : "tv-approval";
-    add("pair", "lg-webos", authorization);
-    for (const action of Object.keys(LG_ACTIONS) as NearbyAction[]) add(action, "lg-webos", authorization);
+    // Saved TV approval isn't a live WebSocket. Require Connect before controls.
+    add("pair", "lg-webos", "tv-approval");
+    if (identity.lgPaired && identity.lgConnected) {
+      for (const action of Object.keys(LG_ACTIONS) as NearbyAction[]) add(action, "lg-webos", "paired-tv");
+    }
   } else if (verified.has("samsung_remote") && identity.samsungFingerprint) {
-    const authorization = identity.samsungPaired ? "paired-tv" : "tv-approval";
-    add("pair", "samsung-tizen", authorization);
-    for (const action of Object.keys(SAMSUNG_KEYS) as NearbyAction[]) add(action, "samsung-tizen", authorization);
+    add("pair", "samsung-tizen", "tv-approval");
+    if (identity.samsungPaired && identity.samsungConnected) {
+      for (const action of Object.keys(SAMSUNG_KEYS) as NearbyAction[]) add(action, "samsung-tizen", "paired-tv");
+    }
   }
   if (verified.has("volume")) {
     add("volume_up", "upnp", "none"); add("volume_down", "upnp", "none");

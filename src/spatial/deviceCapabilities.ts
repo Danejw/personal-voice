@@ -11,8 +11,10 @@ export interface DeviceIdentity {
   features: Capability[];
   samsungFingerprint?: string;
   samsungPaired: boolean;
+  samsungConnected?: boolean;
   lgFingerprint?: string;
   lgPaired: boolean;
+  lgConnected?: boolean;
 }
 
 const supported = new Set<Capability>(["open_web", "volume", "playback", "samsung_remote", "lg_remote", "roku_companion"]);
@@ -48,8 +50,10 @@ export function parseDeviceIdentity(value: unknown, expectedIp: string): DeviceI
       (feature !== "lg_remote" || !!lgFingerprint)),
     ...(fingerprint ? { samsungFingerprint: fingerprint } : {}),
     samsungPaired: raw.samsungPaired === true && !!fingerprint,
+    samsungConnected: raw.samsungConnected === true && raw.samsungPaired === true && !!fingerprint,
     ...(lgFingerprint ? { lgFingerprint } : {}),
     lgPaired: raw.lgPaired === true && !!lgFingerprint,
+    lgConnected: raw.lgConnected === true && raw.lgPaired === true && !!lgFingerprint,
   };
 }
 

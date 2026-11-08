@@ -326,6 +326,7 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
             .put("kind", device.kind).put("source", device.source)
             .put("detail", device.detail)
             .put("paired", device.paired)
+            .put("observedNow", device.observedNow)
           if (device.ipAddress != null) item.put("ipAddress", device.ipAddress)
           if (device.signalDbm != null) item.put("signalDbm", device.signalDbm)
           devices.put(item)
@@ -362,11 +363,13 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
           result.put("samsungFingerprint", identity.samsungFingerprint)
           result.put("samsungPaired", LocalDeviceCapabilities.samsungPaired(
             activity.applicationContext, ip, identity.samsungFingerprint))
+          result.put("samsungConnected", SamsungTvRemote.isConnected(ip, identity.samsungFingerprint))
         }
         if (identity.lgFingerprint != null) {
           result.put("lgFingerprint", identity.lgFingerprint)
           result.put("lgPaired", LocalDeviceCapabilities.lgPaired(
             activity.applicationContext, ip, identity.lgFingerprint))
+          result.put("lgConnected", LgWebOsRemote.isConnected(ip, identity.lgFingerprint))
         }
         invoke.resolve(result)
       } catch (e: Exception) { invoke.reject(e.message ?: "Could not identify this device.") }

@@ -143,6 +143,10 @@ internal object LgWebOsRemote {
     settings(context).getString("pin:" + ip, null) == hash &&
       !settings(context).getString("key:" + ip, null).isNullOrEmpty()
 
+  /** Saved approval and an active remote session are different facts. */
+  fun isConnected(ip: String, hash: String): Boolean =
+    synchronized(lock) { sessions[ip]?.fingerprint == hash }
+
   fun supportedAction(action: String): Boolean = action in actions
 
   fun pair(context: Context, ip: String, inspectedFingerprint: String): String {

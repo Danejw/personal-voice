@@ -26,17 +26,25 @@ describe("universal local capability mapping", () => {
     expect(availableNearbyActions(device, { ...identity, lgFingerprint: undefined })).toEqual([]);
     expect(availableNearbyActions(device, identity).find(a => a.action === "pair"))
       .toMatchObject({ protocol: "lg-webos", authorization: "tv-approval" });
-    expect(availableNearbyActions(device, { ...identity, lgPaired: true }).find(a => a.action === "volume_up"))
+    expect(availableNearbyActions(device, { ...identity, lgPaired: true, lgConnected: true }).find(a => a.action === "volume_up"))
       .toMatchObject({ protocol: "lg-webos", authorization: "paired-tv" });
   });
 
   it("selects the supported native adapter, preferring TV control over UPnP duplicates", () => {
-    const combined = { ...identity, features: ["lg_remote", "volume", "playback", "open_web"] as DeviceIdentity["features"] };
+    const combined = { ...identity, lgPaired: true, lgConnected: true,
+      features: ["lg_remote", "volume", "playback", "open_web"] as DeviceIdentity["features"] };
     const actions = availableNearbyActions(device, combined);
     expect(actions.find(a => a.action === "volume_up")?.protocol).toBe("lg-webos");
     expect(actions.find(a => a.action === "play")?.protocol).toBe("lg-webos");
     expect(actions.find(a => a.action === "open_web")?.protocol).toBe("web");
     expect(actions.find(a => a.action === "show_message")?.protocol).toBe("lg-webos");
+  });
+
+  it("does not offer remote keys merely because TV approval was saved", () => {
+    const saved = { ...identity, lgPaired: true, lgConnected: false };
+    expect(availableNearbyActions(device, saved).map(a => a.action)).toEqual(["pair"]);
+    const connected = { ...saved, lgConnected: true };
+    expect(availableNearbyActions(device, connected).some(a => a.action === "volume_up")).toBe(true);
   });
 
   it("Roku discovery only offers the official mobile app handoff, never ECP remote keys", () => {

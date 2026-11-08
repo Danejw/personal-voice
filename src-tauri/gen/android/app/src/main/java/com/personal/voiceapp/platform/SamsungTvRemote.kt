@@ -83,6 +83,9 @@ internal object SamsungTvRemote {
   fun isPaired(context: Context, ip: String, fingerprint: String): Boolean =
     prefs(context).getString("pin:" + ip, null) == fingerprint
 
+  fun isConnected(ip: String, fingerprint: String): Boolean =
+    synchronized(lock) { sessions[ip]?.fingerprint == fingerprint }
+
   /** TV displays Allow / Deny on first pairing. Never claim success before it accepts. */
   fun pair(context: Context, ip: String, inspectedFingerprint: String): String {
     require(LocalDeviceCapabilities.privateIp(ip)) { "Invalid private LAN address." }
@@ -135,6 +138,7 @@ internal object SamsungTvRemote {
       }
       override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
         failure = "Could not connect to the TV remote: " + (t.message ?: "connection failed")
+        synchronized(lock) { if (sessions[ip]?.webSocket === webSocket) sessions.remove(ip) }
         latch.countDown()
       }
       override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {

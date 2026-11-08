@@ -6,9 +6,11 @@ import {
 import { consolidateNearbyDevices, parseDeviceIdentity, type DeviceIdentity } from "@/spatial/deviceCapabilities";
 import { availableNearbyActions, executeNearbyAction, type NearbyAction } from "@/spatial/deviceActionRegistry";
 import { isUnidentifiedBluetooth, listDevices } from "@/spatial/deviceExplorer";
+import { nearbyGroup, observedThisScan } from "@/spatial/spatialDevices";
 
 const SCAN_TTL_MS = 180_000;
 const INSPECT_LIMIT = 9;
+const TARGETED_INSPECT_LIMIT = 28;
 const REPORT_LIMIT = 28;
 
 /**
@@ -83,10 +85,21 @@ export class NearbyCapabilityService {
     return reply;
   }
 
-  async describe(owned: readonly OwnedDevice[], currentDeviceId: string, peers: readonly string[]): Promise<string> {
+  async describe(owned: readonly OwnedDevice[], currentDeviceId: string, peers: readonly string[],
+    query = ""): Promise<string> {
+    // Targeted read-only discovery lets the model find a specific TV or printer,
+    // rather than losing it behind the first 28 entries of a full inventory.
+    const search = query.trim().slice(0, 80);
     const scan = await this.scan(owned, currentDeviceId, peers);
-    const candidates = listDevices(this.devices, "all", "", false).items;
-    const withIp = candidates.filter(device => device.ipAddress).slice(0, INSPECT_LIMIT);
+    const all = listDevices(this.devices, "all", "", false).items;
+    const directlyNamed = search ? listDevices(this.devices, "all", search, false).items : all;
+    const directIds = new Set(directlyNamed.map(device => device.id));
+    // An unnamed LAN host can identify itself as the requested LG or Samsung
+    // only after native protocol inspection. Inspect bounded unknown hosts too.
+    const inspectionOrder = search
+      ? [...directlyNamed, ...all.filter(device => !directIds.has(device.id))] : all;
+    const withIp = inspectionOrder.filter(device => device.ipAddress)
+      .slice(0, search ? TARGETED_INSPECT_LIMIT : INSPECT_LIMIT);
     // Inspect small concurrent batches; do not flood TVs or delay a Live turn for 30+ radios.
     for (let offset = 0; offset < withIp.length; offset += 3) {
       await Promise.all(withIp.slice(offset, offset + 3).map(async device => {
@@ -94,6 +107,14 @@ export class NearbyCapabilityService {
         catch { /* Mark inspection failure explicitly in the returned inventory. */ }
       }));
     }
+    const term = search.toLocaleLowerCase();
+    const candidates = !search ? all : all.filter(device => {
+      if (directIds.has(device.id)) return true;
+      const identity = device.ipAddress ? this.identities.get(device.ipAddress) : null;
+      return identity != null &&
+        [identity.name, identity.manufacturer, identity.model]
+          .some(value => value.toLocaleLowerCase().includes(term));
+    });
     const items = candidates.slice(0, REPORT_LIMIT).map(device => {
       const identity = device.ipAddress ? this.identities.get(device.ipAddress) ?? null : null;
       const actions = availableNearbyActions(device, identity);
@@ -109,6 +130,15 @@ export class NearbyCapabilityService {
           : "advertisement_only",
         manufacturer: identity?.manufacturer || null,
         model: identity?.model || null,
+        presence: device.pairedDeviceId ? "authenticated_local_peer"
+          : !observedThisScan(device) ? "saved_pairing_not_observed"
+          : nearbyGroup(device.source) === "bluetooth" ? "radio_observed"
+          : device.ipAddress ? "network_observed" : "service_advertised_no_ip",
+        paired_with_android: device.paired === true,
+        tv_connection: identity?.lgConnected || identity?.samsungConnected ? "connected"
+          : identity?.lgPaired || identity?.samsungPaired ? "saved_approval_not_connected"
+          : identity?.features.some(feature => feature === "lg_remote" || feature === "samsung_remote")
+            ? "approval_required" : null,
         actions: actions.map(item => ({
           name: item.action, protocol: item.protocol, authorization: item.authorization,
         })),
@@ -119,13 +149,17 @@ export class NearbyCapabilityService {
     return JSON.stringify({
       observed: "fresh_android_local_scan",
       scope: scan.networkLabel,
+      query: search || null,
+      matching_devices: candidates.length,
+      live_observed: this.devices.filter(observedThisScan).length,
+      saved_pairings_not_observed: this.devices.filter(device => !observedThisScan(device)).length,
       total_discovered: this.devices.length,
       unnamed_bluetooth_not_listed: this.devices.filter(isUnidentifiedBluetooth).length,
       returned: items.length,
       inspected_network_hosts: withIp.length,
       incomplete_inventory: candidates.length > REPORT_LIMIT,
       device_actions_require_user_confirmation: true,
-      note: "Actions reflect verified local protocol evidence; TV authorization and execution are separate. No action was executed. 'not_inspected' never implies support. An acknowledgement is not proof of physical effect.",
+      note: "Only radio/network observations are currently detected. Saved Bluetooth pairings are not proof of proximity. TV remote actions require an active session, not just saved approval. Use the exact ID and a listed action in control_nearby_device; user confirmation is mandatory. No action was executed. A command acknowledgement is not proof of physical effect.",
       devices: items,
     });
   }

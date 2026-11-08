@@ -113,7 +113,7 @@ export interface AssistantActions {
   /** Received handoffs and the names of other devices. */
   listHandoffs(): Promise<string>;
   /** Explicitly requested Android-local device scan; never inferred from cloud registration. */
-  listNearbyDevices(): Promise<string>;
+  listNearbyDevices(query?: string): Promise<string>;
   /** One permitted local action after confirmation; native protocols enforce their own trust. */
   controlNearbyDevice(deviceId: string, action: string): Promise<string>;
   /** Resolve the confirmation preview using observed scan state, before permitting control. */
@@ -1968,7 +1968,7 @@ export class AssistantController {
   private async runNearbyDevices(decision: Extract<ToolDecision, { kind: "nearbyDevices" }>) {
     const epoch = this.toolEpoch;
     try {
-      const result = await this.actions.listNearbyDevices();
+      const result = await this.actions.listNearbyDevices(decision.query);
       if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, result);
     } catch (error) {
       if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
