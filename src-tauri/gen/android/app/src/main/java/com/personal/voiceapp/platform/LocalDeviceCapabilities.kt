@@ -162,9 +162,17 @@ internal object LocalDeviceCapabilities {
     val webPort = listOf(443, 80, 8080).firstOrNull { it in record.ports }
     val fingerprint = if (manufacturer.contains("samsung", ignoreCase = true))
       SamsungTvRemote.fingerprint(ip) else null
-    val lgFingerprint = if (record.lgAnnounced || (
-      manufacturer.contains("LG", ignoreCase = true) && 3001 in record.ports
-    )) LgWebOsRemote.fingerprint(ip) else null
+    val lgFingerprint = when {
+      record.lgAnnounced -> LgWebOsRemote.fingerprint(ip)
+      manufacturer.contains("LG", ignoreCase = true) && 3001 in record.ports ->
+        LgWebOsRemote.fingerprint(ip)
+      3001 in record.ports -> LgWebOsRemote.probeWebOs(ip)
+      else -> null
+    }
+    if (lgFingerprint != null && manufacturer.isBlank()) {
+      manufacturer = "LG"
+      name = "LG webOS TV"
+    }
     val features = buildList {
       if (webPort != null) add("open_web")
       if (media.containsKey("volume")) add("volume")
