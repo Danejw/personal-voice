@@ -73,7 +73,7 @@ internal object LanDeviceDiscovery {
           }
           if (responding.isEmpty()) null else Host(ip, kind(responding), responding)
         }
-      }, 11, TimeUnit.SECONDS)
+      }, 13, TimeUnit.SECONDS)
       val found = futures.mapNotNull { future ->
         if (future.isCancelled) null else try { future.get() } catch (_: Exception) { null }
       }
