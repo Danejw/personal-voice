@@ -21,6 +21,8 @@ interface EffectsHandle {
 
 interface PlaybackHandle {
   fun open(): Boolean
+  /** Media playback bypasses the voice-call route; the mic must be gated during replies. */
+  fun openMedia(): Boolean = false
   fun clear()
   fun close()
 }
@@ -44,9 +46,13 @@ class AssistantAudioSession(
   private var droppingRoute = false
   private var routeLost = false
 
-  fun start(purpose: CapturePurpose): CaptureEchoStatus {
+  fun start(purpose: CapturePurpose, mediaPlayback: Boolean = false): CaptureEchoStatus {
     routeLost = false
-    val config = captureConfig(purpose)
+    val media = purpose == CapturePurpose.ASSISTANT && mediaPlayback
+    val config = if (media) CaptureConfig(
+      source = AudioSourceChoice.VOICE_RECOGNITION, communicationRoute = false,
+      requestEffects = false, preferHeadsetInput = false,
+    ) else captureConfig(purpose)
     var routeApplied = false
     try {
       if (config.communicationRoute) {
@@ -63,7 +69,9 @@ class AssistantAudioSession(
       }
       capture.start()
       var playbackReady = false
-      if (config.communicationRoute && routeApplied) {
+      if (media) {
+        playbackReady = playback.openMedia()
+      } else if (config.communicationRoute && routeApplied) {
         playbackReady = playback.open()
         if (!playbackReady) {
           playback.close()
@@ -71,7 +79,7 @@ class AssistantAudioSession(
           routeApplied = false
         }
       }
-      val nativePlayback = playbackReady && routeApplied
+      val nativePlayback = playbackReady && (routeApplied || media)
       status = CaptureEchoStatus(
         fullDuplex = fullDuplexReady(config, routeApplied, echo, nativePlayback),
         nativePlayback = nativePlayback,
@@ -83,6 +91,20 @@ class AssistantAudioSession(
       close()
       throw error
     }
+  }
+
+  /** Changes the Assistant's output without retaining a stale voice-call device route.
+   * Live playback is briefly cleared and microphone duplex remains disabled. */
+  fun switchToMediaOutput(): CaptureEchoStatus {
+    if (!running) return status
+    playback.clear()
+    playback.close()
+    route.restore()
+    effects.release()
+    val ready = playback.openMedia()
+    status = CaptureEchoStatus(fullDuplex = false, nativePlayback = ready, noiseSuppression = false)
+    onStatusChanged?.invoke(status)
+    return status
   }
 
   fun reselectRoute() {
