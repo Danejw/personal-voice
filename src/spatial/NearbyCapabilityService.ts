@@ -5,7 +5,7 @@ import {
 } from "@/spatial/spatialDevices";
 import { consolidateNearbyDevices, parseDeviceIdentity, type DeviceIdentity } from "@/spatial/deviceCapabilities";
 import { availableNearbyActions, executeNearbyAction, type NearbyAction } from "@/spatial/deviceActionRegistry";
-import { isUnidentifiedBluetooth } from "@/spatial/deviceExplorer";
+import { isUnidentifiedBluetooth, listDevices } from "@/spatial/deviceExplorer";
 
 const SCAN_TTL_MS = 180_000;
 const INSPECT_LIMIT = 9;
@@ -85,7 +85,7 @@ export class NearbyCapabilityService {
 
   async describe(owned: readonly OwnedDevice[], currentDeviceId: string, peers: readonly string[]): Promise<string> {
     const scan = await this.scan(owned, currentDeviceId, peers);
-    const candidates = this.devices.filter(device => !isUnidentifiedBluetooth(device));
+    const candidates = listDevices(this.devices, "all", "", false).items;
     const withIp = candidates.filter(device => device.ipAddress).slice(0, INSPECT_LIMIT);
     // Inspect small concurrent batches; do not flood TVs or delay a Live turn for 30+ radios.
     for (let offset = 0; offset < withIp.length; offset += 3) {
