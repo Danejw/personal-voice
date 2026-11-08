@@ -73,13 +73,14 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   const networkCount = nearby.filter(item => nearbyGroup(item.source) === "network").length;
   const bluetoothCount = nearby.length - networkCount;
   const selectedDevice = nearby.find(item => item.id === selected) ?? null;
+  const selectedDeviceId = selectedDevice?.id;
   const group = nearby.filter(item => view === "all" || nearbyGroup(item.source) === view);
   const { items: listed, matches, hiddenCount } =
     listDevices(nearby, view, query, showUnnamed);
   const placed = group.filter(item => positions[item.id]);
 
   useEffect(() => {
-    if (!selectedDevice) return;
+    if (!selectedDeviceId) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -109,7 +110,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
       document.body.style.overflow = originalOverflow;
       previous?.focus();
     };
-  }, [selectedDevice?.id]);
+  }, [selectedDeviceId]);
 
   useEffect(() => {
     if (placing && showMap) mapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
