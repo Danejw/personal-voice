@@ -102,3 +102,78 @@
 .spatial-remote-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
 .spatial-remote-grid button { font-size: 12px; min-width: 0; padding: 9px 5px; }
 .spatial-action-notice { margin: 0; color: #9edec5; font-size: 12px; line-height: 1.4; }
+
+/* A compact inventory is primary; the optional room map stays secondary. */
+.spatial-shell { gap: 12px; padding-top: 10px; }
+.spatial-head h2 { font-size: 19px; }
+.spatial-head p { margin-top: 2px; }
+.spatial-head > button { min-height: 38px; }
+.spatial-network-scope { padding: 0 4px; color: #8fa9b2; line-height: 1.5; }
+.spatial-inventory-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.spatial-inventory-tools input {
+  width: 100%; min-width: 0; height: 41px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid rgba(166, 214, 204, .15); background: #14242b; color: #e9f4f2;
+  font: inherit; font-size: 13px; appearance: none;
+}
+.spatial-inventory-tools input::placeholder { color: #879da7; }
+.spatial-inventory-tools input:focus-visible { outline: 2px solid #88d8c1; outline-offset: 1px; }
+.spatial-inventory-tools button { min-height: 41px; white-space: nowrap; }
+.spatial-inventory { display: grid; gap: 7px; }
+.spatial-device { min-height: 65px; padding: 10px 12px; background: #172830; border: 1px solid rgba(166, 214, 204, .045); }
+.spatial-device:hover { background: #1c3339; }
+.spatial-device:active { background: #264d48; }
+.spatial-device-label small { max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
+.spatial-place-label { flex: none; font-size: 24px; font-weight: 400; color: #7eaa9f; margin-left: 2px; }
+.spatial-device-connected { color: #9ee0cc; font-size: 10px; font-weight: 700; }
+.spatial-unnamed-toggle {
+  width: 100%; border: 0; background: transparent; color: #a6d9c9; font: inherit;
+  font-size: 12px; font-weight: 600; padding: 12px; cursor: pointer;
+}
+.spatial-unnamed-toggle:focus-visible { outline: 2px solid #88d8c1; border-radius: 10px; }
+.spatial-scene { margin: 2px 0 0; }
+.spatial-floor { height: 260px; }
+
+/* The device's actual actions live in an immediate modal, never below the results list. */
+.spatial-overlay { position: fixed; inset: 0; z-index: 99999; display: flex; align-items: end; justify-content: center; }
+.spatial-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; background: rgba(3, 10, 14, .73); cursor: default; }
+.spatial-sheet {
+  position: relative; width: 100%; max-width: 610px; max-height: min(85dvh, 770px);
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 22px 22px 0 0;
+  border: 1px solid rgba(167, 212, 207, .13); border-bottom: 0; background: #112229;
+  color: #e9f1f2; box-shadow: 0 -16px 55px rgba(0, 0, 0, .3);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.spatial-sheet-handle { width: 36px; height: 4px; flex: none; border-radius: 5px; background: #597478; align-self: center; margin: 9px 0 5px; }
+.spatial-sheet-head { display: flex; align-items: center; gap: 11px; padding: 12px 17px 15px; border-bottom: 1px solid rgba(162, 202, 198, .12); }
+.spatial-sheet-title-wrap { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.spatial-sheet-title-wrap h2 { margin: 0; font-size: 17px; letter-spacing: -.025em; line-height: 1.3; overflow-wrap: anywhere; }
+.spatial-sheet-title-wrap p { margin: 0; font-size: 12px; color: #9fb2bd; line-height: 1.4; overflow-wrap: anywhere; }
+.spatial-sheet-close {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0;
+  border-radius: 50%; background: #233941; color: #d6e3e7; font-size: 16px; cursor: pointer;
+}
+.spatial-sheet-close:focus-visible { outline: 2px solid #88d8c1; }
+.spatial-sheet-content { display: grid; gap: 16px; overflow-y: auto; overscroll-behavior: contain; padding: 18px 17px 20px; min-height: 0; }
+.spatial-sheet-content .spatial-capability-panel > button { min-height: 42px; width: 100%; justify-self: stretch; }
+.spatial-sheet-content .spatial-control-row button { flex: 1; min-height: 41px; }
+.spatial-sheet-content .spatial-remote-grid button { min-height: 44px; }
+.spatial-sheet-placement { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid rgba(162, 202, 198, .12); }
+.spatial-sheet-placement button { flex: 1; min-height: 41px; }
+.spatial-capability-panel { gap: 12px; }
+.spatial-capability-panel > button:first-child { min-height: 46px; }
+.spatial-capabilities { color: #9eb1bb; font-size: 12px; }
+.spatial-identity span { color: #a1b5c0; }
+.spatial-control-group { gap: 10px; }
+.spatial-control-group > span { color: #d4e5e5; }
+.spatial-action-notice { font-size: 12px; }
+@media (min-width: 900px) {
+  .spatial-overlay { justify-content: flex-end; align-items: stretch; }
+  .spatial-sheet { max-height: 100dvh; height: 100dvh; border-radius: 18px 0 0 18px; border-bottom: 1px solid rgba(167, 212, 207, .13); }
+  .spatial-sheet-handle { display: none; }
+}
+@media (max-width: 540px) {
+  .spatial-head p { max-width: unset; }
+  .spatial-floor { height: 245px; }
+  .spatial-inventory-tools { gap: 6px; }
+  .spatial-tabs button { padding: 10px 4px; }
+}
