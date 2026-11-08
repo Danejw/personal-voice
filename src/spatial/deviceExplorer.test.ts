@@ -50,7 +50,7 @@ describe("nearby device inventory", () => {
     expect(deviceSubtitle(records[6]!)).toBe("Personal Voice · Connected");
     expect(deviceSubtitle(records[4]!)).toContain("192.168.0.27");
     expect(records[4]!.pairedDeviceId).toBeUndefined();
-    expect(deviceSubtitle(records[2]!)).toBe("Bluetooth · Paired");
+    expect(deviceSubtitle(records[2]!)).toBe("Saved Bluetooth pairing · not observed in this scan");
   });
 });
 
@@ -66,9 +66,26 @@ describe("action-first readiness", () => {
 
   it("does not label Bluetooth pairing as third-party remote access", () => {
     const status = deviceReadiness(records[2]!, null, false);
-    expect(status).toMatchObject({ state: "setup", label: "Android paired" });
+    expect(status).toMatchObject({ state: "setup", label: "Saved pairing" });
     expect(status.quickAction).toBeUndefined();
   });
+  it("gives a detected Bluetooth device a safe Android settings action, not remote keys", () => {
+    const live = device("bt-aaaaa1", "Headphones", "bluetooth-paired",
+      { observedNow: true, paired: true });
+    expect(deviceReadiness(live, null, false))
+      .toMatchObject({ label: "Detected · Paired", quickAction: "bluetooth_settings" });
+  });
+
+  it("shows saved TV approval as reconnect needed until a remote session exists", () => {
+    const host = device("lan-aaaaa1", "LG TV", "lan", { ipAddress: "192.168.0.17" });
+    const status = deviceReadiness(host, {
+      ipAddress: "192.168.0.17", name: "LG TV", manufacturer: "LG", model: "",
+      features: ["lg_remote"], lgFingerprint: "a".repeat(64),
+      lgPaired: true, lgConnected: false, samsungPaired: false,
+    }, false);
+    expect(status).toMatchObject({ label: "TV reconnect needed", quickAction: "pair", quickLabel: "Connect" });
+  });
+
   it("shows exactly why an unresolved service has no controls", () => {
     expect(deviceReadiness(records[5]!, null, false))
       .toMatchObject({ state: "unavailable", label: "Address unavailable" });
