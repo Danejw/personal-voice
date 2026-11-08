@@ -52,9 +52,14 @@ internal object LocalDeviceCapabilities {
       socket.use {
         it.connect(InetSocketAddress(ip, port), 1100)
         it.soTimeout = 1300
-        // The default TLS trust manager rejects invalid/expired certificates.
-        // Never bypass certificate checks merely to make a web button appear.
-        if (it is SSLSocket) it.startHandshake()
+        // Validate both certificate trust and its IP-address identity as the browser will.
+        // A trusted certificate for a DNS name must not promote an IP-based HTTPS URL.
+        if (it is SSLSocket) {
+          val parameters = it.sslParameters
+          parameters.endpointIdentificationAlgorithm = "HTTPS"
+          it.sslParameters = parameters
+          it.startHandshake()
+        }
         val request = "HEAD / HTTP/1.1\r\nHost: " + ip + "\r\nConnection: close\r\n\r\n"
         it.getOutputStream().write(request.toByteArray(Charsets.US_ASCII))
         it.getOutputStream().flush()
