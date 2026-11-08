@@ -29,6 +29,7 @@ internal object NearbyDeviceDiscovery {
     val id: String, val name: String, val kind: String, val source: String, val detail: String,
     val ipAddress: String? = null, val signalDbm: Int? = null, val paired: Boolean = false,
     val ports: List<Int> = emptyList(), val descriptionUrl: String? = null,
+    val observedNow: Boolean = true,
   )
   data class Scan(
     val devices: List<Device>, val bluetoothPermissionRequired: Boolean,
@@ -62,15 +63,28 @@ internal object NearbyDeviceDiscovery {
     name: String, kind: String, detail: String,
     ipAddress: String? = null, signalDbm: Int? = null, paired: Boolean = false,
     ports: List<Int> = emptyList(), descriptionUrl: String? = null,
+    observedNow: Boolean = true,
   ) {
     val safeName = clean(name, 72)
     if (safeName.isEmpty() || found.size >= 350) return
     // BLE, Classic and paired Bluetooth records share the same hashed hardware identity.
     val id = identifier(if (source.startsWith("bluetooth")) "bt" else source, key)
     val fresh = Device(id, safeName, kind, source, clean(detail, 100), ipAddress, signalDbm,
-      paired, ports, descriptionUrl)
+      paired, ports, descriptionUrl, observedNow)
     found.compute(id) { _, previous ->
-      if (previous?.paired == true && !fresh.paired) previous else fresh
+      if (previous == null) fresh else {
+        // A bonded item is a saved identity, not proof of current radio proximity.
+        // Keep the live advertisement when both represent the same hardware address.
+        val preferred = when {
+          fresh.observedNow && !previous.observedNow -> fresh
+          previous.observedNow && !fresh.observedNow -> previous
+          fresh.paired && !previous.paired -> fresh
+          else -> previous
+        }
+        preferred.copy(paired = fresh.paired || previous.paired,
+          observedNow = fresh.observedNow || previous.observedNow,
+          signalDbm = fresh.signalDbm ?: previous.signalDbm)
+      }
     }
   }
 
@@ -186,7 +200,8 @@ internal object NearbyDeviceDiscovery {
     val stopClassic = if (!permissionScan && !permissionConnect) BluetoothClassicDiscovery.start(context) {
       address, name, kind, source, paired, rssi ->
       add(found, source, address, name, kind,
-        if (paired) "Paired Bluetooth" else "Bluetooth Classic", signalDbm = rssi, paired = paired)
+        if (paired) "Paired Bluetooth" else "Bluetooth Classic", signalDbm = rssi, paired = paired,
+        observedNow = source != "bluetooth-paired" || rssi != null)
     } else ({})
     try { Thread.sleep(if (permissionScan || permissionConnect) 8500 else 10500) }
     catch (_: InterruptedException) { Thread.currentThread().interrupt() }
