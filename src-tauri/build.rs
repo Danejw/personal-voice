@@ -40,6 +40,7 @@ fn main() {
                     "scan_nearby_devices",
                     "inspect_nearby_device",
                     "open_nearby_web",
+                    "open_nearby_roku_app",
                     "nearby_media_action",
                     "pair_samsung_tv",
                     "pair_lg_tv",
