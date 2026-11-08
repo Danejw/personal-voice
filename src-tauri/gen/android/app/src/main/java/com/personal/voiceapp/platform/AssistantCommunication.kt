@@ -342,6 +342,7 @@ class AndroidCaptureEffects : EffectsHandle {
  */
 class AssistantPcmTrack(
   private val onUpdate: (kind: String, remainingMs: Int, token: Int) -> Unit,
+  private val selectedOutput: () -> AudioDeviceInfo? = { null },
 ) : PlaybackHandle {
   private val lock = Object()
   private val queue = ArrayDeque<ByteArray>()
@@ -351,13 +352,22 @@ class AssistantPcmTrack(
   private var framesWritten = 0L
   private var token = 0
 
-  override fun open(): Boolean {
+  override fun open(): Boolean = openTrack(media = false)
+
+  override fun openMedia(): Boolean = openTrack(media = true)
+
+  private fun openTrack(media: Boolean): Boolean {
     close()
+    val target = if (media) selectedOutput() else null
+    val attributes = if (media) AudioAttributes.Builder()
+      .setUsage(AudioAttributes.USAGE_MEDIA)
+      .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
+    else voiceCommunicationAttributes()
     val min = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
     if (min <= 0) return false
     val built = try {
       AudioTrack.Builder()
-        .setAudioAttributes(voiceCommunicationAttributes())
+        .setAudioAttributes(attributes)
         .setAudioFormat(
           AudioFormat.Builder()
             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
@@ -372,6 +382,10 @@ class AssistantPcmTrack(
       return false
     }
     if (built.state != AudioTrack.STATE_INITIALIZED) {
+      built.release()
+      return false
+    }
+    if (target != null && !built.setPreferredDevice(target)) {
       built.release()
       return false
     }

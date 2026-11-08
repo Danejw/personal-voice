@@ -24,6 +24,7 @@ import { personalContextBody, profileFacts } from "@/assistant/personalContext";
 import { AssistantSession } from "@/assistant/AssistantSession";
 import { PcmPlayback } from "@/assistant/PcmPlayback";
 import { AndroidAssistantPlayback } from "@/platform/android/AndroidAssistantPlayback";
+import { AssistantAudioOutputSettings } from "@/platform/android/AssistantAudioOutputSettings";
 import { useAssistant } from "@/assistant/useAssistant";
 import { useAssistantLibrary } from "@/assistant/useAssistantLibrary";
 import { AppNav, sectionMeta, useMobileNav, type AppSection } from "@/app/AppNav";
@@ -44,6 +45,7 @@ import { saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import { CompanionView } from "@/companion/CompanionView";
 import { assistantPhase } from "@/companion/companionGeometry";
 import { DevicesPanel } from "@/devices/DevicesPanel";
+import { ScreenSharingPanel } from "@/spatial/ScreenSharingPanel";
 import { PairingDialog } from "@/devices/PairingDialog";
 import { pairingAction } from "@/devices/pairingFlow";
 import { DeviceStore } from "@/devices/DeviceStore";
@@ -1448,6 +1450,7 @@ export default function App() {
                     <h4>Assistant settings</h4>
                     <p>Control how your Assistant learns, searches saved content and uses context across devices.</p>
                   </div>
+                  {platform.platform === "android" && <AssistantAudioOutputSettings />}
                   <MemoryPanel
                     store={assistantMemory}
                     snapshot={assistantMemorySnapshot}
@@ -1616,6 +1619,7 @@ export default function App() {
                 <MicrophonePanel />
               </section>
             )}
+            {platform.platform === "android" && <ScreenSharingPanel />}
             <DeviceControls
               key={auth.userId ?? "signed-out"}
               platform={platform}
