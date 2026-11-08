@@ -64,6 +64,29 @@ class OpenDownloadArgs {
 }
 
 @InvokeArg
+class NearbyIpArgs {
+  lateinit var ipAddress: String
+}
+
+@InvokeArg
+class NearbyMediaArgs {
+  lateinit var ipAddress: String
+  lateinit var action: String
+}
+
+@InvokeArg
+class NearbySamsungPairArgs {
+  lateinit var ipAddress: String
+  lateinit var fingerprint: String
+}
+
+@InvokeArg
+class NearbySamsungKeyArgs {
+  lateinit var ipAddress: String
+  lateinit var key: String
+}
+
+@InvokeArg
 class OverlayJsonArgs {
   lateinit var snapshot: String
 }
@@ -290,6 +313,7 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     Thread {
       try {
         val scan = NearbyDeviceDiscovery.scan(activity.applicationContext)
+        LocalDeviceCapabilities.remember(scan.devices)
         val devices = JSONArray()
         for (device in scan.devices) {
           val item = JSONObject()
@@ -308,6 +332,97 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       } catch (error: Exception) {
         invoke.reject(error.message ?: "Could not scan nearby devices.")
       }
+    }.start()
+  }
+
+  /** Inspect only devices found in the recent scan, on the same private Wi-Fi segment. */
+  @Command
+  fun inspectNearbyDevice(invoke: Invoke) {
+    if (!localNetworkAllowed()) {
+      invoke.reject("Allow local network access, then scan again.")
+      return
+    }
+    val ip = try { invoke.parseArgs(NearbyIpArgs::class.java).ipAddress }
+      catch (_: Exception) { invoke.reject("Invalid device."); return }
+    Thread {
+      try {
+        val identity = LocalDeviceCapabilities.inspect(activity.applicationContext, ip)
+        val result = JSObject()
+          .put("ipAddress", identity.ip)
+          .put("name", identity.name)
+          .put("manufacturer", identity.manufacturer)
+          .put("model", identity.model)
+          .put("features", JSONArray(identity.features))
+        if (identity.samsungFingerprint != null) {
+          result.put("samsungFingerprint", identity.samsungFingerprint)
+          result.put("samsungPaired", LocalDeviceCapabilities.samsungPaired(
+            activity.applicationContext, ip, identity.samsungFingerprint))
+        }
+        invoke.resolve(result)
+      } catch (e: Exception) { invoke.reject(e.message ?: "Could not identify this device.") }
+    }.start()
+  }
+
+  /** An HTTP browser hand-off is not admin authentication or arbitrary JavaScript navigation. */
+  @Command
+  fun openNearbyWeb(invoke: Invoke) {
+    if (!localNetworkAllowed()) { invoke.reject("Local network access is required."); return }
+    val ip = try { invoke.parseArgs(NearbyIpArgs::class.java).ipAddress }
+      catch (_: Exception) { invoke.reject("Invalid device."); return }
+    try {
+      open(invoke, LocalDeviceCapabilities.openWeb(activity.applicationContext, ip))
+    } catch (e: Exception) { invoke.reject(e.message ?: "No browser is available.") }
+  }
+
+  @Command
+  fun nearbyMediaAction(invoke: Invoke) {
+    if (!localNetworkAllowed()) { invoke.reject("Local network access is required."); return }
+    val args = try { invoke.parseArgs(NearbyMediaArgs::class.java) }
+      catch (_: Exception) { invoke.reject("Invalid media action."); return }
+    Thread {
+      try {
+        invoke.resolve(JSObject().put("message",
+          LocalDeviceCapabilities.mediaAction(activity.applicationContext, args.ipAddress, args.action)))
+      } catch (e: Exception) { invoke.reject(e.message ?: "Media command failed.") }
+    }.start()
+  }
+
+  @Command
+  fun pairSamsungTv(invoke: Invoke) {
+    if (!localNetworkAllowed()) { invoke.reject("Local network access is required."); return }
+    val args = try { invoke.parseArgs(NearbySamsungPairArgs::class.java) }
+      catch (_: Exception) { invoke.reject("Invalid pairing request."); return }
+    Thread {
+      try {
+        invoke.resolve(JSObject().put("message",
+          LocalDeviceCapabilities.pairSamsung(activity.applicationContext, args.ipAddress, args.fingerprint)))
+      } catch (e: Exception) { invoke.reject(e.message ?: "TV did not approve pairing.") }
+    }.start()
+  }
+
+  @Command
+  fun samsungRemoteKey(invoke: Invoke) {
+    if (!localNetworkAllowed()) { invoke.reject("Local network access is required."); return }
+    val args = try { invoke.parseArgs(NearbySamsungKeyArgs::class.java) }
+      catch (_: Exception) { invoke.reject("Invalid remote key."); return }
+    Thread {
+      try {
+        invoke.resolve(JSObject().put("message",
+          LocalDeviceCapabilities.samsungKey(activity.applicationContext, args.ipAddress, args.key)))
+      } catch (e: Exception) { invoke.reject(e.message ?: "TV remote command failed.") }
+    }.start()
+  }
+
+  @Command
+  fun forgetSamsungTv(invoke: Invoke) {
+    if (!localNetworkAllowed()) { invoke.reject("Local network access is required."); return }
+    val ip = try { invoke.parseArgs(NearbyIpArgs::class.java).ipAddress }
+      catch (_: Exception) { invoke.reject("Invalid TV."); return }
+    Thread {
+      try {
+        LocalDeviceCapabilities.forgetSamsung(activity.applicationContext, ip)
+        invoke.resolve(JSObject())
+      } catch (e: Exception) { invoke.reject(e.message ?: "Could not forget TV pairing.") }
     }.start()
   }
 
