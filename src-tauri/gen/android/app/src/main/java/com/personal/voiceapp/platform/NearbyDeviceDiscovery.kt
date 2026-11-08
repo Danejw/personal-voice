@@ -71,21 +71,33 @@ internal object NearbyDeviceDiscovery {
     val id = identifier(if (source.startsWith("bluetooth")) "bt" else source, key)
     val fresh = Device(id, safeName, kind, source, clean(detail, 100), ipAddress, signalDbm,
       paired, ports, descriptionUrl, observedNow)
-    found.compute(id) { _, previous ->
-      if (previous == null) fresh else {
-        // A bonded item is a saved identity, not proof of current radio proximity.
-        // Keep the live advertisement when both represent the same hardware address.
-        val preferred = when {
-          fresh.observedNow && !previous.observedNow -> fresh
-          previous.observedNow && !fresh.observedNow -> previous
-          fresh.paired && !previous.paired -> fresh
-          else -> previous
-        }
-        preferred.copy(paired = fresh.paired || previous.paired,
-          observedNow = fresh.observedNow || previous.observedNow,
-          signalDbm = fresh.signalDbm ?: previous.signalDbm)
-      }
+    found.compute(id) { _, previous -> mergeObservations(previous, fresh) }
+  }
+
+  /** Keep a resolved mDNS endpoint and a saved Bluetooth identity when observations converge. */
+  internal fun mergeObservations(previous: Device?, fresh: Device): Device {
+    if (previous == null) return fresh
+    if (!fresh.id.startsWith("bt-")) {
+      // mDNS resolution follows the service-name advertisement for the same ID.
+      // Never downgrade a resolved private-IP endpoint back to an unaddressed name.
+      return (if (fresh.ipAddress != null) fresh else previous).copy(
+        observedNow = fresh.observedNow || previous.observedNow,
+        paired = fresh.paired || previous.paired)
     }
+    val live = when {
+      fresh.observedNow && !previous.observedNow -> fresh
+      previous.observedNow && !fresh.observedNow -> previous
+      fresh.signalDbm != null && previous.signalDbm == null -> fresh
+      else -> previous
+    }
+    val other = if (live === fresh) previous else fresh
+    val anonymous = setOf("Bluetooth device", "Bluetooth LE device", "Paired Bluetooth device")
+    val name = if (live.name in anonymous && other.name !in anonymous) other.name else live.name
+    val kind = if (live.kind == "unknown" && other.kind != "unknown") other.kind else live.kind
+    return live.copy(name = name, kind = kind,
+      paired = fresh.paired || previous.paired,
+      observedNow = fresh.observedNow || previous.observedNow,
+      signalDbm = live.signalDbm ?: other.signalDbm)
   }
 
   fun scan(context: Context): Scan {
