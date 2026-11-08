@@ -5,6 +5,7 @@ import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { consolidateNearbyDevices } from "@/spatial/deviceCapabilities";
 import { DeviceActions } from "@/spatial/DeviceActions";
+import { deviceSubtitle, listDevices, type DeviceView } from "@/spatial/deviceExplorer";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import {
   clampPosition, mergePersonalVoicePeers, parseNearbyScan, readPositions, nearbyGroup,
@@ -26,29 +27,6 @@ const placementKey = (id: string) => "pv.spatial-placements.v1:" + id;
 const emptyScan: NearbyScan = {
   devices: [], bluetoothPermissionRequired: false, networkLabel: "", networkLimited: false,
 };
-type DeviceView = "network" | "bluetooth" | "all";
-
-function unnamed(device: NearbyDevice): boolean {
-  return device.name === "Bluetooth device" || device.name === "Bluetooth LE device";
-}
-
-function deviceSubtitle(device: NearbyDevice): string {
-  if (device.pairedDeviceId) return "Personal Voice · Connected";
-  if (device.ipAddress) return device.ipAddress + " · " + device.detail;
-  if (device.paired) return "Bluetooth · Paired";
-  if (device.signalDbm !== undefined) return "Bluetooth · " + device.signalDbm + " dBm";
-  return device.source === "mdns" ? "Network service · " + device.detail : device.detail;
-}
-
-function rank(device: NearbyDevice): number {
-  if (device.pairedDeviceId) return 0;
-  if (device.ipAddress && /Samsung|LG|TV|Cast/i.test(device.name)) return 1;
-  if (device.paired) return 2;
-  if (device.ipAddress) return 3;
-  if (!unnamed(device)) return 4;
-  return 5;
-}
-
 export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props) {
   const [scan, setScan] = useState<NearbyScan>(emptyScan);
   const [peers, setPeers] = useState<string[]>(() => deviceLinkManager.getSnapshot().localPeers);
@@ -96,15 +74,8 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   const bluetoothCount = nearby.length - networkCount;
   const selectedDevice = nearby.find(item => item.id === selected) ?? null;
   const group = nearby.filter(item => view === "all" || nearbyGroup(item.source) === view);
-  const search = query.trim().toLocaleLowerCase();
-  const searched = group.filter(device => !search || (
-    device.name.toLocaleLowerCase().includes(search) ||
-    device.ipAddress?.includes(search) ||
-    device.detail.toLocaleLowerCase().includes(search)
-  ));
-  const hiddenCount = searched.filter(unnamed).length;
-  const listed = searched.filter(device => showUnnamed || !unnamed(device))
-    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  const { items: listed, matches, hiddenCount } =
+    listDevices(nearby, view, query, showUnnamed);
   const placed = group.filter(item => positions[item.id]);
 
   useEffect(() => {
@@ -309,7 +280,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
         )}
       </div>
 
-      {searched.length === 0 && scanned && (
+      {matches === 0 && scanned && (
         <p className="spatial-empty">No matching devices. Try another source or search.</p>
       )}
       {!scanned && !scanning && nearby.length === 0 && (
