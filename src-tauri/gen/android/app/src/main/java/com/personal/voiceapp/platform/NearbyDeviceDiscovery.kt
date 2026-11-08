@@ -22,6 +22,7 @@ internal object NearbyDeviceDiscovery {
   data class Device(
     val id: String, val name: String, val kind: String, val source: String, val detail: String,
     val ipAddress: String? = null, val signalDbm: Int? = null, val paired: Boolean = false,
+    val ports: List<Int> = emptyList(), val descriptionUrl: String? = null,
   )
   data class Scan(
     val devices: List<Device>, val bluetoothPermissionRequired: Boolean,
@@ -54,12 +55,14 @@ internal object NearbyDeviceDiscovery {
     found: ConcurrentHashMap<String, Device>, source: String, key: String,
     name: String, kind: String, detail: String,
     ipAddress: String? = null, signalDbm: Int? = null, paired: Boolean = false,
+    ports: List<Int> = emptyList(), descriptionUrl: String? = null,
   ) {
     val safeName = clean(name, 72)
     if (safeName.isEmpty() || found.size >= 350) return
     // BLE, Classic and paired Bluetooth records share the same hashed hardware identity.
     val id = identifier(if (source.startsWith("bluetooth")) "bt" else source, key)
-    val fresh = Device(id, safeName, kind, source, clean(detail, 100), ipAddress, signalDbm, paired)
+    val fresh = Device(id, safeName, kind, source, clean(detail, 100), ipAddress, signalDbm,
+      paired, ports, descriptionUrl)
     found.compute(id) { _, previous ->
       if (previous?.paired == true && !fresh.paired) previous else fresh
     }
@@ -97,7 +100,7 @@ internal object NearbyDeviceDiscovery {
         lanScan = result
         for (host in result.devices) {
           add(found, "lan", host.ip, "Device " + host.ip, host.kind,
-            "TCP " + host.ports.joinToString(", "), ipAddress = host.ip)
+            "TCP " + host.ports.joinToString(", "), ipAddress = host.ip, ports = host.ports)
         }
       } catch (_: Exception) { /* Media and Bluetooth scanning still continue. */ }
     }.also { it.start() }
@@ -192,7 +195,9 @@ internal object NearbyDeviceDiscovery {
           val usn = headers["usn"]?.take(160) ?: continue
           val server = clean(headers["server"] ?: "", 72)
           val name = if (server.isNotEmpty()) server else if (target.contains("dial")) "DIAL media device" else "UPnP media renderer"
-          add(found, "ssdp", usn, name, if (target.contains("dial")) "display" else "media", "UPnP / DIAL")
+          add(found, "ssdp", usn, name, if (target.contains("dial")) "display" else "media",
+            "UPnP / DIAL", ipAddress = packet.address.hostAddress,
+            descriptionUrl = headers["location"]?.take(400))
         }
       }
     } catch (_: Exception) {
