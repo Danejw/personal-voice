@@ -69,6 +69,54 @@ function controller() {
 afterEach(() => { FakeSession.opened = []; vi.useRealTimers(); });
 
 describe("AssistantController", () => {
+  it("answers nearby capability questions from a fresh scan without executing controls", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setDeviceContext({ platform: "android", otherDeviceCount: 0 });
+    created.setActions(used);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [
+      { id: "scan", name: "list_nearby_devices", args: {} },
+    ] });
+    await settle();
+    expect(used.listNearbyDevices).toHaveBeenCalledTimes(1);
+    expect(used.controlNearbyDevice).not.toHaveBeenCalled();
+    expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
+      id: "scan", response: { result: expect.stringContaining("fresh_android_local_scan") },
+    }] } });
+    created.end();
+  });
+
+  it("requires explicit confirmation before controlling physical devices even when auto-run is on", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setDeviceContext({ platform: "android", otherDeviceCount: 0 });
+    created.setAutoRun(true);
+    created.setActions(used);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [{
+      id: "action", name: "control_nearby_device",
+      args: { device_id: "lan-123456789abc", action: "volume_up" },
+    }] });
+    await settle();
+    expect(used.controlNearbyDevice).not.toHaveBeenCalled();
+    expect(created.getSnapshot().pendingAction?.title).toBe("Control nearby device");
+    created.cancelPending();
+    await settle();
+    expect(used.controlNearbyDevice).not.toHaveBeenCalled();
+    session.emit({ type: "toolCalls", calls: [{
+      id: "approve", name: "control_nearby_device",
+      args: { device_id: "lan-123456789abc", action: "volume_up" },
+    }] });
+    await settle();
+    created.confirmPending();
+    await settle();
+    expect(used.controlNearbyDevice).toHaveBeenCalledWith("lan-123456789abc", "volume_up");
+    created.end();
+  });
+
   it("routes a whole paired desktop task directly to the Windows Computer Use session", async () => {
     const { created } = controller();
     const actions = toolActions();
@@ -1790,6 +1838,8 @@ function toolActions() {
     })),
     listNotes: vi.fn(async () => "Notes (1):\n1. id: n1\nBuy milk"),
     listHandoffs: vi.fn(async () => "Devices you can send to: Phone.\nNo received handoffs."),
+    listNearbyDevices: vi.fn(async () => '{"observed":"fresh_android_local_scan","devices":[]}'),
+    controlNearbyDevice: vi.fn(async () => "Device acknowledged volume up; physical state not verified."),
     pairDevice: vi.fn(async () => "Pairing invitation displayed."),
     describeItem: vi.fn((_kind: "note" | "handoff", id: string) => `Preview ${id}`),
     archiveNote: vi.fn(async () => {}),
