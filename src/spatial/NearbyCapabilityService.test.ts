@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
-import { callPlugin } from "@/platform/android/voicePlatformPlugin";
-
-vi.mock("@/platform/android/voicePlatformPlugin", () => ({ callPlugin: vi.fn() }));
-const mocked = vi.mocked(callPlugin);
+const mocked = vi.hoisted(() => vi.fn());
+vi.mock("@/platform/android/voicePlatformPlugin", () => ({ callPlugin: mocked }));
 const ip = "192.168.0.27";
 const id = "lan-abcdef012345";
 const scan = {
@@ -17,7 +15,7 @@ const identity = {
 
 beforeEach(() => {
   mocked.mockReset();
-  mocked.mockImplementation(async (command: string): Promise<any> => {
+  mocked.mockImplementation(async (command: string) => {
     if (command === "scan_nearby_devices") return scan;
     if (command === "inspect_nearby_device") return identity;
     if (command === "nearby_media_action") return { message: "Volume request accepted." };
@@ -59,7 +57,7 @@ describe("shared nearby capability inventory", () => {
   });
 
   it("does not offer control for an unaddressed service name", async () => {
-    mocked.mockImplementation(async (command: string): Promise<any> => {
+    mocked.mockImplementation(async (command: string) => {
       if (command === "scan_nearby_devices") {
         return { devices: [{ id: "mdns-abcdef012345", source: "mdns", kind: "speaker",
           name: "SpotifyConnect", detail: "_spotify-connect._tcp." }] };
