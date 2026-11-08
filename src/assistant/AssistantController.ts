@@ -112,6 +112,10 @@ export interface AssistantActions {
   listNotes(includeArchived: boolean): Promise<string>;
   /** Received handoffs and the names of other devices. */
   listHandoffs(): Promise<string>;
+  /** Explicitly requested Android-local device scan; never inferred from cloud registration. */
+  listNearbyDevices(): Promise<string>;
+  /** One permitted local action after confirmation; native protocols enforce their own trust. */
+  controlNearbyDevice(deviceId: string, action: string): Promise<string>;
   pairDevice(action: "open" | "show_code" | "scan_qr" | "enter_code" | "status", code?: string): Promise<string>;
   /** Short text for a confirm card. Throws when the id is not in the current list. */
   describeItem(kind: "note" | "handoff", id: string): string;
@@ -1507,6 +1511,10 @@ export class AssistantController {
           await this.runHandoffs(decision);
           continue;
         }
+        if (decision.kind === "nearbyDevices") {
+          await this.runNearbyDevices(decision);
+          continue;
+        }
         if (decision.kind === "pairing") {
           const epoch = this.toolEpoch;
           try {
@@ -1592,6 +1600,8 @@ export class AssistantController {
     // Paired remote command authorization is enforced by the receiving Windows PC.
     // Do not gate each mobile remote command behind a second Assistant UI confirmation.
     if (decision.name === "remote_action") return true;
+    // Nearby physical controls always require an explicit Assistant approval, even in auto-run.
+    if (decision.name === "control_nearby_device") return false;
     if (decision.name === "supervise_screen" && this.deviceContext.platform === "android") return true;
     // Saving any note attachment always requires explicit consent.
     if (decision.name === "attach_file_to_note" ||
@@ -1941,6 +1951,16 @@ export class AssistantController {
     }
   }
 
+  private async runNearbyDevices(decision: Extract<ToolDecision, { kind: "nearbyDevices" }>) {
+    const epoch = this.toolEpoch;
+    try {
+      const result = await this.actions.listNearbyDevices();
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, result);
+    } catch (error) {
+      if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
+    }
+  }
+
   private async runCopy(decision: Extract<ToolDecision, { kind: "copy" }>) {
     const epoch = this.toolEpoch;
     try {
@@ -2226,6 +2246,10 @@ export class AssistantController {
         return this.actions.computer.openApp(pending.text);
       case "press_shortcut":
         return this.actions.computer.pressShortcut(pending.text);
+      case "control_nearby_device": {
+        const payload = JSON.parse(pending.text) as { deviceId: string; action: string };
+        return this.actions.controlNearbyDevice(payload.deviceId, payload.action);
+      }
       case "remote_action": {
         if (!pending.remote) throw new Error("That action is not available.");
         return this.actions.computer.remoteAction(pending.remote.action, pending.text, pending.remote.device);
