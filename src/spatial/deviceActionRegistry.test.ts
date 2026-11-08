@@ -39,6 +39,15 @@ describe("universal local capability mapping", () => {
     expect(actions.find(a => a.action === "show_message")?.protocol).toBe("lg-webos");
   });
 
+  it("Roku discovery only offers the official mobile app handoff, never ECP remote keys", () => {
+    const actions = availableNearbyActions({ ...device, name: "Roku TV" }, {
+      ...identity, features: ["roku_companion"], lgFingerprint: undefined,
+    });
+    expect(actions).toEqual([{
+      action: "open_roku_app", protocol: "roku-companion", authorization: "none",
+    }]);
+  });
+
   it("offers only UPnP actions when no TV remote protocol was verified", () => {
     const actions = availableNearbyActions(device, {
       ...identity, features: ["volume", "playback"], lgFingerprint: undefined,
