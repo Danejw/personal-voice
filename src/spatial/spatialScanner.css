@@ -195,3 +195,54 @@
 }
 .spatial-lg-actions button { min-height: 43px; min-width: 0; font-size: 12px; }
 .spatial-lg-actions button:last-child { grid-column: span 2; }
+
+/* Nearby discovery: one compact toolbar and a small action-first inventory. */
+.spatial-shell { gap: 9px; padding-top: 2px; }
+.spatial-head h2 { font-size: 16px; }
+.spatial-head p { font-size: 11px; }
+.spatial-head > button { min-height: 35px; padding: 5px 12px; }
+.spatial-tabs { padding: 3px; }
+.spatial-tabs button { min-height: 34px; padding: 6px 4px; font-size: 11px; }
+.spatial-inventory-tools { display: block; }
+.spatial-inventory-tools input { width: 100%; height: 37px; font-size: 12px; }
+.spatial-inventory { gap: 5px; }
+.spatial-device-row {
+  display: flex; align-items: stretch; gap: 6px; min-width: 0;
+  background: #172830; border-radius: 10px; overflow: hidden;
+}
+.spatial-device-row:hover { background: #1e343b; }
+.spatial-device {
+  flex: 1; min-width: 0; min-height: 53px; padding: 8px 9px;
+  background: transparent; border-radius: 10px;
+}
+.spatial-device-icon { width: 31px; height: 31px; border-radius: 9px; font-size: 16px; }
+.spatial-device-label strong { font-size: 12px; }
+.spatial-device-label small { font-size: 10px; color: #99adba; line-height: 1.4; }
+.spatial-readiness { font-weight: 700; color: #b0c8c5; }
+.spatial-readiness-ready { color: #a5e2cc; }
+.spatial-readiness-setup { color: #e4cc95; }
+.spatial-readiness-checking { color: #acc2d0; }
+.spatial-place-label { font-size: 20px; }
+.spatial-quick-action {
+  align-self: center; flex: none; min-width: 55px; max-width: 86px;
+  min-height: 35px; padding: 5px 8px; margin-right: 8px;
+  border: 0; border-radius: 9px; background: #245a4e; color: #e8fff6;
+  font: inherit; font-size: 11px; font-weight: 650; cursor: pointer;
+}
+.spatial-quick-action:disabled { opacity: .6; cursor: default; }
+.spatial-quick-action:focus-visible { outline: 2px solid #a2eacb; outline-offset: 2px; }
+.spatial-advanced { background: #14242b; border-radius: 11px; padding: 2px 10px; }
+.spatial-advanced > summary { cursor: pointer; padding: 9px 0; color: #93b8b6; font-size: 11px; }
+.spatial-advanced > button { margin: 6px 0 10px; font-size: 12px; }
+.spatial-advanced .spatial-network-scope { margin: 4px 0; font-size: 10px; }
+.spatial-advanced .spatial-scene { margin: 4px 0 9px; }
+.spatial-capability-details { padding: 4px 0; }
+.spatial-capability-details > summary { cursor: pointer; font-size: 12px; color: #a6c7c6; padding: 8px 1px; }
+.spatial-capability-details .spatial-capability-summary { margin-top: 5px; }
+.spatial-control-group > button { min-height: 43px; width: 100%; }
+.spatial-action-notice { overflow-wrap: anywhere; }
+@media (max-width: 540px) {
+  .spatial-device-row { padding-right: 0; }
+  .spatial-quick-action { min-width: 53px; margin-right: 7px; }
+  .spatial-device-label strong { font-size: 12px; }
+}
