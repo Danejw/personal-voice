@@ -17,8 +17,6 @@ const BASE_TOOL_SCENARIOS = [
   { id: "tool-send_handoff", request: "Send these instructions to my laptop's handoff inbox.", expected: ["send_handoff"], successCriterion: "Handoff exists on laptop" },
   { id: "tool-list_nearby_devices", request: "On my Android phone, scan nearby TVs and tell me which buttons or controls each actually supports.", expected: ["list_nearby_devices"], forbidden: ["list_handoffs", "remote_action"], successCriterion: "Fresh on-device scan returns exact device IDs, evidence-backed capabilities and unsupported markers without control" },
   { id: "tool-control_nearby_device", request: "On my Android phone, turn up the volume on the LG TV that you just listed after I approve.", expected: ["list_nearby_devices", "control_nearby_device"], forbidden: ["remote_action"], successCriterion: "User confirms an exact scanned LG device/action and native TV service acknowledges the command; physical volume still requires observation" },
-  { id: "choice-roku-official-app", request: "On my Android phone find the Roku TV and open its official remote app.", expected: ["list_nearby_devices", "control_nearby_device"], forbidden: ["remote_action"], successCriterion: "Uses exact scanned Roku device and confirmed open_roku_app handoff; no third-party ECP keypresses" },
-  { id: "none-roku-third-party-ecp", request: "Why does Roku restrict third-party mobile ECP keys?", expected: [], successCriterion: "Explains official Roku ECP mobile policy without executing a tool" },
   { id: "tool-list_handoffs", request: "What did my desktop send me?", expected: ["list_handoffs"], successCriterion: "Received handoffs are listed" },
   { id: "tool-dismiss_handoff", request: "Dismiss the handoff containing 'meet at six'.", expected: ["list_handoffs","dismiss_handoff"], successCriterion: "Correct received handoff dismissed" },
   { id: "tool-capture_screen", request: "Look at my screen and tell me what is visible.", expected: ["capture_screen"], successCriterion: "Answer grounded in fresh screenshot" },
@@ -76,6 +74,7 @@ const BASE_TOOL_SCENARIOS = [
 ] as const satisfies readonly ToolSelectionScenario[];
 
 const DISAMBIGUATION_SCENARIOS = [
+  { id: "choice-roku-official-app", request: "On my Android phone find the Roku TV and open its official remote app.", expected: ["list_nearby_devices", "control_nearby_device"], forbidden: ["remote_action"], successCriterion: "Uses exact scanned Roku device and confirmed open_roku_app handoff; no third-party ECP keypresses" },
   { id: "choice-nearby-v-account-devices", request: "What TVs and speakers can my phone currently find on my Wi-Fi?", expected: ["list_nearby_devices"], forbidden: ["list_handoffs", "pair_device"], successCriterion: "Fresh local Wi-Fi/BT observations rather than cloud device registration" },
   { id: "choice-nearby-v-signed-pc", request: "Open Calculator on my paired Windows laptop.", expected: ["remote_action"], forbidden: ["control_nearby_device", "list_nearby_devices"], successCriterion: "Paired PC control retains existing signed protocol" },
   { id: "choice-pair-v-remote", request: "My new Android is not paired yet; scan the Personal Voice QR code to pair it with my laptop.", expected: ["pair_device"], forbidden: ["remote_action"], successCriterion: "Android native scanner submits verified claim, not a remote control command" },
@@ -111,6 +110,7 @@ const DISAMBIGUATION_SCENARIOS = [
   // Keep the actual PC tool unchanged. These scenarios test target selection
   // and preserve the distinction between a signed execution receipt and handoff.
 const NO_TOOL_SCENARIOS = [
+  { id: "none-roku-third-party-ecp", request: "Why does Roku restrict third-party mobile ECP keys?", expected: [], successCriterion: "Explains official Roku ECP mobile policy without executing a tool" },
   { id: "none-chat-only", request: "Thanks, that's all.", expected: [], successCriterion: "Acknowledges without tool use" },
   { id: "none-math-only", request: "What is 14 times 3?", expected: [], successCriterion: "Answers arithmetic without tool" },
   { id: "none-rewrite-only", request: "Rewrite: 'Please give me sometime'.", expected: [], successCriterion: "Rewrites supplied text without tools" },
