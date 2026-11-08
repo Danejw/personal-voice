@@ -91,7 +91,14 @@ describe("assistant tool schema", () => {
 
   it("validates nearby discovery and rejects invented or unsafe device commands", () => {
     expect(decideToolCall({ id: "list", name: "list_nearby_devices", args: {} }, plan))
-      .toMatchObject({ kind: "nearbyDevices" });
+      .toMatchObject({ kind: "nearbyDevices", query: "" });
+    expect(decideToolCall({ id: "find", name: "list_nearby_devices",
+      args: { query: "LG webOS TV" } }, plan))
+      .toMatchObject({ kind: "nearbyDevices", query: "LG webOS TV" });
+    for (const query of [123, "a".repeat(81), { ip: "192.168.0.1" }]) {
+      expect(decideToolCall({ id: "bad-search", name: "list_nearby_devices",
+        args: { query } }, plan).kind).toBe("reject");
+    }
     const id = "lan-123456789abc";
     expect(decideToolCall({ id: "run", name: "control_nearby_device",
       args: { device_id: id, action: "volume_up" } }, plan))
