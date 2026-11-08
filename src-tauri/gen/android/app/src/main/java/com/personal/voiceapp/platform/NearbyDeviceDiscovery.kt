@@ -19,8 +19,14 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** An on-demand, bounded scan of advertised services. No port scanning, connection or control. */
 internal object NearbyDeviceDiscovery {
-  data class Device(val id: String, val name: String, val kind: String, val source: String, val detail: String)
-  data class Scan(val devices: List<Device>, val bluetoothPermissionRequired: Boolean)
+  data class Device(
+    val id: String, val name: String, val kind: String, val source: String, val detail: String,
+    val ipAddress: String? = null, val signalDbm: Int? = null, val paired: Boolean = false,
+  )
+  data class Scan(
+    val devices: List<Device>, val bluetoothPermissionRequired: Boolean,
+    val networkLabel: String, val networkLimited: Boolean,
+  )
 
   private val serviceTypes = listOf(
     "_googlecast._tcp." to "media",
@@ -41,11 +47,16 @@ internal object NearbyDeviceDiscovery {
   private fun add(
     found: ConcurrentHashMap<String, Device>, source: String, key: String,
     name: String, kind: String, detail: String,
+    ipAddress: String? = null, signalDbm: Int? = null, paired: Boolean = false,
   ) {
     val safeName = clean(name, 72)
-    if (safeName.isEmpty() || found.size >= 60) return
-    val id = identifier(source, key)
-    found.putIfAbsent(id, Device(id, safeName, kind, source, clean(detail, 100)))
+    if (safeName.isEmpty() || found.size >= 350) return
+    // BLE, Classic and paired Bluetooth records share the same hashed hardware identity.
+    val id = identifier(if (source.startsWith("bluetooth")) "bt" else source, key)
+    val fresh = Device(id, safeName, kind, source, clean(detail, 100), ipAddress, signalDbm, paired)
+    found.compute(id) { _, previous ->
+      if (previous?.paired == true && !fresh.paired) previous else fresh
+    }
   }
 
   fun scan(context: Context): Scan {
@@ -73,23 +84,37 @@ internal object NearbyDeviceDiscovery {
     }
 
     val ssdpWorker = Thread { discoverSsdp(found) }.also { it.start() }
-    var bluetoothPermissionRequired = false
+    var lanScan = LanDeviceDiscovery.Scan(emptyList(), "Wi-Fi scan unavailable", false)
+    val lanWorker = Thread {
+      try {
+        val result = LanDeviceDiscovery.scan(context)
+        lanScan = result
+        for (host in result.devices) {
+          add(found, "lan", host.ip, "Device " + host.ip, host.kind,
+            "TCP " + host.ports.joinToString(", "), ipAddress = host.ip)
+        }
+      } catch (_: Exception) { /* Media and Bluetooth scanning still continue. */ }
+    }.also { it.start() }
+    val permissionScan = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+      ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED
+    val permissionConnect = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+      ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+    val bluetoothPermissionRequired = permissionScan || permissionConnect
     var bluetoothScanner: android.bluetooth.le.BluetoothLeScanner? = null
     var bluetoothCallback: ScanCallback? = null
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
-        != PackageManager.PERMISSION_GRANTED) {
-        bluetoothPermissionRequired = true
-      } else {
+      if (!permissionScan && !permissionConnect) {
         try {
           val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
           val scanner = adapter?.bluetoothLeScanner
           if (scanner != null) {
             val callback = object : ScanCallback() {
               override fun onScanResult(callbackType: Int, result: ScanResult) {
-                // Advertised names only. Never read MAC address or infer distance from RSSI.
-                val name = result.scanRecord?.deviceName ?: return
-                add(found, "bluetooth", name.lowercase(), name, "unknown", "Bluetooth LE advertisement")
+                // Use a hashed radio identity internally; never expose the hardware address.
+                val name = result.scanRecord?.deviceName ?: "Bluetooth LE device"
+                val address = try { result.device.address } catch (_: SecurityException) { return }
+                add(found, "bluetooth", address, name, "unknown",
+                  "Bluetooth LE advertisement", signalDbm = result.rssi)
               }
             }
             scanner.startScan(callback)
@@ -102,15 +127,26 @@ internal object NearbyDeviceDiscovery {
       }
     }
 
-    try { Thread.sleep(2500) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
-    for (listener in listeners) {
-      try { nsd.stopServiceDiscovery(listener) } catch (_: Exception) {}
-    }
+    // BLE and Classic inquiry run serially so the two radio scans do not compete.
+    try { Thread.sleep(3500) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
     if (bluetoothScanner != null && bluetoothCallback != null) {
       try { bluetoothScanner.stopScan(bluetoothCallback) } catch (_: Exception) {}
     }
-    try { ssdpWorker.join(250) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
-    return Scan(found.values.sortedWith(compareBy({ it.name.lowercase() }, { it.id })).take(60), bluetoothPermissionRequired)
+    val stopClassic = if (!permissionScan && !permissionConnect) BluetoothClassicDiscovery.start(context) {
+      address, name, kind, source, paired, rssi ->
+      add(found, source, address, name, kind,
+        if (paired) "Paired Bluetooth" else "Bluetooth Classic", signalDbm = rssi, paired = paired)
+    } else ({})
+    try { Thread.sleep(if (permissionScan || permissionConnect) 8500 else 10500) }
+    catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+    stopClassic()
+    for (listener in listeners) {
+      try { nsd.stopServiceDiscovery(listener) } catch (_: Exception) {}
+    }
+    try { ssdpWorker.join(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+    try { lanWorker.join(1500) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+    return Scan(found.values.sortedWith(compareBy({ it.name.lowercase() }, { it.id })).take(350),
+      bluetoothPermissionRequired, lanScan.networkLabel, lanScan.limited)
   }
 
   /** Send targeted UPnP/DIAL discovery only. Do not fetch or follow untrusted LOCATION URLs. */
