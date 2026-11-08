@@ -7,8 +7,10 @@ import type { OwnedDevice } from "@/handoffs/handoff";
 import { MAX_DEVICE_NAME } from "@/services/deviceService";
 import { DevicePairingPanel } from "@/devices/DevicePairingPanel";
 import { SpatialScanner } from "@/spatial/SpatialScanner";
+import "./deviceTabs.css";
 
 interface DevicesPanelProps {
+  mode: "paired" | "nearby";
   store: DeviceStore;
   snapshot: DeviceSnapshot;
   onChanged(): void;
@@ -47,9 +49,10 @@ interface DeviceRowProps {
   busy: boolean;
   onRename(name: string): void;
   onRemove(): void;
+  onControlPc?(): void;
 }
 
-function DeviceRow({ device, current, connected, busy, onRename, onRemove }: DeviceRowProps) {
+function DeviceRow({ device, current, connected, busy, onRename, onRemove, onControlPc }: DeviceRowProps) {
   const [name, setName] = useState(device.name);
 
   useEffect(() => {
@@ -72,36 +75,35 @@ function DeviceRow({ device, current, connected, busy, onRename, onRemove }: Dev
           {platformLabel(device.platform)} · {lastSeenLabel(device.lastSeen)}
         </p>
       </div>
-      <form className="device-rename" onSubmit={submit}>
-        <input
-          aria-label={`Name for ${device.name}`}
-          maxLength={MAX_DEVICE_NAME}
-          value={name}
-          disabled={!connected || busy}
-          onChange={(event) => setName(event.target.value)}
-        />
-        <button
-          type="submit"
-          className="secondary"
-          disabled={!connected || busy || !name.trim() || name.trim() === device.name}
-        >
-          Rename
-        </button>
-        <button
-          type="button"
-          className="secondary note-delete"
-          disabled={!connected || busy || current}
-          onClick={onRemove}
-        >
-          Remove
-        </button>
-      </form>
+      {onControlPc && <button type="button" className="secondary" onClick={onControlPc}>
+        Companion
+      </button>}
+      <details className="device-row-manage">
+        <summary aria-label={`Manage ${device.name}`}>Manage</summary>
+        <form className="device-rename" onSubmit={submit}>
+          <input
+            aria-label={`Name for ${device.name}`}
+            maxLength={MAX_DEVICE_NAME}
+            value={name}
+            disabled={!connected || busy}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <button type="submit" className="secondary"
+            disabled={!connected || busy || !name.trim() || name.trim() === device.name}>
+            Rename
+          </button>
+          <button type="button" className="secondary note-delete"
+            disabled={!connected || busy || current} onClick={onRemove}>
+            Remove
+          </button>
+        </form>
+      </details>
     </li>
   );
 }
 
 /** Friendly names for owned installs. Removing a row never deletes notes or handoffs. */
-export function DevicesPanel({ store, snapshot, onChanged, onControlPc }: DevicesPanelProps) {
+export function DevicesPanel({ mode, store, snapshot, onChanged, onControlPc }: DevicesPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const confirm = useConfirmAction();
@@ -120,11 +122,19 @@ export function DevicesPanel({ store, snapshot, onChanged, onControlPc }: Device
     }
   }
 
+  if (mode === "nearby") {
+    return connected && snapshot.currentDeviceId &&
+      snapshot.devices.find(device => device.id === snapshot.currentDeviceId)?.platform === "android"
+      ? <SpatialScanner currentDeviceId={snapshot.currentDeviceId}
+          devices={snapshot.devices} onControlPc={onControlPc} />
+      : <p className="placeholder">Nearby discovery is available on the signed-in Android phone.</p>;
+  }
+
   return (
     <>
       <div className="card-head">
         <Tooltip content="Removing a device does not delete notes or sent text.">
-          <h2 id="devices-heading">Connected devices</h2>
+          <h2 id="devices-heading">My devices</h2>
         </Tooltip>
         <div className="card-head-actions">
           <p role="status">{statusLabel(snapshot.status)}</p>
@@ -140,18 +150,16 @@ export function DevicesPanel({ store, snapshot, onChanged, onControlPc }: Device
         </div>
       </div>
       {(problem ?? snapshot.error) && <p className="error" role="alert">{problem ?? snapshot.error}</p>}
-      {connected && snapshot.currentDeviceId &&
-        snapshot.devices.find(device => device.id === snapshot.currentDeviceId)?.platform === "android" && (
-        <SpatialScanner currentDeviceId={snapshot.currentDeviceId}
-          devices={snapshot.devices} onControlPc={onControlPc} />
-      )}
       {connected && snapshot.currentDeviceId && (
-        <DevicePairingPanel
-          key={snapshot.currentDeviceId}
-          deviceId={snapshot.currentDeviceId}
-          devices={snapshot.devices}
-          platform={snapshot.devices.find((device) => device.id === snapshot.currentDeviceId)?.platform ?? "unknown"}
-        />
+        <details className="devices-pair-setup">
+          <summary>Pair a device</summary>
+          <DevicePairingPanel
+            key={snapshot.currentDeviceId}
+            deviceId={snapshot.currentDeviceId}
+            devices={snapshot.devices}
+            platform={snapshot.devices.find((device) => device.id === snapshot.currentDeviceId)?.platform ?? "unknown"}
+          />
+        </details>
       )}
       {snapshot.devices.length ? (
         <ul className="notes hide-scrollbar">
@@ -162,6 +170,8 @@ export function DevicesPanel({ store, snapshot, onChanged, onControlPc }: Device
               current={device.id === snapshot.currentDeviceId}
               connected={connected}
               busy={busy !== null}
+              onControlPc={connected && device.platform === "windows" && device.id !== snapshot.currentDeviceId
+                ? () => onControlPc(device.id) : undefined}
               onRename={(name) => void run(`rename:${device.id}`, () => store.rename(device.id, name))}
               onRemove={() => confirm.ask({
                 title: "Remove connected device?",
