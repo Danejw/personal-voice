@@ -112,11 +112,13 @@ internal object LocalDeviceCapabilities {
           val element = services.item(i) as? Element ?: continue
           val type = field(element, "serviceType")
           val key = when {
-            type.startsWith("urn:schemas-upnp-org:service:RenderingControl:") -> "volume"
-            type.startsWith("urn:schemas-upnp-org:service:AVTransport:") -> "playback"
+            type.matches(Regex("^urn:schemas-upnp-org:service:RenderingControl:[0-9]{1,3}$")) -> "volume"
+            type.matches(Regex("^urn:schemas-upnp-org:service:AVTransport:[0-9]{1,3}$")) -> "playback"
             else -> continue
           }
-          val actionUrl = location.resolve(field(element, "controlURL"))
+          val rawControl = field(element, "controlURL")
+          if (rawControl.isBlank()) continue
+          val actionUrl = location.resolve(rawControl)
           if (actionUrl.scheme != "http" || actionUrl.host != ip ||
             actionUrl.userInfo != null || actionUrl.fragment != null ||
             actionUrl.rawPath.isNullOrBlank() || actionUrl.rawPath.length > 240 ||
@@ -145,6 +147,31 @@ internal object LocalDeviceCapabilities {
     record.media = media
     return identity
   }
+
+  fun pairSamsung(context: Context, ip: String, fingerprint: String): String {
+    val identity = requireSeen(context, ip).identity ?: error("Identify the TV first.")
+    require("samsung_remote" in identity.features && identity.samsungFingerprint == fingerprint) {
+      "Samsung remote control was not verified for this device."
+    }
+    return SamsungTvRemote.pair(context, ip, fingerprint)
+  }
+
+  fun samsungKey(context: Context, ip: String, key: String): String {
+    val identity = requireSeen(context, ip).identity ?: error("Identify the TV first.")
+    require("samsung_remote" in identity.features) { "Samsung remote is unavailable." }
+    return SamsungTvRemote.sendKey(context, ip, key)
+  }
+
+  fun forgetSamsung(context: Context, ip: String) {
+    val identity = requireSeen(context, ip).identity ?: error("Identify the TV first.")
+    require(identity.manufacturer.contains("samsung", ignoreCase = true)) {
+      "This is not an identified Samsung TV."
+    }
+    SamsungTvRemote.forget(context, ip)
+  }
+
+  fun samsungPaired(context: Context, ip: String, fingerprint: String): Boolean =
+    SamsungTvRemote.isPaired(context, ip, fingerprint)
 
   fun openWeb(context: Context, ip: String): Intent {
     val identity = requireSeen(context, ip).identity ?: error("Identify the device first.")
