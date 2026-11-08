@@ -42,7 +42,7 @@ export const ASSISTANT_TOOL_INTELLIGENCE = {
   list_nearby_devices: spec("devices", "android",
     "User asks which nearby physical Wi-Fi/Bluetooth devices are present, or what actions they support.",
     "They ask which account devices can receive a handoff or control a specifically paired Windows PC.",
-    "Perform a fresh local Android scan and bounded protocol inspection; return exact IDs, verified actions and authorization state. Resolved mDNS addresses alone never grant controls. No device command is sent.",
+    "For a named TV, printer or speaker, pass the name as query. Run a fresh Android scan and inspect matching IPs. Return exact IDs and verified actions. Differentiate observed radios from saved Bluetooth bonds and TV approval from live control sessions. No command is sent.",
     "Local scan gives observed devices and protocol evidence; unsupported or uninspected devices are labeled, not guessed.",
     "Use before control_nearby_device. Android only; do not confuse with list_handoffs or remote PC tools."),
   control_nearby_device: spec("devices", "android",
