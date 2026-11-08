@@ -14,7 +14,6 @@ internal class AssistantAudioOutputs(context: Context) {
 
   private fun mediaType(type: Int): Boolean = when (type) {
     AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-    AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
     AudioDeviceInfo.TYPE_WIRED_HEADSET,
     AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
     AudioDeviceInfo.TYPE_USB_DEVICE,
@@ -27,7 +26,6 @@ internal class AssistantAudioOutputs(context: Context) {
 
   private fun kind(type: Int): String = when (type) {
     AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "Bluetooth media (A2DP)"
-    AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "Bluetooth call audio"
     AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "Wired"
     AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_ACCESSORY -> "USB"
     else -> "Bluetooth LE audio"
