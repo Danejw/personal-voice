@@ -189,3 +189,9 @@
   padding: 6px 9px; border-radius: 8px; background: #25554b;
   color: #b7edde; font-size: 11px; font-weight: 600;
 }
+
+.spatial-lg-actions {
+  display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px;
+}
+.spatial-lg-actions button { min-height: 43px; min-width: 0; font-size: 12px; }
+.spatial-lg-actions button:last-child { grid-column: span 2; }
