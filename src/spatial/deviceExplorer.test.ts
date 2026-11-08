@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deviceSubtitle, isUnidentifiedBluetooth, listDevices } from "@/spatial/deviceExplorer";
+import { deviceSubtitle, deviceReadiness, isUnidentifiedBluetooth, listDevices } from "@/spatial/deviceExplorer";
 import type { NearbyDevice } from "@/spatial/spatialDevices";
 
 const device = (id: string, name: string, source: NearbyDevice["source"],
@@ -51,5 +51,41 @@ describe("nearby device inventory", () => {
     expect(deviceSubtitle(records[4]!)).toContain("192.168.0.27");
     expect(records[4]!.pairedDeviceId).toBeUndefined();
     expect(deviceSubtitle(records[2]!)).toBe("Bluetooth · Paired");
+  });
+});
+
+describe("action-first readiness", () => {
+  const host = device("lan-111111", "TV", "lan", {
+    ipAddress: "192.168.0.14", kind: "display", detail: "TCP 8060",
+  });
+  const inspected = {
+    ipAddress: "192.168.0.14", name: "TV", manufacturer: "Roku",
+    model: "", features: [] as Array<"roku_companion" | "volume" | "lg_remote" | "open_web">,
+    samsungPaired: false, lgPaired: false,
+  };
+
+  it("does not label Bluetooth pairing as third-party remote access", () => {
+    const status = deviceReadiness(records[2]!, null, false);
+    expect(status).toMatchObject({ state: "setup", label: "Android paired" });
+    expect(status.quickAction).toBeUndefined();
+  });
+  it("shows exactly why an unresolved service has no controls", () => {
+    expect(deviceReadiness(records[5]!, null, false))
+      .toMatchObject({ state: "unavailable", label: "Address unavailable" });
+  });
+  it("only shows device controls after native verification", () => {
+    expect(deviceReadiness(host, null, true).state).toBe("checking");
+    expect(deviceReadiness(host, inspected, false).quickAction).toBeUndefined();
+    expect(deviceReadiness(host, { ...inspected, features: ["volume"] }, false))
+      .toMatchObject({ state: "ready", quickAction: "volume_up" });
+  });
+  it("offers the official Roku companion rather than fabricated mobile ECP control", () => {
+    expect(deviceReadiness(host, { ...inspected, features: ["roku_companion"] }, false))
+      .toMatchObject({ state: "setup", quickAction: "open_roku_app" });
+  });
+  it("prompts for TV approval before offering volume buttons", () => {
+    expect(deviceReadiness(host, { ...inspected, name: "LG", manufacturer: "LG",
+      features: ["lg_remote"], lgFingerprint: "a".repeat(64) }, false))
+      .toMatchObject({ state: "setup", quickAction: "pair" });
   });
 });
