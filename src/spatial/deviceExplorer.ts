@@ -1,5 +1,5 @@
 import type { NearbyDevice } from "@/spatial/spatialDevices";
-import { nearbyGroup } from "@/spatial/spatialDevices";
+import { nearbyGroup, observedThisScan } from "@/spatial/spatialDevices";
 import type { DeviceIdentity } from "@/spatial/deviceCapabilities";
 import { availableNearbyActions, type NearbyAction } from "@/spatial/deviceActionRegistry";
 
@@ -14,13 +14,17 @@ export function isUnidentifiedBluetooth(device: NearbyDevice): boolean {
 export function deviceSubtitle(device: NearbyDevice): string {
   if (device.pairedDeviceId) return "Personal Voice · Connected";
   if (device.ipAddress) return device.ipAddress + " · " + device.detail;
-  if (device.paired) return "Bluetooth · Paired";
-  if (device.signalDbm !== undefined) return "Bluetooth · " + device.signalDbm + " dBm";
+  if (nearbyGroup(device.source) === "bluetooth" && !observedThisScan(device)) {
+    return "Saved Bluetooth pairing · not observed in this scan";
+  }
+  if (device.paired) return "Bluetooth · Detected · Paired with Android";
+  if (device.signalDbm !== undefined) return "Bluetooth · Detected · " + device.signalDbm + " dBm";
   return device.source === "mdns" ? "Network service · " + device.detail : device.detail;
 }
 
 function priority(device: NearbyDevice): number {
   if (device.pairedDeviceId) return 0;
+  if (!observedThisScan(device)) return 6;
   if (device.ipAddress && /Samsung|LG|TV|Cast/i.test(device.name)) return 1;
   if (device.paired) return 2;
   if (device.ipAddress) return 3;
@@ -60,12 +64,18 @@ export function deviceReadiness(
   if (device.pairedDeviceId) return {
     state: "ready", label: "Ready", hint: "Authenticated Personal Voice computer",
   };
-  if (nearbyGroup(device.source) === "bluetooth") return {
-    state: "setup", label: device.paired ? "Android paired" : "Bluetooth",
-    hint: device.paired
-      ? "Manage connection and audio output in Android Bluetooth settings"
-      : "Pair through Android settings; Bluetooth discovery alone does not grant remote control",
-  };
+  if (nearbyGroup(device.source) === "bluetooth") {
+    const observed = observedThisScan(device);
+    return {
+      state: "setup", label: !observed ? "Saved pairing" : device.paired ? "Detected · Paired" : "Detected",
+      hint: !observed
+        ? "Saved in Android; not detected during this scan. Open details to manage the pairing"
+        : device.paired
+          ? "Radio observed; Android pairing is saved. Use Bluetooth settings to manage its connection"
+          : "Radio observed; pair in Android settings. Discovery alone does not grant remote control",
+      ...(observed ? { quickAction: "bluetooth_settings" as NearbyAction, quickLabel: "Settings" } : {}),
+    };
+  }
   if (!device.ipAddress) return {
     state: "unavailable", label: "Address unavailable",
     hint: "Service discovered without a usable local IP; rescan on the same Wi-Fi",
@@ -82,10 +92,13 @@ export function deviceReadiness(
   const actions = availableNearbyActions(device, identity);
   if (actions.some(a => a.action === "pair")) {
     const paired = identity.lgPaired || identity.samsungPaired;
-    if (!paired) return {
-      state: "setup", label: "TV approval needed",
-      hint: "Pair over Wi-Fi and approve the request on your TV",
-      quickAction: "pair", quickLabel: "Pair",
+    const connected = identity.lgConnected || identity.samsungConnected;
+    if (!connected) return {
+      state: "setup", label: paired ? "TV reconnect needed" : "TV approval needed",
+      hint: paired
+        ? "TV approval is saved, but the remote session is not connected"
+        : "Pair over Wi-Fi and approve the request on your TV",
+      quickAction: "pair", quickLabel: paired ? "Connect" : "Pair",
     };
   }
   if (actions.some(a => a.action === "volume_up")) return {
