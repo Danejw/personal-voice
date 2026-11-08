@@ -116,6 +116,8 @@ export interface AssistantActions {
   listNearbyDevices(): Promise<string>;
   /** One permitted local action after confirmation; native protocols enforce their own trust. */
   controlNearbyDevice(deviceId: string, action: string): Promise<string>;
+  /** Resolve the confirmation preview using observed scan state, before permitting control. */
+  previewNearbyDeviceAction(deviceId: string, action: string): Promise<string>;
   pairDevice(action: "open" | "show_code" | "scan_qr" | "enter_code" | "status", code?: string): Promise<string>;
   /** Short text for a confirm card. Throws when the id is not in the current list. */
   describeItem(kind: "note" | "handoff", id: string): string;
@@ -1554,6 +1556,15 @@ export class AssistantController {
         if (kind) {
           try {
             preview = this.actions.describeItem(kind, decision.text);
+          } catch (error) {
+            this.replyTool(decision.id, decision.name, false, toolFailure(error));
+            continue;
+          }
+        }
+        if (decision.name === "control_nearby_device") {
+          try {
+            const input = JSON.parse(decision.text) as { deviceId: string; action: string };
+            preview = await this.actions.previewNearbyDeviceAction(input.deviceId, input.action);
           } catch (error) {
             this.replyTool(decision.id, decision.name, false, toolFailure(error));
             continue;
