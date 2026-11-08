@@ -45,6 +45,7 @@ fn main() {
                     "samsung_remote_key",
                     "forget_samsung_tv",
                     "request_nearby_bluetooth",
+                    "open_nearby_bluetooth_settings",
                     "device_link_discover",
                     "device_link_connect",
                     "device_link_send",
