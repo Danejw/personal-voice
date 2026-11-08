@@ -426,6 +426,16 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     }.start()
   }
 
+  /** Bluetooth device discovery does not permit arbitrary device control. */
+  @Command
+  fun openNearbyBluetoothSettings(invoke: Invoke) {
+    try {
+      open(invoke, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+    } catch (_: ActivityNotFoundException) {
+      invoke.reject("Bluetooth settings are unavailable on this device.")
+    }
+  }
+
   @Command
   fun requestNearbyBluetooth(invoke: Invoke) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
