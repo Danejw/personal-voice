@@ -31,6 +31,8 @@ describe("assistant tool schema", () => {
       "restore_note",
       "delete_note",
       "send_handoff",
+      "list_nearby_devices",
+      "control_nearby_device",
       "list_handoffs",
       "dismiss_handoff",
       "capture_screen",
@@ -85,6 +87,25 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("replace_selection");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
+  });
+
+  it("validates nearby discovery and rejects invented or unsafe device commands", () => {
+    expect(decideToolCall({ id: "list", name: "list_nearby_devices", args: {} }, plan))
+      .toMatchObject({ kind: "nearbyDevices" });
+    const id = "lan-123456789abc";
+    expect(decideToolCall({ id: "run", name: "control_nearby_device",
+      args: { device_id: id, action: "volume_up" } }, plan))
+      .toMatchObject({ kind: "confirm", name: "control_nearby_device",
+        text: JSON.stringify({ deviceId: id, action: "volume_up" }) });
+    for (const args of [
+      { device_id: "192.168.0.27", action: "volume_up" },
+      { device_id: id, action: "factory_reset" },
+      { device_id: id },
+      { device_id: "", action: "play" },
+    ]) {
+      expect(decideToolCall({ id: "bad", name: "control_nearby_device", args }, plan).kind)
+        .toBe("reject");
+    }
   });
 
   it("validates pairing tool actions and eight-digit codes", () => {
