@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { parseDeviceIdentity, type DeviceIdentity } from "@/spatial/deviceCapabilities";
 import type { NearbyDevice } from "@/spatial/spatialDevices";
+import { isBluetoothSource } from "@/spatial/spatialDevices";
 
 interface Props {
   device: NearbyDevice;
@@ -21,6 +22,7 @@ export function DeviceActions({ device, onControlPc }: Props) {
   const [inspecting, setInspecting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [remoteOpen, setRemoteOpen] = useState(false);
+  const [inspectAttempt, setInspectAttempt] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const ip = device.ipAddress;
@@ -43,7 +45,7 @@ export function DeviceActions({ device, onControlPc }: Props) {
       })
       .finally(() => { if (!cancelled) setInspecting(false); });
     return () => { cancelled = true; };
-  }, [ip]);
+  }, [ip, inspectAttempt]);
 
   async function perform(command: string, args: Record<string, string>, fallback: string) {
     setBusy(true);
@@ -90,8 +92,29 @@ export function DeviceActions({ device, onControlPc }: Props) {
   }
 
   const has = (feature: string) => identity?.features.some(item => item === feature) === true;
+  const bluetooth = isBluetoothSource(device.source);
+  const capabilityNames: Record<string, string> = {
+    open_web: "Local web page", volume: "UPnP volume", playback: "UPnP playback",
+    samsung_remote: "Samsung TV remote",
+  };
   return (
     <div className="spatial-capability-panel">
+      <div className="spatial-capability-summary">
+        <strong>Capabilities</strong>
+        {inspecting ? (
+          <span>Checking this device…</span>
+        ) : device.pairedDeviceId ? (
+          <span>Authenticated Personal Voice computer</span>
+        ) : bluetooth ? (
+          <span>{device.paired ? "Paired with Android" : "Bluetooth discovery"}</span>
+        ) : identity?.features.length ? (
+          <div className="spatial-feature-chips">
+            {identity.features.map(feature => <span key={feature}>{capabilityNames[feature]}</span>)}
+          </div>
+        ) : (
+          <span>No remote-control protocol verified</span>
+        )}
+      </div>
       {identity && (
         <div className="spatial-identity">
           <strong>{identity.name !== "Device " + ip ? identity.name : device.name}</strong>
@@ -105,7 +128,14 @@ export function DeviceActions({ device, onControlPc }: Props) {
           if (device.pairedDeviceId) onControlPc(device.pairedDeviceId);
         }}>Open Companion</button>
       )}
-      {inspecting && <p className="spatial-capabilities">Identifying supported actions…</p>}
+      {bluetooth && (
+        <button type="button" className="secondary" disabled={busy}
+          onClick={() => void perform("open_nearby_bluetooth_settings", {},
+            "Opened Android Bluetooth settings.")}>
+          {device.paired ? "Manage Bluetooth connection" : "Pair in Bluetooth settings"}
+        </button>
+      )}
+      {inspecting && <p className="spatial-capabilities" role="status">Checking local services and device identity…</p>}
       {ip && identity && (
         <>
           {has("open_web") && (
@@ -173,16 +203,33 @@ export function DeviceActions({ device, onControlPc }: Props) {
             </div>
           )}
           {!identity.features.length && !device.pairedDeviceId && (
-            <p className="spatial-capabilities">No compatible controls verified for this device.</p>
+            <p className="spatial-capabilities">This device is reachable, but no compatible remote-control service was verified. Discovery alone cannot grant control.</p>
+          )}
+          {!has("samsung_remote") && /samsung/i.test(device.name + " " + identity.manufacturer) && (
+            <p className="spatial-capabilities">
+              Samsung remote unavailable. The secure TV remote service on port 8002 was not verified.
+              UPnP controls will appear only if this model advertises them.
+            </p>
           )}
         </>
       )}
-      {!ip && !device.pairedDeviceId && (
+      {bluetooth && (
         <p className="spatial-capabilities">
           {device.paired
-            ? "Bluetooth pairing is separate from Personal Voice remote-control authorization."
-            : "Discovered advertisement only. This device does not expose a verified control channel."}
+            ? "Android recognizes this device. Bluetooth pairing does not grant Personal Voice TV or computer control."
+            : "Android can manage discovery and pairing. Remote control needs a supported device protocol."}
         </p>
+      )}
+      {!ip && !bluetooth && !device.pairedDeviceId && (
+        <p className="spatial-capabilities">
+          This network service did not provide a verified device address. It cannot be controlled from this discovery alone.
+        </p>
+      )}
+      {ip && !inspecting && !identity && (
+        <button type="button" className="secondary" disabled={busy}
+          onClick={() => setInspectAttempt(previous => previous + 1)}>
+          Retry identification
+        </button>
       )}
       {notice && <p className="spatial-action-notice" role="status">{notice}</p>}
       {failure && <p className="spatial-error" role="alert">{failure}</p>}
