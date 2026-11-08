@@ -40,6 +40,9 @@ internal class AssistantAudioOutputs(context: Context) {
 
   fun list(): List<Output> {
     val active = selectedDevice()
+    // Android can disconnect a speaker without notifying the WebView.
+    // Never keep an apparently selected sink that is no longer connected.
+    if (chosenId != null && active == null) chosenId = null
     return listOf(Output("system", "System default", "Automatic call/communication route", chosenId == null)) +
       current().map { device ->
         Output("audio:" + device.id, device.productName?.toString()?.take(80)?.takeIf { it.isNotBlank() }
