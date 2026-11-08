@@ -99,6 +99,7 @@ rust {
 
 dependencies {
     implementation("androidx.webkit:webkit:1.14.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")
