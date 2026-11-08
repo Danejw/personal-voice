@@ -3,10 +3,10 @@ import type { MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
-import { consolidateNearbyDevices } from "@/spatial/deviceCapabilities";
+import { consolidateNearbyDevices, type DeviceIdentity } from "@/spatial/deviceCapabilities";
 import { DeviceActions } from "@/spatial/DeviceActions";
 import { nearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
-import { deviceSubtitle, listDevices, type DeviceView } from "@/spatial/deviceExplorer";
+import { deviceSubtitle, deviceReadiness, listDevices, type DeviceView } from "@/spatial/deviceExplorer";
 import type { OwnedDevice } from "@/handoffs/handoff";
 import {
   clampPosition, mergePersonalVoicePeers, readPositions, nearbyGroup,
@@ -44,6 +44,12 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   const sheetCloseRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLElement>(null);
   const mapRef = useRef<HTMLDivElement>(null);
+  const advancedRef = useRef<HTMLDetailsElement>(null);
+  const [identities, setIdentities] = useState<Record<string, DeviceIdentity>>({});
+  const [inspectionFailures, setInspectionFailures] = useState<Record<string, boolean>>({});
+  const [quickPending, setQuickPending] = useState<string | null>(null);
+  const [quickFeedback, setQuickFeedback] = useState<string | null>(null);
+  const [visibleLimit, setVisibleLimit] = useState(10);
   const [positions, setPositions] = useState<SpatialPositions>(() => {
     try { return readPositions(localStorage.getItem(placementKey(currentDeviceId))); }
     catch { return {}; }
@@ -61,6 +67,9 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     setShowMap(false);
     setShowUnnamed(false);
     setQuery("");
+    setIdentities({});
+    setInspectionFailures({});
+    setVisibleLimit(10);
   }, [currentDeviceId]);
 
   useEffect(() => deviceLinkManager.subscribe(() => {
@@ -79,6 +88,31 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
   const { items: listed, matches, hiddenCount } =
     listDevices(nearby, view, query, showUnnamed);
   const placed = group.filter(item => positions[item.id]);
+  const visible = query.trim() ? listed : listed.slice(0, visibleLimit);
+  const inspectionTargets = useMemo(() => [...new Set(nearby.filter(device => device.ipAddress &&
+    nearbyGroup(device.source) === "network").map(device => device.ipAddress!))].slice(0, 28), [nearby]);
+
+  // Native service verification runs after discovery, bounded to three hosts in
+  // parallel. A host or Bluetooth advertisement is never marked ready on name alone.
+  useEffect(() => {
+    if (!scanned) return;
+    let cancelled = false;
+    const targets = inspectionTargets;
+    let next = 0;
+    const worker = async () => {
+      while (!cancelled && next < targets.length) {
+        const ip = targets[next++]!;
+        try {
+          const identity = await nearbyCapabilityService.inspect(ip);
+          if (!cancelled) setIdentities(prev => ({ ...prev, [ip]: identity }));
+        } catch {
+          if (!cancelled) setInspectionFailures(prev => ({ ...prev, [ip]: true }));
+        }
+      }
+    };
+    void Promise.all(Array.from({ length: Math.min(3, targets.length) }, worker));
+    return () => { cancelled = true; };
+  }, [inspectionTargets, scanned, scanGeneration]);
 
   useEffect(() => {
     if (!selectedDeviceId) return;
@@ -123,6 +157,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     setPlacing(null);
     setShowUnnamed(false);
     setQuery("");
+    setVisibleLimit(10);
   }
 
   async function discover() {
@@ -131,6 +166,9 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     setError(null);
     setSelected(null);
     setPlacing(null);
+    setQuickFeedback(null);
+    setIdentities({});
+    setInspectionFailures({});
     try {
       const result = await nearbyCapabilityService.scan(devices, currentDeviceId,
         deviceLinkManager.getSnapshot().localPeers);
@@ -139,6 +177,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
       setPeers(deviceLinkManager.getSnapshot().localPeers);
       setScanned(true);
       setView("network");
+      setVisibleLimit(10);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Nearby scan failed.");
     } finally {
@@ -171,6 +210,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
 
   function startPlacement(id: string) {
     setShowMap(true);
+    if (advancedRef.current) advancedRef.current.open = true;
     setPlacing(id);
     setSelected(null);
   }
@@ -182,6 +222,25 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
       setError("Allow Nearby Devices, then scan again.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Bluetooth permission unavailable.");
+    }
+  }
+
+  async function quickAction(device: NearbyDevice, action: import("@/spatial/deviceActionRegistry").NearbyAction) {
+    if (quickPending) return;
+    setQuickPending(device.id);
+    setQuickFeedback(null);
+    try {
+      const response = await nearbyCapabilityService.act(device.id, action);
+      setQuickFeedback(device.name + ": " + response);
+      if (action === "pair" && device.ipAddress) {
+        const refreshed = await nearbyCapabilityService.inspect(device.ipAddress);
+        setIdentities(prev => ({ ...prev, [device.ipAddress!]: refreshed }));
+      }
+    } catch (reason) {
+      setQuickFeedback(device.name + ": " +
+        (reason instanceof Error ? reason.message : "Action failed."));
+    } finally {
+      setQuickPending(null);
     }
   }
 
@@ -210,9 +269,6 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
         ))}
       </div>
 
-      {scanned && (view === "network" || view === "all") && !!scan.networkLabel && (
-        <p className="spatial-network-scope">{scan.networkLabel}</p>
-      )}
       {error && <p className="spatial-error" role="alert">{error}</p>}
       {scan.bluetoothPermissionRequired && (
         <button type="button" className="secondary spatial-bluetooth" onClick={() => void enableBluetooth()}>
@@ -221,13 +277,69 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
       )}
       <div className="spatial-inventory-tools">
         <input type="search" value={query} onChange={event => setQuery(event.target.value)}
-          placeholder="Find device or IP" aria-label="Search nearby devices" />
-        <button type="button" className="secondary" aria-expanded={showMap}
-          onClick={() => { setShowMap(!showMap); setPlacing(null); }}>
-          {showMap ? "Hide map" : "Room map"}
-        </button>
+          placeholder="Search name, IP, service" aria-label="Search nearby devices" />
       </div>
 
+      <div className="spatial-inventory">
+        {visible.map(device => {
+          const identity = device.ipAddress ? identities[device.ipAddress] ?? null : null;
+          const scheduled = !!device.ipAddress && inspectionTargets.includes(device.ipAddress);
+          const inspecting = scheduled && scanned && !identity &&
+            !inspectionFailures[device.ipAddress!];
+          const skipped = !!device.ipAddress && scanned && !scheduled;
+          const readiness = deviceReadiness(device, identity, inspecting, skipped);
+          return (
+            <div className="spatial-device-row" key={device.id}>
+              <button type="button" className="spatial-device"
+                title={deviceSubtitle(device) + " · " + readiness.hint}
+                onClick={() => { setPlacing(null); setSelected(device.id); }}
+                aria-label={"Open controls for " + device.name + ". " + readiness.hint}>
+                <span className="spatial-device-icon" aria-hidden="true">{glyph[device.kind]}</span>
+                <span className="spatial-device-label">
+                  <strong>{device.name}</strong>
+                  <small><span className={"spatial-readiness spatial-readiness-" + readiness.state}>
+                    {readiness.label}</span> · {readiness.hint}</small>
+                </span>
+                {!readiness.quickAction && <span className="spatial-place-label" aria-hidden="true">›</span>}
+              </button>
+              {readiness.quickAction && (
+                <button type="button" className="spatial-quick-action"
+                  disabled={quickPending !== null}
+                  aria-label={readiness.quickLabel + " for " + device.name}
+                  onClick={() => void quickAction(device, readiness.quickAction!)}>
+                  {quickPending === device.id ? "…" : readiness.quickLabel}
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {!showUnnamed && hiddenCount > 0 && (
+          <button type="button" className="spatial-unnamed-toggle" onClick={() => setShowUnnamed(true)}>
+            Show {hiddenCount} unidentified Bluetooth devices
+          </button>
+        )}
+        {showUnnamed && hiddenCount > 0 && (
+          <button type="button" className="spatial-unnamed-toggle" onClick={() => setShowUnnamed(false)}>
+            Hide unidentified devices
+          </button>
+        )}
+        {!query && listed.length > visible.length && (
+          <button type="button" className="spatial-unnamed-toggle"
+            onClick={() => setVisibleLimit(n => n + 12)}>
+            Show {Math.min(12, listed.length - visible.length)} more
+          </button>
+        )}
+      </div>
+      {quickFeedback && <p className="spatial-action-notice" role="status">{quickFeedback}</p>}
+      <details className="spatial-advanced" ref={advancedRef}>
+        <summary>Scan details and room map</summary>
+        {scanned && !!scan.networkLabel && (
+          <p className="spatial-network-scope">{scan.networkLabel}</p>
+        )}
+        <button type="button" className="secondary" aria-expanded={showMap}
+          onClick={() => { setShowMap(!showMap); setPlacing(null); }}>
+          {showMap ? "Hide map" : "Show room map"}
+        </button>
       {showMap && (
         <div className="spatial-scene" ref={mapRef}>
           <div className="spatial-floor" aria-label="Manual device placement map">
@@ -257,31 +369,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
         </div>
       )}
 
-      <div className="spatial-inventory">
-        {listed.map(device => (
-          <button key={device.id} type="button" className="spatial-device"
-            onClick={() => { setPlacing(null); setSelected(device.id); }}
-            aria-label={"View device details for " + device.name}>
-            <span className="spatial-device-icon" aria-hidden="true">{glyph[device.kind]}</span>
-            <span className="spatial-device-label">
-              <strong>{device.name}</strong>
-              <small>{deviceSubtitle(device)}</small>
-            </span>
-            {device.pairedDeviceId && <span className="spatial-device-connected">Ready</span>}
-            <span className="spatial-place-label" aria-hidden="true">›</span>
-          </button>
-        ))}
-        {!showUnnamed && hiddenCount > 0 && (
-          <button type="button" className="spatial-unnamed-toggle" onClick={() => setShowUnnamed(true)}>
-            Show {hiddenCount} unidentified Bluetooth devices
-          </button>
-        )}
-        {showUnnamed && hiddenCount > 0 && (
-          <button type="button" className="spatial-unnamed-toggle" onClick={() => setShowUnnamed(false)}>
-            Hide unidentified devices
-          </button>
-        )}
-      </div>
+      </details>
 
       {matches === 0 && scanned && (
         <p className="spatial-empty">No matching devices. Try another source or search.</p>

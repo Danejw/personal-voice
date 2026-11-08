@@ -97,12 +97,12 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "list_nearby_devices",
-      description: "Android only. On explicit request, scan nearby Wi-Fi and Bluetooth devices and report their observed identities and verified supported actions. The result includes exact device IDs, protocols and whether TV approval is required. Read-only; does not pair or control a device. Never guess support from a device name or a Bluetooth advertisement.",
+      description: "Android only. On explicit request, scan nearby Wi-Fi and Bluetooth devices and report their observed identities and verified supported actions. The result includes exact device IDs, protocols and whether TV approval is required. Read-only; does not pair or control a device. A resolved mDNS service name or open port is not proof of remote control; never guess support from Bluetooth.",
       parameters: { type: "object", properties: {} },
     },
     {
       name: "control_nearby_device",
-      description: "Android only. Perform one explicitly requested local device action, after list_nearby_devices supplies the exact device_id and verified action. Requires Personal Voice confirmation, plus TV authorization if applicable. Use only listed actions; pairing must be approved on the television. Never infer remote control from Bluetooth discovery. A command receipt does not prove visible effect.",
+      description: "Android only. Perform one explicitly requested local device action, after list_nearby_devices supplies the exact device_id and verified action. Requires Personal Voice confirmation, plus TV authorization if applicable. Use only listed actions; pairing must be approved on the television. Roku only offers an official companion-app handoff, never third-party ECP keys. Bluetooth discovery does not prove control. A command receipt does not prove visible effect.",
       parameters: { type: "object", properties: {
         device_id: { type: "string", description: "Exact local scan ID from list_nearby_devices; not a guessed name or IP." },
         action: { type: "string", enum: [...NEARBY_ACTIONS] },

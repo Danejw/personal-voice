@@ -3,6 +3,7 @@ import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { nearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
 import type { NearbyAction } from "@/spatial/deviceActionRegistry";
 import type { DeviceIdentity } from "@/spatial/deviceCapabilities";
+
 import type { NearbyDevice } from "@/spatial/spatialDevices";
 import { isBluetoothSource } from "@/spatial/spatialDevices";
 
@@ -29,6 +30,7 @@ const samsungKeyAction: Record<string, NearbyAction> = {
 /** UI and Assistant dispatch the same semantic action, not separate raw protocol controls. */
 function actionFor(command: string, args: Record<string, string>): NearbyAction | null {
   if (command === "open_nearby_web") return "open_web";
+  if (command === "open_nearby_roku_app") return "open_roku_app";
   if (command === "open_nearby_bluetooth_settings") return "bluetooth_settings";
   if (command === "samsung_remote_key") return samsungKeyAction[args.key ?? ""] ?? null;
   if (command === "nearby_media_action" || command === "lg_remote_action") {
@@ -61,7 +63,11 @@ export function DeviceActions({ device, onControlPc }: Props) {
     setInspecting(true);
     void nearbyCapabilityService.inspect(ip)
       .then(next => {
-        if (!cancelled) setIdentity(next);
+        if (!cancelled) {
+          setIdentity(next);
+          setRemoteOpen(next.samsungPaired);
+          setLgRemoteOpen(next.lgPaired);
+        }
       })
       .catch(reason => {
         if (!cancelled) setFailure(reason instanceof Error ? reason.message : "Could not identify device.");
@@ -146,25 +152,10 @@ export function DeviceActions({ device, onControlPc }: Props) {
   const capabilityNames: Record<string, string> = {
     open_web: "Local web page", volume: "UPnP volume", playback: "UPnP playback",
     samsung_remote: "Samsung TV remote", lg_remote: "LG webOS remote",
+    roku_companion: "Official Roku app",
   };
   return (
     <div className="spatial-capability-panel">
-      <div className="spatial-capability-summary">
-        <strong>Capabilities</strong>
-        {inspecting ? (
-          <span>Checking this device…</span>
-        ) : device.pairedDeviceId ? (
-          <span>Authenticated Personal Voice computer</span>
-        ) : bluetooth ? (
-          <span>{device.paired ? "Paired with Android" : "Bluetooth discovery"}</span>
-        ) : identity?.features.length ? (
-          <div className="spatial-feature-chips">
-            {identity.features.map(feature => <span key={feature}>{capabilityNames[feature]}</span>)}
-          </div>
-        ) : (
-          <span>No remote-control protocol verified</span>
-        )}
-      </div>
       {identity && (
         <div className="spatial-identity">
           <strong>{identity.name !== "Device " + ip ? identity.name : device.name}</strong>
@@ -188,6 +179,19 @@ export function DeviceActions({ device, onControlPc }: Props) {
       {inspecting && <p className="spatial-capabilities" role="status">Checking local services and device identity…</p>}
       {ip && identity && (
         <>
+          {has("roku_companion") && (
+            <div className="spatial-control-group">
+              <button type="button" disabled={busy}
+                onClick={() => void perform("open_nearby_roku_app", { ipAddress: ip },
+                  "Opened official Roku app.")}>
+                Open official Roku remote
+              </button>
+              <p className="spatial-capabilities">
+                Roku limits third-party mobile ECP commands. Use Roku's official app
+                for remote keys and channel launching.
+              </p>
+            </div>
+          )}
           {has("open_web") && (
             <button type="button" className="secondary" disabled={busy}
               onClick={() => void perform("open_nearby_web", { ipAddress: ip }, "Opened device page in browser.")}>
@@ -317,6 +321,25 @@ export function DeviceActions({ device, onControlPc }: Props) {
           Retry identification
         </button>
       )}
+      <details className="spatial-capability-details">
+        <summary>Capability details</summary>
+      <div className="spatial-capability-summary">
+        <strong>Capabilities</strong>
+        {inspecting ? (
+          <span>Checking this device…</span>
+        ) : device.pairedDeviceId ? (
+          <span>Authenticated Personal Voice computer</span>
+        ) : bluetooth ? (
+          <span>{device.paired ? "Paired with Android" : "Bluetooth discovery"}</span>
+        ) : identity?.features.length ? (
+          <div className="spatial-feature-chips">
+            {identity.features.map(feature => <span key={feature}>{capabilityNames[feature]}</span>)}
+          </div>
+        ) : (
+          <span>No remote-control protocol verified</span>
+        )}
+      </div>
+      </details>
       {notice && <p className="spatial-action-notice" role="status">{notice}</p>}
       {failure && <p className="spatial-error" role="alert">{failure}</p>}
     </div>

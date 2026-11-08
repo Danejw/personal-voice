@@ -26,6 +26,11 @@
     <!-- Personal sideload: lets the setup panel request unrestricted battery. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- Official Roku companion handoff without broad package visibility. -->
+    <queries>
+        <package android:name="com.roku.remote" />
+    </queries>
+
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 

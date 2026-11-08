@@ -14,6 +14,12 @@ import androidx.core.content.ContextCompat
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.Inet4Address
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
@@ -72,6 +78,12 @@ internal object NearbyDeviceDiscovery {
     val found = ConcurrentHashMap<String, Device>()
     val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
     val listeners = mutableListOf<NsdManager.DiscoveryListener>()
+    // Resolve discovered DNS-SD endpoints without extending the scan indefinitely.
+    // Legacy Android NSD permits only one outstanding resolve request per manager.
+    val resolvers = Executors.newSingleThreadExecutor()
+    val resolutionStalled = AtomicBoolean(false)
+    val queuedResolutions = AtomicInteger(0)
+    val seenServices = ConcurrentHashMap.newKeySet<String>()
     for ((type, kind) in serviceTypes) {
       val listener = object : NsdManager.DiscoveryListener {
         override fun onDiscoveryStarted(serviceType: String) {}
@@ -81,7 +93,37 @@ internal object NearbyDeviceDiscovery {
         override fun onServiceLost(service: NsdServiceInfo) {}
         override fun onServiceFound(service: NsdServiceInfo) {
           val name = clean(service.serviceName, 72)
-          if (name.isNotEmpty()) add(found, "mdns", type + ":" + name.lowercase(), name, kind, type)
+          if (name.isEmpty()) return
+          val key = type + ":" + name.lowercase()
+          add(found, "mdns", key, name, kind, type)
+          if (!seenServices.add(key) || queuedResolutions.incrementAndGet() > 24) return
+          try { resolvers.execute {
+            // A timed-out native resolve may still be active. Do not start another.
+            if (resolutionStalled.get()) return@execute
+            val finished = CountDownLatch(1)
+            val callback = object : NsdManager.ResolveListener {
+              override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) { finished.countDown() }
+              override fun onServiceResolved(info: NsdServiceInfo) {
+                // Android 14+ may publish multiple IPv4/IPv6 host addresses.
+                val address = (listOfNotNull(info.host) +
+                  (if (Build.VERSION.SDK_INT >= 34) info.hostAddresses else emptyList()))
+                  .firstOrNull { it is Inet4Address && it.isSiteLocalAddress } as? Inet4Address
+                if (address != null && info.port in 1..65535) {
+                  // Resolution gives an endpoint, never control permission.
+                  add(found, "mdns", key, name, kind, type + " · TCP " + info.port,
+                    ipAddress = address.hostAddress, ports = listOf(info.port))
+                }
+                finished.countDown()
+              }
+            }
+            try {
+              @Suppress("DEPRECATION")
+              nsd.resolveService(service, callback)
+              if (!finished.await(1600, TimeUnit.MILLISECONDS)) resolutionStalled.set(true)
+            } catch (_: Exception) { /* Name remains visible without an endpoint. */ }
+          } } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Discovery already stopped after its bounded scan window.
+          }
         }
       }
       try {
@@ -152,6 +194,10 @@ internal object NearbyDeviceDiscovery {
     for (listener in listeners) {
       try { nsd.stopServiceDiscovery(listener) } catch (_: Exception) {}
     }
+    resolvers.shutdown()
+    try { resolvers.awaitTermination(1400, TimeUnit.MILLISECONDS) }
+    catch (_: InterruptedException) { Thread.currentThread().interrupt() }
+    resolvers.shutdownNow()
     try { ssdpWorker.join(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
     try { lanWorker.join(1500) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
     return Scan(found.values.sortedWith(compareBy({ it.name.lowercase() }, { it.id })).take(350),
@@ -164,6 +210,7 @@ internal object NearbyDeviceDiscovery {
       "urn:schemas-upnp-org:device:MediaRenderer:1",
       "urn:dial-multiscreen-org:service:dial:1",
       "urn:lge-com:service:webos-second-screen:1",
+      "roku:ecp",
     )
     try {
       DatagramSocket().use { socket ->
@@ -193,15 +240,17 @@ internal object NearbyDeviceDiscovery {
           }.toMap()
           val target = headers["st"]?.lowercase() ?: continue
           val lgWebos = target.contains("webos-second-screen")
-          if (!target.contains("mediarenderer") && !target.contains("dial") && !lgWebos) continue
+          val roku = target == "roku:ecp"
+          if (!target.contains("mediarenderer") && !target.contains("dial") && !lgWebos && !roku) continue
           val usn = headers["usn"]?.take(160) ?: continue
           val server = clean(headers["server"] ?: "", 72)
           val name = if (lgWebos) "LG webOS TV"
+            else if (roku) "Roku device"
             else if (server.isNotEmpty()) server
             else if (target.contains("dial")) "DIAL media device" else "UPnP media renderer"
           add(found, "ssdp", usn, name,
-            if (lgWebos || target.contains("dial")) "display" else "media",
-            if (lgWebos) "LG webOS second screen" else "UPnP / DIAL",
+            if (lgWebos || target.contains("dial") || roku) "display" else "media",
+            if (lgWebos) "LG webOS second screen" else if (roku) "Roku ECP discovery" else "UPnP / DIAL",
             ipAddress = packet.address.hostAddress,
             descriptionUrl = headers["location"]?.take(400))
         }

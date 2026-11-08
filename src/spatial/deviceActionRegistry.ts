@@ -8,11 +8,11 @@ export const NEARBY_ACTIONS = [
   "pair", "open_web", "volume_up", "volume_down", "get_volume",
   "mute", "unmute", "play", "pause", "home", "back",
   "up", "down", "left", "right", "select", "show_message",
-  "bluetooth_settings",
+  "bluetooth_settings", "open_roku_app",
 ] as const;
 export type NearbyAction = typeof NEARBY_ACTIONS[number];
 
-export type NearbyProtocol = "device-link" | "lg-webos" | "samsung-tizen" | "upnp" | "web" | "bluetooth" | "discovered";
+export type NearbyProtocol = "device-link" | "lg-webos" | "samsung-tizen" | "upnp" | "web" | "bluetooth" | "discovered" | "roku-companion";
 export interface ActionDescriptor {
   readonly action: NearbyAction;
   readonly protocol: NearbyProtocol;
@@ -44,6 +44,7 @@ export function availableNearbyActions(device: NearbyDevice, identity: DeviceIde
   };
   const verified = new Set(identity.features);
   if (verified.has("open_web")) add("open_web", "web", "none");
+  if (verified.has("roku_companion")) add("open_roku_app", "roku-companion", "none");
   if (verified.has("lg_remote") && identity.lgFingerprint) {
     const authorization = identity.lgPaired ? "paired-tv" : "tv-approval";
     add("pair", "lg-webos", authorization);
@@ -78,6 +79,10 @@ export async function executeNearbyAction(
   }
   const ipAddress = device.ipAddress;
   if (!ipAddress) throw new Error("No verified network address.");
+  if (action === "open_roku_app") {
+    await callPlugin("open_nearby_roku_app", { ipAddress });
+    return "Opened official Roku remote app or store page. Device control is handled by Roku.";
+  }
   if (action === "open_web") {
     await callPlugin("open_nearby_web", { ipAddress });
     return "Opened device web page. Authentication and page content are not verified.";

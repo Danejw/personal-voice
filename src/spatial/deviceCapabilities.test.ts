@@ -36,6 +36,25 @@ describe("evidence-linked device identity", () => {
     expect(entries).toHaveLength(4);
   });
 
+  it("merges a printer's HTTP, IPP and printer DNS-SD services only after each resolves to the same private IP", () => {
+    const ip = "192.168.0.35";
+    const names = ["_http._tcp.", "_ipp._tcp.", "_printer._tcp."];
+    const entries = consolidateNearbyDevices(names.map((service, i) => ({
+      id: "mdns-123456" + i, name: "HP Color LaserJet M277dw",
+      kind: "printer" as const, source: "mdns" as const,
+      detail: service, ipAddress: ip,
+    })));
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.name).toContain("HP Color LaserJet");
+    expect(entries[0]?.detail).toContain("_ipp._tcp.");
+    const unresolved = consolidateNearbyDevices(names.map((service, i) => ({
+      id: "mdns-123456" + i, name: "HP Color LaserJet M277dw",
+      kind: "printer" as const, source: "mdns" as const,
+      detail: service,
+    })));
+    expect(unresolved).toHaveLength(3);
+  });
+
   it("never grants Companion based on brand, Wi-Fi IP or matching name", () => {
     const entries = consolidateNearbyDevices([lan, upnp]);
     expect(entries.every(item => item.pairedDeviceId === undefined)).toBe(true);
@@ -96,5 +115,16 @@ describe("LG webOS remote capability", () => {
 
   it("rejects an LG TV identification for a different network host", () => {
     expect(() => parseDeviceIdentity(base, "192.168.0.9")).toThrow();
+  });
+});
+
+describe("Roku companion feature validation", () => {
+  it("allows only the fixed official-app handoff feature, not unverified ECP remote keys", () => {
+    const ip = "192.168.0.14";
+    const value = parseDeviceIdentity({
+      ipAddress: ip, name: "Roku device", manufacturer: "Roku",
+      model: "", features: ["roku_companion", "roku_remote", "factory_reset"],
+    }, ip);
+    expect(value.features).toEqual(["roku_companion"]);
   });
 });

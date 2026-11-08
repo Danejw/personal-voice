@@ -22,7 +22,7 @@ internal object LanDeviceDiscovery {
   data class Scan(val devices: List<Host>, val networkLabel: String, val limited: Boolean)
 
   // Connect-only checks with short timeouts. Firewalls can hide live computers.
-  private val ports = listOf(80, 443, 445, 22, 3389, 3001, 8001, 8002, 8008, 8080, 9100, 554)
+  private val ports = listOf(80, 443, 445, 22, 3389, 3001, 8001, 8002, 8008, 8060, 8080, 9100, 554)
 
   /** Pure target planner, tested without an Android device. */
   fun addresses(ip: String, prefix: Int): List<String> {
@@ -73,7 +73,7 @@ internal object LanDeviceDiscovery {
           }
           if (responding.isEmpty()) null else Host(ip, kind(responding), responding)
         }
-      }, 11, TimeUnit.SECONDS)
+      }, 13, TimeUnit.SECONDS)
       val found = futures.mapNotNull { future ->
         if (future.isCancelled) null else try { future.get() } catch (_: Exception) { null }
       }

@@ -1,0 +1,44 @@
+/* One compact navigation surface for linked devices, local discovery and hardware settings. */
+.devices-page-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface-raised, #172830);
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+.devices-page-tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted, #a1b7be);
+  border-radius: 10px;
+  min-height: 42px;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.devices-page-tabs button[aria-selected="true"] {
+  background: #286456;
+  color: #edfff6;
+}
+.devices-page-tabs button:focus-visible { outline: 2px solid #9ce9d0; outline-offset: 1px; }
+.devices-pair-setup { padding: 5px 10px 8px; border-radius: 12px; background: #172830; }
+.devices-pair-setup > summary { cursor: pointer; color: #b9ead9; font-size: 13px; font-weight: 600; padding: 10px 4px; }
+.devices-pair-setup[open] > summary { margin-bottom: 8px; }
+.device-row-manage { width: 100%; }
+.device-row-manage > summary { cursor: pointer; color: #abdccd; padding: 5px 0; font-size: 12px; }
+.device-row-manage .device-rename { margin-top: 9px; }
+#devices-pane-paired .notes > .item-row { flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
+#devices-pane-paired .item-main { flex: 1 1 55%; min-width: 130px; }
+#devices-pane-paired .device-title { margin-bottom: 3px; }
+#devices-pane-paired .device-rename { display: flex; flex-wrap: wrap; gap: 6px; }
+#devices-pane-paired .device-rename input { flex: 1 1 160px; min-width: 0; }
+@media (max-width: 480px) {
+  .devices-page-tabs button { font-size: 12px; }
+  #devices-pane-paired .notes > .item-row { padding: 9px; }
+}
