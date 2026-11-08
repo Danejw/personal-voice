@@ -291,15 +291,17 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
             !inspectionFailures[device.ipAddress!];
           const skipped = !!device.ipAddress && scanned && !scheduled;
           const readiness = deviceReadiness(device, identity, inspecting, skipped);
+          const displayName = identity?.name && !/^Device \d+\.\d+\.\d+\.\d+$/.test(identity.name)
+            ? identity.name : device.name;
           return (
             <div className="spatial-device-row" key={device.id}>
               <button type="button" className="spatial-device"
                 title={deviceSubtitle(device) + " · " + readiness.hint}
                 onClick={() => { setPlacing(null); setSelected(device.id); }}
-                aria-label={"Open controls for " + device.name + ". " + readiness.hint}>
+                aria-label={"Open controls for " + displayName + ". " + readiness.hint}>
                 <span className="spatial-device-icon" aria-hidden="true">{glyph[device.kind]}</span>
                 <span className="spatial-device-label">
-                  <strong>{device.name}</strong>
+                  <strong>{displayName}</strong>
                   <small><span className={"spatial-readiness spatial-readiness-" + readiness.state}>
                     {readiness.label}</span> · {readiness.hint}</small>
                 </span>
@@ -308,7 +310,7 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
               {readiness.quickAction && (
                 <button type="button" className="spatial-quick-action"
                   disabled={quickPending !== null}
-                  aria-label={readiness.quickLabel + " for " + device.name}
+                  aria-label={readiness.quickLabel + " for " + displayName}
                   onClick={() => void quickAction(device, readiness.quickAction!)}>
                   {quickPending === device.id ? "…" : readiness.quickLabel}
                 </button>
