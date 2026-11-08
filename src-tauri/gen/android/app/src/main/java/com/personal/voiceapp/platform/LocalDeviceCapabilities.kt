@@ -32,6 +32,7 @@ internal object LocalDeviceCapabilities {
   private data class Record(
     val observedAt: Long, val ports: Set<Int>, val descriptions: List<URI>,
     val lgAnnounced: Boolean = false,
+    val rokuAnnounced: Boolean = false,
     var identity: Identity? = null, var media: Map<String, Service> = emptyMap(),
   )
   private val known = java.util.concurrent.ConcurrentHashMap<String, Record>()
@@ -59,13 +60,19 @@ internal object LocalDeviceCapabilities {
   @Synchronized fun remember(devices: List<NearbyDeviceDiscovery.Device>) {
     val next = mutableMapOf<String, Pair<MutableSet<Int>, MutableList<URI>>>()
     val lgResponders = mutableSetOf<String>()
+    val rokuResponders = mutableSetOf<String>()
     for (device in devices) {
       val ip = device.ipAddress ?: continue
       if (!privateIp(ip)) continue
       val pair = next.getOrPut(ip) { Pair(mutableSetOf(), mutableListOf()) }
-      pair.first.addAll(device.ports)
+      // DNS-SD advertises ports but does not prove they are reachable or safe
+      // browser/control endpoints. Only a successfully connected LAN port counts.
+      if (device.source == "lan") pair.first.addAll(device.ports)
       if (device.source == "ssdp" && device.detail == "LG webOS second screen") {
         lgResponders.add(ip)
+      }
+      if (device.source == "ssdp" && device.detail == "Roku ECP discovery") {
+        rokuResponders.add(ip)
       }
       val safe = safeLocation(device.descriptionUrl, ip)
       if (safe != null && safe !in pair.second) pair.second.add(safe)
@@ -74,7 +81,7 @@ internal object LocalDeviceCapabilities {
     val now = SystemClock.elapsedRealtime()
     for ((ip, evidence) in next) {
       known[ip] = Record(now, evidence.first.toSet(), evidence.second.take(4),
-        lgAnnounced = ip in lgResponders)
+        lgAnnounced = ip in lgResponders, rokuAnnounced = ip in rokuResponders)
     }
   }
 
@@ -153,6 +160,10 @@ internal object LocalDeviceCapabilities {
       } catch (_: Exception) { /* An open port alone proves nothing about TV identity. */ }
     }
 
+    if (record.rokuAnnounced && manufacturer.isBlank()) {
+      manufacturer = "Roku"
+      name = "Roku device"
+    }
     if (record.lgAnnounced && manufacturer.isBlank()) {
       manufacturer = "LG"
       name = "LG webOS TV"
@@ -179,6 +190,9 @@ internal object LocalDeviceCapabilities {
       if (media.containsKey("playback")) add("playback")
       if (fingerprint != null) add("samsung_remote")
       if (lgFingerprint != null) add("lg_remote")
+      // Safe handoff to Roku's official mobile remote. Roku's published
+      // policy does not allow third-party mobile ECP commands.
+      if (record.rokuAnnounced || 8060 in record.ports) add("roku_companion")
     }
     val identity = Identity(ip, name, manufacturer, model, features, webPort, fingerprint,
       lgFingerprint)
@@ -236,6 +250,14 @@ internal object LocalDeviceCapabilities {
 
   fun samsungPaired(context: Context, ip: String, fingerprint: String): Boolean =
     SamsungTvRemote.isPaired(context, ip, fingerprint)
+
+  fun openRokuApp(context: Context, ip: String): Intent {
+    val identity = requireSeen(context, ip).identity ?: error("Identify the Roku first.")
+    require("roku_companion" in identity.features) { "Roku has not been verified on this network." }
+    return Intent(Intent.ACTION_VIEW,
+      Uri.parse("https://play.google.com/store/apps/details?id=com.roku.remote"))
+      .addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+  }
 
   fun openWeb(context: Context, ip: String): Intent {
     val identity = requireSeen(context, ip).identity ?: error("Identify the device first.")
