@@ -58,7 +58,7 @@ import { interpretToolResult, ToolFailureHistory, type ToolResultAssessment } fr
 import { ToolTraceRecorder, type ToolEvalTrace, type TraceMetadata } from "@/assistant/harness/evals/traceRecorder";
 import { assembleTaskGuidance, deviceToolGuidance, UNKNOWN_DEVICE_CONTEXT, type AssistantDeviceContext } from "@/assistant/harness/contextAssembler";
 import { parseInteraction, type ComputerCall, type RemoteComputerAction } from "@/assistant/computerActions";
-import { REMOTE_COMPUTER_LIMITS, runComputerTaskReport, type ComputerImage, type ComputerTaskReport, type ComputerTaskTraceEvent } from "@/assistant/computerTask";
+import { REMOTE_COMPUTER_LIMITS, runComputerTaskReport, computerVerificationPrompt, type ComputerImage, type ComputerTaskReport, type ComputerTaskTraceEvent } from "@/assistant/computerTask";
 import type { RemoteKind } from "@/assistant/remoteContext";
 import type { CameraCapture } from "@/platform/camera/CameraCapture";
 import {
@@ -2126,16 +2126,7 @@ export class AssistantController {
           // New independent model interaction with a fresh screenshot, not the click receipt.
           // A hidden/background side effect cannot be asserted from a visible screenshot.
           if (validate) await validate();
-          const prompt = [
-            "Verify the RESULT using only this final screenshot. Do not act or call tools.",
-            `Task: ${objective.slice(0, 130)}`,
-            `Agent claim: ${candidate.slice(0, 70)}`,
-            "Only if every requested result is visibly demonstrated, reply VERIFIED: with concrete visual evidence.",
-            "For file-save or edit goals, text visible in an editor or a closed Save dialog alone is NOT proof the file was saved.",
-            "Require visible evidence of the exact reopened file and its requested content, otherwise return NOT_VERIFIED.",
-            "Do not infer browser navigation, saved files, or cross-device delivery from an action acknowledgement.",
-            "Otherwise reply NOT_VERIFIED: and explain what remains unknown.",
-          ].join("\n");
+          const prompt = computerVerificationPrompt(objective, candidate);
           const response = parseInteraction(await this.actions.computer.propose({
             goal: prompt, image: freshImage.jpeg, previousInteractionId: null, functionResult: null,
             supportsModelFallback: true,
