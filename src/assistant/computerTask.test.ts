@@ -162,7 +162,7 @@ describe("computer task loop", () => {
       ["Save a note to Documents.", "It is saved."],
       ["G".repeat(1500), "C".repeat(1000)],
       ["Reopen " + "😀".repeat(1000), "Checked\n" + "line ".repeat(500)],
-    ]) {
+    ] as const) {
       const prompt = computerVerificationPrompt(goal, claim);
       expect(prompt.length).toBeGreaterThan(40);
       expect(prompt.length).toBeLessThanOrEqual(COMPUTER_GOAL_MAX_CHARS);
