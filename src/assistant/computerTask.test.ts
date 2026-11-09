@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REMOTE_COMPUTER_LIMITS, runComputerTask, runComputerTaskReport, type ComputerTaskHost } from "@/assistant/computerTask";
+import { COMPUTER_STEP_LIMIT } from "@/assistant/computerActions";
 
 function host(partial: Partial<ComputerTaskHost> & Pick<ComputerTaskHost, "propose">): ComputerTaskHost & { executed: string[]; confirmed: string[] } {
   const executed: string[] = [];
@@ -91,7 +92,7 @@ describe("computer task loop", () => {
       .resolves.toContain("STOPPED: Stopped after 1 actions");
   });
 
-  it("stops on the step cap without a ninth action", async () => {
+  it("stops on the expanded local step cap without executing one extra action", async () => {
     let step = 0;
     const task = host({
       propose: async () => {
@@ -99,8 +100,9 @@ describe("computer task loop", () => {
         return { id: `s-${step}`, steps: [{ type: "function_call", id: "call-test", name: "move", arguments: { x: step, y: 1 } }] };
       },
     });
-    await expect(runComputerTask("Move around.", task)).resolves.toContain("Step limit reached after 8 actions");
-    expect(task.executed).toHaveLength(8);
+    await expect(runComputerTask("Move around.", task)).resolves.toContain(
+      `Step limit reached after ${COMPUTER_STEP_LIMIT} actions`);
+    expect(task.executed).toHaveLength(COMPUTER_STEP_LIMIT);
   });
   it("preserves function-call identity and the new screenshot in the continuation", async () => {
     let continuation: Record<string, unknown> | null = null;
@@ -153,6 +155,50 @@ describe("computer task loop", () => {
     expect(outcome).toMatchObject({ status: "verified", steps: 0 });
     expect(outcome.evidence).toContain("destination folder");
     expect(frames).toBe(2);
+  });
+
+  it("allows one independent evidence-gathering continuation after unsupported completion", async () => {
+    let proposals = 0;
+    let checks = 0;
+    const submitted: Record<string, unknown>[] = [];
+    const task = host({
+      propose: async body => {
+        submitted.push(body);
+        proposals++;
+        if (proposals === 1) return { id: "step-1", steps: [{
+          type: "function_call", id: "action-1", name: "hotkey",
+          arguments: { keys: ["ctrl", "s"] },
+        }] };
+        return { id: "done", steps: [], text: "File saved." };
+      },
+      verify: async () => ++checks === 1 ? null
+        : "The exact reopened file shows the saved content and filename.",
+    });
+    const result = await runComputerTaskReport("Save and verify the document.", task);
+    expect(result).toMatchObject({ status: "verified", steps: 1 });
+    expect(task.executed).toEqual(["hotkey"]);
+    expect(checks).toBe(2);
+    expect(submitted).toHaveLength(3);
+    expect(submitted[2]?.goal).toContain("Do not repeat uncertain side effects");
+    expect(submitted[2]?.previousInteractionId).toBeNull();
+    expect(submitted[2]?.image).toBe("img");
+  });
+
+  it("does not retry unverifiable completion indefinitely or repeat a saved action", async () => {
+    let proposals = 0;
+    const task = host({
+      propose: async () => {
+        proposals++;
+        return proposals === 1 ? { id: "first", steps: [{
+          type: "function_call", id: "click", name: "click", arguments: { x: 15, y: 10 },
+        }] } : { id: "end", steps: [], text: "All done" };
+      },
+      verify: async () => null,
+    });
+    const result = await runComputerTaskReport("Complete the task.", task);
+    expect(result).toMatchObject({ status: "unverified", steps: 1 });
+    expect(task.executed).toEqual(["click"]);
+    expect(proposals).toBe(3);
   });
 
   it("keeps a model's completion claim unverified when the fresh screen cannot prove it", async () => {
