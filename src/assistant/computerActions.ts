@@ -25,13 +25,6 @@ export const ALLOWED_SHORTCUTS = [
   { id: "paste", label: "Paste" },
   { id: "select-all", label: "Select all" },
   { id: "undo", label: "Undo" },
-  { id: "save", label: "Save (Ctrl+S)" },
-  { id: "save-as", label: "Save as (Ctrl+Shift+S)" },
-  { id: "open-file", label: "Open file (Ctrl+O)" },
-  { id: "find", label: "Find (Ctrl+F)" },
-  { id: "address-bar", label: "Focus address bar (Ctrl+L)" },
-  { id: "new-tab", label: "New browser tab (Ctrl+T)" },
-  { id: "switch-window", label: "Switch window (Alt+Tab)" },
   { id: "escape", label: "Escape" },
   { id: "tab", label: "Tab" },
 ] as const;
