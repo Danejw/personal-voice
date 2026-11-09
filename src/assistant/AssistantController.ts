@@ -2131,6 +2131,9 @@ export class AssistantController {
             `Task: ${objective.slice(0, 130)}`,
             `Agent claim: ${candidate.slice(0, 70)}`,
             "Only if every requested result is visibly demonstrated, reply VERIFIED: with concrete visual evidence.",
+            "For file-save or edit goals, text visible in an editor or a closed Save dialog alone is NOT proof the file was saved.",
+            "Require visible evidence of the exact reopened file and its requested content, otherwise return NOT_VERIFIED.",
+            "Do not infer browser navigation, saved files, or cross-device delivery from an action acknowledgement.",
             "Otherwise reply NOT_VERIFIED: and explain what remains unknown.",
           ].join("\n");
           const response = parseInteraction(await this.actions.computer.propose({
