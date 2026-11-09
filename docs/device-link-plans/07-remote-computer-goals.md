@@ -13,7 +13,7 @@ The signed start request acknowledges acceptance quickly, because `device_action
 - Windows must be online, unlocked and explicitly opted in via **Allow remote actions**. Starting a goal requires one Windows approval. Existing one-off pointer requests still require their usual approval.
 - Remote goal steps use the existing Computer Use safety decisions. Ordinary clicks and typing proceed automatically; sensitive steps that require approval stop and ask on Windows even if Assistant auto-run is enabled. Blocked commands remain blocked. No arbitrary shell.
 - Windows rechecks the phone pairing, account session, remote-control preference and unlocked desktop before each screenshot. Disconnecting the **phone network** alone does not stop already authorized execution, but revocation, sign-out, disabling remote actions or locking Windows does.
-- Goal execution is bounded to **240 steps or 30 minutes**, whichever comes first. Normal local Computer Use retains its existing **8 steps/45 seconds** default.
+- Goal execution is bounded to **240 steps or 30 minutes**, whichever comes first. Normal local Computer Use now allows up to **20 steps/three minutes**, still supervised, cancellable and subject to the same safety gates.
 - One Windows executor may run one goal at a time. Progress counts completed actions; the start acknowledgment **does not** assert task completion. Status returns active/failed/completed/stopped and the last action (not screen pixels).
 - Computer Use screenshots remain on Windows and travel only along its existing model request path. No screenshots, cursor paths, or task arguments are copied into a new backend state table.
 
