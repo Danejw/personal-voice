@@ -44,6 +44,9 @@ internal object ScreenSharing {
   private val main = Handler(Looper.getMainLooper())
   private var waiting: ((String?, String?) -> Unit)? = null
   private var address: String? = null
+  private val consentFence = ScreenShareConsentFence()
+  const val REQUEST_ID = "shareRequestId"
+  @Synchronized fun isCurrent(requestId: Long): Boolean = consentFence.isCurrent(requestId)
   /** Only tracks delivery to an HTTP browser, never asserts it is a specific TV. */
   data class Delivery(val browserConnected: Boolean, val framesWritten: Long, val frameAgeMs: Long?)
   @Volatile private var observer: (() -> Delivery)? = null
@@ -59,45 +62,52 @@ internal object ScreenSharing {
       finished(null, "Stop the current screen share before starting another.")
       return
     }
+    val requestId = consentFence.begin()
     waiting = finished
     try {
-      activity.startActivity(Intent(activity, ScreenShareConsentActivity::class.java))
+      activity.startActivity(Intent(activity, ScreenShareConsentActivity::class.java)
+        .putExtra(REQUEST_ID, requestId))
     } catch (error: Exception) {
-      failed("Cannot open Android screen sharing permission.")
+      failed("Cannot open Android screen sharing permission.", requestId)
     }
   }
 
-  fun consent(context: Context, code: Int, data: Intent?) {
+  @Synchronized fun consent(context: Context, code: Int, data: Intent?, requestId: Long) {
+    if (!consentFence.isCurrent(requestId) || waiting == null) return
     if (code != Activity.RESULT_OK || data == null) {
-      failed("Screen sharing was cancelled.")
+      failed("Screen sharing was cancelled.", requestId)
       return
     }
     try {
       val intent = Intent(context, ScreenShareService::class.java)
         .putExtra(ScreenShareService.EXTRA_RESULT, code)
         .putExtra(ScreenShareService.EXTRA_DATA, data)
+        .putExtra(REQUEST_ID, requestId)
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
       else context.startService(intent)
     } catch (_: Exception) {
-      failed("Could not start the screen sharing service.")
+      failed("Could not start the screen sharing service.", requestId)
     }
   }
 
   @Synchronized fun currentUrl(): String? = address
 
-  fun connected(url: String) {
+  fun connected(url: String, requestId: Long): Boolean {
     val complete: ((String?, String?) -> Unit)?
     synchronized(this) {
+      if (!consentFence.isCurrent(requestId) || waiting == null) return false
       address = url
       complete = waiting
       waiting = null
     }
     complete?.let { main.post { it(url, null) } }
+    return true
   }
 
-  fun failed(reason: String) {
+  fun failed(reason: String, requestId: Long? = null) {
     val complete: ((String?, String?) -> Unit)?
     synchronized(this) {
+      if (requestId != null && !consentFence.isCurrent(requestId)) return
       address = null
       complete = waiting
       waiting = null
@@ -105,12 +115,18 @@ internal object ScreenSharing {
     complete?.let { main.post { it(null, reason) } }
   }
 
-  @Synchronized fun closed() {
+  @Synchronized fun closed(requestId: Long) {
+    if (!consentFence.isCurrent(requestId)) return
     address = null
     observer = null
   }
 
   fun stop(context: Context) {
+    // Invalidate first, before the OS can deliver a stale permission result or queued service.
+    synchronized(this) {
+      consentFence.revoke()
+      observer = null
+    }
     context.stopService(Intent(context, ScreenShareService::class.java))
     failed("Screen sharing stopped.")
   }
@@ -118,21 +134,33 @@ internal object ScreenSharing {
 
 /** Separate visible Android consent is required for every new MediaProjection session. */
 class ScreenShareConsentActivity : Activity() {
+  private var requestId = 0L
   override fun onCreate(savedInstanceState: android.os.Bundle?) {
     super.onCreate(savedInstanceState)
+    requestId = savedInstanceState?.getLong(ScreenSharing.REQUEST_ID)
+      ?: intent.getLongExtra(ScreenSharing.REQUEST_ID, 0L)
+    if (!ScreenSharing.isCurrent(requestId)) {
+      finish()
+      return
+    }
     try {
       val manager = getSystemService(MediaProjectionManager::class.java)
       @Suppress("DEPRECATION")
       startActivityForResult(manager.createScreenCaptureIntent(), REQUEST)
     } catch (_: Exception) {
-      ScreenSharing.failed("Android screen sharing is not available.")
+      ScreenSharing.failed("Android screen sharing is not available.", requestId)
       finish()
     }
   }
 
+  override fun onSaveInstanceState(outState: android.os.Bundle) {
+    outState.putLong(ScreenSharing.REQUEST_ID, requestId)
+    super.onSaveInstanceState(outState)
+  }
+
   @Deprecated("Android's MediaProjection consent still returns through onActivityResult.")
   override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-    if (requestCode == REQUEST) ScreenSharing.consent(this, resultCode, data)
+    if (requestCode == REQUEST) ScreenSharing.consent(this, resultCode, data, requestId)
     finish()
   }
 
@@ -157,15 +185,23 @@ class ScreenShareService : Service() {
   private var client: Socket? = null
   private var lastFrameAt = 0L
   private var token = ""
+  private var captureRequestId = 0L
 
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent?.action == ACTION_STOP) {
+      ScreenSharing.stop(this)
       stopSelf()
       return START_NOT_STICKY
     }
     if (running.get()) return START_NOT_STICKY
+    val requestId = intent?.getLongExtra(ScreenSharing.REQUEST_ID, 0L) ?: 0L
+    if (!ScreenSharing.isCurrent(requestId)) {
+      stopSelf()
+      return START_NOT_STICKY
+    }
+    captureRequestId = requestId
     val code = intent?.getIntExtra(EXTRA_RESULT, Activity.RESULT_CANCELED)
       ?: Activity.RESULT_CANCELED
     val data = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -175,7 +211,7 @@ class ScreenShareService : Service() {
       intent?.getParcelableExtra(EXTRA_DATA)
     }
     if (code != Activity.RESULT_OK || data == null) {
-      ScreenSharing.failed("A fresh screen sharing permission is required.")
+      ScreenSharing.failed("A fresh screen sharing permission is required.", requestId)
       stopSelf()
       return START_NOT_STICKY
     }
@@ -183,15 +219,16 @@ class ScreenShareService : Service() {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
       } else startForeground(NOTIFICATION_ID, notification())
-      openShare(code, data)
+      openShare(code, data, requestId)
     } catch (error: Exception) {
-      ScreenSharing.failed("Screen sharing could not start: " + (error.message ?: "unknown error"))
+      ScreenSharing.failed("Screen sharing could not start: " + (error.message ?: "unknown error"), requestId)
       stopSelf()
     }
     return START_NOT_STICKY
   }
 
-  private fun openShare(code: Int, data: Intent) {
+  private fun openShare(code: Int, data: Intent, requestId: Long) {
+    if (!ScreenSharing.isCurrent(requestId)) return
     val ip = wifiIp() ?: error("Connect phone and TV to the same private Wi-Fi network.")
     // Bind to Wi-Fi only. Never listen on a cellular or public interface.
     val server = ServerSocket(0, 2, ip)
@@ -257,7 +294,8 @@ class ScreenShareService : Service() {
         frameAgeMs = age,
       )
     }
-    ScreenSharing.connected("http://" + ip.hostAddress + ":" + server.localPort + "/watch/" + token)
+    if (!ScreenSharing.connected("http://" + ip.hostAddress + ":" + server.localPort +
+        "/watch/" + token, requestId)) stopSelf()
   }
 
   private fun wifiIp(): Inet4Address? {
@@ -422,7 +460,7 @@ class ScreenShareService : Service() {
     projection = null
     display = null
     listener = null
-    ScreenSharing.closed()
+    ScreenSharing.closed(captureRequestId)
     super.onDestroy()
   }
 
