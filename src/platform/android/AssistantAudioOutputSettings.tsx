@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SelectField } from "@/components/SelectField";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 import { readAudioEvidence } from "@/platform/android/deviceCoordination";
+import { BluetoothSpeakerHandoffStatus } from "@/platform/android/BluetoothSpeakerHandoffStatus";
 
 export interface AudioOutput {
   id: string;
@@ -88,6 +89,7 @@ export function AssistantAudioOutputSettings() {
           {" "}Listen for a reply to confirm actual sound.
         </p>
       )}
+      <BluetoothSpeakerHandoffStatus />
       {message && <p role="status">{message}</p>}
       {error && <p className="error" role="alert">{error}</p>}
     </section>
