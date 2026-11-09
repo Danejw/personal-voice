@@ -55,7 +55,9 @@ internal object ScreenSharing {
     if (address == null) Delivery(false, 0, null)
     else observer?.invoke() ?: Delivery(false, 0, null)
 
-  @Synchronized fun monitor(source: (() -> Delivery)?) { observer = source }
+  @Synchronized fun monitor(requestId: Long, source: (() -> Delivery)?) {
+    if (consentFence.isCurrent(requestId)) observer = source
+  }
 
   @Synchronized fun start(activity: Activity, finished: (String?, String?) -> Unit) {
     if (waiting != null || address != null) {
@@ -228,7 +230,10 @@ class ScreenShareService : Service() {
   }
 
   private fun openShare(code: Int, data: Intent, requestId: Long) {
-    if (!ScreenSharing.isCurrent(requestId)) return
+    if (!ScreenSharing.isCurrent(requestId)) {
+      stopSelf()
+      return
+    }
     val ip = wifiIp() ?: error("Connect phone and TV to the same private Wi-Fi network.")
     // Bind to Wi-Fi only. Never listen on a cellular or public interface.
     val server = ServerSocket(0, 2, ip)
@@ -285,7 +290,7 @@ class ScreenShareService : Service() {
       it.isDaemon = true
       it.start()
     }
-    ScreenSharing.monitor {
+    ScreenSharing.monitor(requestId) {
       val age = lastWrittenAt.get().takeIf { it > 0 }
         ?.let { (SystemClock.elapsedRealtime() - it).coerceAtLeast(0) }
       ScreenSharing.Delivery(
