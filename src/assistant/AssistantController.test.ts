@@ -207,6 +207,8 @@ describe("AssistantController", () => {
   it("requires approval for Bluetooth Connect & Use even when auto-run is on", async () => {
     const { created } = controller();
     const used = toolActions();
+    used.previewNearbyDeviceAction.mockResolvedValue(
+      "connect and use Echo Dot through Android Bluetooth media pairing and connection.");
     created.setDeviceContext({ platform: "android", otherDeviceCount: 0 });
     created.setAutoRun(true);
     created.setActions(used);
