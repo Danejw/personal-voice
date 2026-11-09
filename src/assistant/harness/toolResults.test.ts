@@ -24,6 +24,17 @@ describe("tool result interpretation", () => {
     expect(action.verification_hint).toContain("Focused-field");
   });
 
+  it("does not equate starting screen sharing or saving audio preference with observed user outcome", () => {
+    expect(interpretToolResult("device_environment_status", true, "{}"))
+      .toMatchObject({status:"observed", evidence:"read_result", goal_verified:null});
+    expect(interpretToolResult("manage_screen_share",true,
+      '{"status":"local_stream_started","browserConnected":false}'))
+      .toMatchObject({status:"incomplete",goal_verified:null});
+    expect(interpretToolResult("route_assistant_audio",true,
+      '{"route_match_observed":false}'))
+      .toMatchObject({status:"incomplete",goal_verified:null});
+  });
+
   it("never treats playbook lookup as task completion", () => {
     const assessment = interpretToolResult("get_tool_playbook", true, '{"kind":"tool_playbook"}');
     expect(assessment).toMatchObject({

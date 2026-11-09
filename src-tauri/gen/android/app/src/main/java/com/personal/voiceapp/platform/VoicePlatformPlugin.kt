@@ -1019,7 +1019,12 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
       available.put(JSONObject().put("id", item.id).put("name", item.name)
         .put("type", item.type).put("selected", item.selected))
     }
-    invoke.resolve(JSObject().put("outputs", available))
+    val observedId = playbackTrack?.routedDeviceId()
+    invoke.resolve(JSObject().put("outputs", available)
+      .put("nativeTrackRoutedDeviceId", observedId)
+      .put("routeMatchesSelected", observedId != null &&
+        assistantOutputs.selectedDevice()?.id == observedId)
+      .put("assistantSessionActive", audioSession?.isRunning() == true))
   }
 
   @Command
@@ -1201,7 +1206,11 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun screenShareStatus(invoke: Invoke) {
     val url = ScreenSharing.currentUrl()
-    invoke.resolve(JSObject().put("active", url != null).put("url", url))
+    val observed = ScreenSharing.delivery()
+    invoke.resolve(JSObject().put("active", url != null).put("url", url)
+      .put("browserConnected", observed.browserConnected)
+      .put("framesWritten", observed.framesWritten)
+      .put("frameAgeMs", observed.frameAgeMs))
   }
 
   @Command

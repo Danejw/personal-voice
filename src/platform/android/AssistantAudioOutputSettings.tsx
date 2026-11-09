@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { SelectField } from "@/components/SelectField";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
+import { readAudioEvidence } from "@/platform/android/deviceCoordination";
 
 export interface AudioOutput {
   id: string;
@@ -23,6 +24,8 @@ export function parseAssistantOutputs(value: unknown): AudioOutput[] {
 
 export function AssistantAudioOutputSettings() {
   const [outputs, setOutputs] = useState<AudioOutput[]>([]);
+  const [nativeRouteMatched, setNativeRouteMatched] = useState(false);
+  const [sessionActive, setSessionActive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -31,8 +34,10 @@ export function AssistantAudioOutputSettings() {
   async function refresh() {
     setError("");
     try {
-      const result = await callPlugin<unknown>("list_assistant_audio_outputs");
-      setOutputs(parseAssistantOutputs(result));
+      const result = readAudioEvidence(await callPlugin<unknown>("list_assistant_audio_outputs"));
+      setOutputs(result.outputs);
+      setNativeRouteMatched(result.routeMatchesSelected);
+      setSessionActive(result.assistantSessionActive);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to read audio outputs.");
     }
@@ -75,6 +80,14 @@ export function AssistantAudioOutputSettings() {
           }))}
       />
       <p className="note-meta">Only connected Android audio outputs appear here, not merely paired Bluetooth devices. Bluetooth media speakers use non-duplex speech: the microphone pauses during replies.</p>
+      {selected !== "system" && (
+        <p role="status">
+          {nativeRouteMatched ? "Android reports the native audio track on the selected output."
+            : sessionActive ? "Output selected, but active audio routing is not yet verified."
+              : "Output selected for the next Assistant conversation."}
+          {" "}Listen for a reply to confirm actual sound.
+        </p>
+      )}
       {message && <p role="status">{message}</p>}
       {error && <p className="error" role="alert">{error}</p>}
     </section>

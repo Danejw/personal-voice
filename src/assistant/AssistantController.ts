@@ -118,6 +118,10 @@ export interface AssistantActions {
   controlNearbyDevice(deviceId: string, action: string): Promise<string>;
   /** Resolve the confirmation preview using observed scan state, before permitting control. */
   previewNearbyDeviceAction(deviceId: string, action: string): Promise<string>;
+  /** Android's actual audio and screen-stream state; never merely cached Bluetooth discovery. */
+  getDeviceEnvironment(): Promise<string>;
+  routeAssistantAudio(outputId: string): Promise<string>;
+  manageScreenShare(action: "start" | "stop"): Promise<string>;
   pairDevice(action: "open" | "show_code" | "scan_qr" | "enter_code" | "status", code?: string): Promise<string>;
   /** Short text for a confirm card. Throws when the id is not in the current list. */
   describeItem(kind: "note" | "handoff", id: string): string;
@@ -292,6 +296,9 @@ export class AssistantController {
       listNearbyDevices: async () => { throw new Error("Nearby device discovery is not available."); },
       controlNearbyDevice: async () => { throw new Error("Nearby device control is not available."); },
       previewNearbyDeviceAction: async () => { throw new Error("Nearby device control is not available."); },
+      getDeviceEnvironment: async () => { throw new Error("Android device state is not available."); },
+      routeAssistantAudio: async () => { throw new Error("Assistant speaker output is not available."); },
+      manageScreenShare: async () => { throw new Error("Screen sharing is not available."); },
       pairDevice: async () => { throw new Error("Pairing is not ready."); },
       describeItem: () => { throw new Error("Assistant actions are not available."); },
       archiveNote: unavailable,
@@ -1520,6 +1527,22 @@ export class AssistantController {
           await this.runNearbyDevices(decision);
           continue;
         }
+        if (decision.kind === "deviceEnvironment" || decision.kind === "audioRoute" ||
+            decision.kind === "screenStop") {
+          const epoch = this.toolEpoch;
+          try {
+            if (this.deviceContext.platform !== "android") throw new Error("Android-only device action.");
+            const result = decision.kind === "deviceEnvironment"
+              ? await this.actions.getDeviceEnvironment()
+              : decision.kind === "audioRoute"
+                ? await this.actions.routeAssistantAudio(decision.outputId)
+                : await this.actions.manageScreenShare("stop");
+            if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, true, result);
+          } catch (error) {
+            if (epoch === this.toolEpoch) this.replyTool(decision.id, decision.name, false, toolFailure(error));
+          }
+          continue;
+        }
         if (decision.kind === "pairing") {
           const epoch = this.toolEpoch;
           try {
@@ -1615,7 +1638,8 @@ export class AssistantController {
     // Do not gate each mobile remote command behind a second Assistant UI confirmation.
     if (decision.name === "remote_action") return true;
     // Nearby physical controls always require an explicit Assistant approval, even in auto-run.
-    if (decision.name === "control_nearby_device") return false;
+    if (decision.name === "control_nearby_device" ||
+        decision.name === "manage_screen_share") return false;
     if (decision.name === "supervise_screen" && this.deviceContext.platform === "android") return true;
     // Saving any note attachment always requires explicit consent.
     if (decision.name === "attach_file_to_note" ||
@@ -2264,6 +2288,11 @@ export class AssistantController {
         const payload = JSON.parse(pending.text) as { deviceId: string; action: string };
         return this.actions.controlNearbyDevice(payload.deviceId, payload.action);
       }
+      case "manage_screen_share":
+        if (this.deviceContext.platform !== "android" || pending.text !== "start") {
+          throw new Error("Screen sharing requires Android and an explicit start approval.");
+        }
+        return this.actions.manageScreenShare("start");
       case "remote_action": {
         if (!pending.remote) throw new Error("That action is not available.");
         return this.actions.computer.remoteAction(pending.remote.action, pending.text, pending.remote.device);

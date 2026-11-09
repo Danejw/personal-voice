@@ -69,6 +69,75 @@ function controller() {
 afterEach(() => { FakeSession.opened = []; vi.useRealTimers(); });
 
 describe("AssistantController", () => {
+  it("reads current Android device evidence and routes a connected speaker without a second confirmation", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setDeviceContext({ platform: "android", otherDeviceCount: 0 });
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [
+      { id: "observed", name: "device_environment_status", args: {} },
+      { id: "route", name: "route_assistant_audio", args: { output_id: "audio:31" } },
+    ] });
+    await settle();
+    expect(actions.getDeviceEnvironment).toHaveBeenCalledOnce();
+    expect(actions.routeAssistantAudio).toHaveBeenCalledWith("audio:31");
+    expect(created.getSnapshot().pendingAction).toBeNull();
+    expect(session.responses).toHaveLength(2);
+    created.end();
+  });
+
+  it("requires explicit app approval and Android consent for screen sharing even with auto-run", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setDeviceContext({ platform: "android", otherDeviceCount: 0 });
+    created.setAutoRun(true);
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [
+      { id: "start", name: "manage_screen_share", args: { action: "start" } },
+    ] });
+    await settle();
+    expect(actions.manageScreenShare).not.toHaveBeenCalled();
+    expect(created.getSnapshot().pendingAction?.title).toBe("Share Android screen");
+    created.cancelPending();
+    await settle();
+    expect(actions.manageScreenShare).not.toHaveBeenCalled();
+    session.emit({ type: "toolCalls", calls: [
+      { id: "start2", name: "manage_screen_share", args: { action: "start" } },
+    ] });
+    await settle();
+    created.confirmPending();
+    await settle();
+    expect(actions.manageScreenShare).toHaveBeenCalledWith("start");
+    session.emit({ type: "toolCalls", calls: [
+      { id: "stop", name: "manage_screen_share", args: { action: "stop" } },
+    ] });
+    await settle();
+    expect(actions.manageScreenShare).toHaveBeenCalledWith("stop");
+    created.end();
+  });
+
+  it("does not route Android audio on a Windows client", async () => {
+    const { created } = controller();
+    const actions = toolActions();
+    created.setDeviceContext({ platform: "windows", otherDeviceCount: 1 });
+    created.setActions(actions);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    session.emit({ type: "toolCalls", calls: [
+      { id:"route",name:"route_assistant_audio",args:{output_id:"system"} },
+    ]});
+    await settle();
+    expect(actions.routeAssistantAudio).not.toHaveBeenCalled();
+    expect(session.responses.at(-1)).toMatchObject({ toolResponse: { functionResponses: [{
+      id: "route", response: { error: expect.stringContaining("Android-only") },
+    }] } });
+    created.end();
+  });
+
   it("answers nearby capability questions from a fresh scan without executing controls", async () => {
     const { created } = controller();
     const used = toolActions();
@@ -1859,6 +1928,9 @@ function toolActions() {
     listNearbyDevices: vi.fn(async () => '{"observed":"fresh_android_local_scan","devices":[]}'),
     controlNearbyDevice: vi.fn(async () => "Device acknowledged volume up; physical state not verified."),
     previewNearbyDeviceAction: vi.fn(async () => "volume up on LG TV (192.168.0.27) using LG webOS."),
+    getDeviceEnvironment: vi.fn(async () => '{"connected":["Echo Dot"],"screen":{"active":false}}'),
+    routeAssistantAudio: vi.fn(async () => '{"selected_output":"Echo Dot","route_match_observed":false}'),
+    manageScreenShare: vi.fn(async () => '{"status":"local_stream_started","browserConnected":false}'),
     pairDevice: vi.fn(async () => "Pairing invitation displayed."),
     describeItem: vi.fn((_kind: "note" | "handoff", id: string) => `Preview ${id}`),
     archiveNote: vi.fn(async () => {}),

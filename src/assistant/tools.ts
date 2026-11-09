@@ -111,6 +111,25 @@ export function assistantFunctionDeclarations() {
       }, required: ["device_id", "action"] },
     },
     {
+      name: "device_environment_status",
+      description: "Android only, read-only. Report connected audio outputs (not just Bluetooth pairings), currently selected Assistant speaker and observed native AudioTrack route, plus whether screen sharing is active and a browser actually receives frames. Use before choosing a speaker or after starting a display stream. A browser viewer is not verified as a particular TV. Never infer audible sound or visible video without independent observation.",
+      parameters: { type: "object", properties: {} },
+    },
+    {
+      name: "route_assistant_audio",
+      description: "Android only. When explicitly asked to send Assistant speech to a particular connected speaker, use device_environment_status to obtain its exact output_id. Select a currently connected AudioManager output for Gemini speech; does not pair devices. This is reversible, but selection and route acknowledgement do not prove sound is audible. External media output pauses microphone input during replies.",
+      parameters: { type: "object", properties: {
+        output_id: { type: "string", description: "Exact connected output ID (audio:N or system) from device_environment_status." },
+      }, required: ["output_id"] },
+    },
+    {
+      name: "manage_screen_share",
+      description: "Android only. Start or stop phone screen sharing to a compatible LAN browser. Start requires explicit Assistant approval AND Android MediaProjection consent. The user must manually open the local URL shown in Devices & Controls Settings on the TV; do not claim auto-casting. Use device_environment_status to verify a browser connection and sent frames. Stop terminates sharing and invalidates the link. Stream is low-frame-rate MJPEG over unencrypted local HTTP.",
+      parameters: { type: "object", properties: {
+        action: { type: "string", enum: ["start", "stop"] },
+      }, required: ["action"] },
+    },
+    {
       name: "list_handoffs",
       description: "Read received handoffs and the names of other devices this account can send to. Call this when the user asks what was handed off or which device to use. Answer from this result. Use an id from this list to dismiss one.",
       parameters: { type: "object", properties: {} },
@@ -496,6 +515,7 @@ export type ConfirmToolName =
   | "supervise_screen"
   | "remote_action"
   | "control_nearby_device"
+  | "manage_screen_share"
   | "remember_memory"
   | "change_memory"
   | "forget_memory";
@@ -532,6 +552,9 @@ export type ToolDecision =
   | { kind: "playbook"; id: string; name: "get_tool_playbook"; playbookId: ToolPlaybookId }
   | { kind: "handoffs"; id: string; name: "list_handoffs" }
   | { kind: "nearbyDevices"; id: string; name: "list_nearby_devices"; query: string }
+  | { kind: "deviceEnvironment"; id: string; name: "device_environment_status" }
+  | { kind: "audioRoute"; id: string; name: "route_assistant_audio"; outputId: string }
+  | { kind: "screenStop"; id: string; name: "manage_screen_share" }
   | { kind: "pairing"; id: string; name: "pair_device"; action: "open" | "show_code" | "scan_qr" | "enter_code" | "status"; code?: string }
   | { kind: "remoteComputerGoal"; id: string; name: "remote_computer_goal"; action: "start" | "status" | "pause" | "resume" | "redirect" | "stop"; goal: string; device: string | null }
   | {
@@ -661,6 +684,31 @@ export function decideToolCall(
         text: JSON.stringify({ deviceId, action }),
         title: "Control nearby device",
         preview: action.replace(/_/g, " ") + " on scanned device " + deviceId,
+        deviceId: null, remote: null, memory: null,
+      };
+    }
+    case "device_environment_status":
+      return { kind: "deviceEnvironment", id: call.id, name: "device_environment_status" };
+    case "route_assistant_audio": {
+      const outputId = args.output_id;
+      if (typeof outputId !== "string" || !/^(?:system|audio:\d{1,9})$/.test(outputId)) {
+        return { kind: "reject", id: call.id, name: call.name,
+          message: "Use a connected audio output ID from device_environment_status." };
+      }
+      return { kind: "audioRoute", id: call.id, name: "route_assistant_audio", outputId };
+    }
+    case "manage_screen_share": {
+      if (args.action === "stop") {
+        return { kind: "screenStop", id: call.id, name: "manage_screen_share" };
+      }
+      if (args.action !== "start") {
+        return { kind: "reject", id: call.id, name: call.name,
+          message: "Screen sharing action must be start or stop." };
+      }
+      return {
+        kind: "confirm", id: call.id, name: "manage_screen_share",
+        text: "start", title: "Share Android screen",
+        preview: "Share this phone screen over an unencrypted local Wi-Fi link. A fresh Android screen-capture permission prompt will appear. Only start on trusted Wi-Fi. The TV browser must open the link manually.",
         deviceId: null, remote: null, memory: null,
       };
     }

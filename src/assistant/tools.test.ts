@@ -33,6 +33,9 @@ describe("assistant tool schema", () => {
       "send_handoff",
       "list_nearby_devices",
       "control_nearby_device",
+      "device_environment_status",
+      "route_assistant_audio",
+      "manage_screen_share",
       "list_handoffs",
       "dismiss_handoff",
       "capture_screen",
@@ -87,6 +90,29 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("run_shell");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("replace_selection");
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
+  });
+
+  it("validates Android audio/display actions and never accepts arbitrary output IDs", () => {
+    expect(decideToolCall({id:"status",name:"device_environment_status",args:{}}, plan))
+      .toMatchObject({kind:"deviceEnvironment"});
+    expect(decideToolCall({id:"route",name:"route_assistant_audio",
+      args:{output_id:"audio:42"}}, plan)).toMatchObject({
+        kind:"audioRoute", outputId:"audio:42",
+      });
+    expect(decideToolCall({id:"route",name:"route_assistant_audio",
+      args:{output_id:"system"}}, plan)).toMatchObject({kind:"audioRoute"});
+    for (const output_id of ["bt-abcdef", "audio:2/foo", "audio:-9", "", 123]) {
+      expect(decideToolCall({id:"bad",name:"route_assistant_audio",
+        args:{output_id}}, plan).kind).toBe("reject");
+    }
+    expect(decideToolCall({id:"share",name:"manage_screen_share",
+      args:{action:"start"}}, plan)).toMatchObject({kind:"confirm",name:"manage_screen_share"});
+    expect(decideToolCall({id:"stop",name:"manage_screen_share",
+      args:{action:"stop"}}, plan)).toMatchObject({kind:"screenStop"});
+    for(const action of ["status","cast","",undefined]){
+      expect(decideToolCall({id:"bad",name:"manage_screen_share",
+        args:{action}},plan).kind).toBe("reject");
+    }
   });
 
   it("validates nearby discovery and rejects invented or unsafe device commands", () => {
