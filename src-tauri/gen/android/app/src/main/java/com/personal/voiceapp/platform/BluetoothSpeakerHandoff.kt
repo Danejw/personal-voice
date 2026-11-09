@@ -52,15 +52,19 @@ internal class BluetoothSpeakerHandoff(
   private var bondedSince = 0L
   private var active = false
 
-  private val listener = object : BluetoothProfile.ServiceListener {
+  private var listener: BluetoothProfile.ServiceListener? = null
+  private fun newListener(ticket: Int) = object : BluetoothProfile.ServiceListener {
     override fun onServiceConnected(type: Int, proxy: BluetoothProfile) {
-      if (type == BluetoothProfile.A2DP) {
-        profile = proxy
-        handler.post { if (active) check() }
+      if (type != BluetoothProfile.A2DP) return
+      if (!active || generation != ticket) {
+        try { adapter?.closeProfileProxy(BluetoothProfile.A2DP, proxy) } catch (_: Exception) {}
+        return
       }
+      profile = proxy
+      handler.post { if (active && generation == ticket) check() }
     }
     override fun onServiceDisconnected(type: Int) {
-      if (type == BluetoothProfile.A2DP) profile = null
+      if (type == BluetoothProfile.A2DP && generation == ticket) profile = null
     }
   }
 
@@ -123,8 +127,10 @@ internal class BluetoothSpeakerHandoff(
 
     if (!profileRequested) {
       profileRequested = true
+      val callback = newListener(generation)
+      listener = callback
       try {
-        if (!bt.getProfileProxy(app, listener, BluetoothProfile.A2DP)) profileRequested = false
+        if (!bt.getProfileProxy(app, callback, BluetoothProfile.A2DP)) profileRequested = false
       } catch (_: Exception) { profileRequested = false }
     }
 
@@ -138,6 +144,12 @@ internal class BluetoothSpeakerHandoff(
     }
     if (bonded != BluetoothDevice.BOND_BONDED) {
       bondedSince = 0L
+      if (bonded == BluetoothDevice.BOND_BONDING) {
+        status = status.copy(state = "pairing", needsAndroidInteraction = true,
+          message = "Android is pairing " + item.name + ". Approve its system prompt.")
+        schedule()
+        return
+      }
       if (!bondAttempted && item.observedNow && item.kind == "speaker") {
         bondAttempted = true
         val started = try { device.createBond() } catch (_: Exception) { false }
@@ -224,6 +236,7 @@ internal class BluetoothSpeakerHandoff(
       adapter?.closeProfileProxy(BluetoothProfile.A2DP, oldProfile)
     } catch (_: Exception) {}
     profileRequested = false
+    listener = null
     target = null
     if (!keepStatus) status = Status()
   }
