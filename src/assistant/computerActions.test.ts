@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   computerUseBody,
+  COMPUTER_STEP_LIMIT, COMPUTER_TIME_LIMIT_MS,
+  executableShortcut,
   dragEndpoints,
   isUnsupportedAction,
   isTrustedRemoteAction,
@@ -29,6 +31,31 @@ describe("computer action safety", () => {
     expect(validateOpenApp("powershell").ok).toBe(false);
     expect(validateShortcut("copy")).toMatchObject({ ok: true, id: "copy" });
     expect(validateShortcut("alt+f4").ok).toBe(false);
+    for (const id of ["save", "save-as", "open-file", "find", "address-bar", "new-tab", "switch-window"]) {
+      // The backend remote_auto_claim allowlist is intentionally unchanged.
+      // These chords exist only in supervised Computer Use, never as standalone
+      // remote commands or new unapproved Live press_shortcut actions.
+      expect(validateShortcut(id).ok).toBe(false);
+      expect(isTrustedRemoteAction("press_shortcut", id)).toBe(false);
+    }
+  });
+
+  it("maps only fixed document and browser shortcuts, without broad keyboard access", () => {
+    for (const [keys, name] of [
+      [["CTRL", "S"], "save"], [["ctrl", "shift", "s"], "save-as"],
+      [["ctrl", "o"], "open-file"], [["ctrl", "f"], "find"],
+      [["ctrl", "l"], "address-bar"], [["ctrl", "t"], "new-tab"],
+      [["alt", "tab"], "switch-window"],
+    ] as const) {
+      const call = { name: "hotkey", args: { keys } };
+      expect(validateComputerCall(call)).toEqual({ ok: true });
+      expect(executableShortcut(call)).toBe(name);
+      expect(planComputerStep(call, 0, started, started, false).action).toBe("execute");
+    }
+    for (const keys of [["ctrl", "p"], ["alt", "f4"], ["ctrl", "shift", "delete"],
+      ["ctrl", "enter"], ["win", "r"]]) {
+      expect(validateComputerCall({ name: "hotkey", args: { keys } }).ok).toBe(false);
+    }
   });
 
   it("asks before a high-impact step and reports a real stop", () => {
@@ -54,10 +81,10 @@ describe("computer action safety", () => {
 
   it("rejects bad coordinates and stops at the step and time caps", () => {
     expect(planComputerStep({ name: "click", args: { x: 1000, y: 1 } }, 0, started, started, false).action).toBe("stop");
-    expect(planComputerStep({ name: "click", args: { x: 1, y: 1 } }, 8, started, started, false)).toMatchObject({
-      message: "Stopped after 8 steps.",
+    expect(planComputerStep({ name: "click", args: { x: 1, y: 1 } }, COMPUTER_STEP_LIMIT, started, started, false)).toMatchObject({
+      message: `Stopped after ${COMPUTER_STEP_LIMIT} steps.`,
     });
-    expect(planComputerStep({ name: "click", args: { x: 1, y: 1 } }, 1, started, started + 45_000, false)).toMatchObject({
+    expect(planComputerStep({ name: "click", args: { x: 1, y: 1 } }, 1, started, started + COMPUTER_TIME_LIMIT_MS, false)).toMatchObject({
       message: "Stopped because the task ran too long.",
     });
   });

@@ -341,7 +341,7 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "supervise_screen",
-      description: "Start a supervised screen task for a goal that needs seeing and clicking. A separate Computer Use model proposes each step. Call this when the user asks. Do not ask them to click. The user can stop it. This Live session does not move the mouse itself.",
+      description: "Start a bounded supervised Windows screen task that can navigate, edit, open and save files using fixed UI shortcuts. The existing Computer Use model proposes each step, with stop and safety controls. For a saved-file goal, reopen and inspect the file before claiming completion; a Save acknowledgement or editor screenshot alone is insufficient.",
       parameters: { type: "object", properties: { goal: { type: "string", description: "The harmless on-screen goal." } }, required: ["goal"] },
     },
     {

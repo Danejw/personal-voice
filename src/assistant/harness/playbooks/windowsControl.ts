@@ -21,7 +21,7 @@ export const WINDOWS_CONTROL: ToolPlaybook = {
       "The requested action is accepted and its effect can be inspected."),
     playbookStep("Delegate visual multi-step workflow", ["supervise_screen"],
       "When task truly requires several visual screen steps rather than a single accessible control.",
-      "Computer Use stepper attempts goal; do not call it for a trivial action."),
+      "Computer Use uses fixed save/open/browser/window shortcuts and a longer bounded local task. For saved files, reopen from disk to verify rather than trusting a Save keystroke."),
     playbookStep("Check target state again", ["inspect_accessibility_tree", "inspect_active_app", "capture_screen"],
       "After actions where observable application state matters.",
       "Desired end state observed, or task marked incomplete."),
@@ -36,5 +36,5 @@ export const WINDOWS_CONTROL: ToolPlaybook = {
     "If the app is unavailable, report the exact blocker. Do not switch to a different application without a reason.",
     "If a tool is unsupported, choose a different declared tool only when it can accomplish the same requested objective.",
   ],
-  completion: ["Confirm the target app/control reaches the user-requested state using available observations."],
+  completion: ["Confirm the target app/control reaches the requested state. For file writes, verify exact filename, reopened document and content; a visible editor or Save dialog alone is insufficient."],
 };

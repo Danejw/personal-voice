@@ -10,8 +10,8 @@
  */
 
 export const COMPUTER_USE_MODEL = "gemini-3.8-flash";
-export const COMPUTER_STEP_LIMIT = 8;
-export const COMPUTER_TIME_LIMIT_MS = 45_000;
+export const COMPUTER_STEP_LIMIT = 20;
+export const COMPUTER_TIME_LIMIT_MS = 180_000;
 export const COMPUTER_TEXT_LIMIT = 500;
 export const COMPUTER_WAIT_LIMIT_SECONDS = 2;
 
@@ -352,6 +352,13 @@ export function executableShortcut(call: ComputerCall): string | null {
   if (joined === "ctrl+v" || joined === "control+v" || joined === "paste") return "paste";
   if (joined === "ctrl+a" || joined === "control+a" || joined === "select-all") return "select-all";
   if (joined === "ctrl+z" || joined === "control+z" || joined === "undo") return "undo";
+  if (joined === "ctrl+s" || joined === "control+s" || joined === "save") return "save";
+  if (joined === "ctrl+shift+s" || joined === "control+shift+s" || joined === "save-as") return "save-as";
+  if (joined === "ctrl+o" || joined === "control+o" || joined === "open-file") return "open-file";
+  if (joined === "ctrl+f" || joined === "control+f" || joined === "find") return "find";
+  if (joined === "ctrl+l" || joined === "control+l" || joined === "address-bar") return "address-bar";
+  if (joined === "ctrl+t" || joined === "control+t" || joined === "new-tab") return "new-tab";
+  if (joined === "alt+tab" || joined === "switch-window") return "switch-window";
   if (joined === "escape") return "escape";
   if (joined === "tab") return "tab";
   return null;
@@ -413,7 +420,10 @@ function allowedHotkey(value: unknown): boolean {
   const keys = hotkeyKeys(value);
   if (!keys.length || hotkeyHasEnter(value) || hotkeyHas(value, ["delete", "del"])) return false;
   const joined = keys.join("+");
-  const aliases = new Set(["copy", "paste", "select-all", "undo", "escape", "tab", "ctrl+c", "control+c", "ctrl+v", "control+v", "ctrl+a", "control+a", "ctrl+z", "control+z"]);
+  const aliases = new Set(["copy", "paste", "select-all", "undo", "escape", "tab",
+    "ctrl+c", "control+c", "ctrl+v", "control+v", "ctrl+a", "control+a", "ctrl+z", "control+z",
+    "ctrl+s", "control+s", "ctrl+shift+s", "control+shift+s", "ctrl+o", "control+o",
+    "ctrl+f", "control+f", "ctrl+l", "control+l", "ctrl+t", "control+t", "alt+tab"]);
   return aliases.has(joined) || ALLOWED_SHORTCUTS.some((item) => item.id === joined);
 }
 

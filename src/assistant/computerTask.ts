@@ -1,6 +1,8 @@
 import {
   parseInteraction,
   planComputerStep,
+  COMPUTER_STEP_LIMIT,
+  COMPUTER_TIME_LIMIT_MS,
   type ComputerCall,
 } from "@/assistant/computerActions";
 
@@ -61,6 +63,22 @@ export interface ComputerTaskLimits {
   allowRoutineDrag?: boolean;
 }
 
+/** Server rejects initial Computer Use requests whose goal exceeds 500 chars. */
+export const COMPUTER_GOAL_MAX_CHARS = 500;
+
+export function computerVerificationPrompt(objective: string, claim: string): string {
+  const brief = (value: string, limit: number) =>
+    value.replace(/\s+/g, " ").trim().slice(0, limit);
+  return [
+    "Independent check using ONLY current screenshot. No tools.",
+    "Task: " + brief(objective, 120),
+    "Claim: " + brief(claim, 55),
+    "VERIFIED: only with concrete visible evidence for the entire task.",
+    "Files: editor or Save dialog is not proof of persistence; require reopened exact file and content.",
+    "Otherwise NOT_VERIFIED: explain what remains unproven.",
+  ].join("\n").slice(0, COMPUTER_GOAL_MAX_CHARS);
+}
+
 export const REMOTE_COMPUTER_LIMITS: ComputerTaskLimits = {
   maxSteps: 240,
   maxDurationMs: 30 * 60 * 1000,
@@ -79,13 +97,15 @@ function report(status: ComputerTaskStatus, steps: number, summary: string, evid
 export async function runComputerTaskReport(
   goal: string,
   host: ComputerTaskHost,
-  limits: ComputerTaskLimits = { maxSteps: 8, maxDurationMs: 45_000 },
+  limits: ComputerTaskLimits = { maxSteps: COMPUTER_STEP_LIMIT, maxDurationMs: COMPUTER_TIME_LIMIT_MS },
 ): Promise<ComputerTaskReport> {
   const startedAt = host.now();
   let previousId: string | null = null;
   let selectedModel: string | undefined;
   let result: { name: string; callId: string; result: string; acknowledgement: boolean; imageBase64: string | null } | null = null;
   let executed = 0;
+  let verificationRetried = false;
+  let verificationFeedback: string | null = null;
   const syncInstructions = async (): Promise<boolean> => {
     const next = await host.instructions?.();
     if (!next || next === goal) return false;
@@ -93,6 +113,8 @@ export async function runComputerTaskReport(
     previousId = null;
     result = null;
     selectedModel = undefined;
+    verificationRetried = false;
+    verificationFeedback = null;
     return true;
   };
   for (let step = 0; step < limits.maxSteps; step += 1) {
@@ -113,8 +135,11 @@ export async function runComputerTaskReport(
     let interaction;
     try {
       const response = await host.propose({
-        goal,
-        image: previousId ? null : image.jpeg,
+        goal: verificationFeedback
+          ? goal.slice(0, COMPUTER_GOAL_MAX_CHARS - verificationFeedback.length - 2) +
+            "\n\n" + verificationFeedback
+          : goal,
+        image: previousId && !verificationFeedback ? null : image.jpeg,
         previousInteractionId: previousId,
         model: selectedModel,
         supportsModelFallback: true,
@@ -158,6 +183,21 @@ export async function runComputerTaskReport(
           host.onTrace?.({ stage: "verified", step: executed });
           return report("verified", executed, said, evidence.trim().slice(0, 500));
         }
+        // Give the existing Computer Use loop one evidence-gathering chance instead
+        // of treating a plausible but unsupported completion claim as the end.
+        // Start with a fresh screenshot and interaction. Never automatically
+        // repeat an uncertain save, click, or submission.
+        if (executed > 0 && !verificationRetried && step + 1 < limits.maxSteps) {
+          verificationRetried = true;
+          verificationFeedback = "A fresh independent check could not verify your completion claim. " +
+            "Inspect current state before taking further action. Do not repeat uncertain side effects. " +
+            "For a file save/edit, reopen the exact file from disk and check its contents. " +
+            "Only claim completion after evidence of the requested end state.";
+          previousId = null;
+          result = null;
+          selectedModel = undefined;
+          continue;
+        }
         host.onTrace?.({ stage: "unverified", step: executed, code: "verification" });
         return report("unverified", executed, `Model reported: ${said}. Fresh-screen verification did not confirm the goal.`);
       } catch {
@@ -165,6 +205,7 @@ export async function runComputerTaskReport(
         return report("unverified", executed, `Model reported: ${said}. Final screen verification was unavailable.`);
       }
     }
+    if (interaction.call) verificationFeedback = null;
     if (!interaction.id || !interaction.callId) {
       host.onTrace?.({ stage: "blocked", step: executed, code: "model" });
       return report("blocked", executed, "Computer Use returned an action without its interaction or call ID. No action was executed.");

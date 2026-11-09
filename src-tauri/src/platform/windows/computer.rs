@@ -7,7 +7,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
     KEYEVENTF_KEYUP, MOUSEEVENTF_ABSOLUTE,
     MOUSEEVENTF_MOVE, MOUSEEVENTF_VIRTUALDESK, MOUSEEVENTF_WHEEL, MOUSEEVENTF_HWHEEL, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, VIRTUAL_KEY, VK_A, VK_C, VK_CONTROL, VK_ESCAPE, VK_RETURN, VK_TAB,
-    VK_V, VK_Z,
+    VK_V, VK_Z, VK_S, VK_O, VK_F, VK_L, VK_T, VK_MENU, VK_SHIFT,
 };
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -53,6 +53,13 @@ pub fn press_allowlisted_shortcut(id: &str) -> Result<String, String> {
         "paste" => send_ctrl(VK_V, "Paste"),
         "select-all" => send_ctrl(VK_A, "Select all"),
         "undo" => send_ctrl(VK_Z, "Undo"),
+        "save" => send_ctrl(VK_S, "Save"),
+        "save-as" => send_modified(&[VK_CONTROL, VK_SHIFT], VK_S, "Save as"),
+        "open-file" => send_ctrl(VK_O, "Open file"),
+        "find" => send_ctrl(VK_F, "Find"),
+        "address-bar" => send_ctrl(VK_L, "Address bar"),
+        "new-tab" => send_ctrl(VK_T, "New tab"),
+        "switch-window" => send_modified(&[VK_MENU], VK_TAB, "Switch window"),
         "escape" => send_key(VK_ESCAPE, "Escape"),
         "tab" => send_key(VK_TAB, "Tab"),
         "enter" => send_key(VK_RETURN, "Enter"),
@@ -237,13 +244,17 @@ fn wheel_input(flags: windows::Win32::UI::Input::KeyboardAndMouse::MOUSE_EVENT_F
 }
 
 fn send_ctrl(vk: VIRTUAL_KEY, label: &str) -> Result<String, String> {
-    let none = KEYBD_EVENT_FLAGS(0);
-    let inputs = [
-        key(VK_CONTROL, none),
-        key(vk, none),
-        key(vk, KEYEVENTF_KEYUP),
-        key(VK_CONTROL, KEYEVENTF_KEYUP),
-    ];
+    send_modified(&[VK_CONTROL], vk, label)
+}
+
+/// Emit only hard-coded modifier/key combinations. Release the modifiers in
+/// reverse order so keyboard focus is not left with Ctrl, Shift or Alt held.
+fn send_modified(modifiers: &[VIRTUAL_KEY], vk: VIRTUAL_KEY, label: &str) -> Result<String, String> {
+    let mut inputs = Vec::with_capacity(modifiers.len() * 2 + 2);
+    for modifier in modifiers { inputs.push(key(*modifier, KEYBD_EVENT_FLAGS(0))); }
+    inputs.push(key(vk, KEYBD_EVENT_FLAGS(0)));
+    inputs.push(key(vk, KEYEVENTF_KEYUP));
+    for modifier in modifiers.iter().rev() { inputs.push(key(*modifier, KEYEVENTF_KEYUP)); }
     send_inputs(&inputs, label)?;
     Ok(format!("Pressed {label}."))
 }
