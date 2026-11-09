@@ -159,7 +159,7 @@ export class NearbyCapabilityService {
       inspected_network_hosts: withIp.length,
       incomplete_inventory: candidates.length > REPORT_LIMIT,
       device_actions_require_user_confirmation: true,
-      note: "Only radio/network observations are currently detected. Saved Bluetooth pairings are not proof of proximity. TV remote actions require an active session, not just saved approval. Use the exact ID and a listed action in control_nearby_device; user confirmation is mandatory. No action was executed. A command acknowledgement is not proof of physical effect.",
+      note: "Saved Bluetooth pairings are not live proximity or connected media outputs. For a verified Bluetooth speaker, connect_and_use starts an Android pairing/Settings handoff and attempts Assistant audio routing only after exact A2DP identity and media output verification. Use device_environment_status to check progress; it is not automatic privileged A2DP connection. TV remote actions require active sessions; physical action acknowledgement does not prove effect.",
       devices: items,
     });
   }
