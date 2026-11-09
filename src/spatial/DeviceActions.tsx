@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
+import { BluetoothSpeakerHandoffStatus } from "@/platform/android/BluetoothSpeakerHandoffStatus";
 import { nearbyCapabilityService } from "@/spatial/NearbyCapabilityService";
 import type { NearbyAction } from "@/spatial/deviceActionRegistry";
 import type { DeviceIdentity } from "@/spatial/deviceCapabilities";
@@ -172,11 +173,25 @@ export function DeviceActions({ device, onControlPc }: Props) {
         }}>Open Companion</button>
       )}
       {bluetooth && (
-        <button type="button" className="secondary" disabled={busy}
-          onClick={() => void perform("open_nearby_bluetooth_settings", {},
-            "Opened Android Bluetooth settings.")}>
-          {device.paired ? "Manage Bluetooth connection" : "Pair in Bluetooth settings"}
-        </button>
+        <div className="spatial-control-group">
+          {device.kind === "speaker" && (
+            <button type="button" disabled={busy}
+              onClick={() => void nearbyCapabilityService.act(device.id, "connect_and_use")
+                .then(result => {
+                  try { setNotice((JSON.parse(result) as { message: string }).message); }
+                  catch { setNotice(result); }
+                })
+                .catch(reason => setFailure(reason instanceof Error ? reason.message : "Connection failed."))}>
+              Connect & Use for Assistant
+            </button>
+          )}
+          <button type="button" className="secondary" disabled={busy}
+            onClick={() => void perform("open_nearby_bluetooth_settings", {},
+              "Opened Android Bluetooth settings.")}>
+            {device.paired ? "Manage Bluetooth connection" : "Pair in Bluetooth settings"}
+          </button>
+          {device.kind === "speaker" && <BluetoothSpeakerHandoffStatus deviceId={device.id} />}
+        </div>
       )}
       {inspecting && <p className="spatial-capabilities" role="status">Checking local services and device identity…</p>}
       {ip && identity && (
