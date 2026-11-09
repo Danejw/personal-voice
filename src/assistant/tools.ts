@@ -336,8 +336,8 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "press_shortcut",
-      description: "Press one exact allowlisted Windows shortcut after user request and confirmation: copy, paste, select-all, undo, save, save-as, open-file, find, address-bar, new-tab, switch-window, escape, or tab. Use the existing target application. A keystroke acknowledges input, not a saved file or finished navigation. No arbitrary key sequences.",
-      parameters: { type: "object", properties: { shortcut: { type: "string", description: "copy, paste, select-all, undo, save, save-as, open-file, find, address-bar, new-tab, switch-window, escape, or tab." } }, required: ["shortcut"] },
+      description: "Press one allowlisted shortcut: copy, paste, select-all, undo, escape, or tab. Call this when the user asks. Do not ask them to click. Do not invent other shortcuts.",
+      parameters: { type: "object", properties: { shortcut: { type: "string", description: "copy, paste, select-all, undo, escape, or tab." } }, required: ["shortcut"] },
     },
     {
       name: "supervise_screen",
