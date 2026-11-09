@@ -1080,22 +1080,28 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   fun selectAssistantAudioOutput(invoke: Invoke) {
     val requested = try { invoke.parseArgs(AssistantOutputArgs::class.java).id }
       catch (_: Exception) { invoke.reject("Choose an audio output."); return }
-    try {
-      assistantOutputs.choose(requested)
-      // Reopening the media track clears queued speech, but never pretends it is echo cancelled.
-      val status = audioSession?.takeIf { it.isRunning() }?.switchToMediaOutput()
-      val message = if (status?.nativePlayback == false) {
-        "Native media routing unavailable. Android will use system playback."
-      } else if (status != null && requested == "system") {
-        "System media output selected. Restart Assistant to restore echo-cancelled call audio."
-      } else if (status != null) {
-        "Assistant output switched. Microphone pauses while speaker replies play."
-      } else {
-        "Assistant output selected for the next conversation."
+    main.post {
+      try {
+        // Latest explicit routing intent wins. Native Bluetooth profile callbacks and
+        // this selection are serialized on the main looper so a pending Connect & Use
+        // can never silently overwrite a later choice of another speaker or System.
+        bluetoothSpeakerHandoff.cancel()
+        assistantOutputs.choose(requested)
+        // Reopening the media track clears queued speech, but never pretends it is echo cancelled.
+        val status = audioSession?.takeIf { it.isRunning() }?.switchToMediaOutput()
+        val message = if (status?.nativePlayback == false) {
+          "Native media routing unavailable. Android will use system playback."
+        } else if (status != null && requested == "system") {
+          "System media output selected. Restart Assistant to restore echo-cancelled call audio."
+        } else if (status != null) {
+          "Assistant output switched. Microphone pauses while speaker replies play."
+        } else {
+          "Assistant output selected for the next conversation."
+        }
+        invoke.resolve(JSObject().put("message", message))
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Couldn't select audio output.")
       }
-      invoke.resolve(JSObject().put("message", message))
-    } catch (error: Exception) {
-      invoke.reject(error.message ?: "Couldn't select audio output.")
     }
   }
 
