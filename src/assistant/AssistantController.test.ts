@@ -204,6 +204,28 @@ describe("AssistantController", () => {
     created.end();
   });
 
+  it("requires approval for Bluetooth Connect & Use even when auto-run is on", async () => {
+    const { created } = controller();
+    const used = toolActions();
+    created.setDeviceContext({ platform: "android", otherDeviceCount: 0 });
+    created.setAutoRun(true);
+    created.setActions(used);
+    created.start();
+    const session = FakeSession.opened[0] as FakeSession;
+    const deviceId = "bt-abcdef012345abcdef012345";
+    session.emit({ type: "toolCalls", calls: [{
+      id: "speaker1", name: "control_nearby_device",
+      args: { device_id: deviceId, action: "connect_and_use" },
+    }] });
+    await settle();
+    expect(used.controlNearbyDevice).not.toHaveBeenCalled();
+    expect(created.getSnapshot().pendingAction?.preview).toContain("connect and use");
+    created.confirmPending();
+    await settle();
+    expect(used.controlNearbyDevice).toHaveBeenCalledWith(deviceId, "connect_and_use");
+    created.end();
+  });
+
   it("routes a whole paired desktop task directly to the Windows Computer Use session", async () => {
     const { created } = controller();
     const actions = toolActions();
