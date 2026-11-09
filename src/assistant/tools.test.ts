@@ -92,6 +92,16 @@ describe("assistant tool schema", () => {
     expect(JSON.stringify(assistantFunctionDeclarations())).not.toContain("NON_BLOCKING");
   });
 
+  it("confirms newly allowlisted document shortcuts rather than executing arbitrary keys", () => {
+    for (const shortcut of ["save", "save-as", "open-file", "find",
+      "address-bar", "new-tab", "switch-window"]) {
+      expect(decideToolCall({ id: shortcut, name: "press_shortcut",
+        args: { shortcut } }, plan)).toMatchObject({ kind: "confirm", name: "press_shortcut" });
+    }
+    expect(decideToolCall({ id: "bad", name: "press_shortcut",
+      args: { shortcut: "alt+f4" } }, plan)).toMatchObject({ kind: "reject" });
+  });
+
   it("validates Android audio/display actions and never accepts arbitrary output IDs", () => {
     expect(decideToolCall({id:"status",name:"device_environment_status",args:{}}, plan))
       .toMatchObject({kind:"deviceEnvironment"});
