@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { callPlugin } from "@/platform/android/voicePlatformPlugin";
+import { readScreenEvidence, type AndroidScreenEvidence } from "@/platform/android/deviceCoordination";
 
-interface ScreenShareState { active: boolean; url: string | null }
+interface ScreenShareState extends AndroidScreenEvidence { url: string | null }
 
 function stateFrom(value: unknown): ScreenShareState {
-  if (!value || typeof value !== "object") return { active: false, url: null };
-  const state = value as { active?: unknown; url?: unknown };
-  return { active: state.active === true && typeof state.url === "string",
-    url: typeof state.url === "string" && state.url.startsWith("http://") ? state.url : null };
+  const evidence = readScreenEvidence(value);
+  const state = value && typeof value === "object" ? value as { url?: unknown } : {};
+  return { ...evidence, url: evidence.linkAvailable ? state.url as string : null };
 }
+const STOPPED = stateFrom(null);
 
 /** The TV opens a one-time LAN link in its browser. This does not imply native casting support. */
 export function ScreenSharingPanel() {
-  const [share, setShare] = useState<ScreenShareState>({ active: false, url: null });
+  const [share, setShare] = useState<ScreenShareState>(STOPPED);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -24,6 +25,11 @@ export function ScreenSharingPanel() {
   }
 
   useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    if (!share.active) return;
+    const timer = window.setInterval(() => { void refresh(); }, 2500);
+    return () => window.clearInterval(timer);
+  }, [share.active]);
 
   async function start() {
     setBusy(true);
@@ -44,7 +50,7 @@ export function ScreenSharingPanel() {
     setError("");
     try {
       await callPlugin("stop_screen_share");
-      setShare({ active: false, url: null });
+      setShare(STOPPED);
       setMessage("Screen sharing stopped.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not stop sharing.");
@@ -75,6 +81,15 @@ export function ScreenSharingPanel() {
             </button>}
         <button type="button" className="secondary" disabled={busy} onClick={() => void refresh()}>Refresh</button>
       </div>
+      {share.active && (
+        <p role="status">
+          {share.browserConnected
+            ? "Local browser connected · " + share.framesWritten + " frames sent"
+            : "Waiting for a TV browser to open the link"}
+          {share.browserConnected && share.frameAgeMs !== null && share.frameAgeMs > 3500
+            ? " · no recent frame delivery" : ""}
+        </p>
+      )}
       {share.active && share.url && (
         <div>
           <label htmlFor="screen-share-link">TV browser address</label>
