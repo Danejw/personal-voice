@@ -62,7 +62,33 @@ describe("shared nearby capability inventory", () => {
       name: "LG webOS TV", presence: "saved_pairing_not_observed", paired_with_android: true,
     });
     expect(found.devices[0].actions.map((a: {name: string}) => a.name))
-      .toEqual(["bluetooth_settings"]);
+      .toEqual(["bluetooth_settings", "connect_and_use"]);
+  });
+
+  it("passes exact scanned Bluetooth speaker ID to native, never an inferred address", async () => {
+    const speakerId = "bt-abcdef012345abcdef012345";
+    mocked.mockImplementation(async (command: string, args?: { deviceId?: string }) => {
+      if (command === "scan_nearby_devices") return { devices: [
+        { id: speakerId, name: "Echo Dot", kind: "speaker", source: "bluetooth-paired",
+          paired: true, observedNow: false, detail: "Paired Bluetooth" },
+      ] };
+      if (command === "connect_nearby_bluetooth_speaker") {
+        expect(args?.deviceId).toBe(speakerId);
+        return { state: "connect_in_android", name: "Echo Dot", deviceId: speakerId,
+          message: "Connect Echo Dot in Android Bluetooth Settings.",
+          routeObserved: false, needsAndroidInteraction: true };
+      }
+      throw new Error("No other native action");
+    });
+    const service = new NearbyCapabilityService();
+    const discovered = JSON.parse(await service.describe([], "phone", [], "Echo Dot"));
+    expect(discovered.devices[0].actions.map((a: {name:string})=>a.name))
+      .toContain("connect_and_use");
+    const response = JSON.parse(await service.act(speakerId, "connect_and_use"));
+    expect(response).toMatchObject({
+      state: "connect_in_android", routeObserved: false, needsAndroidInteraction: true,
+    });
+    await expect(service.act("bt-deadbeefdeadbeefdeadbeef", "connect_and_use")).rejects.toThrow();
   });
 
   it("finds a named TV through bounded inspection even when LAN discovery only supplied its IP", async () => {

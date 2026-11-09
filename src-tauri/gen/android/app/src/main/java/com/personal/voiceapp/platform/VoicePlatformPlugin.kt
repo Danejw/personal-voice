@@ -122,6 +122,11 @@ class AssistantOutputArgs {
 }
 
 @InvokeArg
+class BluetoothSpeakerConnectArgs {
+  lateinit var deviceId: String
+}
+
+@InvokeArg
 class CameraArgs {
   /** `default`, `front`, or `back`. */
   var facing: String = "default"
@@ -198,6 +203,17 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private var captureId = 0
   private var audioSession: AssistantAudioSession? = null
   private val assistantOutputs by lazy { AssistantAudioOutputs(activity.applicationContext) }
+  private val bluetoothSpeakerHandoff by lazy {
+    BluetoothSpeakerHandoff(activity.applicationContext) { outputId ->
+      // Reuse the exact PCM/media implementation tested with the Echo Dot.
+      assistantOutputs.choose("audio:" + outputId)
+      val state = audioSession?.takeIf { it.isRunning() }?.switchToMediaOutput()
+      if (state != null && !state.nativePlayback) {
+        throw IllegalStateException("Android could not open Assistant media playback.")
+      }
+      playbackTrack?.routedDeviceId() == outputId
+    }
+  }
   private var playbackTrack: AssistantPcmTrack? = null
   private var cameraSession: AndroidCameraSession? = null
   private var pendingCamera: (() -> Unit)? = null
@@ -495,7 +511,40 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     }.start()
   }
 
-  /** Bluetooth device discovery does not permit arbitrary device control. */
+  private fun bluetoothSpeakerResponse(status: BluetoothSpeakerHandoff.Status): JSObject =
+    JSObject().put("state", status.state)
+      .put("deviceId", status.deviceId)
+      .put("name", status.name)
+      .put("message", status.message)
+      .put("selectedOutputId", status.selectedOutputId)
+      .put("routeObserved", status.routeObserved)
+      .put("needsAndroidInteraction", status.needsAndroidInteraction)
+
+  /** Exact Bluetooth ID must come from a recent native scan. Never accept a raw MAC. */
+  @Command
+  fun connectNearbyBluetoothSpeaker(invoke: Invoke) {
+    val id = try { invoke.parseArgs(BluetoothSpeakerConnectArgs::class.java).deviceId }
+      catch (_: Exception) { invoke.reject("Select a speaker from a recent Nearby scan."); return }
+    main.post {
+      try {
+        invoke.resolve(bluetoothSpeakerResponse(bluetoothSpeakerHandoff.begin(id)))
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Could not start speaker connection.")
+      }
+    }
+  }
+
+  @Command
+  fun bluetoothSpeakerStatus(invoke: Invoke) {
+    invoke.resolve(bluetoothSpeakerResponse(bluetoothSpeakerHandoff.snapshot()))
+  }
+
+  @Command
+  fun cancelBluetoothSpeaker(invoke: Invoke) {
+    main.post { invoke.resolve(bluetoothSpeakerResponse(bluetoothSpeakerHandoff.cancel())) }
+  }
+
+  /** Android Settings handles restricted profile connection; native app verifies the result. */
   @Command
   fun openNearbyBluetoothSettings(invoke: Invoke) {
     try {
@@ -1031,22 +1080,28 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   fun selectAssistantAudioOutput(invoke: Invoke) {
     val requested = try { invoke.parseArgs(AssistantOutputArgs::class.java).id }
       catch (_: Exception) { invoke.reject("Choose an audio output."); return }
-    try {
-      assistantOutputs.choose(requested)
-      // Reopening the media track clears queued speech, but never pretends it is echo cancelled.
-      val status = audioSession?.takeIf { it.isRunning() }?.switchToMediaOutput()
-      val message = if (status?.nativePlayback == false) {
-        "Native media routing unavailable. Android will use system playback."
-      } else if (status != null && requested == "system") {
-        "System media output selected. Restart Assistant to restore echo-cancelled call audio."
-      } else if (status != null) {
-        "Assistant output switched. Microphone pauses while speaker replies play."
-      } else {
-        "Assistant output selected for the next conversation."
+    main.post {
+      try {
+        // Latest explicit routing intent wins. Native Bluetooth profile callbacks and
+        // this selection are serialized on the main looper so a pending Connect & Use
+        // can never silently overwrite a later choice of another speaker or System.
+        bluetoothSpeakerHandoff.cancel()
+        assistantOutputs.choose(requested)
+        // Reopening the media track clears queued speech, but never pretends it is echo cancelled.
+        val status = audioSession?.takeIf { it.isRunning() }?.switchToMediaOutput()
+        val message = if (status?.nativePlayback == false) {
+          "Native media routing unavailable. Android will use system playback."
+        } else if (status != null && requested == "system") {
+          "System media output selected. Restart Assistant to restore echo-cancelled call audio."
+        } else if (status != null) {
+          "Assistant output switched. Microphone pauses while speaker replies play."
+        } else {
+          "Assistant output selected for the next conversation."
+        }
+        invoke.resolve(JSObject().put("message", message))
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Couldn't select audio output.")
       }
-      invoke.resolve(JSObject().put("message", message))
-    } catch (error: Exception) {
-      invoke.reject(error.message ?: "Couldn't select audio output.")
     }
   }
 

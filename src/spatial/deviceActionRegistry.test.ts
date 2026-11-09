@@ -21,6 +21,16 @@ describe("universal local capability mapping", () => {
     expect(availableNearbyActions({ ...device, pairedDeviceId: "signed-id" }, identity)).toEqual([]);
   });
 
+  it("only offers Bluetooth speaker handoff for identified audio devices", () => {
+    const speaker = { ...device, id: "bt-abcdef012345abcdef012345", source: "bluetooth-paired" as const,
+      kind: "speaker" as const, name: "Echo Dot", ipAddress: undefined, paired: true };
+    const offered = availableNearbyActions(speaker, null);
+    expect(offered.map(a => a.action)).toEqual(["bluetooth_settings", "connect_and_use"]);
+    expect(offered.some(a => ["volume_up", "play", "pair"].includes(a.action))).toBe(false);
+    expect(availableNearbyActions({ ...speaker, kind: "unknown" }, null).map(a => a.action))
+      .toEqual(["bluetooth_settings"]);
+  });
+
   it("requires matching verified native identity before offering actions", () => {
     expect(availableNearbyActions(device, { ...identity, ipAddress: "192.168.0.1" })).toEqual([]);
     expect(availableNearbyActions(device, { ...identity, lgFingerprint: undefined })).toEqual([]);

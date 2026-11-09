@@ -66,14 +66,18 @@ export function deviceReadiness(
   };
   if (nearbyGroup(device.source) === "bluetooth") {
     const observed = observedThisScan(device);
+    const speaker = device.kind === "speaker";
     return {
       state: "setup", label: !observed ? "Saved pairing" : device.paired ? "Detected · Paired" : "Detected",
-      hint: !observed
-        ? "Saved in Android; not detected during this scan. Open details to manage the pairing"
-        : device.paired
-          ? "Radio observed; Android pairing is saved. Use Bluetooth settings to manage its connection"
-          : "Radio observed; pair in Android settings. Discovery alone does not grant remote control",
-      ...(observed ? { quickAction: "bluetooth_settings" as NearbyAction, quickLabel: "Settings" } : {}),
+      hint: speaker
+        ? "Use Connect & Use to finish Android media connection, then select Assistant speech automatically"
+        : !observed
+          ? "Saved in Android, but not detected during this scan"
+          : device.paired
+            ? "Android pairing is saved. Bluetooth discovery does not grant device controls"
+            : "Detected; pairing and permissions are controlled by Android",
+      ...(speaker ? { quickAction: "connect_and_use" as NearbyAction, quickLabel: "Connect & Use" }
+        : observed ? { quickAction: "bluetooth_settings" as NearbyAction, quickLabel: "Settings" } : {}),
     };
   }
   if (!device.ipAddress) return {

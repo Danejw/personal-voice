@@ -104,7 +104,7 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "control_nearby_device",
-      description: "Android only. Perform one explicitly requested local device action, after list_nearby_devices supplies the exact device_id and verified action. Requires Personal Voice confirmation, plus TV authorization if applicable. Use only listed actions; pairing must be approved on the television. Roku only offers an official companion-app handoff, never third-party ECP keys. Bluetooth discovery does not prove control. A command receipt does not prove visible effect.",
+      description: "Android only. Perform one explicitly requested local device action, after list_nearby_devices supplies the exact device_id and verified action. Requires Personal Voice confirmation, plus TV authorization if applicable. Use only listed actions; pairing must be approved on the television. For a scanned Bluetooth audio device, connect_and_use starts Android system pairing or opens Bluetooth Settings and then waits for exact A2DP media connection before routing Assistant PCM; it cannot force a profile connection. Check device_environment_status for completion. Roku only offers the official companion-app handoff. A command receipt does not prove visible or audible effect.",
       parameters: { type: "object", properties: {
         device_id: { type: "string", description: "Exact local scan ID from list_nearby_devices; not a guessed name or IP." },
         action: { type: "string", enum: [...NEARBY_ACTIONS] },
@@ -112,7 +112,7 @@ export function assistantFunctionDeclarations() {
     },
     {
       name: "device_environment_status",
-      description: "Android only, read-only. Report connected audio outputs (not just Bluetooth pairings), currently selected Assistant speaker and observed native AudioTrack route, plus whether screen sharing is active and a browser actually receives frames. Use before choosing a speaker or after starting a display stream. A browser viewer is not verified as a particular TV. Never infer audible sound or visible video without independent observation.",
+      description: "Android only, read-only. Report connected audio outputs (not just Bluetooth pairings), Bluetooth Connect & Use handoff progress, currently selected Assistant speaker and observed native AudioTrack route, plus whether screen sharing is active and a browser actually receives frames. Use before choosing a speaker or after starting a display stream. A browser viewer is not verified as a particular TV. Never infer audible sound or visible video without independent observation.",
       parameters: { type: "object", properties: {} },
     },
     {

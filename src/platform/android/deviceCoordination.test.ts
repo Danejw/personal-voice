@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   androidDeviceEnvironment, manageAndroidScreenShare, readAudioEvidence,
-  readScreenEvidence, routeAssistantAudio,
+  readScreenEvidence, readBluetoothSpeakerHandoff, routeAssistantAudio,
 } from "@/platform/android/deviceCoordination";
 
 const native = vi.hoisted(() => vi.fn());
@@ -24,6 +24,11 @@ beforeEach(() => {
   native.mockImplementation(async (name: string) => {
     if (name === "list_assistant_audio_outputs") return audio;
     if (name === "screen_share_status") return screen;
+    if (name === "bluetooth_speaker_status") return {
+      state: "connect_in_android", deviceId: "bt-abcdef012345abcdef012345",
+      name: "Echo Dot", selectedOutputId: null, routeObserved: false,
+      needsAndroidInteraction: true, message: "Connect Echo Dot in Android Settings."
+    };
     if (name === "select_assistant_audio_output") return { message: "Selected" };
     if (name === "start_screen_share") return { active: true };
     if (name === "stop_screen_share") return { active: false };
@@ -32,6 +37,17 @@ beforeEach(() => {
 });
 
 describe("Android device coordination evidence", () => {
+  it("reports speaker connection handoff without exposing any hardware address", () => {
+    const status = readBluetoothSpeakerHandoff({
+      state: "connect_in_android", deviceId: "bt-abcdef012345abcdef012345",
+      name: "Echo Dot", routeObserved: false, needsAndroidInteraction: true,
+    });
+    expect(status).toMatchObject({ state: "connect_in_android",
+      needsAndroidInteraction: true, routeObserved: false });
+    expect(readBluetoothSpeakerHandoff({ state: "fabricated", deviceId: "AA:BB:CC" }))
+      .toMatchObject({ state: "idle", deviceId: null });
+  });
+
   it("separates native track observation from a selected but disconnected speaker", () => {
     expect(readAudioEvidence(audio)).toMatchObject({
       nativeTrackRoutedDeviceId: 31, routeMatchesSelected: true,
@@ -50,6 +66,9 @@ describe("Android device coordination evidence", () => {
     const report = JSON.parse(await androidDeviceEnvironment());
     expect(report.screen_share).toMatchObject({ active: true, browserConnected: true, framesWritten: 12 });
     expect(report.available_audio_outputs[1]).toMatchObject({ name: "Echo Dot", id: "audio:31" });
+    expect(report.bluetooth_speaker_handoff).toMatchObject({
+      state: "connect_in_android", routeObserved: false, needsAndroidInteraction: true,
+    });
     expect(JSON.stringify(report)).not.toContain("secret-private-token");
     expect(JSON.stringify(report)).not.toContain("/watch/");
   });

@@ -13,6 +13,33 @@ export interface AndroidAudioEvidence {
   nativeTrackRoutedDeviceId: number | null;
   routeMatchesSelected: boolean;
 }
+export interface BluetoothSpeakerHandoffEvidence {
+  state: string;
+  deviceId: string | null;
+  name: string | null;
+  message: string;
+  selectedOutputId: string | null;
+  routeObserved: boolean;
+  needsAndroidInteraction: boolean;
+}
+
+export function readBluetoothSpeakerHandoff(value: unknown): BluetoothSpeakerHandoffEvidence {
+  const x = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const states = ["idle", "checking", "pairing", "connect_in_android", "bluetooth_off",
+    "selected", "routed", "failed", "timed_out", "cancelled", "permission_required"];
+  return {
+    state: typeof x.state === "string" && states.includes(x.state) ? x.state : "idle",
+    deviceId: typeof x.deviceId === "string" && /^bt-[a-f0-9]{24}$/.test(x.deviceId)
+      ? x.deviceId : null,
+    name: typeof x.name === "string" ? x.name.slice(0, 72) : null,
+    message: typeof x.message === "string" ? x.message.slice(0, 320) : "",
+    selectedOutputId: typeof x.selectedOutputId === "string" && /^audio:\d+$/.test(x.selectedOutputId)
+      ? x.selectedOutputId : null,
+    routeObserved: x.routeObserved === true,
+    needsAndroidInteraction: x.needsAndroidInteraction === true,
+  };
+}
+
 export interface AndroidScreenEvidence {
   active: boolean;
   browserConnected: boolean;
@@ -58,9 +85,10 @@ export function readScreenEvidence(raw: unknown): AndroidScreenEvidence {
 }
 
 export async function androidDeviceEnvironment(): Promise<string> {
-  const [audio, share] = await Promise.all([
+  const [audio, share, handoff] = await Promise.all([
     callPlugin<unknown>("list_assistant_audio_outputs"),
     callPlugin<unknown>("screen_share_status"),
+    callPlugin<unknown>("bluetooth_speaker_status"),
   ]);
   const a = readAudioEvidence(audio);
   const selected = a.outputs.find(output => output.selected) ?? null;
@@ -73,7 +101,8 @@ export async function androidDeviceEnvironment(): Promise<string> {
     actual_audio_route_matches_selection: a.routeMatchesSelected,
     actual_routed_audio_device_id: a.nativeTrackRoutedDeviceId,
     screen_share: screen,
-    confidence_note: "Connected audio sinks are observed, but that is not proof of audible speech. A connected screen browser and frames written confirm the local HTTP stream, not its TV identity or visible playback. Screen sharing URL is shown locally in Devices settings, not included in model tool results. A registered Windows PC is not proof of online presence; use its signed remote read tool.",
+    bluetooth_speaker_handoff: readBluetoothSpeakerHandoff(handoff),
+    confidence_note: "Connected audio sinks are observed, but that is not proof of audible speech. Bluetooth Connect & Use requires exact recent scan ID and may need Android pairing/connection actions; read bluetooth_speaker_handoff for its state. A connected screen browser and frames written confirm the local HTTP stream, not its TV identity or visible playback. Screen sharing URL is shown locally in Devices settings, not included in model tool results. A registered Windows PC is not proof of online presence; use its signed remote read tool.",
   });
 }
 

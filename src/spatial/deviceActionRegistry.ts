@@ -8,7 +8,7 @@ export const NEARBY_ACTIONS = [
   "pair", "open_web", "volume_up", "volume_down", "get_volume",
   "mute", "unmute", "play", "pause", "home", "back",
   "up", "down", "left", "right", "select", "show_message",
-  "bluetooth_settings", "open_roku_app",
+  "bluetooth_settings", "connect_and_use", "open_roku_app",
 ] as const;
 export type NearbyAction = typeof NEARBY_ACTIONS[number];
 
@@ -35,7 +35,13 @@ const LG_ACTIONS: Partial<Record<NearbyAction, string>> = {
 export function availableNearbyActions(device: NearbyDevice, identity: DeviceIdentity | null): ActionDescriptor[] {
   if (device.pairedDeviceId) return []; // The signed PC tools handle this separately.
   if (isBluetoothSource(device.source)) {
-    return [{ action: "bluetooth_settings", protocol: "bluetooth", authorization: "none" }];
+    return [
+      { action: "bluetooth_settings", protocol: "bluetooth", authorization: "none" },
+      ...(device.kind === "speaker"
+        ? [{ action: "connect_and_use" as const, protocol: "bluetooth" as const,
+          authorization: "none" as const }]
+        : []),
+    ];
   }
   if (!device.ipAddress || !identity || identity.ipAddress !== device.ipAddress) return [];
   const list: ActionDescriptor[] = [];
@@ -79,6 +85,19 @@ export async function executeNearbyAction(
   if (action === "bluetooth_settings") {
     await callPlugin("open_nearby_bluetooth_settings");
     return "Opened Android Bluetooth settings. Connection or pairing is not verified.";
+  }
+  if (action === "connect_and_use") {
+    // The native side revalidates an opaque ID from its recent scan. No MAC or guessed name.
+    const response = await callPlugin<{
+      state: string; name?: string; message: string; needsAndroidInteraction: boolean;
+      routeObserved: boolean; selectedOutputId?: string;
+    }>("connect_nearby_bluetooth_speaker", { deviceId: device.id });
+    return JSON.stringify({
+      action: "connect_and_use", state: response.state, name: response.name ?? device.name,
+      message: response.message, needsAndroidInteraction: response.needsAndroidInteraction,
+      selectedOutputId: response.selectedOutputId ?? null, routeObserved: response.routeObserved,
+      note: "Pairing may require Android approval and A2DP connection in Settings. Read device_environment_status for final handoff state. A selected track is not proof of audible playback.",
+    });
   }
   const ipAddress = device.ipAddress;
   if (!ipAddress) throw new Error("No verified network address.");

@@ -35,6 +35,12 @@ describe("tool result interpretation", () => {
       .toMatchObject({status:"incomplete",goal_verified:null});
   });
 
+  it("does not treat a Bluetooth Connect & Use handoff as audible playback", () => {
+    expect(interpretToolResult("control_nearby_device", true,
+      '{"action":"connect_and_use","state":"connect_in_android","routeObserved":false}'))
+      .toMatchObject({ status: "incomplete", goal_verified: null });
+  });
+
   it("never treats playbook lookup as task completion", () => {
     const assessment = interpretToolResult("get_tool_playbook", true, '{"kind":"tool_playbook"}');
     expect(assessment).toMatchObject({

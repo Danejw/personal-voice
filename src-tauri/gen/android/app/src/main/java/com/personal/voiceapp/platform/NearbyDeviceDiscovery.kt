@@ -36,6 +36,22 @@ internal object NearbyDeviceDiscovery {
     val networkLabel: String, val networkLimited: Boolean,
   )
 
+  /** Never export Bluetooth hardware addresses to JS or model tool results. */
+  data class BluetoothTarget(val id: String, val address: String, val name: String,
+    val kind: String, val paired: Boolean, val observedNow: Boolean)
+
+  private val radioAddresses = ConcurrentHashMap<String, String>()
+  @Volatile private var recentBluetooth: Map<String, Device> = emptyMap()
+  @Volatile private var bluetoothScanAt = 0L
+  private const val BLUETOOTH_TTL_MS = 180_000L
+
+  fun bluetoothTarget(id: String): BluetoothTarget? {
+    if (!id.startsWith("bt-") || SystemClock.elapsedRealtime() - bluetoothScanAt > BLUETOOTH_TTL_MS) return null
+    val item = recentBluetooth[id] ?: return null
+    val address = radioAddresses[id] ?: return null
+    return BluetoothTarget(id, address, item.name, item.kind, item.paired, item.observedNow)
+  }
+
   private val serviceTypes = listOf(
     "_googlecast._tcp." to "media",
     "_airplay._tcp." to "display",
@@ -71,6 +87,7 @@ internal object NearbyDeviceDiscovery {
     val id = identifier(if (source.startsWith("bluetooth")) "bt" else source, key)
     val fresh = Device(id, safeName, kind, source, clean(detail, 100), ipAddress, signalDbm,
       paired, ports, descriptionUrl, observedNow)
+    if (source.startsWith("bluetooth")) radioAddresses[id] = key
     found.compute(id) { _, previous -> mergeObservations(previous, fresh) }
   }
 
@@ -101,6 +118,10 @@ internal object NearbyDeviceDiscovery {
   }
 
   fun scan(context: Context): Scan {
+    // Every new scan invalidates old IDs, including a forgotten or renamed speaker.
+    bluetoothScanAt = 0L
+    recentBluetooth = emptyMap()
+    radioAddresses.clear()
     val found = ConcurrentHashMap<String, Device>()
     val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
     val listeners = mutableListOf<NsdManager.DiscoveryListener>()
@@ -227,8 +248,10 @@ internal object NearbyDeviceDiscovery {
     resolvers.shutdownNow()
     try { ssdpWorker.join(300) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
     try { lanWorker.join(1500) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
-    return Scan(found.values.sortedWith(compareBy({ it.name.lowercase() }, { it.id })).take(350),
-      bluetoothPermissionRequired, lanScan.networkLabel, lanScan.limited)
+    val results = found.values.sortedWith(compareBy({ it.name.lowercase() }, { it.id })).take(350)
+    recentBluetooth = results.filter { it.id.startsWith("bt-") }.associateBy { it.id }
+    bluetoothScanAt = SystemClock.elapsedRealtime()
+    return Scan(results, bluetoothPermissionRequired, lanScan.networkLabel, lanScan.limited)
   }
 
   /** Send targeted UPnP/DIAL discovery only. Do not fetch or follow untrusted LOCATION URLs. */
