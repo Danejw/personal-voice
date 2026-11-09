@@ -501,6 +501,9 @@ class AssistantPcmTrack(
     return ((left * 1000L) / SAMPLE_RATE).toInt()
   }
 
+  /** This reports Android's actual active AudioTrack routing, not merely our preference. */
+  fun routedDeviceId(): Int? = try { track?.routedDevice?.id } catch (_: Exception) { null }
+
   private fun head(active: AudioTrack): Long = active.playbackHeadPosition.toLong() and 0xffffffffL
 
   private companion object {
