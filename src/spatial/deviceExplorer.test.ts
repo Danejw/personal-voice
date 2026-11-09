@@ -76,6 +76,14 @@ describe("action-first readiness", () => {
       .toMatchObject({ label: "Detected · Paired", quickAction: "bluetooth_settings" });
   });
 
+  it("offers Connect & Use for an audio-classified Bluetooth speaker, not TV controls", () => {
+    const speaker = device("bt-abcdef", "Echo Dot", "bluetooth-paired",
+      { kind: "speaker", paired: true, observedNow: false });
+    expect(deviceReadiness(speaker, null, false)).toMatchObject({
+      state: "setup", quickAction: "connect_and_use", quickLabel: "Connect & Use",
+    });
+  });
+
   it("shows saved TV approval as reconnect needed until a remote session exists", () => {
     const host = device("lan-aaaaa1", "LG TV", "lan", { ipAddress: "192.168.0.17" });
     const status = deviceReadiness(host, {
