@@ -296,8 +296,13 @@ export class ComputerActionStore {
     }
     if (call.name === "type") {
       if (typeof call.args.text !== "string") throw new Error("Text is required.");
-      await this.platform.insertText(call.args.text);
-      return "Typed the text into the focused app.";
+      const destination = await this.platform.insertText(call.args.text);
+      // A native paste acknowledgement does not mean that any editor accepted
+      // it. Let the screenshot-driven loop inspect focus and text before
+      // claiming successful insertion.
+      return destination
+        ? "Paste sent to " + destination.label.slice(0, 100) + ". Verify the text on screen."
+        : "Paste attempted, but the destination app could not be identified. Inspect the next screenshot before claiming text insertion.";
     }
     if (call.name === "press_key" || call.name === "hotkey") {
       const shortcut = executableShortcut(call);
