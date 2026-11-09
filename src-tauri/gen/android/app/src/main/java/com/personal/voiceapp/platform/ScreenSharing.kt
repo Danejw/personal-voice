@@ -44,6 +44,15 @@ internal object ScreenSharing {
   private val main = Handler(Looper.getMainLooper())
   private var waiting: ((String?, String?) -> Unit)? = null
   private var address: String? = null
+  /** Only tracks delivery to an HTTP browser, never asserts it is a specific TV. */
+  data class Delivery(val browserConnected: Boolean, val framesWritten: Long, val frameAgeMs: Long?)
+  @Volatile private var observer: (() -> Delivery)? = null
+
+  @Synchronized fun delivery(): Delivery =
+    if (address == null) Delivery(false, 0, null)
+    else observer?.invoke() ?: Delivery(false, 0, null)
+
+  @Synchronized fun monitor(source: (() -> Delivery)?) { observer = source }
 
   @Synchronized fun start(activity: Activity, finished: (String?, String?) -> Unit) {
     if (waiting != null || address != null) {
@@ -96,7 +105,10 @@ internal object ScreenSharing {
     complete?.let { main.post { it(null, reason) } }
   }
 
-  @Synchronized fun closed() { address = null }
+  @Synchronized fun closed() {
+    address = null
+    observer = null
+  }
 
   fun stop(context: Context) {
     context.stopService(Intent(context, ScreenShareService::class.java))
@@ -133,6 +145,8 @@ class ScreenShareService : Service() {
   private val viewer = AtomicBoolean(false)
   private val latestFrame = AtomicReference<ByteArray>()
   private val frameSequence = AtomicLong(0)
+  private val framesWritten = AtomicLong(0)
+  private val lastWrittenAt = AtomicLong(0)
   private var projection: MediaProjection? = null
   private var projectionCallback: MediaProjection.Callback? = null
   private var display: VirtualDisplay? = null
@@ -233,6 +247,15 @@ class ScreenShareService : Service() {
     acceptThread = Thread({ acceptLoop(server, ip) }, "screen-sharing-server").also {
       it.isDaemon = true
       it.start()
+    }
+    ScreenSharing.monitor {
+      val age = lastWrittenAt.get().takeIf { it > 0 }
+        ?.let { (SystemClock.elapsedRealtime() - it).coerceAtLeast(0) }
+      ScreenSharing.Delivery(
+        browserConnected = viewer.get() && running.get(),
+        framesWritten = framesWritten.get(),
+        frameAgeMs = age,
+      )
     }
     ScreenSharing.connected("http://" + ip.hostAddress + ":" + server.localPort + "/watch/" + token)
   }
@@ -335,6 +358,8 @@ class ScreenShareService : Service() {
         out.write(bytes)
         out.write("\r\n".toByteArray(Charsets.US_ASCII))
         out.flush()
+        framesWritten.incrementAndGet()
+        lastWrittenAt.set(SystemClock.elapsedRealtime())
       }
       try { Thread.sleep(100) } catch (_: InterruptedException) { return }
     }
