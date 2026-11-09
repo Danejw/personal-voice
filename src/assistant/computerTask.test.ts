@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { REMOTE_COMPUTER_LIMITS, runComputerTask, runComputerTaskReport, type ComputerTaskHost } from "@/assistant/computerTask";
+import { COMPUTER_GOAL_MAX_CHARS, computerVerificationPrompt, REMOTE_COMPUTER_LIMITS, runComputerTask, runComputerTaskReport, type ComputerTaskHost } from "@/assistant/computerTask";
 import { COMPUTER_STEP_LIMIT } from "@/assistant/computerActions";
 
 function host(partial: Partial<ComputerTaskHost> & Pick<ComputerTaskHost, "propose">): ComputerTaskHost & { executed: string[]; confirmed: string[] } {
@@ -157,6 +157,21 @@ describe("computer task loop", () => {
     expect(frames).toBe(2);
   });
 
+  it("keeps real final verifier requests within the 500-character server contract", () => {
+    for (const [goal, claim] of [
+      ["Save a note to Documents.", "It is saved."],
+      ["G".repeat(1500), "C".repeat(1000)],
+      ["Reopen " + "😀".repeat(1000), "Checked\n" + "line ".repeat(500)],
+    ]) {
+      const prompt = computerVerificationPrompt(goal, claim);
+      expect(prompt.length).toBeGreaterThan(40);
+      expect(prompt.length).toBeLessThanOrEqual(COMPUTER_GOAL_MAX_CHARS);
+      expect(prompt).toContain("VERIFIED:");
+      expect(prompt).toContain("NOT_VERIFIED:");
+      expect(prompt).toContain("reopened exact file");
+    }
+  });
+
   it("allows one independent evidence-gathering continuation after unsupported completion", async () => {
     let proposals = 0;
     let checks = 0;
@@ -180,6 +195,7 @@ describe("computer task loop", () => {
     expect(checks).toBe(2);
     expect(submitted).toHaveLength(3);
     expect(submitted[2]?.goal).toContain("Do not repeat uncertain side effects");
+    expect(String(submitted[2]?.goal).length).toBeLessThanOrEqual(COMPUTER_GOAL_MAX_CHARS);
     expect(submitted[2]?.previousInteractionId).toBeNull();
     expect(submitted[2]?.image).toBe("img");
   });
