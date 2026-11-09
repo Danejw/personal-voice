@@ -63,6 +63,22 @@ export interface ComputerTaskLimits {
   allowRoutineDrag?: boolean;
 }
 
+/** Server rejects initial Computer Use requests whose goal exceeds 500 chars. */
+export const COMPUTER_GOAL_MAX_CHARS = 500;
+
+export function computerVerificationPrompt(objective: string, claim: string): string {
+  const brief = (value: string, limit: number) =>
+    value.replace(/\s+/g, " ").trim().slice(0, limit);
+  return [
+    "Independent check using ONLY current screenshot. No tools.",
+    "Task: " + brief(objective, 120),
+    "Claim: " + brief(claim, 55),
+    "VERIFIED: only with concrete visible evidence for the entire task.",
+    "Files: editor or Save dialog is not proof of persistence; require reopened exact file and content.",
+    "Otherwise NOT_VERIFIED: explain what remains unproven.",
+  ].join("\n").slice(0, COMPUTER_GOAL_MAX_CHARS);
+}
+
 export const REMOTE_COMPUTER_LIMITS: ComputerTaskLimits = {
   maxSteps: 240,
   maxDurationMs: 30 * 60 * 1000,
@@ -119,7 +135,10 @@ export async function runComputerTaskReport(
     let interaction;
     try {
       const response = await host.propose({
-        goal: verificationFeedback ? goal + "\n\n" + verificationFeedback : goal,
+        goal: verificationFeedback
+          ? goal.slice(0, COMPUTER_GOAL_MAX_CHARS - verificationFeedback.length - 2) +
+            "\n\n" + verificationFeedback
+          : goal,
         image: previousId && !verificationFeedback ? null : image.jpeg,
         previousInteractionId: previousId,
         model: selectedModel,
