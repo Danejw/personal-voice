@@ -233,7 +233,10 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
     setQuickFeedback(action === "pair" ? "Approve Personal Voice on your TV if prompted." : null);
     try {
       const response = await nearbyCapabilityService.act(device.id, action);
-      setQuickFeedback(device.name + ": " + response);
+      if (action === "connect_and_use") {
+        const result = JSON.parse(response) as { message: string };
+        setQuickFeedback(device.name + ": " + result.message);
+      } else setQuickFeedback(device.name + ": " + response);
       if (action === "pair" && device.ipAddress) {
         const refreshed = await nearbyCapabilityService.inspect(device.ipAddress);
         setIdentities(prev => ({ ...prev, [device.ipAddress!]: refreshed }));
