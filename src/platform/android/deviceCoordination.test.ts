@@ -83,9 +83,7 @@ describe("Android device coordination evidence", () => {
       if (name === "start_screen_share") return { active: true };
       throw new Error("Unexpected " + name);
     });
-    const fresh = JSON.parse(await manageAndroidScreenShare("start"));
+    await expect(manageAndroidScreenShare("start")).rejects.toThrow(/did not remain active/);
     expect(native).toHaveBeenCalledWith("start_screen_share");
-    expect(fresh.status).toBe("stopped"); // The native service has not reported active yet.
-    expect(fresh.active).toBe(false);
   });
 });
