@@ -24,7 +24,7 @@ export interface ToolResultAssessment {
 }
 
 const READ_TOOLS = new Set<string>([
-  "list_notes", "list_handoffs", "list_nearby_devices", "inspect_pointer_context", "inspect_active_app",
+  "list_notes", "list_handoffs", "list_nearby_devices", "device_environment_status", "inspect_pointer_context", "inspect_active_app",
   "inspect_accessibility_tree", "inspect_accessible_elements", "list_windows",
   "list_installed_apps", "list_snippets", "read_remote_device",
   "read_usage_analytics", "read_insights", "list_past_conversations",
@@ -94,6 +94,16 @@ export function interpretToolResult(
         : unverified ? "The PC did not verify completion. Report the state and blocker without claiming success."
         : "The PC only accepted or is running the goal. Do not say it is done; check status later.",
     };
+  }
+  if (name === "manage_screen_share" && /"status":"local_stream_started"/.test(message)) {
+    return { status: "incomplete", evidence: "action_acknowledged", goal_verified: null,
+      failure_kind: null, failure_streak: 0, verification_hint,
+      next_step: "Screen capture started, but TV reception is not verified. Open the link in a compatible browser and re-read browser connection and frames via device_environment_status." };
+  }
+  if (name === "route_assistant_audio" && /"route_match_observed":false/.test(message)) {
+    return { status: "incomplete", evidence: "action_acknowledged", goal_verified: null,
+      failure_kind: null, failure_streak: 0, verification_hint,
+      next_step: "Output preference saved; native route and audible output are not verified. Start a reply and listen on the selected speaker." };
   }
   if (name === "get_tool_playbook") {
     return { status: "reference", evidence: "reference_only", goal_verified: null, failure_kind: null,
