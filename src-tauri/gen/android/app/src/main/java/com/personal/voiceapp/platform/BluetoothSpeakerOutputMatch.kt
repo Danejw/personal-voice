@@ -24,7 +24,9 @@ internal object BluetoothSpeakerOutputMatch {
     // user-visible device name. Never choose the first arbitrary speaker.
     if (connected.size != 1) return null
     val byName = mediaOutputs.filter {
-      it.name.trim().equals(targetName.trim(), ignoreCase = true)
+      // An output with a concrete *different* Bluetooth address is not the target.
+      normalized(it.address).isEmpty() &&
+        it.name.trim().equals(targetName.trim(), ignoreCase = true)
     }
     return byName.singleOrNull()
   }
