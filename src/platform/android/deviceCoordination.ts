@@ -114,6 +114,9 @@ export async function manageAndroidScreenShare(action: "start" | "stop"): Promis
     await callPlugin("stop_screen_share");
   }
   const status = readScreenEvidence(await callPlugin<unknown>("screen_share_status"));
+  if (action === "start" && !status.active) {
+    throw new Error("Android screen sharing did not remain active. Check the screen capture permission and Wi-Fi connection.");
+  }
   return JSON.stringify({
     action, status: status.active ? "local_stream_started" : "stopped",
     ...status,
