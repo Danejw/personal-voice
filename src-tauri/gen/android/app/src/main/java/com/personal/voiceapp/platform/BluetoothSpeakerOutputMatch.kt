@@ -19,15 +19,13 @@ internal object BluetoothSpeakerOutputMatch {
     if (direct.size == 1) return direct.single()
     if (direct.size > 1) return null
 
-    // Some Android audio routes redact a device address. Fall back only if
-    // there is one connected A2DP profile and one output bearing the exact
-    // user-visible device name. Never choose the first arbitrary speaker.
+    // Some Android versions redact or replace AudioDeviceInfo.address with a
+    // non-MAC route string. When the exact target is the ONLY A2DP profile
+    // connection, exactly one connected A2DP output with no concrete, conflicting
+    // MAC is safe to select. Do not rely on a coincidentally matching name.
     if (connected.size != 1) return null
-    val byName = mediaOutputs.filter {
-      // An output with a concrete *different* Bluetooth address is not the target.
-      normalized(it.address).isEmpty() &&
-        it.name.trim().equals(targetName.trim(), ignoreCase = true)
-    }
-    return byName.singleOrNull()
+    val bluetoothMac = Regex("^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$")
+    val unaddressed = mediaOutputs.filter { !bluetoothMac.matches(normalized(it.address)) }
+    return unaddressed.singleOrNull()
   }
 }
