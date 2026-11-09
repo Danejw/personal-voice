@@ -95,6 +95,11 @@ export function interpretToolResult(
         : "The PC only accepted or is running the goal. Do not say it is done; check status later.",
     };
   }
+  if (name === "control_nearby_device" && /"action":"connect_and_use"/.test(message)) {
+    return { status: "incomplete", evidence: "action_acknowledged", goal_verified: null,
+      failure_kind: null, failure_streak: 0, verification_hint,
+      next_step: "Connect & Use may require Android pairing or Settings. Query device_environment_status for the exact handoff state, then listen for the Assistant reply. Never infer audible playback from selected output." };
+  }
   if (name === "manage_screen_share" && /"status":"local_stream_started"/.test(message)) {
     return { status: "incomplete", evidence: "action_acknowledged", goal_verified: null,
       failure_kind: null, failure_streak: 0, verification_hint,
