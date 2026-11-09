@@ -32,7 +32,10 @@ describe("computer action safety", () => {
     expect(validateShortcut("copy")).toMatchObject({ ok: true, id: "copy" });
     expect(validateShortcut("alt+f4").ok).toBe(false);
     for (const id of ["save", "save-as", "open-file", "find", "address-bar", "new-tab", "switch-window"]) {
-      expect(validateShortcut(id)).toMatchObject({ ok: true, id });
+      // The backend remote_auto_claim allowlist is intentionally unchanged.
+      // These chords exist only in supervised Computer Use, never as standalone
+      // remote commands or new unapproved Live press_shortcut actions.
+      expect(validateShortcut(id).ok).toBe(false);
       expect(isTrustedRemoteAction("press_shortcut", id)).toBe(false);
     }
   });
