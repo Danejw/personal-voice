@@ -126,6 +126,11 @@ describe("assistant tool schema", () => {
         args: { query } }, plan).kind).toBe("reject");
     }
     const id = "lan-123456789abc";
+    const speakerId = "bt-abcdef012345abcdef012345";
+    expect(decideToolCall({ id: "speaker", name: "control_nearby_device",
+      args: { device_id: speakerId, action: "connect_and_use" } }, plan))
+      .toMatchObject({ kind: "confirm", name: "control_nearby_device",
+        text: JSON.stringify({ deviceId: speakerId, action: "connect_and_use" }) });
     expect(decideToolCall({ id: "run", name: "control_nearby_device",
       args: { device_id: id, action: "volume_up" } }, plan))
       .toMatchObject({ kind: "confirm", name: "control_nearby_device",
