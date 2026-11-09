@@ -46,6 +46,21 @@ function request(id: string, action: string, argument: string): ComputerActionRo
 }
 
 describe("Windows signed remote action receiver", () => {
+  it("distinguishes a paste attempt from verified destination and preserves typed text", async () => {
+    const platform = {
+      platform: "windows",
+      insertText: vi.fn().mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: "notepad.exe", label: "Notepad" }),
+    } as unknown as PlatformAdapter;
+    const api = {} as ConstructorParameters<typeof ComputerActionStore>[0];
+    const actions = new ComputerActionStore(api, async () => [], () => "pc", platform);
+    await expect(actions.execute({ name: "type", args: { text: "hello" } }))
+      .resolves.toContain("could not be identified");
+    await expect(actions.execute({ name: "type", args: { text: "hello" } }))
+      .resolves.toContain("Paste sent to Notepad");
+    expect(platform.insertText).toHaveBeenCalledTimes(2);
+  });
+
   it("shows receiver failures and clears them after a successful poll", async () => {
     let unavailable = true;
     const store = new ComputerActionStore({
