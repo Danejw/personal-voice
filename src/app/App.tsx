@@ -24,6 +24,9 @@ import { personalContextBody, profileFacts } from "@/assistant/personalContext";
 import { AssistantSession } from "@/assistant/AssistantSession";
 import { PcmPlayback } from "@/assistant/PcmPlayback";
 import { AndroidAssistantPlayback } from "@/platform/android/AndroidAssistantPlayback";
+import {
+  androidDeviceEnvironment, routeAssistantAudio, manageAndroidScreenShare,
+} from "@/platform/android/deviceCoordination";
 import { AssistantAudioOutputSettings } from "@/platform/android/AssistantAudioOutputSettings";
 import { useAssistant } from "@/assistant/useAssistant";
 import { useAssistantLibrary } from "@/assistant/useAssistantLibrary";
@@ -484,6 +487,18 @@ assistant.setActions({
       throw new Error("Unsupported nearby device action.");
     }
     return nearbyCapabilityService.act(deviceId, action as NearbyAction);
+  },
+  getDeviceEnvironment: () => {
+    if (platform.platform !== "android") throw new Error("Device environment is Android-only.");
+    return androidDeviceEnvironment();
+  },
+  routeAssistantAudio: (outputId) => {
+    if (platform.platform !== "android") throw new Error("Assistant audio routing is Android-only.");
+    return routeAssistantAudio(outputId);
+  },
+  manageScreenShare: (action) => {
+    if (platform.platform !== "android") throw new Error("Screen sharing is Android-only.");
+    return manageAndroidScreenShare(action);
   },
   listHandoffs: async () => {
     const snap = handoffs.getSnapshot();
