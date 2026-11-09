@@ -21,7 +21,7 @@ Other PC actions continue through signed `read_remote_device` / `remote_computer
 
 ## Permissions and failure safety
 - Tauri's existing native plugin allowlist is unchanged. The new Gemini functions use already-granted Android commands and are separately checked for platform and argument validity.
-- Screen start is an Assistant confirmation decision, followed by Android OS consent. Cancelling either does not start capture.
+- Screen start is an Assistant confirmation decision, followed by Android OS consent. Cancelling either does not start capture. A monotonically increasing native capture request ID invalidates the pending OS dialog and any queued service intent when Stop is requested. A late Android consent result from the cancelled request cannot revive sharing.
 - Selecting `audio:N` revalidates the connected output in native Android. Disconnected or fabricated IDs fail. Any native failure becomes a tool error, not a success message.
 - Media output has microphone gating during playback, not claimed full-duplex echo cancellation.
 - The HTTP share remains foreground, user-visible and stoppable. Stop invalidates the temporary link. No background capture, cloud mirroring, video recording or automatic TV receiver installation.
