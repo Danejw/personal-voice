@@ -29,8 +29,12 @@ class BluetoothSpeakerOutputMatchTest {
       listOf(echo.address), listOf(redacted, redacted.copy(id=10))))
     assertNull(BluetoothSpeakerOutputMatch.choose(echo.address, echo.name,
       listOf(echo.address, other.address), listOf(redacted)))
-    assertNull(BluetoothSpeakerOutputMatch.choose(echo.address, echo.name,
-      listOf(echo.address), listOf(redacted.copy(name = "Different Speaker"))))
+    assertEquals(redacted.copy(name = "Different Speaker"),
+      BluetoothSpeakerOutputMatch.choose(echo.address, echo.name,
+        listOf(echo.address), listOf(redacted.copy(name = "Different Speaker"))))
+    assertEquals(redacted.copy(address = "redacted"),
+      BluetoothSpeakerOutputMatch.choose(echo.address, echo.name,
+        listOf(echo.address), listOf(redacted.copy(address = "redacted"))))
   }
 
   @Test fun identicalSpeakerNamesCannotOverrideDifferentConcreteAddress() {
