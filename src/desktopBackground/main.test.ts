@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  render: vi.fn(), dispose: vi.fn(), invoke: vi.fn().mockResolvedValue(undefined),
+  render: vi.fn(), setWorld: vi.fn(), dispose: vi.fn(), invoke: vi.fn().mockResolvedValue(undefined),
   listener: undefined as undefined | ((event: { payload: { x: number; y: number; z: number } }) => void),
 }));
-vi.mock("./scene", () => ({ createTerrainView: () => ({ render: mocks.render, dispose: mocks.dispose }) }));
+vi.mock("./scene", () => ({ createTerrainView: () => ({ render: mocks.render, setWorld: mocks.setWorld, dispose: mocks.dispose }) }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async (_name: string, handler: typeof mocks.listener) => {
   mocks.listener = handler;
