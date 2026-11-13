@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Toggle } from "@/components/Toggle";
+import { DesktopBackgroundPanel } from "./DesktopBackgroundPanel";
 import { PAIRING_FINISHED_EVENT } from "@/devices/pairingFlow";
 import type { WindowsPlatformAdapter } from "@/platform/windows/WindowsPlatformAdapter";
 import {
@@ -52,6 +53,7 @@ export function WindowsBehaviorPanel({
 
   return (
     <>
+      <DesktopBackgroundPanel platform={platform} />
       <Toggle
         label="Start with Windows"
         title="Opens in the tray when you sign in."
