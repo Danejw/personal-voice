@@ -7,6 +7,47 @@ use crate::platform;
 
 pub const INDICATOR_WINDOW: &str = "indicator";
 
+#[cfg(all(windows, debug_assertions))]
+#[tauri::command]
+pub fn desktop_head_probe(window: tauri::WebviewWindow, error: Option<String>) -> Result<(), String> {
+    platform::head_tracking::probe_report(window.label(), error)
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub async fn open_desktop_head_tracking(app: AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != "main" { return Err("Only Settings can open head tracking".into()); }
+    tauri::async_runtime::spawn_blocking(move || platform::head_tracking::open(&app))
+        .await.map_err(|e| e.to_string())?
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn desktop_head_pose(app: AppHandle, window: tauri::WebviewWindow, pose: platform::head_tracking::HeadPose) -> Result<(), String> {
+    platform::head_tracking::publish(&app, window.label(), pose)
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn desktop_background_status(window: tauri::WebviewWindow) -> Result<platform::desktop_background::Status, String> {
+    if window.label() != "main" { return Err("Only Settings can control the desktop background".into()); }
+    platform::desktop_background::status()
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub async fn set_desktop_background(app: AppHandle, window: tauri::WebviewWindow, enabled: bool) -> Result<platform::desktop_background::Status, String> {
+    if window.label() != "main" { return Err("Only Settings can control the desktop background".into()); }
+    tauri::async_runtime::spawn_blocking(move || platform::desktop_background::set_enabled(&app, enabled))
+        .await.map_err(|e| e.to_string())?
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub fn desktop_background_ready(app: AppHandle, window: tauri::WebviewWindow, error: Option<String>) -> Result<(), String> {
+    platform::desktop_background::ready(&app, &window, error)
+}
+
 #[cfg(windows)]
 #[tauri::command]
 pub fn device_link_start_relay(device_id: String) -> Result<u16, String> {

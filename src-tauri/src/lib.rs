@@ -8,6 +8,11 @@ use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(windows, debug_assertions))]
+    if std::env::args().any(|arg| arg == "--desktop-background-smoke-test" || arg == "--desktop-background-review") {
+        platform::desktop_background::smoke_test(std::env::args().any(|arg| arg == "--desktop-background-review"));
+        return;
+    }
     let builder = tauri::Builder::default();
     // Must be the first plugin: a second launch hands over to the running app and exits
     // before it installs a second push-to-talk hook (which would paste every transcript twice).
@@ -40,6 +45,8 @@ pub fn run() {
                 tray::create(app)?;
                 place_indicator(app)?;
                 watch_overlay(app.handle().clone());
+                #[cfg(windows)]
+                watch_desktop_background(app.handle().clone());
                 if let Err(error) = platform::start_push_to_talk(app.handle().clone()) {
                     eprintln!("{error}");
                 }
@@ -87,7 +94,20 @@ pub fn run() {
             #[cfg(mobile)]
             let _ = (window, event);
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler({
+            let handler: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
+            #[cfg(windows)]
+            commands::desktop_background_status,
+            #[cfg(windows)]
+            commands::set_desktop_background,
+            #[cfg(windows)]
+            commands::desktop_background_ready,
+            #[cfg(windows)]
+            commands::open_desktop_head_tracking,
+            #[cfg(windows)]
+            commands::desktop_head_pose,
+            #[cfg(all(windows, debug_assertions))]
+            commands::desktop_head_probe,
             commands::insert_text,
             commands::live_dictation_text,
             commands::insert_handoff_text,
@@ -161,14 +181,42 @@ pub fn run() {
             commands::show_settings,
             commands::get_launch_at_login,
             commands::set_launch_at_login,
-        ])
+            ];
+            move |invoke| {
+                // App commands otherwise have no per-window ACL by default. A scene
+                // renderer must never gain access to voice, clipboard, or computer actions.
+                #[cfg(windows)]
+                if !platform::desktop_background::permits_command(invoke.message.webview().label(), invoke.message.command()) {
+                    invoke.resolver.reject("Background renderers cannot call app commands");
+                    return true;
+                }
+                handler(invoke)
+            }
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
     app.run(|_app, event| {
         if let tauri::RunEvent::Exit = event {
+            #[cfg(windows)]
+            platform::desktop_background::shutdown(_app);
             platform::finish_pending_restore();
             #[cfg(windows)]
             let _ = platform::stop_accessibility_watch();
+        }
+    });
+}
+
+#[cfg(windows)]
+fn watch_desktop_background(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let mut last = std::time::Instant::now();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let now = std::time::Instant::now();
+            let resumed = now.duration_since(last) > std::time::Duration::from_secs(10);
+            last = now;
+            let handle = app.clone();
+            if app.run_on_main_thread(move || platform::desktop_background::watch(&handle, resumed)).is_err() { break; }
         }
     });
 }

@@ -227,6 +227,31 @@ The shared `src/updates/` holds the version comparison, the release parsing, and
 
 ## Application state
 
+### Experimental Windows desktop background
+
+`background.html` is a separate frontend entry for the procedural Three.js scene;
+it never mounts the voice app. Windows native hosting lives in
+`src-tauri/src/platform/windows/desktop_background.rs`, behind Windows-only adapter
+methods and Settings controls. Each monitor renders a physical-pixel slice of one
+camera frustum. The scene has no continuous frame loop. Native child windows are
+created inside an experimental Explorer WorkerW host; unsupported shell/DPI states
+fail safely. The feature starts disabled on each launch. A watchdog stops it when
+shell ownership, monitor layout, or power timing changes, and Quit destroys surfaces.
+Scene windows can invoke only their readiness/error command, with no app-action IPC.
+Their event capability permits receiving the local head-pose event. An opt-in
+`head-tracking.html` window runs one MediaPipe worker and one video-only webcam
+stream. It sends bounded x/y/z movement through a caller-validated Windows command;
+native smoothing happens once before the same pose is relayed to every scene.
+Each monitor derives an off-axis frustum from that eye and a stationary flat display
+plane. Scene views return to center on stale tracking; closing/disabling releases
+the camera and resets the pose. Raw images and landmarks never enter native IPC,
+storage, sync, analytics, or Assistant context. The webcam is not opened on app load.
+The pinned MediaPipe WASM and versioned model are bundled locally. CSP permits
+self-hosted workers and WASM compilation without enabling general JavaScript eval.
+See [prototype evidence and remaining acceptance tests](WINDOWS_3D_BACKGROUND_PLAN.md).
+
+### Voice lifecycle
+
 Use an explicit lifecycle.
 
 Suggested states:

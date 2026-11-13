@@ -1,4 +1,6 @@
 mod accessibility;
+pub mod desktop_background;
+pub mod head_tracking;
 mod accessibility_plus;
 mod accessibility_events;
 mod autostart;

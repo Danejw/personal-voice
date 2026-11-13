@@ -59,6 +59,37 @@ I built Personal Voice because I wanted more control over that. It replaced Wisp
 
 Personal Voice runs on **Windows and Android**. The two share account features, while some screen and computer controls are Windows-specific.
 
+Experimental branch `codex/3d-background` adds a Windows-only **3D desktop background**
+switch in Devices & Controls. It renders one static cyan terrain mesh across the
+displays, with a separate camera slice per monitor. It starts off on every launch;
+closing Settings keeps it alive, and disabling it or quitting removes it. Shell or
+display changes safely stop it and require enabling again. Explorer embedding uses
+an undocumented shell convention and is experimental; mixed-DPI seams, shell recovery,
+and voice coexistence still require the [prototype acceptance tests](docs/WINDOWS_3D_BACKGROUND_PLAN.md).
+Objects and VR are deferred. A browser scene preview at
+`http://localhost:1420/background.html?preview` while `pnpm dev` runs shows the geometry
+only; it does not prove desktop hosting.
+
+For a persistent local desktop test alongside the installed voice app, build with
+`cargo build --locked --manifest-path src-tauri/Cargo.toml --features tauri/custom-protocol`
+after `pnpm build`, then run
+`src-tauri/target/debug/personal-voice-app.exe --desktop-background-review`.
+Its separate tray icon is labeled **Personal Voice — 3D background test** and offers
+Enable, Disable, and Quit background test. This debug-only runner uses the actual
+desktop host and scene without starting another voice session; no merge or release
+is needed. Launch without that flag to test the full app after quitting the installed
+app from its tray (single-instance protection otherwise forwards to the installed app).
+
+**Head parallax:** choose **Head tracking…** from the background tester tray or
+the running background's Settings control, then **Start camera**. MediaPipe runs
+locally in a worker using bundled assets; it does not send video to Google or the
+Assistant. Sit normally and press **Center**, then move slightly left/right or
+up/down. Movement strength and horizontal reversal are adjustable. **Stop camera**,
+closing the tracking window, or disabling the background releases the webcam.
+All monitors receive one centrally smoothed viewpoint. Depth is an approximate
+webcam estimate, and monitor angles/physical sizes are not calibrated yet. If
+another camera feature reports the webcam busy, stop tracking before using it.
+
 ## Get Personal Voice
 
 Download the latest release for your device:
