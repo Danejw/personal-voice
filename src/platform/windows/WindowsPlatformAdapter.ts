@@ -15,10 +15,15 @@ import { parseTargetApp } from "@/platform/targetApp";
 import { loadMicrophone } from "@/settings/deviceSettings";
 import { playWebDictationCue } from "@/platform/windows/dictationCue";
 import type { DesktopBackgroundStatus } from "@/platform/windows/desktopBackground";
+import type { WorldConfig } from "@/desktopBackground/worldConfig";
 
 /** Thin IPC bridge to `src-tauri/src/commands` and `src-tauri/src/platform/windows`. */
 export class WindowsPlatformAdapter implements PlatformAdapter {
   readonly platform = "windows";
+
+  setDesktopEnvironment(config: WorldConfig) {
+    return invoke<void>("set_desktop_environment", { palette: config.palette });
+  }
 
   getDesktopBackgroundStatus() {
     return invoke<DesktopBackgroundStatus>("desktop_background_status");
