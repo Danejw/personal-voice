@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Personal Voice — Head Tracking</title>
+<style>
+body{margin:0;padding:24px;background:#09131c;color:#def5ff;font:15px system-ui;line-height:1.5}h1{font-size:22px;margin:0 0 12px}p{color:#a3b9c9}button{border:0;border-radius:10px;background:#183748;color:#def5ff;padding:12px 16px;cursor:pointer;margin:4px}button:disabled{opacity:.45;cursor:default}button:focus-visible{outline:2px solid #68dfff}video{width:100%;max-height:200px;object-fit:contain;transform:scaleX(-1);background:#02060c;border-radius:12px}label{display:block;margin-top:14px}input{accent-color:#68dfff;width:100%}#status{color:#68dfff;min-height:45px}
+</style></head><body>
+<h1>Head-tracked desktop</h1>
+<p>Your webcam is processed on this PC. Video and face landmarks are never saved or sent to the Assistant. Close this window to release the camera.</p>
+<video id="camera" autoplay muted playsinline></video>
+<p id="status" role="status">Camera is off. Sit normally, then start tracking.</p>
+<button id="start">Start camera</button><button id="center" disabled>Center</button><button id="stop" disabled>Stop camera</button>
+<label>Movement strength <input id="strength" type="range" min="0" max="2" step="0.1" value="1" /></label>
+<label><input id="reverse" type="checkbox" style="width:auto" /> Reverse horizontal movement</label>
+<script type="module" src="/src/desktopBackground/tracking.ts"></script></body></html>
