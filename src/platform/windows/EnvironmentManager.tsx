@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { SelectField } from "@/components/SelectField";
 import {
   createEnvironment, deleteEnvironment, listEnvironments, renameEnvironment,
   selectEnvironment, setEnvironmentPalette, type EnvironmentSnapshot,
@@ -60,16 +61,13 @@ export function EnvironmentManager({ platform }: { platform: WindowsPlatformAdap
             })} />
           {world.name}
         </label>
-        <select aria-label={`Color palette for ${world.name}`} value={world.scene_config.palette} disabled={busy}
-          onChange={event => void run(async () => {
-            const palette = event.target.value as WorldPalette;
+        <SelectField label={`Color palette for ${world.name}`} value={world.scene_config.palette} disabled={busy}
+          options={[{ value: "cyan", label: "Cyan" }, { value: "violet", label: "Violet" }, { value: "amber", label: "Amber" }]}
+          onChange={value => void run(async () => {
+            const palette = value as WorldPalette;
             await setEnvironmentPalette(world.id, palette);
             if (world.id === snapshot.activeId) await platform.setDesktopEnvironment({ kind: "terrain", palette });
-          })}>
-          <option value="cyan">Cyan</option>
-          <option value="violet">Violet</option>
-          <option value="amber">Amber</option>
-        </select>
+          })} />
         <button type="button" disabled={busy} onClick={() => {
           const updated = window.prompt("Rename environment", world.name);
           if (updated !== null) void run(() => renameEnvironment(world.id, updated));
