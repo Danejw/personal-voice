@@ -1,0 +1,11 @@
+{
+  "productName": "Personal Voice Spatial Test",
+  "identifier": "com.personal.voiceapp.spatialtest",
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "shortDescription": "Isolated Windows spatial-environment test build",
+    "windows": {
+      "nsis": { "installMode": "currentUser" }
+    }
+  }
+}
