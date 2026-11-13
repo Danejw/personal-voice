@@ -4,10 +4,11 @@ import { listen } from "@tauri-apps/api/event";
 import { CENTER, type HeadPose } from "./headPose";
 import { viewSection, type MonitorRect } from "./layout";
 import { createTerrainView } from "./scene";
+import { parseWorldConfig, type WorldPalette } from "./worldConfig";
 
 declare global {
   interface Window {
-    __PV_BACKGROUND__?: { monitors: MonitorRect[]; index: number };
+    __PV_BACKGROUND__?: { monitors: MonitorRect[]; index: number; palette?: WorldPalette };
   }
 }
 
@@ -24,6 +25,7 @@ try {
   if (!nativeLayout && !preview) throw new Error("Open this view through the desktop-background control, or use ?preview for a scene preview.");
   const scene = createTerrainView(canvas, error => { void report(error); });
   cleanup = scene.dispose;
+  scene.setWorld(parseWorldConfig({ kind: "terrain", palette: nativeLayout?.palette ?? "cyan" }));
   let current = { ...CENTER };
   let stale: ReturnType<typeof setTimeout> | undefined;
   function draw() {
@@ -38,6 +40,10 @@ try {
     // Chromium can suspend rAF for an occluded desktop child on just one monitor.
     draw();
   }
+  const unlistenWorld = nativeLayout ? await listen<WorldPalette>("desktop-environment-changed", event => {
+    scene.setWorld(parseWorldConfig({ kind: "terrain", palette: event.payload }));
+    draw();
+  }) : undefined;
   const unlisten = nativeLayout ? await listen<HeadPose>("desktop-head-pose", event => {
     move(event.payload);
     clearTimeout(stale);
@@ -49,7 +55,7 @@ try {
   window.addEventListener("resize", draw);
   document.addEventListener("visibilitychange", visible);
   const dispose = () => {
-    clearTimeout(stale); unlisten?.();
+    clearTimeout(stale); unlisten?.(); unlistenWorld?.();
     window.removeEventListener("resize", draw);
     document.removeEventListener("visibilitychange", visible);
     scene.dispose();
