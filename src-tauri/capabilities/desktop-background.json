@@ -1,0 +1,7 @@
+{
+  "identifier": "desktop-background",
+  "description": "Desktop scene windows may receive movement events only. Native invocation also restricts them to readiness reports.",
+  "platforms": ["windows"],
+  "windows": ["desktop-background-*"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}
