@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Toggle } from "@/components/Toggle";
 import type { WindowsPlatformAdapter } from "./WindowsPlatformAdapter";
 import type { DesktopBackgroundStatus } from "./desktopBackground";
+import { EnvironmentManager } from "./EnvironmentManager";
+import { listEnvironments } from "@/services/spatialEnvironments";
+import { DEFAULT_WORLD } from "@/desktopBackground/worldConfig";
 
 export function DesktopBackgroundPanel({ platform }: { platform: WindowsPlatformAdapter }) {
   const [status, setStatus] = useState<DesktopBackgroundStatus | null>(null);
@@ -24,12 +27,20 @@ export function DesktopBackgroundPanel({ platform }: { platform: WindowsPlatform
   async function toggle(enabled: boolean) {
     setPending(true);
     setError(null);
-    try { setStatus(await platform.setDesktopBackground(enabled)); }
+    try {
+      if (enabled) {
+        const selected = await listEnvironments().catch(() => null);
+        const active = selected?.environments.find(world => world.id === selected.activeId);
+        await platform.setDesktopEnvironment(active?.scene_config ?? DEFAULT_WORLD);
+      }
+      setStatus(await platform.setDesktopBackground(enabled));
+    }
     catch (reason) { setError(String(reason)); }
     finally { setPending(false); }
   }
 
   return <>
+    <EnvironmentManager platform={platform} />
     <Toggle label="3D desktop background (experimental)"
       title="One cyan mesh world across this PC's displays. Stays behind desktop icons while Personal Voice runs. Off on every app launch."
       checked={status?.phase === "starting" || status?.phase === "running"}
