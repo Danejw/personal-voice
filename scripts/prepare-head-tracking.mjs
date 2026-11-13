@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { readFile, writeFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ const gitSha = bytes => createHash("sha1").update(`blob ${bytes.length}\0`).upda
 let bytes;
 try { bytes = await readFile(modelPath); } catch { /* first build */ }
 if (!bytes || gitSha(bytes) !== expectedGitBlobSha) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+  const response = await globalThis.fetch(url, { signal: globalThis.AbortSignal.timeout(30000) });
   if (!response.ok) throw new Error(`Head tracking model download failed: HTTP ${response.status}`);
   bytes = Buffer.from(await response.arrayBuffer());
   if (gitSha(bytes) !== expectedGitBlobSha) throw new Error("Head tracking model did not match the pinned Git blob SHA");
