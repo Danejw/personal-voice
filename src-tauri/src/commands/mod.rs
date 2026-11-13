@@ -44,6 +44,13 @@ pub async fn set_desktop_background(app: AppHandle, window: tauri::WebviewWindow
 
 #[cfg(windows)]
 #[tauri::command]
+pub fn set_desktop_environment(app: AppHandle, window: tauri::WebviewWindow, palette: String) -> Result<(), String> {
+    if window.label() != "main" { return Err("Only Settings can select environments".into()); }
+    platform::desktop_background::set_palette(&app, &palette)
+}
+
+#[cfg(windows)]
+#[tauri::command]
 pub fn desktop_background_ready(app: AppHandle, window: tauri::WebviewWindow, error: Option<String>) -> Result<(), String> {
     platform::desktop_background::ready(&app, &window, error)
 }

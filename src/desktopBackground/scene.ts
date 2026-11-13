@@ -4,6 +4,7 @@ import {
   Scene, ShaderMaterial, WebGLRenderer, WireframeGeometry,
 } from "three";
 import type { viewSection } from "./layout";
+import { DEFAULT_WORLD, worldColors, type WorldConfig } from "./worldConfig";
 import { applyHeadView, CENTER, type HeadPose } from "./headPose";
 
 /** Original, deterministic world content; no Windows, React, voice, or account dependencies. */
@@ -36,6 +37,7 @@ export function createTerrainView(canvas: HTMLCanvasElement, onFailure: (error: 
   dots.setAttribute("position", new BufferAttribute(new Float32Array(positions.array), 3));
   // Soft cyan points without textures, postprocessing, external images, or a frame loop.
   const pointMaterial = new ShaderMaterial({
+    uniforms: { glowColor: { value: new Color("#26c7ff") } },
     transparent: true, depthWrite: false, blending: AdditiveBlending,
     vertexShader: `varying float distanceToEye;
       void main() {
@@ -44,12 +46,12 @@ export function createTerrainView(canvas: HTMLCanvasElement, onFailure: (error: 
         gl_PointSize = clamp(160.0 / max(1.0, -eye.z), 1.5, 12.0);
         gl_Position = projectionMatrix * eye;
       }`,
-    fragmentShader: `varying float distanceToEye;
+    fragmentShader: `uniform vec3 glowColor; varying float distanceToEye;
       void main() {
         float radius = length(gl_PointCoord - vec2(0.5)) * 2.0;
         float glow = exp(-radius * radius * 6.0);
         float fade = 1.0 - smoothstep(35.0, 125.0, distanceToEye);
-        gl_FragColor = vec4(0.15, 0.78, 1.0, glow * fade * 0.9);
+        gl_FragColor = vec4(glowColor, glow * fade * 0.9);
       }`,
   });
   scene.add(new Points(dots, pointMaterial));
@@ -67,7 +69,17 @@ export function createTerrainView(canvas: HTMLCanvasElement, onFailure: (error: 
     renderer.dispose(); renderer.forceContextLoss();
   }
 
+  function setWorld(config: WorldConfig) {
+    const colors = worldColors(config ?? DEFAULT_WORLD);
+    scene.background = new Color(colors.background);
+    if (scene.fog) scene.fog.color.set(colors.background);
+    lineMaterial.color.set(colors.lines);
+    (pointMaterial.uniforms.glowColor.value as Color).setRGB(...colors.glow);
+  }
+  setWorld(DEFAULT_WORLD);
+
   return {
+    setWorld,
     render(view: ReturnType<typeof viewSection>, pose: HeadPose = CENTER) {
       if (disposed) return;
       const gl = renderer.getContext();
