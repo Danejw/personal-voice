@@ -101,6 +101,8 @@ pub fn run() {
             #[cfg(windows)]
             commands::set_desktop_background,
             #[cfg(windows)]
+            commands::set_desktop_environment,
+            #[cfg(windows)]
             commands::desktop_background_ready,
             #[cfg(windows)]
             commands::open_desktop_head_tracking,
