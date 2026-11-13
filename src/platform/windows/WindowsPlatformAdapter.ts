@@ -14,10 +14,22 @@ import type { PushToTalkEvent } from "@/platform/pushToTalkEvent";
 import { parseTargetApp } from "@/platform/targetApp";
 import { loadMicrophone } from "@/settings/deviceSettings";
 import { playWebDictationCue } from "@/platform/windows/dictationCue";
+import type { DesktopBackgroundStatus } from "./desktopBackground";
+import type { WorldConfig } from "@/desktopBackground/worldConfig";
 
 /** Thin IPC bridge to `src-tauri/src/commands` and `src-tauri/src/platform/windows`. */
 export class WindowsPlatformAdapter implements PlatformAdapter {
   readonly platform = "windows";
+
+  setDesktopEnvironment(config: WorldConfig) {
+    return invoke<void>("set_desktop_environment", { palette: config.palette });
+  }
+  getDesktopBackgroundStatus() { return invoke<DesktopBackgroundStatus>("desktop_background_status"); }
+  setDesktopBackground(enabled: boolean) { return invoke<DesktopBackgroundStatus>("set_desktop_background", { enabled }); }
+  openDesktopHeadTracking() { return invoke<void>("open_desktop_head_tracking"); }
+  onDesktopBackgroundStatus(handler: (status: DesktopBackgroundStatus) => void) {
+    return listen<DesktopBackgroundStatus>("desktop-background-status", event => handler(event.payload));
+  }
 
   /** Reads the chosen microphone per utterance, so a new choice applies to the next press. */
   createCapture() {

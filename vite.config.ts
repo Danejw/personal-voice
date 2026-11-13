@@ -10,6 +10,16 @@ export default defineConfig(() => ({
   // Keep in sync with `paths` in tsconfig.json.
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
 
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        background: fileURLToPath(new URL("./background.html", import.meta.url)),
+        tracking: fileURLToPath(new URL("./head-tracking.html", import.meta.url)),
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
