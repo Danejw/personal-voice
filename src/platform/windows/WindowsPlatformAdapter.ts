@@ -184,6 +184,8 @@ export class WindowsPlatformAdapter implements PlatformAdapter {
 
   /** Tauri's updater: `latest.json` from GitHub Releases, verified against `plugins.updater.pubkey`. */
   async checkForUpdate(): Promise<AvailableUpdate | null> {
+    // Test installers are side-by-side previews, not participants in the stable update channel.
+    if (import.meta.env.VITE_SPATIAL_TEST_BUILD === "true") return null;
     const update = await check();
     if (!update) return null;
     return {

@@ -37,6 +37,7 @@ jobs:
       - name: Build unsigned, isolated spatial test installer
         run: pnpm tauri build --config src-tauri/tauri.spatial-test.conf.json
         env:
+          VITE_SPATIAL_TEST_BUILD: "true"
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - name: Upload Windows installer

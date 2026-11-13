@@ -36,8 +36,9 @@ export function createTerrainView(canvas: HTMLCanvasElement, onFailure: (error: 
   const dots = new BufferGeometry();
   dots.setAttribute("position", new BufferAttribute(new Float32Array(positions.array), 3));
   // Soft cyan points without textures, postprocessing, external images, or a frame loop.
+  const glowColor = new Color("#26c7ff");
   const pointMaterial = new ShaderMaterial({
-    uniforms: { glowColor: { value: new Color("#26c7ff") } },
+    uniforms: { glowColor: { value: glowColor } },
     transparent: true, depthWrite: false, blending: AdditiveBlending,
     vertexShader: `varying float distanceToEye;
       void main() {
@@ -74,7 +75,7 @@ export function createTerrainView(canvas: HTMLCanvasElement, onFailure: (error: 
     scene.background = new Color(colors.background);
     if (scene.fog) scene.fog.color.set(colors.background);
     lineMaterial.color.set(colors.lines);
-    (pointMaterial.uniforms.glowColor.value as Color).setRGB(...colors.glow);
+    glowColor.setRGB(...colors.glow);
   }
   setWorld(DEFAULT_WORLD);
 

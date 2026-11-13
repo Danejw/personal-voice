@@ -13,7 +13,7 @@ const palettes: Record<WorldPalette, { background: string; lines: string; glow: 
 export function parseWorldConfig(input: unknown): WorldConfig {
   if (!input || typeof input !== "object") return DEFAULT_WORLD;
   const value = input as Record<string, unknown>;
-  if (value.kind !== "terrain" || !Object.prototype.hasOwnProperty.call(palettes, value.palette)) return DEFAULT_WORLD;
+  if (value.kind !== "terrain" || typeof value.palette !== "string" || !Object.prototype.hasOwnProperty.call(palettes, value.palette)) return DEFAULT_WORLD;
   return { kind: "terrain", palette: value.palette as WorldPalette };
 }
 export function worldColors(config: WorldConfig) { return palettes[config.palette]; }
