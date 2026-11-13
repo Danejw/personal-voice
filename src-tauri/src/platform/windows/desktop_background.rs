@@ -16,6 +16,7 @@ const PREFIX: &str = "desktop-background-";
 static OPERATION: Mutex<()> = Mutex::new(());
 static STATE: Mutex<Option<Host>> = Mutex::new(None);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+static PALETTE: Mutex<&'static str> = Mutex::new("cyan");
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct MonitorRect {
@@ -63,6 +64,24 @@ pub fn permits_command(label: &str, command: &str) -> bool {
             || (cfg!(debug_assertions) && command == "desktop_head_probe");
     }
     !is_surface(label) || command == "desktop_background_ready"
+}
+
+/// Only the Settings WebView may select a visual preset. No scripts or credentials enter surfaces.
+pub fn set_palette(app: &AppHandle, requested: &str) -> Result<(), String> {
+    let palette = match requested {
+        "cyan" => "cyan",
+        "violet" => "violet",
+        "amber" => "amber",
+        _ => return Err("Unsupported environment palette".into()),
+    };
+    *PALETTE.lock().map_err(|e| e.to_string())? = palette;
+    for (label, _) in app.webview_windows() {
+        if is_surface(&label) {
+            app.emit_to(&label, "desktop-environment-changed", palette)
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 pub fn status() -> Result<Status, String> {
@@ -216,7 +235,8 @@ fn start(app: &AppHandle) -> Result<(), String> {
     });
     publish(app);
     for (index, monitor) in monitors.iter().enumerate() {
-        let payload = serde_json::json!({ "monitors": monitors, "index": index });
+        let palette = *PALETTE.lock().map_err(|e| e.to_string())?;
+        let payload = serde_json::json!({ "monitors": monitors, "index": index, "palette": palette });
         let label = &labels[index];
         let window =
             WebviewWindowBuilder::new(app, label, WebviewUrl::App("background.html".into()))
