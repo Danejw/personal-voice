@@ -9,6 +9,7 @@ create table public.spatial_environments (
   unique (owner_id, id),
   constraint spatial_scene_config check (
     jsonb_typeof(scene_config) = 'object'
+    and scene_config ? 'kind' and scene_config ? 'palette'
     and scene_config->>'kind' = 'terrain'
     and scene_config->>'palette' in ('cyan','violet','amber')
   )
