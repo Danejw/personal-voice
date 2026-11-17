@@ -10,7 +10,9 @@ export class BackgroundTrafficBudget {
     return now >= this.quietUntil;
   }
 
-  noteSuccess(): void {
+  noteSuccess(now = Date.now()): void {
+    // A concurrent successful request must never cancel an active quota backoff.
+    if (now < this.quietUntil) return;
     this.quotaFailures = 0;
     this.quietUntil = 0;
   }
@@ -48,7 +50,7 @@ export class DeviceHeartbeatGate {
     const task = write()
       .then(() => {
         this.lastSuccess.set(deviceId, this.now());
-        this.traffic.noteSuccess();
+        this.traffic.noteSuccess(this.now());
       })
       .catch((error: unknown) => {
         this.traffic.noteFailure(error, this.now());
