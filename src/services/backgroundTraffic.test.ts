@@ -10,8 +10,11 @@ describe("background Supabase traffic budget", () => {
     budget.noteFailure(new Error("Supabase quota exceeded (HTTP 402)"), 301_000);
     expect(budget.canPoll(301_000 + 300_000)).toBe(false);
     expect(budget.canPoll(301_000 + 600_000)).toBe(true);
-    budget.noteSuccess();
-    expect(budget.canPoll(301_000)).toBe(true);
+    // A stray concurrent success does not override the restriction.
+    budget.noteSuccess(401_000);
+    expect(budget.canPoll(401_000)).toBe(false);
+    budget.noteSuccess(901_000);
+    expect(budget.canPoll(901_000)).toBe(true);
   });
 
   it("backs off briefly from network outages without suppressing normal errors", () => {
@@ -19,7 +22,7 @@ describe("background Supabase traffic budget", () => {
     budget.noteFailure(new Error("Failed to fetch"), 100);
     expect(budget.canPoll(29_999)).toBe(false);
     expect(budget.canPoll(30_100)).toBe(true);
-    budget.noteSuccess();
+    budget.noteSuccess(30_100);
     budget.noteFailure(new Error("unsupported request type"), 50_000);
     expect(budget.canPoll(50_000)).toBe(true);
   });
