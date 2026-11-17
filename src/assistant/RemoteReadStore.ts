@@ -73,9 +73,10 @@ export class RemoteReadStore {
     try {
     const currentId = this.getDeviceId(userId);
     try { await this.api.touch(currentId); } catch { /* presence is best-effort */ }
-    const devices = await this.listDevices(userId);
-    const mine = devices.find((device) => device.id === currentId);
     const pending = await this.api.listPending(userId, currentId);
+    // Avoid a second database read every poll when there is no incoming request.
+    const devices = pending.length ? await this.listDevices(userId) : [];
+    const mine = devices.find((device) => device.id === currentId);
     let waiting: { id: string } | null = null;
     for (const row of pending) {
       const plan = planRemoteRead(row.kind, this.platform.platform, loadRemoteReads());
