@@ -1,4 +1,5 @@
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
+import { backgroundTraffic } from "@/services/backgroundTraffic";
 import {
   REMOTE_DICTATION_CATCHUP_MS,
   REMOTE_DICTATION_HEARTBEAT_MS,
@@ -72,6 +73,9 @@ export class RemoteDictationStore {
   private currentDeviceId: string | null = null;
   private generation = 0;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private feedConnected = false;
+  private lastCatchUpAt = 0;
+  private catchUpInFlight = false;
   private catchupTimer: ReturnType<typeof setInterval> | null = null;
   private unsubscribeFeed: (() => void) | null = null;
   private unsubscribeDeviceLinkWakes: (() => void) | null = null;
@@ -327,11 +331,21 @@ export class RemoteDictationStore {
       void Promise.resolve(this.api.touch(deviceId)).catch(() => undefined);
     };
     beat();
-    this.heartbeatTimer = setInterval(beat, REMOTE_DICTATION_HEARTBEAT_MS);
+    // Target list refresh piggybacks on presence, not every 4s catch-up tick.
+    this.heartbeatTimer = setInterval(() => {
+      beat();
+      if (backgroundTraffic.canPoll()) void this.refreshDevices(this.generation);
+    }, REMOTE_DICTATION_HEARTBEAT_MS);
 
     const catchUp = () => {
+      if (!backgroundTraffic.canPoll()) return;
+      // A healthy Realtime subscription delivers new dictations immediately.
+      // Keep one slow safety scan, but retain 4s fallback when Realtime is down
+      // because remote dictation requests expire after just six seconds.
+      const now = this.now();
+      if (this.feedConnected && now - this.lastCatchUpAt < 60_000) return;
+      this.lastCatchUpAt = now;
       void this.catchUpPending();
-      void this.refreshDevices(this.generation);
     };
     catchUp();
     this.catchupTimer = setInterval(catchUp, REMOTE_DICTATION_CATCHUP_MS);
@@ -341,17 +355,28 @@ export class RemoteDictationStore {
     });
     this.unsubscribeFeed = this.feed.subscribe(userId, deviceId, (requestId) => {
       if (requestId) void this.handleRequest(requestId);
-      else void this.catchUpPending();
+      else {
+        this.lastCatchUpAt = this.now();
+        void this.catchUpPending();
+      }
+    }, connected => {
+      this.feedConnected = connected;
+      if (!connected) this.lastCatchUpAt = 0;
     });
   }
 
   private async catchUpPending(): Promise<void> {
-    if (!this.userId || !this.currentDeviceId) return;
+    if (!this.userId || !this.currentDeviceId || this.catchUpInFlight || !backgroundTraffic.canPoll()) return;
+    this.catchUpInFlight = true;
     try {
       const pending = await this.api.listPending(this.currentDeviceId);
+      backgroundTraffic.noteSuccess();
       for (const row of pending) await this.handleRequest(row.id);
-    } catch {
+    } catch (error) {
+      backgroundTraffic.noteFailure(error);
       // Catch-up is best-effort; Realtime remains the primary path.
+    } finally {
+      this.catchUpInFlight = false;
     }
   }
 
@@ -365,6 +390,8 @@ export class RemoteDictationStore {
     this.unsubscribeDeviceLinkWakes?.();
     this.unsubscribeDeviceLinkWakes = null;
     this.handling.clear();
+    this.feedConnected = false;
+    this.lastCatchUpAt = 0;
   }
 
   private flash(message: string): void {
