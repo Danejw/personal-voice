@@ -61,6 +61,26 @@ describe("signed paired Companion screenshots", () => {
     mocks.fulfill.mockClear();
   });
 
+  it("does not fetch all devices when no remote read is pending", async () => {
+    const devices = vi.fn(async () => [{
+      id: "pc", name: "Laptop", platform: "windows", lastSeen: new Date().toISOString(),
+    }]);
+    const api = {
+      touch: vi.fn(async () => {}),
+      listPending: vi.fn(async () => []),
+      get: vi.fn(),
+      create: vi.fn(),
+      answer: vi.fn(),
+      deny: vi.fn(),
+      remove: vi.fn(),
+    };
+    const store = new RemoteReadStore(api, devices, () => "pc",
+      { platform: "windows" } as PlatformAdapter);
+    await store.poll("account");
+    expect(api.listPending).toHaveBeenCalledTimes(1);
+    expect(devices).not.toHaveBeenCalled();
+  });
+
   it("does not ask for Windows approval when both remote settings permit a verified paired read", async () => {
     const { store } = fixture();
     await store.poll("account");
