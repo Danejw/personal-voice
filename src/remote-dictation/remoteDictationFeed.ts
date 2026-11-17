@@ -2,13 +2,13 @@ import { getSupabase } from "@/services/supabase";
 
 /** A hint that a Remote Dictation row changed. The row is re-read after this fires. */
 export interface RemoteDictationChangeFeed {
-  subscribe(userId: string, targetDeviceId: string, onChange: (requestId?: string) => void): () => void;
+  subscribe(userId: string, targetDeviceId: string, onChange: (requestId?: string) => void, onStatus?: (connected: boolean) => void): () => void;
 }
 
 /** Realtime on requests aimed at this device. Catch-up still runs without a client. */
 export function supabaseRemoteDictationFeed(): RemoteDictationChangeFeed {
   return {
-    subscribe(userId, targetDeviceId, onChange) {
+    subscribe(userId, targetDeviceId, onChange, onStatus) {
       const client = getSupabase();
       if (!client) return () => undefined;
       const channel = client.channel(`remote-dictation:${userId}:${targetDeviceId}`)
@@ -31,7 +31,12 @@ export function supabaseRemoteDictationFeed(): RemoteDictationChangeFeed {
           onChange(typeof id === "string" ? id : undefined);
         })
         .subscribe((status) => {
-          if (status === "SUBSCRIBED") onChange();
+          if (status === "SUBSCRIBED") {
+            onStatus?.(true);
+            onChange();
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            onStatus?.(false);
+          }
         });
       return () => {
         void client.removeChannel(channel);

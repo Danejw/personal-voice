@@ -8,6 +8,7 @@ import {
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
 import { syncErrorMessage } from "@/services/personalSyncService";
 import { getSupabase } from "@/services/supabase";
+import { deviceHeartbeat } from "@/services/backgroundTraffic";
 import type { Database } from "@/types/database";
 
 const COLUMNS = "id, user_id, requester_device_id, target_device_id, action, argument, status, result, error, version, expires_at, request_signature, response_signature";
@@ -66,8 +67,10 @@ async function signedReply(
  * v2 requests can reach the unchanged Windows approval/execution pipeline. */
 export const computerActionApi: ComputerActionApi & { touch(deviceId: string): Promise<void> } = {
   async touch(deviceId) {
-    const { error } = await requireClient().from("devices").update({ last_seen: current() }).eq("id", deviceId);
-    check(error);
+    await deviceHeartbeat.touch(deviceId, async () => {
+      const { error } = await requireClient().from("devices").update({ last_seen: current() }).eq("id", deviceId);
+      check(error);
+    });
   },
 
   async create(userId, requesterDeviceId, targetDeviceId, action: RemoteComputerAction, argument) {

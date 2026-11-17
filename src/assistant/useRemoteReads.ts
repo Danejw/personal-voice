@@ -1,8 +1,10 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { deviceLinkManager } from "@/device-link/DeviceLinkManager";
+import { backgroundTraffic } from "@/services/backgroundTraffic";
 import type { RemoteReadSnapshot, RemoteReadStore } from "@/assistant/RemoteReadStore";
 
-const REMOTE_READ_POLL_MS = 4_000;
+// Wake notifications are immediate; the slower poll only recovers missed wakes.
+const REMOTE_READ_POLL_MS = 15_000;
 
 /** Refreshes presence and answers read requests aimed at this device. */
 export function useRemoteReads(store: RemoteReadStore, userId: string | null): RemoteReadSnapshot {
@@ -11,8 +13,12 @@ export function useRemoteReads(store: RemoteReadStore, userId: string | null): R
     let pending = false;
     const tick = () => {
       if (pending) return; // LAN + cloud + poll cannot execute the same request concurrently.
+      if (!backgroundTraffic.canPoll()) return;
       pending = true;
-      void store.poll(userId).catch(() => undefined).finally(() => { pending = false; });
+      void store.poll(userId)
+        .then(() => backgroundTraffic.noteSuccess())
+        .catch(error => backgroundTraffic.noteFailure(error))
+        .finally(() => { pending = false; });
     };
     tick();
     const timer = window.setInterval(tick, REMOTE_READ_POLL_MS);

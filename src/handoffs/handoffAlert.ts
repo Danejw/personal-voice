@@ -4,7 +4,8 @@ import type { HandoffStatus } from "@/handoffs/HandoffStore";
 import { clipOverlayText } from "@/overlay/overlay";
 
 /** How often a signed-in device asks Supabase for new handoffs, even while Settings is hidden. */
-export const HANDOFF_POLL_MS = 8000;
+// Fallback while the app is hidden; focus/visibility events still refresh immediately.
+export const HANDOFF_POLL_MS = 30_000;
 
 export interface HandoffAlert {
   id: string;
