@@ -1,6 +1,6 @@
 # Agency MCP Phase 1: implementation and verification
 
-Status: **Implemented on feature branch; live database and OAuth handshake pending verification**
+Status: **Code implemented and CI contract checks passed; Edge Function deployed (v2); database migration and OAuth sign-in not verified**
 
 ## Scope
 
@@ -22,7 +22,7 @@ Status: **Implemented on feature branch; live database and OAuth handshake pendi
 
 ## Acceptance tests and evidence
 
-- [ ] Deno check + Deno contract test from CI (pending actual workflow results).
+- [x] Deno check + Deno contract tests pass in Agency MCP GitHub Actions run 43988675199.
 - [ ] Database migration applied; row exists; RLS restricted to owner.
 - [ ] Unauthenticated MCP call returns 401 + WWW-Authenticate resource metadata.
 - [ ] OAuth resource metadata and authorization server issuer match.
@@ -32,6 +32,15 @@ Status: **Implemented on feature branch; live database and OAuth handshake pendi
 - [ ] Invalid arguments, excess evidence, and owner/verification spoofing are rejected.
 - [ ] User B cannot read or mutate User A's record.
 - [ ] External model client connection tested separately; do not infer compatibility from MCP Inspector alone.
+
+## Verified deployment and remaining blocker
+
+- Supabase project: `VoiceDictationAPP` (`dlovrtlkniolcovfgvvj`).
+- Edge Function `agency-mcp` deployed as ACTIVE version **2** with function-local Deno configuration and gateway `verify_jwt=false` (OAuth middleware enforces user authorization).
+- GitHub Actions Agency MCP contract job: **passed**. Existing full Personal Voice Validate jobs have separate status and must be evaluated independently.
+- Migration attempt using the connected Supabase management integration **failed before SQL execution** with `FATAL: 28P01 password authentication failed for user "postgres"`. The new `agency_experiences` table must not be assumed to exist. No live read/write MCP experience test can pass until the database issue is repaired and the migration is applied.
+- OAuth 2.1 server activation, consent/authorization route, dynamic client registration, and OAuth metadata handshake are **not verified**. These may require authorized manual dashboard/app configuration.
+- An attempt to inspect the protected-resource metadata via the browsing environment was inconclusive; it was not a successful handshake test.
 
 ## Deployment notes
 
