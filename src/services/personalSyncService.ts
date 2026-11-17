@@ -23,6 +23,10 @@ export interface PersonalSyncApi {
 
 /** Maps a PostgREST failure to a short user-facing message. */
 export function syncErrorMessage(error: Pick<PostgrestError, "code" | "message">): string {
+  // Keep the 402 signal intact so background receivers stop hammering a restricted project.
+  if (/exceed_egress_quota|quota exceeded|HTTP 402|payment required|spend cap/i.test(`${error.code} ${error.message}`)) {
+    return "Supabase quota exceeded (HTTP 402).";
+  }
   switch (error.code) {
     case "23505": return "That term is already in your dictionary.";
     // Raised by `enforce_dictionary_limit`, whose message is written for users.
