@@ -10,6 +10,7 @@ import {
 } from "@/remote-dictation/types";
 import { syncErrorMessage } from "@/services/personalSyncService";
 import { getSupabase } from "@/services/supabase";
+import { deviceHeartbeat } from "@/services/backgroundTraffic";
 import type { Database } from "@/types/database";
 
 export interface RemoteDictationApi {
@@ -50,11 +51,13 @@ function ttlSeconds(): number {
 /** Short-lived exact-transcript transport. Ownership and claim atomicity live in RPCs. */
 export const remoteDictationApi: RemoteDictationApi = {
   async touch(deviceId) {
-    const { error } = await requireClient()
-      .from("devices")
-      .update({ last_seen: new Date().toISOString() })
-      .eq("id", deviceId);
-    check(error);
+    await deviceHeartbeat.touch(deviceId, async () => {
+      const { error } = await requireClient()
+        .from("devices")
+        .update({ last_seen: new Date().toISOString() })
+        .eq("id", deviceId);
+      check(error);
+    });
   },
 
   async create(sourceDeviceId, targetDeviceId, text) {
