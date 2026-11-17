@@ -1,0 +1,25 @@
+name: Agency MCP Phase 1
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/agency-mcp/**'
+      - 'supabase/migrations/*agency_experiences.sql'
+      - '.github/workflows/agency-mcp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check MCP function types
+        run: deno check supabase/functions/agency-mcp/index.ts
+      - name: Validate MCP tool contracts
+        run: deno test --allow-none supabase/functions/agency-mcp/contracts.test.ts
