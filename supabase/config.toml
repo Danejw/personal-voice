@@ -1,0 +1,5 @@
+# Agency MCP's own OAuth middleware validates caller tokens.
+# The gateway must allow unauthenticated OAuth discovery requests through.
+# Other Edge Functions retain their existing deployed verification settings.
+[functions.agency-mcp]
+verify_jwt = false
