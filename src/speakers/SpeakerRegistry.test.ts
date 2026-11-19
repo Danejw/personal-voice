@@ -95,7 +95,7 @@ describe("SpeakerRegistry", () => {
     expect(() => registry("account-b").restore(snapshot)).toThrow("Incompatible");
     expect(() => new SpeakerRegistry("account-a", "different-model", 3).restore(snapshot)).toThrow("Incompatible");
     const corrupt = structuredClone(snapshot);
-    corrupt.profiles[0].samples[0].embedding[0] = Number.NaN;
+    corrupt.profiles[0]!.samples[0]!.embedding[0] = Number.NaN;
     expect(() => restored.restore(corrupt)).toThrow();
     expect(restored.list()).toEqual(book.list());
   });
@@ -103,12 +103,12 @@ describe("SpeakerRegistry", () => {
   it("exposes defensive copies and supports deletion", () => {
     const book = registry();
     const saved = primary(book);
-    saved.samples[0].embedding[0] = 0;
+    saved.samples[0]!.embedding[0] = 0;
     const list = book.list();
-    list[0].samples[0].embedding[0] = 0;
-    expect(book.list()[0].samples[0].embedding).toEqual([1, 0, 0]);
+    list[0]!.samples[0]!.embedding[0] = 0;
+    expect(book.list()[0]!.samples[0]!.embedding).toEqual([1, 0, 0]);
     book.rename("owner", "New label");
-    expect(book.list()[0].displayName).toBe("New label");
+    expect(book.list()[0]!.displayName).toBe("New label");
     book.forget("owner");
     expect(book.identify([1, 0, 0], config)).toEqual({ kind: "unknown", reason: "no-profiles" });
   });
