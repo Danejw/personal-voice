@@ -32,6 +32,8 @@ jobs:
 
           mkdir -p "$RUNNER_TEMP/watch-source" "$RUNNER_TEMP/watch-release"
           gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/watch-source"
+          echo "::notice::Downloaded artifact contents:"
+          find "$RUNNER_TEMP/watch-source" -maxdepth 5 -printf "%y %p %s bytes\\n"
           mapfile -t apks < <(find "$RUNNER_TEMP/watch-source" -type f -name '*.apk')
           if [ "${#apks[@]}" -ne 1 ]; then
             echo "::error::Expected exactly one verified APK artifact; found ${#apks[@]}"
