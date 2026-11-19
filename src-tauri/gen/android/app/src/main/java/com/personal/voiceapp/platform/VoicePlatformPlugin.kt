@@ -27,6 +27,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import com.personal.voiceapp.BuildConfig
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.PermissionState
@@ -127,6 +128,11 @@ class BluetoothSpeakerConnectArgs {
 }
 
 @InvokeArg
+class UdpWatchConnectArgs {
+  lateinit var deviceId: String
+}
+
+@InvokeArg
 class CameraArgs {
   /** `default`, `front`, or `back`. */
   var facing: String = "default"
@@ -186,6 +192,9 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private val main = Handler(Looper.getMainLooper())
   private var webView: WebView? = null
   private var deviceLinkSocket: DeviceLinkNetwork.WebSocketClient? = null
+  private var udpWatchClient: WatchBleClient? = null
+  private var udpWatchGeneration = 0
+  private var udpWatchSequence = 0
   private var requestedLocalNetworkPermission = false
   private fun localNetworkAllowed(): Boolean {
     if (Build.VERSION.SDK_INT < 37) return true
@@ -259,6 +268,9 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
 
   /** Without the WebView nothing can answer the bubble, so the service goes with it. */
   override fun onDestroy(activity: AppCompatActivity) {
+    udpWatchGeneration += 1
+    udpWatchClient?.close()
+    udpWatchClient = null
     deviceLinkSocket?.close()
     deviceLinkSocket = null
     cameraSession?.stop()
@@ -569,6 +581,90 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
     main.post {
       activity.requestPermissions(required.toTypedArray(), 54018)
       invoke.resolve(JSObject())
+    }
+  }
+
+  /** Bench-only: explicit recent Nearby identity. Debug APKs never auto-connect. */
+  @Command
+  fun connectUdpWatch(invoke: Invoke) {
+    if (!BuildConfig.DEBUG) {
+      invoke.reject("The watch transport is limited to debug builds until pairing is secured.")
+      return
+    }
+    val id = try { invoke.parseArgs(UdpWatchConnectArgs::class.java).deviceId }
+      catch (_: Exception) { invoke.reject("Select the watch from a recent Nearby scan."); return }
+    main.post {
+      try {
+        val target = NearbyDeviceDiscovery.bluetoothTarget(id)
+          ?: throw IllegalArgumentException("Scan Nearby again before connecting the watch.")
+        require(target.observedNow && target.name == "UDP-W0") {
+          "Choose the observed UDP-W0 watch from Nearby."
+        }
+        require(android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+          "The watch requires Android 12 or newer."
+        }
+        require(androidx.core.content.ContextCompat.checkSelfPermission(activity,
+          Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+          "Allow Bluetooth access before connecting the watch."
+        }
+        val adapter = activity.getSystemService(android.bluetooth.BluetoothManager::class.java).adapter
+        require(adapter.isEnabled) { "Turn on Bluetooth first." }
+        udpWatchGeneration += 1
+        udpWatchSequence = 0
+        udpWatchClient?.close()
+        val generation = udpWatchGeneration
+        val client = WatchBleClient(activity.applicationContext, object : WatchBleClient.Listener {
+          override fun onFound(device: android.bluetooth.BluetoothDevice) { /* Existing Nearby scan selects the device. */ }
+          override fun onConnected(deviceId: String, capabilities: List<String>) {
+            if (generation != udpWatchGeneration) return
+            main.post {
+              trigger("udpWatchStatus", JSObject().put("state", "connected")
+                .put("manifest", JSONObject().put("v", 1).put("id", deviceId)
+                  .put("caps", JSONArray(capabilities))))
+            }
+          }
+          override fun onEvent(event: String) {
+            if (generation != udpWatchGeneration || event != "button.primary.pressed") return
+            main.post {
+              if (generation != udpWatchGeneration) return@post
+              udpWatchSequence += 1
+              trigger("udpWatchEvent", JSObject()
+                .put("type", "event").put("protocol", "udp/1")
+                .put("device_id", "watch-v0")
+                .put("event", event).put("seq", udpWatchSequence))
+            }
+          }
+          override fun onDisconnected() {
+            if (generation == udpWatchGeneration) main.post {
+              if (generation == udpWatchGeneration) trigger("udpWatchStatus", JSObject().put("state", "disconnected"))
+            }
+          }
+          override fun onError(description: String) {
+            if (generation == udpWatchGeneration) main.post {
+              if (generation == udpWatchGeneration) trigger("udpWatchStatus", JSObject()
+                .put("state", "error").put("error", description))
+            }
+          }
+        })
+        udpWatchClient = client
+        client.connect(adapter.getRemoteDevice(target.address))
+        invoke.resolve(JSObject().put("state", "connecting"))
+      } catch (error: Exception) {
+        udpWatchClient?.close()
+        udpWatchClient = null
+        invoke.reject(error.message ?: "Watch connection failed")
+      }
+    }
+  }
+
+  @Command
+  fun disconnectUdpWatch(invoke: Invoke) {
+    main.post {
+      udpWatchGeneration += 1
+      udpWatchClient?.close()
+      udpWatchClient = null
+      trigger("udpWatchStatus", JSObject().put("state", "disconnected"))
+      invoke.resolve(JSObject().put("state", "disconnected"))
     }
   }
 

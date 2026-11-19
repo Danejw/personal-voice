@@ -7,6 +7,7 @@ import type { OwnedDevice } from "@/handoffs/handoff";
 import { MAX_DEVICE_NAME } from "@/services/deviceService";
 import { DevicePairingPanel } from "@/devices/DevicePairingPanel";
 import { SpatialScanner } from "@/spatial/SpatialScanner";
+import { VirtualWatchPanel } from "@/wearables/VirtualWatchPanel";
 import "./deviceTabs.css";
 
 interface DevicesPanelProps {
@@ -15,6 +16,7 @@ interface DevicesPanelProps {
   snapshot: DeviceSnapshot;
   onChanged(): void;
   onControlPc(id: string): void;
+  onConnectWatch?(id: string): void;
 }
 
 function statusLabel(status: DeviceStatus): string {
@@ -103,7 +105,7 @@ function DeviceRow({ device, current, connected, busy, onRename, onRemove, onCon
 }
 
 /** Friendly names for owned installs. Removing a row never deletes notes or handoffs. */
-export function DevicesPanel({ mode, store, snapshot, onChanged, onControlPc }: DevicesPanelProps) {
+export function DevicesPanel({ mode, store, snapshot, onChanged, onControlPc, onConnectWatch }: DevicesPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const confirm = useConfirmAction();
@@ -125,8 +127,8 @@ export function DevicesPanel({ mode, store, snapshot, onChanged, onControlPc }: 
   if (mode === "nearby") {
     return connected && snapshot.currentDeviceId &&
       snapshot.devices.find(device => device.id === snapshot.currentDeviceId)?.platform === "android"
-      ? <SpatialScanner currentDeviceId={snapshot.currentDeviceId}
-          devices={snapshot.devices} onControlPc={onControlPc} />
+      ? <><VirtualWatchPanel /><SpatialScanner currentDeviceId={snapshot.currentDeviceId}
+          devices={snapshot.devices} onControlPc={onControlPc} onConnectWatch={onConnectWatch} /></>
       : <p className="placeholder">Nearby discovery is available on the signed-in Android phone.</p>;
   }
 

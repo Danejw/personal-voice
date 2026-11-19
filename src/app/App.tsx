@@ -48,6 +48,9 @@ import { saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import { CompanionView } from "@/companion/CompanionView";
 import { assistantPhase } from "@/companion/companionGeometry";
 import { DevicesPanel } from "@/devices/DevicesPanel";
+import { wearableManager } from "@/wearables/WearableManager";
+import { callPlugin, listenPlugin } from "@/platform/android/voicePlatformPlugin";
+import { WatchTapRouter } from "@/wearables/watchAction";
 import { ScreenSharingPanel } from "@/spatial/ScreenSharingPanel";
 import { PairingDialog } from "@/devices/PairingDialog";
 import { pairingAction } from "@/devices/pairingFlow";
@@ -233,6 +236,7 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
   });
 }
 
+const wearableTapRouter = new WatchTapRouter();
 const assistantLibrary = new AssistantConversationStore(
   assistant,
   assistantConversationsApi,
@@ -1139,6 +1143,49 @@ export default function App() {
   const signedInRef = useRef(signedIn);
   signedInRef.current = signedIn;
 
+  // Revoking the account immediately revokes both virtual and local BLE input.
+  useEffect(() => {
+    if (auth.userId || wearableManager.getSnapshot().status === "disconnected") return;
+    if (wearableManager.getSnapshot().source === "bluetooth") {
+      void callPlugin("disconnect_udp_watch").catch(() => undefined);
+    }
+    wearableManager.disconnect();
+  }, [auth.userId]);
+
+  useEffect(() => {
+    if (platform.platform !== "android") return;
+    let active = true;
+    const stops: Array<() => void> = [];
+    void Promise.all([
+      listenPlugin("udpWatchStatus", payload => {
+        if (!active || !payload || typeof payload !== "object") return;
+        const data = payload as { state?: string; manifest?: unknown; error?: string };
+        if (data.state === "connected") wearableManager.confirmBluetooth(data.manifest);
+        else if (data.state === "disconnected" && wearableManager.getSnapshot().source === "bluetooth") wearableManager.disconnect();
+        else if (data.state === "error" && wearableManager.getSnapshot().source === "bluetooth") wearableManager.reportError(data.error ?? "Watch disconnected");
+      }),
+      listenPlugin("udpWatchEvent", payload => {
+        if (active) wearableManager.receive(payload, "bluetooth");
+      }),
+    ]).then(unsubscribers => {
+      if (!active) unsubscribers.forEach(stop => stop());
+      else stops.push(...unsubscribers);
+    }).catch(() => { if (active) wearableManager.reportError("Watch event listener unavailable"); });
+    return () => { active = false; stops.forEach(stop => stop()); };
+  }, []);
+
+
+  useEffect(() => wearableManager.onPress(() => {
+    const status = assistant.getSnapshot().status;
+    void wearableTapRouter.handle({
+      signedIn: signedInRef.current,
+      dictationBusy: microphone.heldBy() === "dictation",
+      status,
+    }, () => assistantLibrary.produce(), () => assistant.end()).catch(error => {
+      wearableManager.reportError(error instanceof Error ? error.message : "Could not start Assistant");
+    });
+  }), []);
+
   useEffect(() => {
     let stop = () => {};
     void platform.onShowFloatingControl(() => {
@@ -1158,6 +1205,14 @@ export default function App() {
     }).then((unlisten) => { stop = unlisten; });
     return () => stop();
   }, []);
+
+  function connectWearable(id: string) {
+    if (platform.platform !== "android" || !signedInRef.current) return;
+    wearableManager.beginBluetoothConnection();
+    void callPlugin("connect_udp_watch", { deviceId: id }).catch(error => {
+      wearableManager.reportError(error instanceof Error ? error.message : "Watch connection failed");
+    });
+  }
 
   function onControl() {
     switch (state) {
@@ -1618,6 +1673,7 @@ export default function App() {
             hidden={devicesTab !== "nearby"}>
             <DevicesPanel mode="nearby"
               store={devices} snapshot={deviceSnapshot}
+              onConnectWatch={connectWearable}
               onChanged={() => { void handoffs.reload(); }}
               onControlPc={(id) => {
                 if (!deviceSnapshot.currentDeviceId) return;
