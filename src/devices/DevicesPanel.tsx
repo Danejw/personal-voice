@@ -16,6 +16,7 @@ interface DevicesPanelProps {
   snapshot: DeviceSnapshot;
   onChanged(): void;
   onControlPc(id: string): void;
+  onConnectWatch?(id: string): void;
 }
 
 function statusLabel(status: DeviceStatus): string {
@@ -104,7 +105,7 @@ function DeviceRow({ device, current, connected, busy, onRename, onRemove, onCon
 }
 
 /** Friendly names for owned installs. Removing a row never deletes notes or handoffs. */
-export function DevicesPanel({ mode, store, snapshot, onChanged, onControlPc }: DevicesPanelProps) {
+export function DevicesPanel({ mode, store, snapshot, onChanged, onControlPc, onConnectWatch }: DevicesPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const confirm = useConfirmAction();
@@ -127,7 +128,7 @@ export function DevicesPanel({ mode, store, snapshot, onChanged, onControlPc }: 
     return connected && snapshot.currentDeviceId &&
       snapshot.devices.find(device => device.id === snapshot.currentDeviceId)?.platform === "android"
       ? <><VirtualWatchPanel /><SpatialScanner currentDeviceId={snapshot.currentDeviceId}
-          devices={snapshot.devices} onControlPc={onControlPc} /></>
+          devices={snapshot.devices} onControlPc={onControlPc} onConnectWatch={onConnectWatch} /></>
       : <p className="placeholder">Nearby discovery is available on the signed-in Android phone.</p>;
   }
 

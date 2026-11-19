@@ -18,6 +18,7 @@ interface Props {
   currentDeviceId: string;
   devices: readonly OwnedDevice[];
   onControlPc(id: string): void;
+  onConnectWatch?(id: string): void;
 }
 
 const glyph: Record<NearbyDevice["kind"], string> = {
@@ -28,7 +29,7 @@ const placementKey = (id: string) => "pv.spatial-placements.v1:" + id;
 const emptyScan: NearbyScan = {
   devices: [], bluetoothPermissionRequired: false, networkLabel: "", networkLimited: false,
 };
-export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props) {
+export function SpatialScanner({ currentDeviceId, devices, onControlPc, onConnectWatch }: Props) {
   const [scan, setScan] = useState<NearbyScan>(emptyScan);
   const [peers, setPeers] = useState<string[]>(() => deviceLinkManager.getSnapshot().localPeers);
   const [scanning, setScanning] = useState(false);
@@ -310,6 +311,11 @@ export function SpatialScanner({ currentDeviceId, devices, onControlPc }: Props)
                 </span>
                 {!readiness.quickAction && <span className="spatial-place-label" aria-hidden="true">›</span>}
               </button>
+              {onConnectWatch && (import.meta.env.DEV || import.meta.env.VITE_ENABLE_UDP_SIMULATOR === "1") &&
+                device.source === "bluetooth" && device.name === "UDP-W0" && (
+                  <button type="button" className="spatial-quick-action"
+                    onClick={() => onConnectWatch(device.id)}>Connect watch</button>
+                )}
               {readiness.quickAction && (
                 <button type="button" className="spatial-quick-action"
                   disabled={quickPending !== null}

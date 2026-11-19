@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { wearableManager } from "@/wearables/WearableManager";
+import { callPlugin } from "@/platform/android/voicePlatformPlugin";
 
 const ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_UDP_SIMULATOR === "1";
 
@@ -23,7 +24,11 @@ export function VirtualWatchPanel() {
         <button type="button" disabled={!connected}
           onClick={() => wearableManager.pressVirtual()}>Tap watch button</button>
         <button type="button" disabled={!connected}
-          onClick={() => wearableManager.disconnect()}>Disconnect</button>
+          onClick={() => wearableManager.disconnect()}>Disconnect virtual</button>
+        <button type="button" disabled={state.source !== "bluetooth"}
+          onClick={() => void callPlugin("disconnect_udp_watch").then(() => wearableManager.disconnect()).catch(error => {
+            wearableManager.reportError(error instanceof Error ? error.message : "Watch disconnect failed");
+          })}>Disconnect physical</button>
       </div>
     </section>
   );
