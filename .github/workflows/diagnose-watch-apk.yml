@@ -1,0 +1,31 @@
+name: Diagnose Watch Preview APK
+
+on:
+  push:
+    branches: [preview/udp-watch-android-20261119]
+    paths: [.github/workflows/diagnose-watch-apk.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Inspect published APK integrity, identity and compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/watch"
+          gh release download watch-preview-20261119 --repo "$GITHUB_REPOSITORY" --pattern '*.apk' --dir "$RUNNER_TEMP/watch"
+          apk="$RUNNER_TEMP/watch/PersonalVoice-WatchPreview-20261119.apk"
+          test -s "$apk"
+          sha256sum "$apk"
+          find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -o -name aapt -o -name zipalign
+          build_tools="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -printf '%h\n' | sort -V | tail -1)"
+          "$build_tools/apksigner" verify --verbose --print-certs "$apk"
+          "$build_tools/aapt" dump badging "$apk" | head -50
+          "$build_tools/zipalign" -c -P 16 -v 4 "$apk"
+          unzip -Z1 "$apk" | grep '^lib/' | cut -d/ -f2 | sort -u
