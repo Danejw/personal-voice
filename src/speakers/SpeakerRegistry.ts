@@ -71,7 +71,7 @@ export function normalizeSpeakerEmbedding(value: readonly number[], dimensions: 
 }
 
 function cosine(left: readonly number[], right: readonly number[]): number {
-  return left.reduce((total, value, index) => total + value * right[index], 0);
+  return left.reduce((total, value, index) => total + value * (right[index] ?? 0), 0);
 }
 
 function validThresholds(value: SpeakerMatchThresholds): void {
@@ -178,8 +178,10 @@ export class SpeakerRegistry {
       score: Math.max(...profile.samples.map(sample => cosine(probe, sample.embedding))),
     })).sort((left, right) => right.score - left.score);
     const best = scored[0];
+    if (!best) return { kind: "unknown", reason: "no-profiles" };
     if (best.score < thresholds.minSimilarity) return { kind: "unknown", reason: "low-confidence" };
-    if (scored.length > 1 && best.score - scored[1].score < thresholds.minMargin) {
+    const runnerUp = scored[1];
+    if (runnerUp && best.score - runnerUp.score < thresholds.minMargin) {
       return { kind: "unknown", reason: "ambiguous" };
     }
     return {
@@ -216,6 +218,7 @@ export class SpeakerRegistry {
       if (!Array.isArray(profile.samples) || profile.samples.length === 0
           || profile.samples.length > MAX_SAMPLES) throw new Error("Invalid speaker samples.");
       const first = profile.samples[0];
+      if (!first) throw new Error("Invalid speaker samples.");
       restored.enroll({
         id: profile.id,
         displayName: profile.displayName,
