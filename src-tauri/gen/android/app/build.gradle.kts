@@ -1,3 +1,7 @@
+import java.net.URL
+import java.security.MessageDigest
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -28,6 +32,61 @@ fun signingValue(property: String, env: String): String? =
 val releaseStoreFile = signingValue("storeFile", "ANDROID_KEYSTORE_PATH")
 val releaseStorePassword = signingValue("password", "ANDROID_KEYSTORE_PASSWORD")
 val releaseKeyAlias = signingValue("keyAlias", "ANDROID_KEY_ALIAS")
+
+// Speaker recognition dependencies are reproducible and checked before use. They are
+// downloaded during Android builds, not during dictation, and stay out of git.
+val sherpaAar = layout.buildDirectory.file("speaker/vendor/sherpa-onnx-2.0.1.aar")
+val speakerModels = layout.buildDirectory.dir("speaker/assets")
+val speakerModelName = "3dspeaker_speech_eres2net_sv_en_voxceleb_16k.onnx"
+val speakerModel = speakerModels.map { it.file(speakerModelName) }
+
+val prepareSpeakerModel = tasks.register("prepareSpeakerModel") {
+    outputs.file(sherpaAar)
+    outputs.file(speakerModel)
+    doLast {
+        fun downloadVerified(url: String, sha256: String, destination: java.io.File) {
+            fun digest(file: java.io.File): String {
+                val hash = MessageDigest.getInstance("SHA-256")
+                file.inputStream().buffered().use { input ->
+                    val chunk = ByteArray(64 * 1024)
+                    while (true) {
+                        val n = input.read(chunk)
+                        if (n < 0) break
+                        hash.update(chunk, 0, n)
+                    }
+                }
+                return hash.digest().joinToString("") { "%02x".format(it) }
+            }
+            if (destination.exists() && digest(destination) == sha256) return
+            destination.parentFile.mkdirs()
+            val temporary = java.io.File(destination.absolutePath + ".partial")
+            try {
+                val connection = URL(url).openConnection()
+                connection.connectTimeout = 30_000
+                connection.readTimeout = 120_000
+                connection.getInputStream().use { input ->
+                    temporary.outputStream().buffered().use { output -> input.copyTo(output) }
+                }
+                if (digest(temporary) != sha256) {
+                    throw IllegalStateException("Speaker model dependency checksum mismatch: ${destination.name}")
+                }
+                Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } finally {
+                temporary.delete()
+            }
+        }
+        downloadVerified(
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-2.0.1.aar",
+            "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7",
+            sherpaAar.get().asFile,
+        )
+        downloadVerified(
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/$speakerModelName",
+            "c4947caf150b8502fdd75bbe4089b971ab1ec42e90ee3ba547faca2cde44d9ee",
+            speakerModel.get().asFile,
+        )
+    }
+}
 
 android {
     compileSdk = 37
@@ -85,7 +144,11 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    sourceSets.getByName("main").assets.srcDir(speakerModels)
 }
+
+// Build model and AAR before Java/Kotlin compilation or asset merging.
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(prepareSpeakerModel) }
 
 kotlin {
     compilerOptions {
@@ -98,6 +161,7 @@ rust {
 }
 
 dependencies {
+    implementation(files(sherpaAar))
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
