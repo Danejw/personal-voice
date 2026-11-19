@@ -1,0 +1,78 @@
+# One-time distribution of the CI-verified Android debug preview from PR #95.
+# The stable app updater never considers this prerelease as latest.
+name: Publish UDP Watch Android Preview
+
+on:
+  push:
+    branches:
+      - preview/udp-watch-android-20261119
+    paths:
+      - .github/workflows/publish-udp-watch-preview.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 0a182d9ed1bf1b0752992ee0fbf328452729a698
+      SOURCE_RUN: "44471407416"
+      TAG: watch-preview-20261119
+    steps:
+      - name: Download precisely the CI-verified Android preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN")"
+          test "$(jq -r '.conclusion' <<< "$run")" = "success"
+          test "$(jq -r '.head_sha' <<< "$run")" = "$SOURCE_SHA"
+
+          mkdir -p "$RUNNER_TEMP/watch-source" "$RUNNER_TEMP/watch-release"
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/watch-source"
+          mapfile -t apks < <(find "$RUNNER_TEMP/watch-source" -type f -name '*.apk')
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one verified APK artifact; found ${#apks[@]}"
+            exit 1
+          fi
+          apk="${apks[0]}"
+          test "$(stat -c%s "$apk")" -gt 50000000
+          cp "$apk" "$RUNNER_TEMP/watch-release/PersonalVoice-WatchPreview-20261119.apk"
+          (
+            cd "$RUNNER_TEMP/watch-release"
+            sha256sum PersonalVoice-WatchPreview-20261119.apk > SHA256SUMS.txt
+          )
+
+      - name: Publish separate non-latest prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Preview tag already has a release; refusing to overwrite its APK."
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/watch-notes.md" <<'NOTES'
+          # Personal Voice: Virtual Watch Android Test
+
+          **Android testing prerelease**, built from PR #95's verified commit 0a182d9ed1bf1b0752992ee0fbf328452729a698. Validation: https://github.com/Danejw/personal-voice/actions/runs/44471407416 (Windows and Android passed).
+
+          Download **PersonalVoice-WatchPreview-20261119.apk** under Assets. This **debug preview** installs alongside the normal app under the `.preview` package. It is not a signed production update and does not replace the latest stable release.
+
+          After installing, sign in and open **Devices > Nearby > Virtual AI Watch**. Tap **Connect virtual watch**, then **Tap watch button**. Say: **"What's two plus two? Answer with just the number."** Hear **"Four"** from the phone speaker. Tap again to stop, then disconnect.
+
+          No ESP32 or other hardware required. The watch button is simulated and uses the phone's microphone and existing Gemini Live session. The current Bluetooth reference path is intentionally debug-only and does not include authenticated watch pairing. Avoid private or sensitive control testing on the physical BLE bench.
+
+          The Personal Voice feature remains in PR #95 pending actual on-phone confirmation.
+          NOTES
+          gh release create "$TAG" \
+            "$RUNNER_TEMP/watch-release/PersonalVoice-WatchPreview-20261119.apk" \
+            "$RUNNER_TEMP/watch-release/SHA256SUMS.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title "Personal Voice Watch Preview (Android)" \
+            --notes-file "$RUNNER_TEMP/watch-notes.md" \
+            --prerelease \
+            --latest=false
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,isPrerelease,assets
