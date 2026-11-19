@@ -81,11 +81,27 @@ jobs:
           echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - name: Build Android debug APK
-        run: pnpm tauri android build --debug --apk --target aarch64
+        run: pnpm tauri android build --debug --apk --target aarch64 --config src-tauri/tauri.watchpreview.conf.json
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_ENABLE_UDP_SIMULATOR: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+      - name: Verify Android preview uses isolated package ID and is installable
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk"
+          tools="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt -printf '%h\n' | sort -V | tail -1)"
+          test -f "$apk"
+          package="$("$tools/aapt" dump badging "$apk" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          echo "Android APK package identity: $package"
+          if [ "$package" != "com.personal.voiceapp.watchpreview" ]; then
+            echo "::error::Unsafe package '$package'; must not replace the installed Personal Voice app."
+            exit 1
+          fi
+          "$tools/apksigner" verify --verbose "$apk"
+          "$tools/zipalign" -c -P 16 -v 4 "$apk" >/dev/null
+          echo "Verified isolated identity, APK signing and ZIP alignment"
       - name: Upload Android preview APK
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v7
