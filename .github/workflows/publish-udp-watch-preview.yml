@@ -20,6 +20,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       SOURCE_SHA: 0a182d9ed1bf1b0752992ee0fbf328452729a698
       SOURCE_RUN: "44471407416"
+      ARTIFACT_ID: "14504751151"
       TAG: watch-preview-20261119
     steps:
       - name: Download precisely the CI-verified Android preview
@@ -30,18 +31,35 @@ jobs:
           test "$(jq -r '.conclusion' <<< "$run")" = "success"
           test "$(jq -r '.head_sha' <<< "$run")" = "$SOURCE_SHA"
 
-          mkdir -p "$RUNNER_TEMP/watch-source" "$RUNNER_TEMP/watch-release"
-          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/watch-source"
-          echo "::notice::Downloaded artifact contents:"
-          find "$RUNNER_TEMP/watch-source" -maxdepth 5 -printf "%y %p %s bytes\\n"
-          mapfile -t apks < <(find "$RUNNER_TEMP/watch-source" -type f -name '*.apk')
-          if [ "${#apks[@]}" -ne 1 ]; then
-            echo "::error::Expected exactly one verified APK artifact; found ${#apks[@]}"
-            exit 1
+          artifact="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID")"
+          test "$(jq -r '.workflow_run.id' <<< "$artifact")" = "$SOURCE_RUN"
+          test "$(jq -r '.name' <<< "$artifact")" = "app-universal-debug.apk"
+          test "$(jq -r '.expired' <<< "$artifact")" = "false"
+
+          mkdir -p "$RUNNER_TEMP/watch-release"
+          downloaded="$RUNNER_TEMP/watch-release/ci-artifact.bin"
+          apk="$RUNNER_TEMP/watch-release/PersonalVoice-WatchPreview-20261119.apk"
+          curl --fail --location --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            --output "$downloaded"
+          test "$(stat -c%s "$downloaded")" -gt 50000000
+          if unzip -Z1 "$downloaded" | grep -Fxq 'AndroidManifest.xml'; then
+            mv "$downloaded" "$apk"
+          else
+            mapfile -t inner < <(unzip -Z1 "$downloaded" | grep -E '\.apk$')
+            if [ "${#inner[@]}" -ne 1 ]; then
+              echo "::error::Artifact contains neither a raw APK nor exactly one nested APK"
+              exit 1
+            fi
+            unzip -p "$downloaded" "${inner[0]}" > "$apk"
           fi
-          apk="${apks[0]}"
           test "$(stat -c%s "$apk")" -gt 50000000
-          cp "$apk" "$RUNNER_TEMP/watch-release/PersonalVoice-WatchPreview-20261119.apk"
+          unzip -Z1 "$apk" | grep -Fxq 'AndroidManifest.xml'
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -1)"
+          test -x "$apksigner"
+          "$apksigner" verify --print-certs "$apk"
           (
             cd "$RUNNER_TEMP/watch-release"
             sha256sum PersonalVoice-WatchPreview-20261119.apk > SHA256SUMS.txt
