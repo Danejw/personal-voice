@@ -153,11 +153,13 @@ class WatchBleClient(private val context: Context, private val listener: Listene
             }
             try {
                 val payload = JSONObject(value.toString(Charsets.UTF_8))
-                require(payload.getInt("v") == 1) { "Unknown watch protocol version" }
+
                 val id = payload.getString("id")
                 val caps = payload.getJSONArray("caps")
                 val capabilities = (0 until caps.length()).map { caps.getString(it) }
-                require(capabilities == listOf("button.primary")) { "Unexpected V0 capabilities" }
+                require(WatchWire.accepts(payload.getInt("v"), id, capabilities)) {
+                    "Unsupported watch identity, version or capabilities"
+                }
                 val events = eventCharacteristic ?: error("Missing event characteristic")
                 if (!g.setCharacteristicNotification(events, true)) {
                     error("Notification registration rejected")
@@ -206,12 +208,9 @@ class WatchBleClient(private val context: Context, private val listener: Listene
         }
 
         private fun handleEvent(value: ByteArray) {
-            val code = value.firstOrNull()?.toInt()?.toChar()
-            when (code) {
-                'P' -> { sequence++; listener.onEvent("button.primary.pressed") }
-                '!' -> listener.onEvent("device.pong")
-                else -> listener.onError("Unrecognized BLE event code")
-            }
+            if (!ready) return
+            val event = WatchWire.event(value) ?: return
+            listener.onEvent(event)
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic,
