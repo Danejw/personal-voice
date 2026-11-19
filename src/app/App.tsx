@@ -1143,6 +1143,15 @@ export default function App() {
   const signedInRef = useRef(signedIn);
   signedInRef.current = signedIn;
 
+  // Revoking the account immediately revokes both virtual and local BLE input.
+  useEffect(() => {
+    if (auth.userId || wearableManager.getSnapshot().status === "disconnected") return;
+    if (wearableManager.getSnapshot().source === "bluetooth") {
+      void callPlugin("disconnect_udp_watch").catch(() => undefined);
+    }
+    wearableManager.disconnect();
+  }, [auth.userId]);
+
   useEffect(() => {
     if (platform.platform !== "android") return;
     let active = true;
