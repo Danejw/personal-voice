@@ -1,0 +1,118 @@
+# One-time distribution of the CI-verified Android debug preview from PR #95.
+# The stable app updater never considers this prerelease as latest.
+name: Publish Isolated Android Watch Preview
+
+on:
+  push:
+    branches:
+      - preview/udp-watch-android-20261119
+    paths:
+      - .github/workflows/publish-udp-watch-isolated.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: 9826eb5ea453a29e92415aeb083508764c081976
+      SOURCE_RUN: "44473983642"
+      ARTIFACT_ID: "14504644606"
+      TAG: watch-preview-20261119-fixed
+    steps:
+      - name: Download precisely the CI-verified Android preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN")"
+          test "$(jq -r '.conclusion' <<< "$run")" = "success"
+          test "$(jq -r '.head_sha' <<< "$run")" = "$SOURCE_SHA"
+
+          artifact="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID")"
+          test "$(jq -r '.workflow_run.id' <<< "$artifact")" = "$SOURCE_RUN"
+          test "$(jq -r '.name' <<< "$artifact")" = "app-universal-debug.apk"
+          test "$(jq -r '.expired' <<< "$artifact")" = "false"
+
+          mkdir -p "$RUNNER_TEMP/watch-release"
+          downloaded="$RUNNER_TEMP/watch-release/ci-artifact.bin"
+          apk="$RUNNER_TEMP/watch-release/PersonalVoice-WatchPreview-Isolated.apk"
+          curl --fail --location --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            --output "$downloaded"
+          test "$(stat -c%s "$downloaded")" -gt 50000000
+          if unzip -Z1 "$downloaded" | grep -Fxq 'AndroidManifest.xml'; then
+            mv "$downloaded" "$apk"
+          else
+            mapfile -t inner < <(unzip -Z1 "$downloaded" | grep -E '\.apk$')
+            if [ "${#inner[@]}" -ne 1 ]; then
+              echo "::error::Artifact contains neither a raw APK nor exactly one nested APK"
+              exit 1
+            fi
+            unzip -p "$downloaded" "${inner[0]}" > "$apk"
+          fi
+          test "$(stat -c%s "$apk")" -gt 50000000
+          unzip -Z1 "$apk" | grep -Fxq 'AndroidManifest.xml'
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -1)"
+          test -x "$apksigner"
+          "$apksigner" verify --print-certs "$apk"
+          aapt="$(dirname "$apksigner")/aapt"
+          package="$("$aapt" dump badging "$apk" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p")"
+          if [ "$package" != "com.personal.voiceapp.watchpreview" ]; then
+            echo "::error::Refusing to publish APK with unsafe package ID $package"
+            exit 1
+          fi
+          "$(dirname "$apksigner")/zipalign" -c -P 16 -v 4 "$apk" >/dev/null
+          echo "Verified isolated install ID: $package"
+
+          (
+            cd "$RUNNER_TEMP/watch-release"
+            sha256sum PersonalVoice-WatchPreview-Isolated.apk > SHA256SUMS.txt
+          )
+
+      - name: Publish separate non-latest prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Preview tag already has a release; refusing to overwrite its APK."
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/watch-notes.md" <<'NOTES'
+          # Personal Voice Watch Preview: Fixed Android Installation
+
+          **Corrected Android testing prerelease**, sourced from [PR #95](https://github.com/Danejw/personal-voice/pull/95). Validated Android + Windows CI: https://github.com/Danejw/personal-voice/actions/runs/44473983642.
+
+          The earlier watch-preview-20261119 APK accidentally used the production package ID `com.personal.voiceapp`, which collided with the stable app's different signing key and caused **"App not installed"**. That original APK is superseded.
+
+          This fixed APK uses the independently installable ID **`com.personal.voiceapp.watchpreview`**, verified from the actual signed APK after build. Your existing Personal Voice app can remain installed, with all its data.
+
+          Download **PersonalVoice-WatchPreview-Isolated.apk** from Assets and install it on Android. Sign in separately, open **Devices > Nearby > Virtual AI Watch**, tap **Connect virtual watch**, then **Tap watch button**. Say **"What's two plus two? Answer with just the number."** Gemini should reply **"Four"** aloud. Tap again to end the assistant and disconnect.
+
+          This is a debug-only prerelease. It does not replace the production Android app or update channel. There is no physical watch hardware test yet; BLE bench mode is not approved for sensitive inputs, camera, or health data. The feature PR remains open until live phone verification.
+          NOTES
+          gh release create "$TAG" \
+            "$RUNNER_TEMP/watch-release/PersonalVoice-WatchPreview-Isolated.apk" \
+            "$RUNNER_TEMP/watch-release/SHA256SUMS.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title "Personal Voice Watch Preview (Fixed Android Install)" \
+            --notes-file "$RUNNER_TEMP/watch-notes.md" \
+            --prerelease \
+            --latest=false
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,isPrerelease,assets
+          cat > "$RUNNER_TEMP/watch-old-notes.md" <<'NOTES'
+          This preview APK is superseded because it used the production Android package identity and could fail with "App not installed" when Personal Voice was already installed.
+
+          Use the corrected, separately installable build: https://github.com/Danejw/personal-voice/releases/tag/watch-preview-20261119-fixed
+
+          Do not uninstall your current Personal Voice app to work around the old preview.
+          NOTES
+          gh release edit watch-preview-20261119 --repo "$GITHUB_REPOSITORY" \
+            --title "Superseded: Personal Voice Watch Preview (Package Conflict)" \
+            --notes-file "$RUNNER_TEMP/watch-old-notes.md" --prerelease --latest=false
+
