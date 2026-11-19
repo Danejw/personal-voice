@@ -48,6 +48,8 @@ import { saveRemoteVoiceDefault } from "@/assistant/remoteVoiceTarget";
 import { CompanionView } from "@/companion/CompanionView";
 import { assistantPhase } from "@/companion/companionGeometry";
 import { DevicesPanel } from "@/devices/DevicesPanel";
+import { wearableManager } from "@/wearables/WearableManager";
+import { WatchTapRouter } from "@/wearables/watchAction";
 import { ScreenSharingPanel } from "@/spatial/ScreenSharingPanel";
 import { PairingDialog } from "@/devices/PairingDialog";
 import { pairingAction } from "@/devices/pairingFlow";
@@ -233,6 +235,7 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
   });
 }
 
+const wearableTapRouter = new WatchTapRouter();
 const assistantLibrary = new AssistantConversationStore(
   assistant,
   assistantConversationsApi,
@@ -1138,6 +1141,17 @@ export default function App() {
 
   const signedInRef = useRef(signedIn);
   signedInRef.current = signedIn;
+
+  useEffect(() => wearableManager.onPress(() => {
+    const status = assistant.getSnapshot().status;
+    void wearableTapRouter.handle({
+      signedIn: signedInRef.current,
+      dictationBusy: microphone.heldBy() === "dictation",
+      status,
+    }, () => assistantLibrary.produce(), () => assistant.end()).catch(error => {
+      wearableManager.reportError(error instanceof Error ? error.message : "Could not start Assistant");
+    });
+  }), []);
 
   useEffect(() => {
     let stop = () => {};

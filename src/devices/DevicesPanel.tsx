@@ -7,6 +7,7 @@ import type { OwnedDevice } from "@/handoffs/handoff";
 import { MAX_DEVICE_NAME } from "@/services/deviceService";
 import { DevicePairingPanel } from "@/devices/DevicePairingPanel";
 import { SpatialScanner } from "@/spatial/SpatialScanner";
+import { VirtualWatchPanel } from "@/wearables/VirtualWatchPanel";
 import "./deviceTabs.css";
 
 interface DevicesPanelProps {
@@ -125,8 +126,8 @@ export function DevicesPanel({ mode, store, snapshot, onChanged, onControlPc }: 
   if (mode === "nearby") {
     return connected && snapshot.currentDeviceId &&
       snapshot.devices.find(device => device.id === snapshot.currentDeviceId)?.platform === "android"
-      ? <SpatialScanner currentDeviceId={snapshot.currentDeviceId}
-          devices={snapshot.devices} onControlPc={onControlPc} />
+      ? <><VirtualWatchPanel /><SpatialScanner currentDeviceId={snapshot.currentDeviceId}
+          devices={snapshot.devices} onControlPc={onControlPc} /></>
       : <p className="placeholder">Nearby discovery is available on the signed-in Android phone.</p>;
   }
 
