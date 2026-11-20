@@ -145,7 +145,7 @@ android {
     buildFeatures {
         buildConfig = true
     }
-    sourceSets.getByName("main").assets.srcDir(speakerModels)
+    sourceSets.getByName("main").assets.srcDir(speakerModels.get().asFile)
 }
 
 // Build model and AAR before Java/Kotlin compilation or asset merging.
