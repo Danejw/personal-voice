@@ -111,6 +111,22 @@ class CaptureArgs {
 }
 
 @InvokeArg
+class SpeakerEmbeddingArgs {
+  lateinit var data: String
+}
+
+@InvokeArg
+class SpeakerAccountArgs {
+  lateinit var accountId: String
+}
+
+@InvokeArg
+class SpeakerWriteArgs {
+  lateinit var accountId: String
+  lateinit var payload: String
+}
+
+@InvokeArg
 class AssistantPlaybackArgs {
   var data: String = ""
   var token: Int = 0
@@ -185,6 +201,9 @@ class DictationCueArgs {
 class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
   private val main = Handler(Looper.getMainLooper())
   private var webView: WebView? = null
+  private val speakerWork = java.util.concurrent.Executors.newSingleThreadExecutor()
+  private val speakerEngine by lazy { AndroidSpeakerEngine(activity.applicationContext) }
+  private val speakerVault by lazy { AndroidSpeakerVault(activity.applicationContext) }
   private var deviceLinkSocket: DeviceLinkNetwork.WebSocketClient? = null
   private var requestedLocalNetworkPermission = false
   private fun localNetworkAllowed(): Boolean {
@@ -985,6 +1004,85 @@ class VoicePlatformPlugin(private val activity: Activity) : Plugin(activity) {
 
   private fun cameraGranted(): Boolean =
     ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+  /** Compute a short sample's embedding on-device, off the microphone and UI threads. */
+  @Command
+  fun speakerEmbedding(invoke: Invoke) {
+    val data = try {
+      val encoded = invoke.parseArgs(SpeakerEmbeddingArgs::class.java).data
+      if (encoded.length > 400_000) throw IllegalArgumentException("Voice sample is too long.")
+      Base64.decode(encoded, Base64.NO_WRAP)
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "Invalid voice sample.")
+      return
+    }
+    speakerWork.execute {
+      try {
+        val vector = speakerEngine.embed(data)
+        val values = JSONArray()
+        for (value in vector) values.put(value.toDouble())
+        invoke.resolve(
+          JSObject()
+            .put("modelId", AndroidSpeakerEngine.MODEL_ID)
+            .put("embedding", values),
+        )
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "On-device voice recognition failed.")
+      } finally {
+        data.fill(0)
+      }
+    }
+  }
+
+  /** Read only the signed-in account's AES-GCM encrypted voice-profile snapshot. */
+  @Command
+  fun speakerProfilesRead(invoke: Invoke) {
+    val accountId = invoke.parseArgs(SpeakerAccountArgs::class.java).accountId
+    speakerWork.execute {
+      try {
+        invoke.resolve(JSObject().put("payload", speakerVault.read(accountId) ?: JSONObject.NULL))
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Couldn't load encrypted voice profiles.")
+      }
+    }
+  }
+
+  /** Only encrypted bytes touch persistent storage; no audio is stored. */
+  @Command
+  fun speakerProfilesWrite(invoke: Invoke) {
+    val args = invoke.parseArgs(SpeakerWriteArgs::class.java)
+    val accountId = args.accountId
+    val payload = args.payload
+    speakerWork.execute {
+      try {
+        speakerVault.write(accountId, payload)
+        invoke.resolve()
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Couldn't save encrypted voice profiles.")
+      }
+    }
+  }
+
+  @Command
+  fun speakerProfilesForget(invoke: Invoke) {
+    val accountId = invoke.parseArgs(SpeakerAccountArgs::class.java).accountId
+    speakerWork.execute {
+      try {
+        speakerVault.forget(accountId)
+        invoke.resolve()
+      } catch (error: Exception) {
+        invoke.reject(error.message ?: "Couldn't delete voice profiles.")
+      }
+    }
+  }
+
+  @Command
+  fun speakerModelRelease(invoke: Invoke) {
+    speakerWork.execute {
+      speakerEngine.release()
+      invoke.resolve()
+    }
+  }
 
   /**
    * Starts streaming `audioCapture` events: `chunk` (base64 PCM), `error`, and finally `end`.
