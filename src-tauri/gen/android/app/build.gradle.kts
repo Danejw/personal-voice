@@ -1,3 +1,4 @@
+import java.io.File
 import java.net.URL
 import java.security.MessageDigest
 import java.nio.file.Files
@@ -44,8 +45,8 @@ val prepareSpeakerModel = tasks.register("prepareSpeakerModel") {
     outputs.file(sherpaAar)
     outputs.file(speakerModel)
     doLast {
-        fun downloadVerified(url: String, sha256: String, destination: java.io.File) {
-            fun digest(file: java.io.File): String {
+        fun downloadVerified(url: String, sha256: String, destination: File) {
+            fun digest(file: File): String {
                 val hash = MessageDigest.getInstance("SHA-256")
                 file.inputStream().buffered().use { input ->
                     val chunk = ByteArray(64 * 1024)
@@ -59,7 +60,7 @@ val prepareSpeakerModel = tasks.register("prepareSpeakerModel") {
             }
             if (destination.exists() && digest(destination) == sha256) return
             destination.parentFile.mkdirs()
-            val temporary = java.io.File(destination.absolutePath + ".partial")
+            val temporary = File(destination.absolutePath + ".partial")
             try {
                 val connection = URL(url).openConnection()
                 connection.connectTimeout = 30_000
