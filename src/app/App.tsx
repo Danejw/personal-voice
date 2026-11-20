@@ -28,6 +28,7 @@ import {
   androidDeviceEnvironment, routeAssistantAudio, manageAndroidScreenShare,
 } from "@/platform/android/deviceCoordination";
 import { AssistantAudioOutputSettings } from "@/platform/android/AssistantAudioOutputSettings";
+import { AndroidSpeakerSettings } from "@/speakers/AndroidSpeakerSettings";
 import { useAssistant } from "@/assistant/useAssistant";
 import { useAssistantLibrary } from "@/assistant/useAssistantLibrary";
 import { AppNav, sectionMeta, useMobileNav, type AppSection } from "@/app/AppNav";
@@ -1466,6 +1467,7 @@ export default function App() {
                     <p>Control how your Assistant learns, searches saved content and uses context across devices.</p>
                   </div>
                   {platform.platform === "android" && <AssistantAudioOutputSettings />}
+                  {platform.platform === "android" && <AndroidSpeakerSettings userId={auth.userId} />}
                   <MemoryPanel
                     store={assistantMemory}
                     snapshot={assistantMemorySnapshot}
